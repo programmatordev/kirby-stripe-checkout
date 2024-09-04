@@ -1,0 +1,32 @@
+{
+	"name": "programmatordev/kirby-stripe-checkout",
+	"description": "Kirby Stripe Checkout",
+	"license": "MIT",
+	"type": "kirby-plugin",
+	"version": "0.1.0",
+	"authors": [
+		{
+			"name": "André Pimpão",
+			"email": "a.pimpao@programmator.dev",
+            "homepage": "https://programmator.dev/"
+		}
+	],
+	"require": {
+        "php": ">=8.1.0",
+		"getkirby/composer-installer": "^1.2"
+	},
+	"autoload": {
+		"psr-4": {
+			"ProgrammatorDev\\StripeCheckout\\": "src/"
+		}
+	},
+	"config": {
+		"optimize-autoloader": true,
+		"allow-plugins": {
+			"getkirby/composer-installer": true
+		}
+	},
+	"require-dev": {
+		"getkirby/cms": "^4.3"
+	}
+}
