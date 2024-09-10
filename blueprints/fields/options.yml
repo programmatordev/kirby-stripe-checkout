@@ -1,0 +1,18 @@
+label: Options
+type: structure
+duplicate: false
+fields:
+  name:
+    label: Name
+    type: text
+    required: true
+  variants:
+    label: Variants
+    type: structure
+    required: true
+    duplicate: false
+    fields:
+      name:
+        label: Name
+        type: text
+        required: true

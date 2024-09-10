@@ -1,0 +1,9 @@
+# TODO restrict uploads to images only
+
+label: Cover
+type: files
+required: true
+multiple: false
+query: page.images
+layout: cards
+translate: false
