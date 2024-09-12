@@ -14,5 +14,7 @@ App::plugin('programmatordev/kirby-stripe-checkout', [
         // pages
         'stripe.checkout.pages/product' => __DIR__ . '/blueprints/pages/product.yml',
         'stripe.checkout.pages/product-options' => __DIR__ . '/blueprints/pages/product-options.yml',
+        'stripe.checkout.pages/orders' => __DIR__ . '/blueprints/pages/orders.yml',
+        'stripe.checkout.pages/order' => __DIR__ . '/blueprints/pages/order.yml',
     ]
 ]);

@@ -1,0 +1,23 @@
+title: Orders
+
+icon: cart
+
+options:
+  changeSlug: false
+  changeStatus: false
+  changeTemplate: false
+  create: false
+  delete: false
+  duplicate: false
+  move: false
+  preview: false
+  update: false
+
+sections:
+  orders:
+    label: Orders
+    type: pages
+    layout: table
+    create: false
+    search: true
+    empty: No orders yet

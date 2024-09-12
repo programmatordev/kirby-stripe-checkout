@@ -1,0 +1,18 @@
+title: Order
+
+icon: cart
+
+status:
+  draft: Error
+  unlisted: Incomplete
+  listed: Complete
+
+options:
+  changeSlug: false
+  changeStatus: false
+  changeTemplate: false
+  changeTitle: false
+  delete: false
+  duplicate: false
+  move: false
+  preview: false
