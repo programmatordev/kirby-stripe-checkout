@@ -10,6 +10,10 @@
 composer.lock
 package-lock.json
 
+# Test files
+# ------------
+.phpunit.result.cache
+
 # System files
 # ------------
 

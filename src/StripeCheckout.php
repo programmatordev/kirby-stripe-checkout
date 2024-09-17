@@ -33,7 +33,7 @@ class StripeCheckout
             'ui_mode' => $uiMode,
             'mode' => 'payment',
             // TODO replace with Cart data
-            // temporarily add line_items
+            // temporarily manually add line_items
             'line_items' => [
                 [
                     'price_data' => [

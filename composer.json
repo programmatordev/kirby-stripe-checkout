@@ -16,18 +16,25 @@
 		"getkirby/composer-installer": "^1.2",
 		"stripe/stripe-php": "^15.9"
 	},
+    "require-dev": {
+        "getkirby/cms": "^4.4",
+        "phpunit/phpunit": "^10.5",
+		"symfony/var-dumper": "^6.4"
+    },
 	"autoload": {
 		"psr-4": {
 			"ProgrammatorDev\\StripeCheckout\\": "src/"
 		}
 	},
+    "autoload-dev": {
+        "psr-4": {
+            "ProgrammatorDev\\StripeCheckout\\Test\\": "tests/"
+        }
+    },
 	"config": {
 		"optimize-autoloader": true,
 		"allow-plugins": {
 			"getkirby/composer-installer": true
 		}
-	},
-	"require-dev": {
-		"getkirby/cms": "^4.3"
 	}
 }
