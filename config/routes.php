@@ -30,6 +30,7 @@ return function(App $kirby) {
                 $checkoutSession = StripeCheckout::createSession();
 
                 // redirect to hosted payment form
+                // https://docs.stripe.com/checkout/quickstart#redirect
                 go($checkoutSession->url);
             }
         ],
@@ -42,6 +43,8 @@ return function(App $kirby) {
 
                 $checkoutSession = StripeCheckout::createSession();
 
+                // return JSON with required data for embedded checkout
+                // https://docs.stripe.com/checkout/embedded/quickstart#fetch-checkout-session
                 return [
                     'clientSecret' => $checkoutSession->client_secret
                 ];

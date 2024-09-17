@@ -1,7 +1,6 @@
 <?php
 
 use Kirby\Cms\App;
-use Kirby\Cms\Site;
 
 @include_once __DIR__ . '/vendor/autoload.php';
 
@@ -37,15 +36,6 @@ App::plugin('programmatordev/kirby-stripe-checkout', [
         'stripe.checkout.pages/order' => __DIR__ . '/blueprints/pages/order.yml',
     ],
     'snippets' => [],
-    'siteMethods' => [
-        'checkoutUrl' => function () {
-            /** @var Site $this */
-            return sprintf('%s/%s', $this->url(), 'checkout');
-        },
-        'checkoutClientSecretUrl' => function () {
-            /** @var Site $this */
-            return sprintf('%s/%s', $this->url(), 'checkout/embedded');
-        }
-    ],
+    'siteMethods' => require __DIR__ . '/config/siteMethods.php',
     'routes' => require __DIR__ . '/config/routes.php',
 ]);
