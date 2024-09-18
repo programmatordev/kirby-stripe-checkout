@@ -4,7 +4,7 @@ use Kirby\Cms\App;
 
 @include_once __DIR__ . '/vendor/autoload.php';
 
-App::plugin('programmatordev/kirby-stripe-checkout', [
+App::plugin('programmatordev/stripe-checkout', [
     'options' => [
         'stripePublicKey' => null,
         'stripeSecretKey' => null,
@@ -35,7 +35,6 @@ App::plugin('programmatordev/kirby-stripe-checkout', [
         'stripe.checkout.pages/orders' => __DIR__ . '/blueprints/pages/orders.yml',
         'stripe.checkout.pages/order' => __DIR__ . '/blueprints/pages/order.yml',
     ],
-    'snippets' => [],
     'siteMethods' => require __DIR__ . '/config/siteMethods.php',
     'routes' => require __DIR__ . '/config/routes.php',
 ]);

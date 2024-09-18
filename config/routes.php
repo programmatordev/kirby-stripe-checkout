@@ -6,10 +6,11 @@ use ProgrammatorDev\StripeCheckout\StripeCheckout;
 
 return function(App $kirby) {
     return [
+        // handle checkout request
         [
             'pattern' => 'checkout',
             'action' => function () use ($kirby) {
-                $options = $kirby->option('programmatordev.kirby-stripe-checkout');
+                $options = $kirby->option('programmatordev.stripe-checkout');
 
                 StripeCheckout::setOptions($options);
 
@@ -27,6 +28,7 @@ return function(App $kirby) {
                     ]);
                 }
 
+                // if we reached here, we're in "hosted" mode
                 $checkoutSession = StripeCheckout::createSession();
 
                 // redirect to hosted payment form
@@ -34,10 +36,11 @@ return function(App $kirby) {
                 go($checkoutSession->url);
             }
         ],
+        // get checkout client secret when in "embedded" mode
         [
             'pattern' => 'checkout/embedded',
             'action' => function () use ($kirby) {
-                $options = $kirby->option('programmatordev.kirby-stripe-checkout');
+                $options = $kirby->option('programmatordev.stripe-checkout');
 
                 StripeCheckout::setOptions($options);
 
