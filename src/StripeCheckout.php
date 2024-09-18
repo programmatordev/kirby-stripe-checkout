@@ -2,7 +2,7 @@
 
 namespace ProgrammatorDev\StripeCheckout;
 
-use ProgrammatorDev\StripeCheckout\Exception\InvalidOptionException;
+use ProgrammatorDev\StripeCheckout\Exception\InvalidConfigException;
 use Stripe\Checkout\Session;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Stripe;
@@ -12,17 +12,17 @@ class StripeCheckout
     public const UI_MODE_HOSTED = 'hosted';
     public const UI_MODE_EMBEDDED = 'embedded';
 
-    private static ?array $options = null;
+    private static ?array $config = null;
 
     /**
-     * @throws InvalidOptionException
+     * @throws InvalidConfigException
      * @throws ApiErrorException
      */
     static function createSession(): Session
     {
-        if (self::$options === null) {
-            throw new InvalidOptionException(
-                'No options provided. Set your options using StripeCheckout::setOptions($options).'
+        if (self::$config === null) {
+            throw new InvalidConfigException(
+                'No config provided. Set your config using StripeCheckout::setConfig($options).'
             );
         }
 
@@ -65,67 +65,67 @@ class StripeCheckout
     }
 
     /**
-     * @throws InvalidOptionException
+     * @throws InvalidConfigException
      */
-    static function setOptions(array $options): void
+    static function setConfig(array $options): void
     {
-        self::validateOptions($options);
+        self::validateConfig($options);
 
-        self::$options = $options;
+        self::$config = $options;
     }
 
     public static function getPublicKey(): string
     {
-        return self::$options['stripePublicKey'];
+        return self::$config['stripePublicKey'];
     }
 
     public static function getSecretKey(): string
     {
-        return self::$options['stripeSecretKey'];
+        return self::$config['stripeSecretKey'];
     }
 
     public static function getUiMode(): string
     {
-        return self::$options['uiMode'];
+        return self::$config['uiMode'];
     }
 
     public static function getReturnUrl(): ?string
     {
-        return self::$options['returnUrl'];
+        return self::$config['returnUrl'];
     }
 
     public static function getSuccessUrl(): ?string
     {
-        return self::$options['successUrl'];
+        return self::$config['successUrl'];
     }
 
     public static function getCancelUrl(): ?string
     {
-        return self::$options['cancelUrl'];
+        return self::$config['cancelUrl'];
     }
 
     /**
-     * @throws InvalidOptionException
+     * @throws InvalidConfigException
      */
-    private static function validateOptions(array $options): void
+    private static function validateConfig(array $options): void
     {
         if (empty($options['stripePublicKey']) || empty($options['stripeSecretKey'])) {
-            throw new InvalidOptionException('stripePublicKey and stripeSecretKey are required.');
+            throw new InvalidConfigException('stripePublicKey and stripeSecretKey are required.');
         }
 
         if (!in_array($options['uiMode'], [self::UI_MODE_HOSTED, self::UI_MODE_EMBEDDED])) {
-            throw new InvalidOptionException('uiMode is invalid. Accepted values are: "hosted" or "embedded".');
+            throw new InvalidConfigException('uiMode is invalid. Accepted values are: "hosted" or "embedded".');
         }
 
         if ($options['uiMode'] == self::UI_MODE_HOSTED) {
             if ((empty($options['successUrl']) || empty($options['cancelUrl']))) {
-                throw new InvalidOptionException('successUrl and cancelUrl are required in "hosted" mode.');
+                throw new InvalidConfigException('successUrl and cancelUrl are required in "hosted" mode.');
             }
         }
 
         if ($options['uiMode'] == self::UI_MODE_EMBEDDED) {
             if (empty($options['returnUrl'])) {
-                throw new InvalidOptionException('returnUrl is required in "embedded" mode.');
+                throw new InvalidConfigException('returnUrl is required in "embedded" mode.');
             }
         }
     }

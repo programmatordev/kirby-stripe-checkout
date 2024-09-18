@@ -1,7 +1,7 @@
 <?php
 
 use Kirby\Cms\App;
-use ProgrammatorDev\StripeCheckout\Exception\InvalidOptionException;
+use ProgrammatorDev\StripeCheckout\Exception\InvalidConfigException;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 
 return function(App $kirby) {
@@ -12,7 +12,7 @@ return function(App $kirby) {
             'action' => function () use ($kirby) {
                 $options = $kirby->option('programmatordev.stripe-checkout');
 
-                StripeCheckout::setOptions($options);
+                StripeCheckout::setConfig($options);
 
                 // if "embedded" show checkout page
                 // no need to proceed more
@@ -20,7 +20,7 @@ return function(App $kirby) {
                     $checkoutPage = $options['checkoutPage'];
 
                     if (($page = page($checkoutPage)) === null) {
-                        throw new InvalidOptionException('checkoutPage is invalid or does not exist.');
+                        throw new InvalidConfigException('checkoutPage is invalid or does not exist.');
                     }
 
                     return $page->render([
@@ -42,7 +42,7 @@ return function(App $kirby) {
             'action' => function () use ($kirby) {
                 $options = $kirby->option('programmatordev.stripe-checkout');
 
-                StripeCheckout::setOptions($options);
+                StripeCheckout::setConfig($options);
 
                 $checkoutSession = StripeCheckout::createSession();
 

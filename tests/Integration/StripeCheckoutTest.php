@@ -3,7 +3,7 @@
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use PHPUnit\Framework\Attributes\DataProvider;
-use ProgrammatorDev\StripeCheckout\Exception\InvalidOptionException;
+use ProgrammatorDev\StripeCheckout\Exception\InvalidConfigException;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 use ProgrammatorDev\StripeCheckout\Test\BaseTestCase;
 use ProgrammatorDev\StripeCheckout\Test\MockStripeClient;
@@ -12,13 +12,13 @@ use Stripe\Checkout\Session;
 
 class StripeCheckoutTest extends BaseTestCase
 {
-    private array $options;
+    private array $config;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->options = [
+        $this->config = [
             'stripePublicKey' => 'pk_test_abc123',
             'stripeSecretKey' => 'sk_test_abc123',
             'uiMode' => 'hosted',
@@ -28,10 +28,10 @@ class StripeCheckoutTest extends BaseTestCase
         ];
     }
 
-    public function testInvalidOptionsOnCreateSession(): void
+    public function testInvalidConfigOnCreateSession(): void
     {
-        $this->expectException(InvalidOptionException::class);
-        $this->expectExceptionMessage('No options provided. Set your options using StripeCheckout::setOptions($options).');
+        $this->expectException(InvalidConfigException::class);
+        $this->expectExceptionMessage('No config provided. Set your config using StripeCheckout::setConfig($options).');
 
         StripeCheckout::createSession();
     }
@@ -43,24 +43,24 @@ class StripeCheckoutTest extends BaseTestCase
             new MockStripeClient('{"object": "checkout.session"}')
         );
 
-        StripeCheckout::setOptions($this->options);
+        StripeCheckout::setConfig($this->config);
 
         $this->assertInstanceOf(Session::class, StripeCheckout::createSession());
     }
 
-    #[DataProvider('provideInvalidSetOptionsData')]
-    public function testInvalidSetOptions(array $invalidOptions, string $exceptionMessage): void
+    #[DataProvider('provideInvalidSetConfigData')]
+    public function testInvalidSetConfig(array $invalidOptions, string $exceptionMessage): void
     {
         // replace with invalid options
-        $options = array_merge($this->options, $invalidOptions);
+        $options = array_merge($this->config, $invalidOptions);
 
-        $this->expectException(InvalidOptionException::class);
+        $this->expectException(InvalidConfigException::class);
         $this->expectExceptionMessage($exceptionMessage);
 
-        StripeCheckout::setOptions($options);
+        StripeCheckout::setConfig($options);
     }
 
-    public static function provideInvalidSetOptionsData(): \Generator
+    public static function provideInvalidSetConfigData(): \Generator
     {
         yield 'stripe public key' => [
             ['stripePublicKey' => null],
@@ -74,10 +74,6 @@ class StripeCheckoutTest extends BaseTestCase
             ['uiMode' => 'invalid'],
             'uiMode is invalid. Accepted values are: "hosted" or "embedded".'
         ];
-        yield 'return url' => [
-            ['uiMode' => 'embedded', 'returnUrl' => null],
-            'returnUrl is required in "embedded" mode.'
-        ];
         yield 'success url' => [
             ['uiMode' => 'hosted', 'successUrl' => null],
             'successUrl and cancelUrl are required in "hosted" mode.'
@@ -86,17 +82,21 @@ class StripeCheckoutTest extends BaseTestCase
             ['uiMode' => 'hosted', 'cancelUrl' => null],
             'successUrl and cancelUrl are required in "hosted" mode.'
         ];
+        yield 'return url' => [
+            ['uiMode' => 'embedded', 'returnUrl' => null],
+            'returnUrl is required in "embedded" mode.'
+        ];
     }
 
-    public function testSetOptions(): void
+    public function testSetConfig(): void
     {
-        StripeCheckout::setOptions($this->options);
+        StripeCheckout::setConfig($this->config);
 
-        $this->assertSame(StripeCheckout::getPublicKey(), $this->options['stripePublicKey']);
-        $this->assertSame(StripeCheckout::getSecretKey(), $this->options['stripeSecretKey']);
-        $this->assertSame(StripeCheckout::getUiMode(), $this->options['uiMode']);
-        $this->assertSame(StripeCheckout::getReturnUrl(), $this->options['returnUrl']);
-        $this->assertSame(StripeCheckout::getSuccessUrl(), $this->options['successUrl']);
-        $this->assertSame(StripeCheckout::getCancelUrl(), $this->options['cancelUrl']);
+        $this->assertSame(StripeCheckout::getPublicKey(), $this->config['stripePublicKey']);
+        $this->assertSame(StripeCheckout::getSecretKey(), $this->config['stripeSecretKey']);
+        $this->assertSame(StripeCheckout::getUiMode(), $this->config['uiMode']);
+        $this->assertSame(StripeCheckout::getReturnUrl(), $this->config['returnUrl']);
+        $this->assertSame(StripeCheckout::getSuccessUrl(), $this->config['successUrl']);
+        $this->assertSame(StripeCheckout::getCancelUrl(), $this->config['cancelUrl']);
     }
 }
