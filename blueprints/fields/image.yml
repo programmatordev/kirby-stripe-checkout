@@ -1,6 +1,6 @@
 # TODO restrict uploads to images only
 
-label: Cover
+label: Image
 type: files
 required: true
 multiple: false

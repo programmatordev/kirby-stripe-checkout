@@ -26,8 +26,7 @@ App::plugin('programmatordev/stripe-checkout', [
     'blueprints' => [
         // fields
         'stripe.checkout.fields/price' => __DIR__ . '/blueprints/fields/price.yml',
-        'stripe.checkout.fields/tax' => __DIR__ . '/blueprints/fields/tax.yml',
-        'stripe.checkout.fields/cover' => __DIR__ . '/blueprints/fields/cover.yml',
+        'stripe.checkout.fields/image' => __DIR__ . '/blueprints/fields/image.yml',
         'stripe.checkout.fields/options' => __DIR__ . '/blueprints/fields/options.yml',
         // pages
         'stripe.checkout.pages/product' => __DIR__ . '/blueprints/pages/product.yml',

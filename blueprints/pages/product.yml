@@ -10,8 +10,7 @@ columns:
     width: 2/3
     fields:
       price: stripe.checkout.fields/price
-      tax: stripe.checkout.fields/tax
   right:
     width: 1/3
     fields:
-      cover: stripe.checkout.fields/cover
+      image: stripe.checkout.fields/image

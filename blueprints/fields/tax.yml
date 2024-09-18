@@ -1,9 +1,0 @@
-label: Tax rate
-type: number
-required: true
-step: 1
-min: 0
-max: 100
-after: %
-width: 1/2
-translate: false
