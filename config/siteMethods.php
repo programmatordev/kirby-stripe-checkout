@@ -3,11 +3,14 @@
 use Kirby\Cms\Site;
 
 return [
-    'checkoutUrl' => function () {
+    'cart' => function() {
+        return cart();
+    },
+    'checkoutUrl' => function() {
         /** @var Site $this */
         return sprintf('%s/%s', $this->url(), 'checkout');
     },
-    'checkoutClientSecretUrl' => function () {
+    'checkoutClientSecretUrl' => function() {
         /** @var Site $this */
         return sprintf('%s/%s', $this->url(), 'checkout/embedded');
     }

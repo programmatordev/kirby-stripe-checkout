@@ -1,8 +1,14 @@
 <?php
 
 use Kirby\Cms\App;
+use ProgrammatorDev\StripeCheckout\Cart;
 
 @include_once __DIR__ . '/vendor/autoload.php';
+
+function cart(): Cart
+{
+    return new Cart();
+}
 
 App::plugin('programmatordev/stripe-checkout', [
     'options' => [

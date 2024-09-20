@@ -2,4 +2,4 @@
 
 namespace ProgrammatorDev\StripeCheckout\Exception;
 
-class InvalidOptionException extends \Exception {}
+class CartItemDoesNotExistException extends \Exception {}
