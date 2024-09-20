@@ -13,4 +13,4 @@ columns:
   right:
     width: 1/3
     fields:
-      image: stripe.checkout.fields/image
+      cover: stripe.checkout.fields/cover

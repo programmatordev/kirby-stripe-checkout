@@ -176,24 +176,12 @@ class Cart
         $resolver->setAllowedTypes('quantity', 'int');
         $resolver->setAllowedTypes('options', ['null', 'scalar[]']);
 
-        $resolver->setAllowedValues('id', Validation::createIsValidCallable(
-            new NotBlank()
-        ));
-        $resolver->setAllowedValues('name', Validation::createIsValidCallable(
-            new NotBlank()
-        ));
-        $resolver->setAllowedValues('image', Validation::createIsValidCallable(
-            new AtLeastOneOf([new IsNull(), new NotBlank()])
-        ));
-        $resolver->setAllowedValues('price', Validation::createIsValidCallable(
-            new GreaterThanOrEqual(0)
-        ));
-        $resolver->setAllowedValues('quantity', Validation::createIsValidCallable(
-            new GreaterThan(0)
-        ));
-        $resolver->setAllowedValues('options', Validation::createIsValidCallable(
-            new AtLeastOneOf([new IsNull(), new NotBlank()])
-        ));
+        $resolver->setAllowedValues('id', Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setAllowedValues('name', Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setAllowedValues('image', Validation::createIsValidCallable(new AtLeastOneOf([new IsNull(), new NotBlank()])));
+        $resolver->setAllowedValues('price', Validation::createIsValidCallable(new GreaterThanOrEqual(0)));
+        $resolver->setAllowedValues('quantity', Validation::createIsValidCallable(new GreaterThan(0)));
+        $resolver->setAllowedValues('options', Validation::createIsValidCallable(new AtLeastOneOf([new IsNull(), new NotBlank()])));
 
         $resolver->setNormalizer('price', function (Options $options, int|float $value): float {
             return round($value, 2);

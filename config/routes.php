@@ -9,7 +9,7 @@ return function(App $kirby) {
         // handle checkout request
         [
             'pattern' => 'checkout',
-            'action' => function () use ($kirby) {
+            'action' => function() use ($kirby) {
                 $options = $kirby->option('programmatordev.stripe-checkout');
 
                 StripeCheckout::setConfig($options);
@@ -39,7 +39,7 @@ return function(App $kirby) {
         // get checkout client secret when in "embedded" mode
         [
             'pattern' => 'checkout/embedded',
-            'action' => function () use ($kirby) {
+            'action' => function() use ($kirby) {
                 $options = $kirby->option('programmatordev.stripe-checkout');
 
                 StripeCheckout::setConfig($options);

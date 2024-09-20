@@ -32,7 +32,7 @@ App::plugin('programmatordev/stripe-checkout', [
     'blueprints' => [
         // fields
         'stripe.checkout.fields/price' => __DIR__ . '/blueprints/fields/price.yml',
-        'stripe.checkout.fields/image' => __DIR__ . '/blueprints/fields/image.yml',
+        'stripe.checkout.fields/cover' => __DIR__ . '/blueprints/fields/cover.yml',
         'stripe.checkout.fields/options' => __DIR__ . '/blueprints/fields/options.yml',
         // pages
         'stripe.checkout.pages/product' => __DIR__ . '/blueprints/pages/product.yml',
@@ -42,4 +42,5 @@ App::plugin('programmatordev/stripe-checkout', [
     ],
     'siteMethods' => require __DIR__ . '/config/siteMethods.php',
     'routes' => require __DIR__ . '/config/routes.php',
+    'api' => require __DIR__ . '/config/api.php',
 ]);
