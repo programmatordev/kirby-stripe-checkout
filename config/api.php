@@ -69,7 +69,7 @@ return [
 
                     // find page
                     if (($page = page($data['id'])) === null) {
-                        throw new ProductDoesNotExistException('Product not found.');
+                        throw new ProductDoesNotExistException('Product does not exist.');
                     }
 
                     $cart = cart();

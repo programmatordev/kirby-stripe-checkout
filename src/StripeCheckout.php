@@ -2,34 +2,72 @@
 
 namespace ProgrammatorDev\StripeCheckout;
 
-use ProgrammatorDev\StripeCheckout\Exception\InvalidConfigException;
 use Stripe\Checkout\Session;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Stripe;
+use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Validator\Constraints\NotBlank;
+use Symfony\Component\Validator\Constraints\Url;
+use Symfony\Component\Validator\Validation;
 
 class StripeCheckout
 {
     public const UI_MODE_HOSTED = 'hosted';
     public const UI_MODE_EMBEDDED = 'embedded';
 
-    private static ?array $config = null;
+    private array $options;
 
-    /**
-     * @throws InvalidConfigException
-     * @throws ApiErrorException
-     */
-    static function createSession(): Session
+    public function __construct(array $options)
     {
-        if (self::$config === null) {
-            throw new InvalidConfigException(
-                'No config provided. Set your config using StripeCheckout::setConfig($options).'
-            );
+        $this->options = $this->resolveOptions($options);
+    }
+
+    private function resolveOptions(array $options): array
+    {
+        $resolver = new OptionsResolver();
+        $resolver->setIgnoreUndefined();
+
+        $resolver->setRequired(['stripePublicKey', 'stripeSecretKey', 'uiMode']);
+
+        $resolver->setAllowedTypes('stripePublicKey', 'string');
+        $resolver->setAllowedTypes('stripeSecretKey', 'string');
+        $resolver->setAllowedTypes('uiMode', 'string');
+
+        $resolver->setAllowedValues('stripePublicKey', Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setAllowedValues('stripeSecretKey', Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setAllowedValues('uiMode', [self::UI_MODE_HOSTED, self::UI_MODE_EMBEDDED]);
+
+        if ($options['uiMode'] === self::UI_MODE_HOSTED) {
+            $resolver->setRequired(['successUrl', 'cancelUrl']);
+
+            $resolver->setAllowedTypes('successUrl', 'string');
+            $resolver->setAllowedTypes('cancelUrl', 'string');
+
+            $resolver->setAllowedValues('successUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
+            $resolver->setAllowedValues('cancelUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
+        }
+        else if ($options['uiMode'] === self::UI_MODE_EMBEDDED) {
+            $resolver->setRequired(['checkoutPage', 'returnUrl']);
+
+            $resolver->setAllowedTypes('checkoutPage', 'string');
+            $resolver->setAllowedTypes('returnUrl', 'string');
+
+            $resolver->setAllowedValues('checkoutPage', Validation::createIsValidCallable(new NotBlank()));
+            $resolver->setAllowedValues('returnUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
         }
 
-        $uiMode = self::getUiMode();
+        return $resolver->resolve($options);
+    }
 
-        // set base params
-        $params = [
+    /**
+     * @throws ApiErrorException
+     */
+    public function createSession(): Session
+    {
+        $uiMode = $this->getUiMode();
+
+        // set base session params
+        $sessionParams = [
             'ui_mode' => $uiMode,
             'mode' => 'payment',
             // TODO replace with Cart data
@@ -48,85 +86,59 @@ class StripeCheckout
             ]
         ];
 
-        // set params according to uiMode
-        $params = match ($uiMode) {
-            self::UI_MODE_HOSTED => array_merge($params, [
-                'success_url' => self::getSuccessUrl(),
-                'cancel_url' => self::getCancelUrl()
+        // set session params according to uiMode
+        $sessionParams = match ($uiMode) {
+            self::UI_MODE_HOSTED => array_merge($sessionParams, [
+                'success_url' => $this->getSuccessUrl(),
+                'cancel_url' => $this->getCancelUrl(),
             ]),
-            self::UI_MODE_EMBEDDED => array_merge($params, [
-                'return_url' => self::getReturnUrl()
+            self::UI_MODE_EMBEDDED => array_merge($sessionParams, [
+                'return_url' => $this->getReturnUrl(),
             ])
         };
 
-        Stripe::setApiKey(self::getSecretKey());
+        Stripe::setApiKey($this->getStripeSecretKey());
 
-        return Session::create($params);
+        return Session::create($sessionParams);
     }
 
-    /**
-     * @throws InvalidConfigException
-     */
-    static function setConfig(array $options): void
+    public function getOptions(): array
     {
-        self::validateConfig($options);
-
-        self::$config = $options;
+        return $this->options;
     }
 
-    public static function getPublicKey(): string
+    public function getStripePublicKey(): string
     {
-        return self::$config['stripePublicKey'];
+        return $this->options['stripePublicKey'];
     }
 
-    public static function getSecretKey(): string
+    public function getStripeSecretKey(): string
     {
-        return self::$config['stripeSecretKey'];
+        return $this->options['stripeSecretKey'];
     }
 
-    public static function getUiMode(): string
+    public function getUiMode(): string
     {
-        return self::$config['uiMode'];
+        return $this->options['uiMode'];
     }
 
-    public static function getReturnUrl(): ?string
+    public function getCheckoutPage(): string
     {
-        return self::$config['returnUrl'];
+        return $this->options['checkoutPage'];
     }
 
-    public static function getSuccessUrl(): ?string
+    public function getReturnUrl(): ?string
     {
-        return self::$config['successUrl'];
+        return $this->options['returnUrl'];
     }
 
-    public static function getCancelUrl(): ?string
+    public function getSuccessUrl(): ?string
     {
-        return self::$config['cancelUrl'];
+        return $this->options['successUrl'];
     }
 
-    /**
-     * @throws InvalidConfigException
-     */
-    private static function validateConfig(array $options): void
+    public function getCancelUrl(): ?string
     {
-        if (empty($options['stripePublicKey']) || empty($options['stripeSecretKey'])) {
-            throw new InvalidConfigException('stripePublicKey and stripeSecretKey are required.');
-        }
-
-        if (!in_array($options['uiMode'], [self::UI_MODE_HOSTED, self::UI_MODE_EMBEDDED])) {
-            throw new InvalidConfigException('uiMode is invalid. Accepted values are: "hosted" or "embedded".');
-        }
-
-        if ($options['uiMode'] == self::UI_MODE_HOSTED) {
-            if ((empty($options['successUrl']) || empty($options['cancelUrl']))) {
-                throw new InvalidConfigException('successUrl and cancelUrl are required in "hosted" mode.');
-            }
-        }
-
-        if ($options['uiMode'] == self::UI_MODE_EMBEDDED) {
-            if (empty($options['returnUrl'])) {
-                throw new InvalidConfigException('returnUrl is required in "embedded" mode.');
-            }
-        }
+        return $this->options['cancelUrl'];
     }
 }
