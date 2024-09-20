@@ -44,6 +44,7 @@ function resolveUpdateItemData(array $data): array
 return [
     'routes' => function(App $kirby) {
         return [
+            // get cart contents
             [
                 'pattern' => 'cart',
                 'method' => 'GET',
@@ -57,6 +58,7 @@ return [
                     ];
                 }
             ],
+            // add item to cart
             [
                 'pattern' => 'cart/items',
                 'method' => 'POST',
@@ -74,7 +76,7 @@ return [
 
                     $cart->addItem([
                         'id' => $page->id(),
-                        'image' => $page->cover()->toFile()?->url(),
+                        'image' => $page->cover()->toFile()->url(),
                         'name' => $page->title()->value(),
                         'price' => (float) $page->price()->value(),
                         'quantity' => (int) $data['quantity'],
@@ -87,6 +89,7 @@ return [
                     ];
                 }
             ],
+            // update cart item
             [
                 'pattern' => 'cart/items/(:alphanum)',
                 'method' => 'PATCH',
@@ -105,6 +108,7 @@ return [
                     ];
                 }
             ],
+            // delete cart item
             [
                 'pattern' => 'cart/items/(:alphanum)',
                 'method' => 'DELETE',
