@@ -162,8 +162,8 @@ class CartTest extends BaseTestCase
         ], $this->cart->getContents());
     }
 
-    #[DataProvider('provideAddItemWithMissingRequiredOptionsData')]
-    public function testAddItemWithMissingRequiredOptions(string $missingOption): void
+    #[DataProvider('provideAddItemWithMissingOptionsData')]
+    public function testAddItemWithMissingOptions(string $missingOption): void
     {
         $item = [
             'id' => 'item-id',
@@ -179,7 +179,7 @@ class CartTest extends BaseTestCase
         $this->cart->addItem($item);
     }
 
-    public static function provideAddItemWithMissingRequiredOptionsData(): \Generator
+    public static function provideAddItemWithMissingOptionsData(): \Generator
     {
         yield 'missing id' => ['id'];
         yield 'missing name' => ['name'];

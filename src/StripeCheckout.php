@@ -37,23 +37,27 @@ class StripeCheckout
         $resolver->setAllowedValues('stripeSecretKey', Validation::createIsValidCallable(new NotBlank()));
         $resolver->setAllowedValues('uiMode', [self::UI_MODE_HOSTED, self::UI_MODE_EMBEDDED]);
 
-        if ($options['uiMode'] === self::UI_MODE_HOSTED) {
-            $resolver->setRequired(['successUrl', 'cancelUrl']);
+        switch ($options['uiMode'] ?? null) {
+            case self::UI_MODE_HOSTED:
+                $resolver->setRequired(['successUrl', 'cancelUrl']);
 
-            $resolver->setAllowedTypes('successUrl', 'string');
-            $resolver->setAllowedTypes('cancelUrl', 'string');
+                $resolver->setAllowedTypes('successUrl', 'string');
+                $resolver->setAllowedTypes('cancelUrl', 'string');
 
-            $resolver->setAllowedValues('successUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
-            $resolver->setAllowedValues('cancelUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
-        }
-        else if ($options['uiMode'] === self::UI_MODE_EMBEDDED) {
-            $resolver->setRequired(['checkoutPage', 'returnUrl']);
+                $resolver->setAllowedValues('successUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
+                $resolver->setAllowedValues('cancelUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
 
-            $resolver->setAllowedTypes('checkoutPage', 'string');
-            $resolver->setAllowedTypes('returnUrl', 'string');
+                break;
+            case self::UI_MODE_EMBEDDED:
+                $resolver->setRequired(['checkoutPage', 'returnUrl']);
 
-            $resolver->setAllowedValues('checkoutPage', Validation::createIsValidCallable(new NotBlank()));
-            $resolver->setAllowedValues('returnUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
+                $resolver->setAllowedTypes('checkoutPage', 'string');
+                $resolver->setAllowedTypes('returnUrl', 'string');
+
+                $resolver->setAllowedValues('checkoutPage', Validation::createIsValidCallable(new NotBlank()));
+                $resolver->setAllowedValues('returnUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
+
+                break;
         }
 
         return $resolver->resolve($options);
@@ -86,7 +90,7 @@ class StripeCheckout
             ]
         ];
 
-        // set session params according to uiMode
+        // add session params according to uiMode
         $sessionParams = match ($uiMode) {
             self::UI_MODE_HOSTED => array_merge($sessionParams, [
                 'success_url' => $this->getSuccessUrl(),
@@ -122,23 +126,23 @@ class StripeCheckout
         return $this->options['uiMode'];
     }
 
-    public function getCheckoutPage(): string
+    public function getCheckoutPage(): ?string
     {
-        return $this->options['checkoutPage'];
+        return $this->options['checkoutPage'] ?? null;
     }
 
     public function getReturnUrl(): ?string
     {
-        return $this->options['returnUrl'];
+        return $this->options['returnUrl'] ?? null;
     }
 
     public function getSuccessUrl(): ?string
     {
-        return $this->options['successUrl'];
+        return $this->options['successUrl'] ?? null;
     }
 
     public function getCancelUrl(): ?string
     {
-        return $this->options['cancelUrl'];
+        return $this->options['cancelUrl'] ?? null;
     }
 }
