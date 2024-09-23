@@ -27,15 +27,17 @@ class StripeCheckout
         $resolver = new OptionsResolver();
         $resolver->setIgnoreUndefined();
 
-        $resolver->setRequired(['stripePublicKey', 'stripeSecretKey', 'uiMode']);
+        $resolver->setRequired(['stripePublicKey', 'stripeSecretKey', 'uiMode', 'lineItems']);
 
         $resolver->setAllowedTypes('stripePublicKey', 'string');
         $resolver->setAllowedTypes('stripeSecretKey', 'string');
         $resolver->setAllowedTypes('uiMode', 'string');
+        $resolver->setAllowedTypes('lineItems', 'array');
 
         $resolver->setAllowedValues('stripePublicKey', Validation::createIsValidCallable(new NotBlank()));
         $resolver->setAllowedValues('stripeSecretKey', Validation::createIsValidCallable(new NotBlank()));
         $resolver->setAllowedValues('uiMode', [self::UI_MODE_HOSTED, self::UI_MODE_EMBEDDED]);
+        $resolver->setAllowedValues('lineItems', Validation::createIsValidCallable(new NotBlank()));
 
         switch ($options['uiMode'] ?? null) {
             case self::UI_MODE_HOSTED:
@@ -74,20 +76,7 @@ class StripeCheckout
         $sessionParams = [
             'ui_mode' => $uiMode,
             'mode' => 'payment',
-            // TODO replace with Cart data
-            // temporarily manually add line_items
-            'line_items' => [
-                [
-                    'price_data' => [
-                        'currency' => 'eur',
-                        'unit_amount' => 2000,
-                        'product_data' => [
-                            'name' => 'Product 01',
-                        ]
-                    ],
-                    'quantity' => 1,
-                ]
-            ]
+            'line_items' => $this->getLineItems(),
         ];
 
         // add session params according to uiMode
@@ -124,6 +113,11 @@ class StripeCheckout
     public function getUiMode(): string
     {
         return $this->options['uiMode'];
+    }
+
+    public function getLineItems(): array
+    {
+        return $this->options['lineItems'];
     }
 
     public function getCheckoutPage(): ?string

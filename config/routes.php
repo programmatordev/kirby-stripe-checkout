@@ -1,8 +1,30 @@
 <?php
 
 use Kirby\Cms\App;
+use ProgrammatorDev\StripeCheckout\Converter;
+use ProgrammatorDev\StripeCheckout\Exception\CartIsEmptyException;
 use ProgrammatorDev\StripeCheckout\Exception\PageDoesNotExistException;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
+
+/**
+ * @throws CartIsEmptyException
+ */
+function createStripeCheckout(array $options): StripeCheckout
+{
+    $cart = cart();
+
+    // stop if cart is empty
+    if (empty($cart->getItems())) {
+        throw new CartIsEmptyException('Cart is empty.');
+    }
+
+    // populate options before initialization
+    $options = array_merge($options, [
+        'lineItems' => Converter::cartToLineItems($cart, 'eur')
+    ]);
+
+    return new StripeCheckout($options);
+}
 
 return function(App $kirby) {
     return [
@@ -12,8 +34,7 @@ return function(App $kirby) {
             'method' => 'GET',
             'action' => function() use ($kirby) {
                 $options = $kirby->option('programmatordev.stripe-checkout');
-
-                $stripeCheckout = new StripeCheckout($options);
+                $stripeCheckout = createStripeCheckout($options);
 
                 // if "embedded", show checkout page (no need to proceed more)
                 if ($stripeCheckout->getUiMode() === StripeCheckout::UI_MODE_EMBEDDED) {
@@ -40,8 +61,7 @@ return function(App $kirby) {
             'method' => 'POST',
             'action' => function() use ($kirby) {
                 $options = $kirby->option('programmatordev.stripe-checkout');
-
-                $stripeCheckout = new StripeCheckout($options);
+                $stripeCheckout = createStripeCheckout($options);
 
                 $checkoutSession = $stripeCheckout->createSession();
 

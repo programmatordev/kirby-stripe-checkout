@@ -19,11 +19,26 @@ class StripeCheckoutTest extends BaseTestCase
     {
         parent::setUp();
 
+        $lineItems = [
+            [
+                'price_data' => [
+                    'currency' => 'eur',
+                    'unit_amount' => 100,
+                    'product_data' => [
+                        'name' => 'Product',
+                        'images' => ['image.jpg']
+                    ]
+                ],
+                'quantity' => 1
+            ]
+        ];
+
         $this->options = [
             'hosted' => [
                 'stripePublicKey' => 'pk_test_abc123',
                 'stripeSecretKey' => 'sk_test_abc123',
                 'uiMode' => 'hosted',
+                'lineItems' => $lineItems,
                 'successUrl' => 'https://example.com/success',
                 'cancelUrl' => 'https://example.com/cancel',
             ],
@@ -31,6 +46,7 @@ class StripeCheckoutTest extends BaseTestCase
                 'stripePublicKey' => 'pk_test_abc123',
                 'stripeSecretKey' => 'sk_test_abc123',
                 'uiMode' => 'embedded',
+                'lineItems' => $lineItems,
                 'checkoutPage' => 'checkout',
                 'returnUrl' => 'https://example.com/return',
             ]
@@ -55,12 +71,14 @@ class StripeCheckoutTest extends BaseTestCase
         yield 'hosted missing stripePublicKey' => ['hosted', 'stripePublicKey'];
         yield 'hosted missing stripeSecretKey' => ['hosted', 'stripeSecretKey'];
         yield 'hosted missing uiMode' => ['hosted', 'uiMode'];
+        yield 'hosted missing lineItems' => ['hosted', 'lineItems'];
         yield 'hosted missing successUrl' => ['hosted', 'successUrl'];
         yield 'hosted missing cancelUrl' => ['hosted', 'cancelUrl'];
         // embedded
         yield 'embedded missing stripePublicKey' => ['embedded', 'stripePublicKey'];
         yield 'embedded missing stripeSecretKey' => ['embedded', 'stripeSecretKey'];
         yield 'embedded missing uiMode' => ['embedded', 'uiMode'];
+        yield 'embedded missing lineItems' => ['embedded', 'lineItems'];
         yield 'embedded missing checkoutPage' => ['embedded', 'checkoutPage'];
         yield 'embedded missing returnUrl' => ['embedded', 'returnUrl'];
     }
@@ -85,6 +103,8 @@ class StripeCheckoutTest extends BaseTestCase
         yield 'hosted invalid stripeSecretKey' => ['hosted', 'stripeSecretKey', 1];
         yield 'hosted empty stripeSecretKey' => ['hosted', 'stripeSecretKey', ''];
         yield 'hosted invalid uiMode' => ['hosted', 'uiMode', 'invalid'];
+        yield 'hosted invalid lineItems' => ['hosted', 'lineItems', 'invalid'];
+        yield 'hosted empty lineItems' => ['hosted', 'lineItems', []];
         yield 'hosted invalid type successUrl' => ['hosted', 'successUrl', 1];
         yield 'hosted invalid url successUrl' => ['hosted', 'successUrl', 'invalid'];
         yield 'hosted empty successUrl' => ['hosted', 'successUrl', ''];
@@ -97,6 +117,8 @@ class StripeCheckoutTest extends BaseTestCase
         yield 'embedded invalid stripeSecretKey' => ['embedded', 'stripeSecretKey', 1];
         yield 'embedded empty stripeSecretKey' => ['embedded', 'stripeSecretKey', ''];
         yield 'embedded invalid uiMode' => ['embedded', 'uiMode', 'invalid'];
+        yield 'embedded invalid lineItems' => ['embedded', 'lineItems', 'invalid'];
+        yield 'embedded empty lineItems' => ['embedded', 'lineItems', []];
         yield 'embedded invalid checkoutPage' => ['embedded', 'checkoutPage', 1];
         yield 'embedded empty checkoutPage' => ['embedded', 'checkoutPage', ''];
         yield 'embedded invalid type returnUrl' => ['embedded', 'returnUrl', 1];
@@ -133,6 +155,7 @@ class StripeCheckoutTest extends BaseTestCase
         $this->assertSame($stripeCheckout->getStripePublicKey(), $options['stripePublicKey']);
         $this->assertSame($stripeCheckout->getStripeSecretKey(), $options['stripeSecretKey']);
         $this->assertSame($stripeCheckout->getUiMode(), $options['uiMode']);
+        $this->assertSame($stripeCheckout->getLineItems(), $options['lineItems']);
 
         switch ($uiMode) {
             case 'hosted':
