@@ -5,6 +5,7 @@ namespace ProgrammatorDev\StripeCheckout;
 use Stripe\Checkout\Session;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Stripe;
+use Symfony\Component\OptionsResolver\Options;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Constraints\Url;
@@ -17,7 +18,10 @@ class StripeCheckout
 
     private array $options;
 
-    public function __construct(array $options)
+    public function __construct(
+        array $options,
+        private readonly Cart $cart
+    )
     {
         $this->options = $this->resolveOptions($options);
     }
@@ -27,17 +31,22 @@ class StripeCheckout
         $resolver = new OptionsResolver();
         $resolver->setIgnoreUndefined();
 
-        $resolver->setRequired(['stripePublicKey', 'stripeSecretKey', 'uiMode', 'lineItems']);
+        $resolver->setRequired(['stripePublicKey', 'stripeSecretKey', 'currency', 'uiMode']);
 
         $resolver->setAllowedTypes('stripePublicKey', 'string');
         $resolver->setAllowedTypes('stripeSecretKey', 'string');
+        $resolver->setAllowedTypes('currency', 'string');
         $resolver->setAllowedTypes('uiMode', 'string');
-        $resolver->setAllowedTypes('lineItems', 'array');
 
         $resolver->setAllowedValues('stripePublicKey', Validation::createIsValidCallable(new NotBlank()));
         $resolver->setAllowedValues('stripeSecretKey', Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setAllowedValues('currency', Validation::createIsValidCallable(new NotBlank()));
         $resolver->setAllowedValues('uiMode', [self::UI_MODE_HOSTED, self::UI_MODE_EMBEDDED]);
-        $resolver->setAllowedValues('lineItems', Validation::createIsValidCallable(new NotBlank()));
+
+        // https://docs.stripe.com/currencies#presentment-currencies
+        $resolver->setNormalizer('currency', function (Options $options, string $value): string {
+            return strtolower($value);
+        });
 
         switch ($options['uiMode'] ?? null) {
             case self::UI_MODE_HOSTED:
@@ -76,7 +85,7 @@ class StripeCheckout
         $sessionParams = [
             'ui_mode' => $uiMode,
             'mode' => 'payment',
-            'line_items' => $this->getLineItems(),
+            'line_items' => $this->convertCartToLineItems()
         ];
 
         // add session params according to uiMode
@@ -110,14 +119,14 @@ class StripeCheckout
         return $this->options['stripeSecretKey'];
     }
 
+    public function getCurrency(): string
+    {
+        return $this->options['currency'];
+    }
+
     public function getUiMode(): string
     {
         return $this->options['uiMode'];
-    }
-
-    public function getLineItems(): array
-    {
-        return $this->options['lineItems'];
     }
 
     public function getCheckoutPage(): ?string
@@ -138,5 +147,43 @@ class StripeCheckout
     public function getCancelUrl(): ?string
     {
         return $this->options['cancelUrl'] ?? null;
+    }
+
+    protected function convertCartToLineItems(): array
+    {
+        $lineItems = [];
+
+        foreach ($this->cart->getItems() as $item) {
+            $description = null;
+
+            if (!empty($item['options'])) {
+                $description = [];
+
+                foreach ($item['options'] as $name => $value) {
+                    $description[] = sprintf('%s: %s', $name, $value);
+                }
+
+                $description = implode(', ', $description);
+            }
+
+            // convert to Stripe line_items data
+            // https://docs.stripe.com/api/checkout/sessions/create?lang=php#create_checkout_session-line_items
+            $lineItems[] = [
+                'price_data' => [
+                    'currency' => $this->getCurrency(),
+                    // Stripe only accepts zero-decimal amounts
+                    // https://docs.stripe.com/currencies#zero-decimal
+                    'unit_amount' => (int) round($item['price'] * 100),
+                    'product_data' => [
+                        'name' => $item['name'],
+                        'images' => [$item['image']],
+                        'description' => $description
+                    ]
+                ],
+                'quantity' => $item['quantity'],
+            ];
+        }
+
+        return $lineItems;
     }
 }

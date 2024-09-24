@@ -1,7 +1,6 @@
 <?php
 
 use Kirby\Cms\App;
-use ProgrammatorDev\StripeCheckout\Converter;
 use ProgrammatorDev\StripeCheckout\Exception\CartIsEmptyException;
 use ProgrammatorDev\StripeCheckout\Exception\PageDoesNotExistException;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
@@ -18,12 +17,7 @@ function createStripeCheckout(array $options): StripeCheckout
         throw new CartIsEmptyException('Cart is empty.');
     }
 
-    // populate options before initialization
-    $options = array_merge($options, [
-        'lineItems' => Converter::cartToLineItems($cart, 'eur')
-    ]);
-
-    return new StripeCheckout($options);
+    return new StripeCheckout($options, $cart);
 }
 
 return function(App $kirby) {
@@ -38,8 +32,12 @@ return function(App $kirby) {
 
                 // if "embedded", show checkout page (no need to proceed more)
                 if ($stripeCheckout->getUiMode() === StripeCheckout::UI_MODE_EMBEDDED) {
-                    if (($page = page($stripeCheckout->getCheckoutPage())) === null) {
-                        throw new PageDoesNotExistException('checkoutPage does not exist.');
+                    $checkoutPage = $stripeCheckout->getCheckoutPage();
+
+                    if (($page = page($checkoutPage)) === null) {
+                        throw new PageDoesNotExistException(
+                            sprintf('checkoutPage with id "%s" does not exist.', $checkoutPage)
+                        );
                     }
 
                     return $page->render([

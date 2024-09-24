@@ -14,19 +14,11 @@ App::plugin('programmatordev/stripe-checkout', [
     'options' => [
         'stripePublicKey' => null,
         'stripeSecretKey' => null,
-        // available modes: "hosted" or "embedded"
+        'currency' => 'eur',
         'uiMode' => 'hosted',
-        // required if uiMode is "embedded"
-        // page with Stripe Checkout embedded form
         'checkoutPage' => 'checkout',
-        // required if uiMode is "embedded"
-        // redirects to this page after payment is completed
         'returnUrl' => null,
-        // required if uiMode is "hosted"
-        // redirects to this page after payment is completed
         'successUrl' => null,
-        // required if uiMode is "hosted"
-        // redirects to this page if payment was cancelled
         'cancelUrl' => null,
     ],
     'blueprints' => [
