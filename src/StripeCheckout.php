@@ -48,27 +48,25 @@ class StripeCheckout
             return strtolower($value);
         });
 
-        switch ($options['uiMode'] ?? null) {
-            case self::UI_MODE_HOSTED:
-                $resolver->setRequired(['successUrl', 'cancelUrl']);
+        $uiMode = $options['uiMode'] ?? null;
 
-                $resolver->setAllowedTypes('successUrl', 'string');
-                $resolver->setAllowedTypes('cancelUrl', 'string');
+        if ($uiMode === self::UI_MODE_HOSTED) {
+            $resolver->setRequired(['successUrl', 'cancelUrl']);
 
-                $resolver->setAllowedValues('successUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
-                $resolver->setAllowedValues('cancelUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
+            $resolver->setAllowedTypes('successUrl', 'string');
+            $resolver->setAllowedTypes('cancelUrl', 'string');
 
-                break;
-            case self::UI_MODE_EMBEDDED:
-                $resolver->setRequired(['checkoutPage', 'returnUrl']);
+            $resolver->setAllowedValues('successUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
+            $resolver->setAllowedValues('cancelUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
+        }
+        else if ($uiMode === self::UI_MODE_EMBEDDED) {
+            $resolver->setRequired(['checkoutPage', 'returnUrl']);
 
-                $resolver->setAllowedTypes('checkoutPage', 'string');
-                $resolver->setAllowedTypes('returnUrl', 'string');
+            $resolver->setAllowedTypes('checkoutPage', 'string');
+            $resolver->setAllowedTypes('returnUrl', 'string');
 
-                $resolver->setAllowedValues('checkoutPage', Validation::createIsValidCallable(new NotBlank()));
-                $resolver->setAllowedValues('returnUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
-
-                break;
+            $resolver->setAllowedValues('checkoutPage', Validation::createIsValidCallable(new NotBlank()));
+            $resolver->setAllowedValues('returnUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
         }
 
         return $resolver->resolve($options);
@@ -79,29 +77,31 @@ class StripeCheckout
      */
     public function createSession(): Session
     {
-        $uiMode = $this->getUiMode();
+        $uiMode = $this->options['uiMode'];
 
-        // set base session params
-        $sessionParams = [
-            'ui_mode' => $uiMode,
+        // set base session options
+        $options = [
             'mode' => 'payment',
-            'line_items' => $this->convertCartToLineItems()
+            'ui_mode' => $uiMode,
+            'line_items' => $this->convertCartToLineItems(),
         ];
 
         // add session params according to uiMode
-        $sessionParams = match ($uiMode) {
-            self::UI_MODE_HOSTED => array_merge($sessionParams, [
-                'success_url' => $this->getSuccessUrl(),
-                'cancel_url' => $this->getCancelUrl(),
-            ]),
-            self::UI_MODE_EMBEDDED => array_merge($sessionParams, [
-                'return_url' => $this->getReturnUrl(),
-            ])
-        };
+        if ($uiMode === self::UI_MODE_HOSTED) {
+            $options['success_url'] = $this->options['successUrl'];
+            $options['cancel_url'] = $this->options['cancelUrl'];
+        }
+        else if ($uiMode === self::UI_MODE_EMBEDDED) {
+            $options['return_url'] = $this->options['returnUrl'];
+        }
 
-        Stripe::setApiKey($this->getStripeSecretKey());
+        Stripe::setApiKey($this->options['stripeSecretKey']);
 
-        return Session::create($sessionParams);
+        // trigger event to allow session options manipulation
+        // https://docs.stripe.com/api/checkout/sessions/create?lang=php
+        $options = kirby()->apply('stripe.checkout.sessionCreate:before', compact('options'), 'options');
+
+        return Session::create($options);
     }
 
     public function getOptions(): array
@@ -170,7 +170,7 @@ class StripeCheckout
             // https://docs.stripe.com/api/checkout/sessions/create?lang=php#create_checkout_session-line_items
             $lineItems[] = [
                 'price_data' => [
-                    'currency' => $this->getCurrency(),
+                    'currency' => $this->options['currency'],
                     // Stripe only accepts zero-decimal amounts
                     // https://docs.stripe.com/currencies#zero-decimal
                     'unit_amount' => (int) round($item['price'] * 100),

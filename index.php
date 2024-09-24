@@ -19,7 +19,7 @@ App::plugin('programmatordev/stripe-checkout', [
         'checkoutPage' => 'checkout',
         'returnUrl' => null,
         'successUrl' => null,
-        'cancelUrl' => null,
+        'cancelUrl' => null
     ],
     'blueprints' => [
         // fields
