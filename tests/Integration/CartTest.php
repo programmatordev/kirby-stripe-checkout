@@ -215,7 +215,7 @@ class CartTest extends BaseTestCase
         yield 'invalid name' => ['name', 1];
         yield 'empty name' => ['name', ''];
         yield 'invalid price' => ['price', 'invalid'];
-        yield 'negative price' => ['price', -10.0];
+        yield 'zero price' => ['price', 0];
         yield 'invalid quantity' => ['quantity', 'invalid'];
         yield 'zero quantity' => ['quantity', 0];
         yield 'invalid options' => ['options', 'invalid'];

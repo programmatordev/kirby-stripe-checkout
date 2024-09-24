@@ -2,6 +2,6 @@ label: Price
 type: number
 required: true
 step: 0.01
-min: 0
+min: 0.01
 width: 1/2
 translate: false

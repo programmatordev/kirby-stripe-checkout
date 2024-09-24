@@ -8,7 +8,6 @@ use Symfony\Component\OptionsResolver\Options;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\AtLeastOneOf;
 use Symfony\Component\Validator\Constraints\GreaterThan;
-use Symfony\Component\Validator\Constraints\GreaterThanOrEqual;
 use Symfony\Component\Validator\Constraints\IsNull;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Validation;
@@ -180,7 +179,7 @@ class Cart
         $resolver->setAllowedValues('id', Validation::createIsValidCallable(new NotBlank()));
         $resolver->setAllowedValues('name', Validation::createIsValidCallable(new NotBlank()));
         $resolver->setAllowedValues('image', Validation::createIsValidCallable(new AtLeastOneOf([new IsNull(), new NotBlank()])));
-        $resolver->setAllowedValues('price', Validation::createIsValidCallable(new GreaterThanOrEqual(0)));
+        $resolver->setAllowedValues('price', Validation::createIsValidCallable(new GreaterThan(0)));
         $resolver->setAllowedValues('quantity', Validation::createIsValidCallable(new GreaterThan(0)));
         $resolver->setAllowedValues('options', Validation::createIsValidCallable(new AtLeastOneOf([new IsNull(), new NotBlank()])));
 
