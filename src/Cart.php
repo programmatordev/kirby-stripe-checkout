@@ -142,9 +142,10 @@ class Cart
         $totalQuantity = 0;
 
         foreach ($this->contents['items'] as $lineItemId => $item) {
-            $this->contents['items'][$lineItemId]['subtotal'] = round($item['price'] * $item['quantity'], 2);
+            $item['subtotal'] = round($item['price'] * $item['quantity'], 2);
+            $this->setContentsItem($lineItemId, $item);
 
-            $totalAmount += $this->contents['items'][$lineItemId]['subtotal'];
+            $totalAmount += $item['subtotal'];
             $totalQuantity += $item['quantity'];
         }
 
