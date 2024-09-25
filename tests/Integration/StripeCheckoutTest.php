@@ -144,19 +144,22 @@ class StripeCheckoutTest extends BaseTestCase
         $options = $this->options[$uiMode];
         $stripeCheckout = new StripeCheckout($options, $this->cart);
 
-        $this->assertEquals($stripeCheckout->getOptions(), $options);
-
         $this->assertSame($stripeCheckout->getStripePublicKey(), $options['stripePublicKey']);
         $this->assertSame($stripeCheckout->getStripeSecretKey(), $options['stripeSecretKey']);
         $this->assertSame($stripeCheckout->getCurrency(), $options['currency']);
         $this->assertSame($stripeCheckout->getUiMode(), $options['uiMode']);
 
         if ($uiMode === 'hosted') {
+            $this->assertSame($stripeCheckout->getOptions(), $options);
             $this->assertSame($stripeCheckout->getReturnUrl(), null);
             $this->assertSame($stripeCheckout->getSuccessUrl(), $options['successUrl']);
             $this->assertSame($stripeCheckout->getCancelUrl(), $options['cancelUrl']);
         }
         else if ($uiMode === 'embedded') {
+            // return url is always appended with a session_id parameter
+            $options['returnUrl'] .= '?session_id={CHECKOUT_SESSION_ID}';
+
+            $this->assertSame($stripeCheckout->getOptions(), $options);
             $this->assertSame($stripeCheckout->getReturnUrl(), $options['returnUrl']);
             $this->assertSame($stripeCheckout->getSuccessUrl(), null);
             $this->assertSame($stripeCheckout->getCancelUrl(), null);

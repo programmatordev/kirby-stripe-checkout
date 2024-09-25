@@ -183,8 +183,8 @@ class Cart
         $resolver->setAllowedValues('quantity', Validation::createIsValidCallable(new GreaterThan(0)));
         $resolver->setAllowedValues('options', Validation::createIsValidCallable(new AtLeastOneOf([new IsNull(), new NotBlank()])));
 
-        $resolver->setNormalizer('price', function (Options $options, int|float $value): float {
-            return round($value, 2);
+        $resolver->setNormalizer('price', function (Options $options, int|float $price): float {
+            return round($price, 2);
         });
 
         return $resolver->resolve($data);

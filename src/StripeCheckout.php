@@ -44,8 +44,8 @@ class StripeCheckout
         $resolver->setAllowedValues('uiMode', [self::UI_MODE_HOSTED, self::UI_MODE_EMBEDDED]);
 
         // https://docs.stripe.com/currencies#presentment-currencies
-        $resolver->setNormalizer('currency', function (Options $options, string $value): string {
-            return strtolower($value);
+        $resolver->setNormalizer('currency', function (Options $options, string $currency): string {
+            return strtolower($currency);
         });
 
         $uiMode = $options['uiMode'] ?? null;
@@ -63,8 +63,15 @@ class StripeCheckout
             $resolver->setRequired(['returnUrl']);
 
             $resolver->setAllowedTypes('returnUrl', 'string');
-
             $resolver->setAllowedValues('returnUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
+
+            $resolver->setNormalizer('returnUrl', function (Options $options, string $returnUrl): string {
+                // always include the {CHECKOUT_SESSION_ID} template variable in the URL
+                // https://docs.stripe.com/checkout/embedded/quickstart#return-url
+                $returnUrl .= (parse_url($returnUrl, PHP_URL_QUERY) ? '&' : '?') . 'session_id={CHECKOUT_SESSION_ID}';
+
+                return $returnUrl;
+            });
         }
 
         return $resolver->resolve($options);
