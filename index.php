@@ -16,7 +16,6 @@ App::plugin('programmatordev/stripe-checkout', [
         'stripeSecretKey' => null,
         'currency' => 'eur',
         'uiMode' => 'hosted',
-        'checkoutPage' => 'checkout',
         'returnUrl' => null,
         'successUrl' => null,
         'cancelUrl' => null

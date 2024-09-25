@@ -6,12 +6,12 @@ return [
     'cart' => function() {
         return cart();
     },
-    'checkoutUrl' => function() {
+    'stripeCheckoutUrl' => function() {
         /** @var Site $this */
-        return sprintf('%s/%s', $this->url(), 'checkout');
+        return sprintf('%s/%s', $this->url(), 'stripe/checkout');
     },
-    'checkoutClientSecretUrl' => function() {
+    'stripeCheckoutClientSecretUrl' => function() {
         /** @var Site $this */
-        return sprintf('%s/%s', $this->url(), 'checkout/embedded');
+        return sprintf('%s/%s', $this->url(), 'stripe/checkout/embedded');
     }
 ];

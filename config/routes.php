@@ -2,7 +2,7 @@
 
 use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Exception\CartIsEmptyException;
-use ProgrammatorDev\StripeCheckout\Exception\PageDoesNotExistException;
+use ProgrammatorDev\StripeCheckout\Exception\StripeCheckoutUiModeIsInvalidException;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 
 /**
@@ -24,28 +24,18 @@ return function(App $kirby) {
     return [
         // handle checkout request
         [
-            'pattern' => 'checkout',
+            'pattern' => 'stripe/checkout',
             'method' => 'GET',
             'action' => function() use ($kirby) {
                 $options = $kirby->option('programmatordev.stripe-checkout');
                 $stripeCheckout = createStripeCheckout($options);
 
-                // if "embedded", show checkout page (no need to proceed more)
-                if ($stripeCheckout->getUiMode() === StripeCheckout::UI_MODE_EMBEDDED) {
-                    $checkoutPage = $stripeCheckout->getCheckoutPage();
-
-                    if (($page = page($checkoutPage)) === null) {
-                        throw new PageDoesNotExistException(
-                            sprintf('checkoutPage with id "%s" does not exist.', $checkoutPage)
-                        );
-                    }
-
-                    return $page->render([
-                        'stripePublicKey' => $stripeCheckout->getStripePublicKey(),
-                    ]);
+                if ($stripeCheckout->getUiMode() !== StripeCheckout::UI_MODE_HOSTED) {
+                    throw new StripeCheckoutUiModeIsInvalidException(
+                        'This endpoint is reserved for Stripe Checkout in "hosted" mode.'
+                    );
                 }
 
-                // if we reached here, we are in "hosted" mode
                 $checkoutSession = $stripeCheckout->createSession();
 
                 // redirect to hosted payment form
@@ -55,11 +45,17 @@ return function(App $kirby) {
         ],
         // get checkout client secret when in "embedded" mode
         [
-            'pattern' => 'checkout/embedded',
+            'pattern' => 'stripe/checkout/embedded',
             'method' => 'POST',
             'action' => function() use ($kirby) {
                 $options = $kirby->option('programmatordev.stripe-checkout');
                 $stripeCheckout = createStripeCheckout($options);
+
+                if ($stripeCheckout->getUiMode() !== StripeCheckout::UI_MODE_EMBEDDED) {
+                    throw new StripeCheckoutUiModeIsInvalidException(
+                        'This endpoint is reserved for Stripe Checkout in "embedded" mode.'
+                    );
+                }
 
                 $checkoutSession = $stripeCheckout->createSession();
 

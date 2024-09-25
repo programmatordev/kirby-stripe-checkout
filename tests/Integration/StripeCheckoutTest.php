@@ -36,7 +36,6 @@ class StripeCheckoutTest extends BaseTestCase
                 'stripeSecretKey' => 'sk_test_abc123',
                 'currency' => 'eur',
                 'uiMode' => 'embedded',
-                'checkoutPage' => 'checkout',
                 'returnUrl' => 'https://example.com/return',
             ]
         ];
@@ -77,7 +76,6 @@ class StripeCheckoutTest extends BaseTestCase
         yield 'embedded missing stripeSecretKey' => ['embedded', 'stripeSecretKey'];
         yield 'embedded missing currency' => ['embedded', 'currency'];
         yield 'embedded missing uiMode' => ['embedded', 'uiMode'];
-        yield 'embedded missing checkoutPage' => ['embedded', 'checkoutPage'];
         yield 'embedded missing returnUrl' => ['embedded', 'returnUrl'];
     }
 
@@ -117,8 +115,6 @@ class StripeCheckoutTest extends BaseTestCase
         yield 'embedded invalid currency' => ['embedded', 'currency', 1];
         yield 'embedded empty currency' => ['embedded', 'currency', ''];
         yield 'embedded invalid uiMode' => ['embedded', 'uiMode', 'invalid'];
-        yield 'embedded invalid checkoutPage' => ['embedded', 'checkoutPage', 1];
-        yield 'embedded empty checkoutPage' => ['embedded', 'checkoutPage', ''];
         yield 'embedded invalid type returnUrl' => ['embedded', 'returnUrl', 1];
         yield 'embedded invalid url returnUrl' => ['embedded', 'returnUrl', 'invalid'];
         yield 'embedded empty returnUrl' => ['embedded', 'returnUrl', ''];
@@ -155,21 +151,15 @@ class StripeCheckoutTest extends BaseTestCase
         $this->assertSame($stripeCheckout->getCurrency(), $options['currency']);
         $this->assertSame($stripeCheckout->getUiMode(), $options['uiMode']);
 
-        switch ($uiMode) {
-            case 'hosted':
-                $this->assertSame($stripeCheckout->getCheckoutPage(), null);
-                $this->assertSame($stripeCheckout->getReturnUrl(), null);
-                $this->assertSame($stripeCheckout->getSuccessUrl(), $options['successUrl']);
-                $this->assertSame($stripeCheckout->getCancelUrl(), $options['cancelUrl']);
-
-                break;
-            case 'embedded':
-                $this->assertSame($stripeCheckout->getCheckoutPage(), $options['checkoutPage']);
-                $this->assertSame($stripeCheckout->getReturnUrl(), $options['returnUrl']);
-                $this->assertSame($stripeCheckout->getSuccessUrl(), null);
-                $this->assertSame($stripeCheckout->getCancelUrl(), null);
-
-                breaK;
+        if ($uiMode === 'hosted') {
+            $this->assertSame($stripeCheckout->getReturnUrl(), null);
+            $this->assertSame($stripeCheckout->getSuccessUrl(), $options['successUrl']);
+            $this->assertSame($stripeCheckout->getCancelUrl(), $options['cancelUrl']);
+        }
+        else if ($uiMode === 'embedded') {
+            $this->assertSame($stripeCheckout->getReturnUrl(), $options['returnUrl']);
+            $this->assertSame($stripeCheckout->getSuccessUrl(), null);
+            $this->assertSame($stripeCheckout->getCancelUrl(), null);
         }
     }
 
