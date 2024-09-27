@@ -3,8 +3,11 @@
 namespace ProgrammatorDev\StripeCheckout;
 
 use Stripe\Checkout\Session;
+use Stripe\Event;
 use Stripe\Exception\ApiErrorException;
+use Stripe\Exception\SignatureVerificationException;
 use Stripe\Stripe;
+use Stripe\Webhook;
 use Symfony\Component\OptionsResolver\Options;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\NotBlank;
@@ -31,15 +34,17 @@ class StripeCheckout
         $resolver = new OptionsResolver();
         $resolver->setIgnoreUndefined();
 
-        $resolver->setRequired(['stripePublicKey', 'stripeSecretKey', 'currency', 'uiMode']);
+        $resolver->setRequired(['stripePublicKey', 'stripeSecretKey', 'stripeWebhookSecret', 'currency', 'uiMode']);
 
         $resolver->setAllowedTypes('stripePublicKey', 'string');
         $resolver->setAllowedTypes('stripeSecretKey', 'string');
+        $resolver->setAllowedTypes('stripeWebhookSecret', 'string');
         $resolver->setAllowedTypes('currency', 'string');
         $resolver->setAllowedTypes('uiMode', 'string');
 
         $resolver->setAllowedValues('stripePublicKey', Validation::createIsValidCallable(new NotBlank()));
         $resolver->setAllowedValues('stripeSecretKey', Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setAllowedValues('stripeWebhookSecret', Validation::createIsValidCallable(new NotBlank()));
         $resolver->setAllowedValues('currency', Validation::createIsValidCallable(new NotBlank()));
         $resolver->setAllowedValues('uiMode', [self::UI_MODE_HOSTED, self::UI_MODE_EMBEDDED]);
 
@@ -58,6 +63,10 @@ class StripeCheckout
 
             $resolver->setAllowedValues('successUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
             $resolver->setAllowedValues('cancelUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
+
+            $resolver->setNormalizer('successUrl', function (Options $options, string $successUrl): string {
+                return $this->addSessionIdParamToUrl($successUrl);
+            });
         }
         else if ($uiMode === self::UI_MODE_EMBEDDED) {
             $resolver->setRequired(['returnUrl']);
@@ -66,11 +75,7 @@ class StripeCheckout
             $resolver->setAllowedValues('returnUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
 
             $resolver->setNormalizer('returnUrl', function (Options $options, string $returnUrl): string {
-                // always include the {CHECKOUT_SESSION_ID} template variable in the URL
-                // https://docs.stripe.com/checkout/embedded/quickstart#return-url
-                $returnUrl .= (parse_url($returnUrl, PHP_URL_QUERY) ? '&' : '?') . 'session_id={CHECKOUT_SESSION_ID}';
-
-                return $returnUrl;
+                return $this->addSessionIdParamToUrl($returnUrl);
             });
         }
 
@@ -109,6 +114,14 @@ class StripeCheckout
         return Session::create($options);
     }
 
+    /**
+     * @throws SignatureVerificationException
+     */
+    public static function constructWebhookEvent(string $payload, string $sigHeader, string $secret): Event
+    {
+        return Webhook::constructEvent($payload, $sigHeader, $secret);
+    }
+
     public function getOptions(): array
     {
         return $this->options;
@@ -122,6 +135,11 @@ class StripeCheckout
     public function getStripeSecretKey(): string
     {
         return $this->options['stripeSecretKey'];
+    }
+
+    public function getStripeWebhookSecret(): string
+    {
+        return $this->options['stripeWebhookSecret'];
     }
 
     public function getCurrency(): string
@@ -186,4 +204,14 @@ class StripeCheckout
 
         return $lineItems;
     }
+
+    protected function addSessionIdParamToUrl(string $url): string
+    {
+        // always include the {CHECKOUT_SESSION_ID} template variable in the URL
+        // https://docs.stripe.com/checkout/embedded/quickstart#return-url
+        $url .= (parse_url($url, PHP_URL_QUERY) ? '&' : '?') . 'session_id={CHECKOUT_SESSION_ID}';
+
+        return $url;
+    }
+
 }
