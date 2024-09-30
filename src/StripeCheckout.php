@@ -2,11 +2,12 @@
 
 namespace ProgrammatorDev\StripeCheckout;
 
+use ProgrammatorDev\StripeCheckout\Exception\CartIsEmptyException;
 use Stripe\Checkout\Session;
 use Stripe\Event;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Exception\SignatureVerificationException;
-use Stripe\Stripe;
+use Stripe\StripeClient;
 use Stripe\Webhook;
 use Symfony\Component\OptionsResolver\Options;
 use Symfony\Component\OptionsResolver\OptionsResolver;
@@ -21,12 +22,12 @@ class StripeCheckout
 
     private array $options;
 
-    public function __construct(
-        array $options,
-        private readonly Cart $cart
-    )
+    private StripeClient $stripe;
+
+    public function __construct(array $options)
     {
         $this->options = $this->resolveOptions($options);
+        $this->stripe = new StripeClient($this->options['stripeSecretKey']);
     }
 
     private function resolveOptions(array $options): array
@@ -84,42 +85,53 @@ class StripeCheckout
 
     /**
      * @throws ApiErrorException
+     * @throws CartIsEmptyException
      */
-    public function createSession(): Session
+    public function createSession(Cart $cart): Session
     {
+        if ($cart->getTotalQuantity() === 0) {
+            throw new CartIsEmptyException('Cart is empty.');
+        }
+
         $uiMode = $this->options['uiMode'];
 
         // set base session options
-        $options = [
+        $params = [
             'mode' => 'payment',
             'ui_mode' => $uiMode,
-            'line_items' => $this->convertCartToLineItems(),
+            'line_items' => $this->convertCartToLineItems($cart),
         ];
 
         // add session params according to uiMode
         if ($uiMode === self::UI_MODE_HOSTED) {
-            $options['success_url'] = $this->options['successUrl'];
-            $options['cancel_url'] = $this->options['cancelUrl'];
+            $params['success_url'] = $this->options['successUrl'];
+            $params['cancel_url'] = $this->options['cancelUrl'];
         }
         else if ($uiMode === self::UI_MODE_EMBEDDED) {
-            $options['return_url'] = $this->options['returnUrl'];
+            $params['return_url'] = $this->options['returnUrl'];
         }
 
-        Stripe::setApiKey($this->options['stripeSecretKey']);
-
-        // trigger event to allow session options manipulation
+        // trigger event to allow session parameters manipulation
         // https://docs.stripe.com/api/checkout/sessions/create?lang=php
-        $options = kirby()->apply('stripe.checkout.sessionCreate:before', compact('options'), 'options');
+        $params = kirby()->apply('stripe.checkout.sessionCreate:before', compact('params'), 'params');
 
-        return Session::create($options);
+        return $this->stripe->checkout->sessions->create($params);
+    }
+
+    /**
+     * @throws ApiErrorException
+     */
+    public function retrieveSession(string $sessionId, array $params = [], array $options = []): Session
+    {
+        return $this->stripe->checkout->sessions->retrieve($sessionId, $params, $options);
     }
 
     /**
      * @throws SignatureVerificationException
      */
-    public static function constructWebhookEvent(string $payload, string $sigHeader, string $secret): Event
+    public function constructWebhookEvent(string $payload, string $sigHeader): Event
     {
-        return Webhook::constructEvent($payload, $sigHeader, $secret);
+        return Webhook::constructEvent($payload, $sigHeader, $this->options['stripeWebhookSecret']);
     }
 
     public function getOptions(): array
@@ -167,12 +179,16 @@ class StripeCheckout
         return $this->options['cancelUrl'] ?? null;
     }
 
-    protected function convertCartToLineItems(): array
+    protected function convertCartToLineItems(Cart $cart): array
     {
         $lineItems = [];
 
-        foreach ($this->cart->getItems() as $item) {
-            $description = null;
+        foreach ($cart->getItems() as $item) {
+            // initial product data
+            $productData = [
+                'name' => $item['name'],
+                'images' => [$item['image']]
+            ];
 
             if (!empty($item['options'])) {
                 $description = [];
@@ -181,7 +197,8 @@ class StripeCheckout
                     $description[] = sprintf('%s: %s', $name, $value);
                 }
 
-                $description = implode(', ', $description);
+                // only add description property if there are options
+                $productData['description'] = implode(', ', $description);
             }
 
             // convert to Stripe line_items data
@@ -192,11 +209,7 @@ class StripeCheckout
                     // Stripe only accepts zero-decimal amounts
                     // https://docs.stripe.com/currencies#zero-decimal
                     'unit_amount' => (int) round($item['price'] * 100),
-                    'product_data' => [
-                        'name' => $item['name'],
-                        'images' => [$item['image']],
-                        'description' => $description
-                    ]
+                    'product_data' => $productData
                 ],
                 'quantity' => $item['quantity'],
             ];

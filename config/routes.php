@@ -1,24 +1,8 @@
 <?php
 
 use Kirby\Cms\App;
-use ProgrammatorDev\StripeCheckout\Exception\CartIsEmptyException;
 use ProgrammatorDev\StripeCheckout\Exception\StripeCheckoutUiModeIsInvalidException;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
-
-/**
- * @throws CartIsEmptyException
- */
-function createStripeCheckout(array $options): StripeCheckout
-{
-    $cart = cart();
-
-    // stop if cart is empty
-    if (empty($cart->getItems())) {
-        throw new CartIsEmptyException('Cart is empty.');
-    }
-
-    return new StripeCheckout($options, $cart);
-}
 
 return function(App $kirby) {
     return [
@@ -27,8 +11,7 @@ return function(App $kirby) {
             'pattern' => 'stripe/checkout',
             'method' => 'GET',
             'action' => function() use ($kirby) {
-                $options = $kirby->option('programmatordev.stripe-checkout');
-                $stripeCheckout = createStripeCheckout($options);
+                $stripeCheckout = stripeCheckout();
 
                 if ($stripeCheckout->getUiMode() !== StripeCheckout::UI_MODE_HOSTED) {
                     throw new StripeCheckoutUiModeIsInvalidException(
@@ -36,7 +19,8 @@ return function(App $kirby) {
                     );
                 }
 
-                $checkoutSession = $stripeCheckout->createSession();
+                $cart = cart();
+                $checkoutSession = $stripeCheckout->createSession($cart);
 
                 // redirect to hosted payment form
                 // https://docs.stripe.com/checkout/quickstart#redirect
@@ -48,8 +32,7 @@ return function(App $kirby) {
             'pattern' => 'stripe/checkout/embedded',
             'method' => 'POST',
             'action' => function() use ($kirby) {
-                $options = $kirby->option('programmatordev.stripe-checkout');
-                $stripeCheckout = createStripeCheckout($options);
+                $stripeCheckout = stripeCheckout();
 
                 if ($stripeCheckout->getUiMode() !== StripeCheckout::UI_MODE_EMBEDDED) {
                     throw new StripeCheckoutUiModeIsInvalidException(
@@ -57,7 +40,8 @@ return function(App $kirby) {
                     );
                 }
 
-                $checkoutSession = $stripeCheckout->createSession();
+                $cart = cart();
+                $checkoutSession = $stripeCheckout->createSession($cart);
 
                 // return JSON with required data for embedded checkout
                 // https://docs.stripe.com/checkout/embedded/quickstart#fetch-checkout-session

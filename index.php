@@ -2,12 +2,21 @@
 
 use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Cart;
+use ProgrammatorDev\StripeCheckout\StripeCheckout;
 
 @include_once __DIR__ . '/vendor/autoload.php';
 
 function cart(): Cart
 {
     return new Cart();
+}
+
+function stripeCheckout(array $options = []): StripeCheckout
+{
+    $stripeCheckoutOptions = kirby()->option('programmatordev.stripe-checkout');
+    $stripeCheckoutOptions = array_merge($stripeCheckoutOptions, $options);
+
+    return new StripeCheckout($stripeCheckoutOptions);
 }
 
 App::plugin('programmatordev/stripe-checkout', [

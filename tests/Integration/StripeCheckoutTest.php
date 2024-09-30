@@ -4,6 +4,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Cart;
+use ProgrammatorDev\StripeCheckout\Exception\CartIsEmptyException;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 use ProgrammatorDev\StripeCheckout\Test\BaseTestCase;
 use ProgrammatorDev\StripeCheckout\Test\MockStripeClient;
@@ -61,7 +62,7 @@ class StripeCheckoutTest extends BaseTestCase
 
         $this->expectException(MissingOptionsException::class);
 
-        new StripeCheckout($options, $this->cart);
+        new StripeCheckout($options);
     }
 
     public static function provideInitializeWithMissingOptionsData(): \Generator
@@ -92,7 +93,7 @@ class StripeCheckoutTest extends BaseTestCase
 
         $this->expectException(InvalidOptionsException::class);
 
-        new StripeCheckout($options, $this->cart);
+        new StripeCheckout($options);
     }
 
     public static function provideInitializeWithInvalidOptionsData(): \Generator
@@ -136,11 +137,35 @@ class StripeCheckoutTest extends BaseTestCase
             new MockStripeClient('{"object": "checkout.session"}')
         );
 
-        $stripeCheckout = new StripeCheckout($this->options[$uiMode], $this->cart);
-        $this->assertInstanceOf(Session::class, $stripeCheckout->createSession());
+        // arrange
+        $this->cart->addItem([
+            'id' => 'item-id-1',
+            'name' => 'Item 1',
+            'image' => 'image.jpg',
+            'price' => 10,
+            'quantity' => 1
+        ]);
+
+        $stripeCheckout = new StripeCheckout($this->options[$uiMode]);
+        $this->assertInstanceOf(Session::class, $stripeCheckout->createSession($this->cart));
     }
 
     public static function provideCreateSessionData(): \Generator
+    {
+        yield 'hosted' => ['hosted'];
+        yield 'embedded' => ['embedded'];
+    }
+
+    #[DataProvider('provideCreateSessionWithEmptyCartData')]
+    public function testCreateSessionWithEmptyCart(string $uiMode): void
+    {
+        $this->expectException(CartIsEmptyException::class);
+
+        $stripeCheckout = new StripeCheckout($this->options[$uiMode]);
+        $stripeCheckout->createSession($this->cart);
+    }
+
+    public static function provideCreateSessionWithEmptyCartData(): \Generator
     {
         yield 'hosted' => ['hosted'];
         yield 'embedded' => ['embedded'];
@@ -151,7 +176,7 @@ class StripeCheckoutTest extends BaseTestCase
     {
         $options = $this->options[$uiMode];
 
-        $stripeCheckout = new StripeCheckout($options, $this->cart);
+        $stripeCheckout = new StripeCheckout($options);
 
         $this->assertSame($stripeCheckout->getStripePublicKey(), $options['stripePublicKey']);
         $this->assertSame($stripeCheckout->getStripeSecretKey(), $options['stripeSecretKey']);
@@ -206,15 +231,15 @@ class StripeCheckoutTest extends BaseTestCase
             ]
         ]);
 
-        $stripeCheckout = new class($this->options['hosted'], $this->cart) extends StripeCheckout {
-            public function convertCartToLineItems(): array
+        $stripeCheckout = new class($this->options['hosted']) extends StripeCheckout {
+            public function convertCartToLineItems(Cart $cart): array
             {
-                return parent::convertCartToLineItems();
+                return parent::convertCartToLineItems($cart);
             }
         };
 
         // act
-        $lineItems = $stripeCheckout->convertCartToLineItems();
+        $lineItems = $stripeCheckout->convertCartToLineItems($this->cart);
 
         // assert
         $this->assertEquals([
@@ -224,8 +249,7 @@ class StripeCheckoutTest extends BaseTestCase
                     'unit_amount' => 1000,
                     'product_data' => [
                         'name' => 'Item 1',
-                        'images' => ['image.jpg'],
-                        'description' => null
+                        'images' => ['image.jpg']
                     ]
                 ],
                 'quantity' => 1,
@@ -248,7 +272,7 @@ class StripeCheckoutTest extends BaseTestCase
     public function testAddSessionIdParamToUrl(): void
     {
         // arrange
-        $stripeCheckout = new class($this->options['hosted'], $this->cart) extends StripeCheckout {
+        $stripeCheckout = new class($this->options['hosted']) extends StripeCheckout {
             public function addSessionIdParamToUrl(string $url): string
             {
                 return parent::addSessionIdParamToUrl($url);
