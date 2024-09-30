@@ -129,7 +129,7 @@ class StripeCheckoutTest extends BaseTestCase
         yield 'embedded empty returnUrl' => ['embedded', 'returnUrl', ''];
     }
 
-    #[DataProvider('provideCreateSessionData')]
+    #[DataProvider('provideUiModeData')]
     public function testCreateSession(string $uiMode): void
     {
         // set Stripe mock HTTP client
@@ -150,13 +150,7 @@ class StripeCheckoutTest extends BaseTestCase
         $this->assertInstanceOf(Session::class, $stripeCheckout->createSession($this->cart));
     }
 
-    public static function provideCreateSessionData(): \Generator
-    {
-        yield 'hosted' => ['hosted'];
-        yield 'embedded' => ['embedded'];
-    }
-
-    #[DataProvider('provideCreateSessionWithEmptyCartData')]
+    #[DataProvider('provideUiModeData')]
     public function testCreateSessionWithEmptyCart(string $uiMode): void
     {
         $this->expectException(CartIsEmptyException::class);
@@ -165,13 +159,19 @@ class StripeCheckoutTest extends BaseTestCase
         $stripeCheckout->createSession($this->cart);
     }
 
-    public static function provideCreateSessionWithEmptyCartData(): \Generator
+    #[DataProvider('provideUiModeData')]
+    public function testRetrieveSession(string $uiMode): void
     {
-        yield 'hosted' => ['hosted'];
-        yield 'embedded' => ['embedded'];
+        // set Stripe mock HTTP client
+        ApiRequestor::setHttpClient(
+            new MockStripeClient('{"object": "checkout.session"}')
+        );
+
+        $stripeCheckout = new StripeCheckout($this->options[$uiMode]);
+        $this->assertInstanceOf(Session::class, $stripeCheckout->retrieveSession('session-id'));
     }
 
-    #[DataProvider('provideGettersData')]
+    #[DataProvider('provideUiModeData')]
     public function testGetters(string $uiMode): void
     {
         $options = $this->options[$uiMode];
@@ -202,12 +202,6 @@ class StripeCheckoutTest extends BaseTestCase
             $this->assertSame($stripeCheckout->getSuccessUrl(), null);
             $this->assertSame($stripeCheckout->getCancelUrl(), null);
         }
-    }
-
-    public static function provideGettersData(): \Generator
-    {
-        yield 'hosted' => ['hosted'];
-        yield 'embedded' => ['embedded'];
     }
 
     public function testConvertCartToLineItems(): void
@@ -288,5 +282,11 @@ class StripeCheckoutTest extends BaseTestCase
             'https://example.com/success?action=purchase&session_id={CHECKOUT_SESSION_ID}',
             $stripeCheckout->addSessionIdParamToUrl('https://example.com/success?action=purchase')
         );
+    }
+
+    public static function provideUiModeData(): \Generator
+    {
+        yield 'hosted' => ['hosted'];
+        yield 'embedded' => ['embedded'];
     }
 }
