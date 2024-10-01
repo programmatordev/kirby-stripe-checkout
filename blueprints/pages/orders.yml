@@ -15,10 +15,17 @@ options:
 
 sections:
   orders:
+    extends: stripe.checkout.sections/orders
     label: Orders
-    type: pages
-    layout: table
-    create: false
-    search: true
-    sortable: false
+    status: listed
     empty: No orders yet
+  pendingPayment:
+    extends: stripe.checkout.sections/orders
+    label: Pending payment
+    status: unlisted
+    empty: No pending payments
+  failedPayment:
+    extends: stripe.checkout.sections/orders
+    label: Failed payment
+    status: draft
+    empty: No failed payments

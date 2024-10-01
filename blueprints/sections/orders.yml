@@ -1,0 +1,20 @@
+type: pages
+layout: table
+columns:
+  title:
+    label: ID
+  email:
+    label: Email
+  paymentmethod:
+    label: Payment method
+  totalamount:
+    label: Total amount
+    align: right
+  createdat:
+    label: Date
+    value: "{{ page.createdAt.toDate('d.m.Y') }}"
+    align: right
+sortBy: createdAt desc
+create: false
+search: true
+sortable: false
