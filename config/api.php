@@ -150,7 +150,7 @@ return [
                     }
 
                     $checkoutSession = $stripeCheckout->retrieveSession($event->data->object->id, [
-                        'expand' => ['line_items', 'payment_intent.payment_method']
+                        'expand' => ['line_items.data.price.product', 'payment_intent.payment_method']
                     ]);
 
                     // impersonate kirby to have permissions to create pages
@@ -165,7 +165,8 @@ return [
 
                             foreach ($checkoutSession->line_items->data as $lineItem) {
                                 $lineItems[] = [
-                                    'name' => $lineItem->description,
+                                    'name' => $lineItem->price->product->name,
+                                    'options' => $lineItem->price->product->description,
                                     'price' => $lineItem->price->unit_amount,
                                     'quantity' => $lineItem->quantity,
                                     'subtotal' => $lineItem->amount_subtotal

@@ -197,7 +197,7 @@ class StripeCheckout
                     $description[] = sprintf('%s: %s', $name, $value);
                 }
 
-                // only add description property if there are options
+                // only add description key if there are options
                 $productData['description'] = implode(', ', $description);
             }
 

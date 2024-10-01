@@ -16,6 +16,7 @@ options:
   duplicate: false
   move: false
   preview: false
+  sort: false
 
 fields:
   createdAt:
@@ -33,6 +34,9 @@ fields:
     fields:
       name:
         label: Name
+        type: text
+      options:
+        label: Options
         type: text
       price:
         label: Price
