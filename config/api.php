@@ -1,8 +1,9 @@
 <?php
 
 use Kirby\Cms\App;
+use Kirby\Toolkit\Date;
+use Kirby\Toolkit\Str;
 use ProgrammatorDev\StripeCheckout\Exception\ProductDoesNotExistException;
-use ProgrammatorDev\StripeCheckout\StripeCheckout;
 use Stripe\Exception\SignatureVerificationException;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\AtLeastOneOf;
@@ -129,34 +130,81 @@ return [
                 'method' => 'POST',
                 'auth' => false,
                 'action' => function() use ($kirby) {
-                    $options = $kirby->option('programmatordev.stripe-checkout');
+                    $stripeCheckout = stripeCheckout();
 
                     $payload = @file_get_contents('php://input');
                     $sigHeader = $_SERVER['HTTP_STRIPE_SIGNATURE'];
 
                     try {
-                        $event = StripeCheckout::constructWebhookEvent($payload, $sigHeader, $options['stripeWebhookSecret']);
+                        $event = $stripeCheckout->constructWebhookEvent($payload, $sigHeader);
                     }
                     catch (UnexpectedValueException) {
                         // invalid payload
+                        http_response_code(400);
                         exit;
                     }
                     catch (SignatureVerificationException) {
                         // invalid signature
+                        http_response_code(400);
                         exit;
                     }
+
+                    $checkoutSession = $stripeCheckout->retrieveSession($event->data->object->id, [
+                        'expand' => ['line_items', 'payment_intent.payment_method']
+                    ]);
+
+                    // impersonate kirby to have permissions to create pages
+                    $kirby->impersonate('kirby');
 
                     // validate duplicated events
                     // save event ids and check if already exists to avoid duplication
 
                     switch ($event->type) {
                         case 'checkout.session.completed':
+                            $lineItems = [];
+
+                            foreach ($checkoutSession->line_items->data as $lineItem) {
+                                $lineItems[] = [
+                                    'name' => $lineItem->description,
+                                    'price' => $lineItem->price->unit_amount,
+                                    'quantity' => $lineItem->quantity,
+                                    'subtotal' => $lineItem->amount_subtotal
+                                ];
+                            }
+
+                            $orderPage = $kirby->page('orders')->createChild([
+                                'slug' => Str::slug($checkoutSession->payment_intent->id),
+                                'template' => 'order',
+                                'model' => 'order',
+                                'draft' => false,
+                                'content' => [
+                                    'createdAt' => Date::now()->format('Y-m-d H:i:s'),
+                                    'email' => $checkoutSession->customer_details->email,
+                                    'paymentMethod' => $checkoutSession->payment_intent->payment_method->type,
+                                    'lineItems' => $lineItems,
+                                    'totalAmount' => $checkoutSession->payment_intent->amount,
+                                    'events' => [
+                                        [
+                                            'id' => $event->id,
+                                            'name' => $event->type,
+                                            'paymentStatus' => $checkoutSession->payment_status,
+                                            'date' => Date::createFromFormat('U', $event->created)->format('Y-m-d H:i:s')
+                                        ]
+                                    ]
+                                ]
+                            ]);
+
+                            // if payment status is "paid"
+                            // set order to "listed" (completed)
+                            if ($checkoutSession->payment_status === 'paid') {
+                                $orderPage->changeStatus('listed');
+                            }
+
+                            break;
                         case 'checkout.session.async_payment_succeeded':
                             // fulfill order
 
-                            // check payment_status
-                            // if "unpaid" create incomplete order
-                            // if "paid" complete order
+                            // check existing order in "unpaid" status and complete it
                             break;
                         case 'checkout.session.async_payment_failed':
                             // fail order

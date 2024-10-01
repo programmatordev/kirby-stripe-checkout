@@ -20,4 +20,5 @@ sections:
     layout: table
     create: false
     search: true
+    sortable: false
     empty: No orders yet

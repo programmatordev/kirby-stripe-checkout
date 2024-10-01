@@ -16,3 +16,49 @@ options:
   duplicate: false
   move: false
   preview: false
+
+fields:
+  createdAt:
+    label: Created at
+    type: text
+  email:
+    label: Email
+    type: email
+  paymentMethod:
+    label: Payment method
+    type: text
+  lineItems:
+    label: Line items
+    type: structure
+    fields:
+      name:
+        label: Name
+        type: text
+      price:
+        label: Price
+        type: text
+      quantity:
+        label: Quantity
+        type: number
+      subtotal:
+        label: Subtotal
+        type: text
+  totalAmount:
+    label: Total amount
+    type: text
+  events:
+    label: Events
+    type: structure
+    fields:
+      id:
+        label: ID
+        type: text
+      name:
+        label: Type
+        type: text
+      paymentStatus:
+        label: Payment status
+        type: text
+      date:
+        label: Date
+        type: text
