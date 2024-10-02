@@ -154,10 +154,10 @@ return [
                     // impersonate kirby to have permissions to create pages
                     $kirby->impersonate('kirby');
 
-                    // TODO validate duplicated events
-                    // save event ids and check if already exists to avoid duplication
-
                     switch ($event->type) {
+                        // no need to handle duplicate events here
+                        // because if an order is (tried to) be created with the same slug (which is based on the payment_intent)
+                        // it will fail
                         case 'checkout.session.completed':
                             // create line items structure
                             $lineItems = [];
@@ -208,14 +208,24 @@ return [
                             $pageId = sprintf('orders/%s', Str::slug($checkoutSession->payment_intent->id));
                             $orderPage = $kirby->page($pageId);
 
-                            // get existing events...
-                            $events = $orderPage->content()
+                            // get existing events
+                            $orderEvents = $orderPage->content()
                                 ->get('events')
                                 ->toStructure()
                                 ->toArray();
 
-                            // ...and add new event
-                            $events[] = [
+                            // check if event id was already processed in the past
+                            // immediately exit if it was
+                            // https://docs.stripe.com/webhooks#handle-duplicate-events
+                            foreach ($orderEvents as $orderEvent) {
+                                if ($orderEvent['id'] === $event->id) {
+                                    http_response_code(400);
+                                    exit;
+                                }
+                            }
+
+                            // add new event
+                            $orderEvents[] = [
                                 'id' => $event->id,
                                 'name' => $event->type,
                                 'paymentStatus' => $checkoutSession->payment_status,
@@ -223,7 +233,7 @@ return [
                             ];
 
                             // update page events
-                            $orderPage->update(['events' => $events]);
+                            $orderPage->update(['events' => $orderEvents]);
 
                             // set order status according to event received
                             match ($event->type) {
