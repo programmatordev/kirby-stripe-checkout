@@ -31,6 +31,15 @@ fields:
   lineItems:
     label: Line items
     type: structure
+    columns:
+      name: true
+      options: true
+      price:
+        align: right
+      quantity:
+        align: right
+      subtotal:
+        align: right
     fields:
       name:
         label: Name
@@ -53,6 +62,12 @@ fields:
   events:
     label: Events
     type: structure
+    columns:
+      id: true
+      name: true
+      paymentStatus: true
+      date:
+        align: right
     fields:
       id:
         label: ID
