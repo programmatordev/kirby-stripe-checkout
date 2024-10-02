@@ -20,9 +20,9 @@ class StripeCheckout
     public const UI_MODE_HOSTED = 'hosted';
     public const UI_MODE_EMBEDDED = 'embedded';
 
-    private array $options;
-
     private StripeClient $stripe;
+
+    private array $options;
 
     public function __construct(array $options)
     {

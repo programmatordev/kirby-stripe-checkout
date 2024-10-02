@@ -13,10 +13,12 @@ function cart(): Cart
 
 function stripeCheckout(array $options = []): StripeCheckout
 {
-    $stripeCheckoutOptions = kirby()->option('programmatordev.stripe-checkout');
-    $stripeCheckoutOptions = array_merge($stripeCheckoutOptions, $options);
+    $options = array_merge(
+        kirby()->option('programmatordev.stripe-checkout'),
+        $options
+    );
 
-    return new StripeCheckout($stripeCheckoutOptions);
+    return new StripeCheckout($options);
 }
 
 App::plugin('programmatordev/stripe-checkout', [

@@ -17,13 +17,10 @@ function resolveAddItemData(array $data): array
     $resolver = new OptionsResolver();
 
     $resolver->setDefaults(['options' => null]);
-
     $resolver->setRequired(['id', 'quantity']);
-
     $resolver->setAllowedTypes('id', 'string');
     $resolver->setAllowedTypes('quantity', ['int']);
     $resolver->setAllowedTypes('options', ['null', 'scalar[]']);
-
     $resolver->setAllowedValues('id', Validation::createIsValidCallable(new NotBlank()));
     $resolver->setAllowedValues('quantity', Validation::createIsValidCallable(new GreaterThan(0)));
     $resolver->setAllowedValues('options', Validation::createIsValidCallable(new AtLeastOneOf([new IsNull(), new NotBlank()])));
@@ -36,7 +33,6 @@ function resolveUpdateItemData(array $data): array
     $resolver = new OptionsResolver();
 
     $resolver->setRequired(['quantity']);
-
     $resolver->setAllowedTypes('quantity', ['int']);
     $resolver->setAllowedValues('quantity', Validation::createIsValidCallable(new GreaterThan(0)));
 
@@ -136,6 +132,7 @@ return [
                     $sigHeader = $_SERVER['HTTP_STRIPE_SIGNATURE'];
 
                     try {
+                        // validate webhook event
                         $event = $stripeCheckout->constructWebhookEvent($payload, $sigHeader);
                     }
                     catch (UnexpectedValueException) {
@@ -149,6 +146,7 @@ return [
                         exit;
                     }
 
+                    // get checkout session with required data
                     $checkoutSession = $stripeCheckout->retrieveSession($event->data->object->id, [
                         'expand' => ['line_items.data.price.product', 'payment_intent.payment_method']
                     ]);
@@ -156,11 +154,12 @@ return [
                     // impersonate kirby to have permissions to create pages
                     $kirby->impersonate('kirby');
 
-                    // validate duplicated events
+                    // TODO validate duplicated events
                     // save event ids and check if already exists to avoid duplication
 
                     switch ($event->type) {
                         case 'checkout.session.completed':
+                            // create line items structure
                             $lineItems = [];
 
                             foreach ($checkoutSession->line_items->data as $lineItem) {
@@ -173,6 +172,7 @@ return [
                                 ];
                             }
 
+                            // create order
                             $orderPage = $kirby->page('orders')->createChild([
                                 'slug' => Str::slug($checkoutSession->payment_intent->id),
                                 'template' => 'order',
@@ -196,21 +196,41 @@ return [
                             ]);
 
                             // if payment status is "paid"
-                            // set order to "listed" (completed)
+                            // set order as completed
                             if ($checkoutSession->payment_status === 'paid') {
                                 $orderPage->changeStatus('listed');
                             }
 
                             break;
                         case 'checkout.session.async_payment_succeeded':
-                            // fulfill order
-
-                            // check existing order in "unpaid" status and complete it
-                            break;
                         case 'checkout.session.async_payment_failed':
-                            // fail order
+                            // find existing order page
+                            $pageId = sprintf('orders/%s', Str::slug($checkoutSession->payment_intent->id));
+                            $orderPage = $kirby->page($pageId);
 
-                            // fail incomplete order
+                            // get existing events...
+                            $events = $orderPage->content()
+                                ->get('events')
+                                ->toStructure()
+                                ->toArray();
+
+                            // ...and add new event
+                            $events[] = [
+                                'id' => $event->id,
+                                'name' => $event->type,
+                                'paymentStatus' => $checkoutSession->payment_status,
+                                'date' => Date::createFromFormat('U', $event->created)->format('Y-m-d H:i:s')
+                            ];
+
+                            // update page events
+                            $orderPage->update(['events' => $events]);
+
+                            // set order status according to event received
+                            match ($event->type) {
+                                'checkout.session.async_payment_succeeded' => $orderPage->changeStatus('listed'),
+                                'checkout.session.async_payment_failed' => $orderPage->changeStatus('draft'),
+                            };
+
                             break;
                     }
 

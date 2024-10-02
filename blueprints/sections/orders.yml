@@ -12,7 +12,7 @@ columns:
     align: right
   createdat:
     label: Date
-    value: "{{ page.createdAt.toDate('d.m.Y') }}"
+    value: "{{ page.createdAt.toDate('Y-m-d') }}"
     align: right
 sortBy: createdAt desc
 create: false
