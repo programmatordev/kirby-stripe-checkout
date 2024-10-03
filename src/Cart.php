@@ -26,7 +26,7 @@ class Cart
 
     private array $defaultContents;
 
-    private ?array $contents;
+    private array $contents;
 
     /**
      * @throws UnknownCurrencyException
@@ -125,7 +125,7 @@ class Cart
         $this->session->remove(self::SESSION_NAME);
     }
 
-    public function getContents(): ?array
+    public function getContents(): array
     {
         return $this->contents;
     }
