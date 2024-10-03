@@ -56,13 +56,13 @@ class MoneyFormatter
         $symbol = Currencies::getSymbol($currency);
         $money = Money::of($amount, $currency);
 
-        $amountFormat = number_format(
+        $amountFormatted = number_format(
             $money->getAmount()->toFloat(),
             $money->getCurrency()->getDefaultFractionDigits()
         );
 
         // format(1000, 'EUR') => € 1,000.00
         // format(1000, 'JPY') => ¥ 1,000
-        return sprintf('%s %s', $symbol, $amountFormat);
+        return sprintf('%s %s', $symbol, $amountFormatted);
     }
 }

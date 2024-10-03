@@ -1,14 +1,26 @@
 <?php
 
+use Brick\Math\Exception\NumberFormatException;
+use Brick\Math\Exception\RoundingNecessaryException;
+use Brick\Money\Exception\UnknownCurrencyException;
 use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Cart;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 
 @include_once __DIR__ . '/vendor/autoload.php';
 
-function cart(): Cart
+/**
+ * @throws UnknownCurrencyException
+ * @throws NumberFormatException
+ * @throws RoundingNecessaryException
+ */
+function cart(array $options = []): Cart
 {
-    return new Cart();
+    $options = array_merge([
+        'currency' => kirby()->option('programmatordev.stripe-checkout.currency')
+    ], $options);
+
+    return new Cart($options);
 }
 
 function stripeCheckout(array $options = []): StripeCheckout
@@ -26,7 +38,7 @@ App::plugin('programmatordev/stripe-checkout', [
         'stripePublicKey' => null,
         'stripeSecretKey' => null,
         'stripeWebhookSecret' => null,
-        'currency' => 'eur',
+        'currency' => 'EUR',
         'uiMode' => 'hosted',
         'returnUrl' => null,
         'successUrl' => null,

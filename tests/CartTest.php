@@ -18,12 +18,15 @@ class CartTest extends BaseTestCase
     {
         parent::setUp();
 
-        $this->cart = new Cart();
+        $this->cart = new Cart([
+            'currency' => 'EUR'
+        ]);
 
         $this->defaultContents = [
             'items' => [],
-            'totalAmount' => 0.0,
-            'totalQuantity' => 0
+            'totalAmount' => 0,
+            'totalQuantity' => 0,
+            'totalAmountFormatted' => '€ 0.00'
         ];
     }
 
@@ -55,14 +58,17 @@ class CartTest extends BaseTestCase
                     'id' => 'item-id',
                     'image' => 'image.jpg',
                     'name' => 'Item',
-                    'price' => 10.0,
+                    'price' => 10,
                     'quantity' => 1,
-                    'subtotal' => 10.0,
-                    'options' => null
+                    'subtotal' => 10,
+                    'options' => null,
+                    'priceFormatted' => '€ 10.00',
+                    'subtotalFormatted' => '€ 10.00'
                 ]
             ],
-            'totalAmount' => 10.0,
-            'totalQuantity' => 1
+            'totalAmount' => 10,
+            'totalQuantity' => 1,
+            'totalAmountFormatted' => '€ 10.00'
         ], $this->cart->getContents());
     }
 
@@ -93,14 +99,17 @@ class CartTest extends BaseTestCase
                     'id' => 'item-id',
                     'image' => null,
                     'name' => 'Item',
-                    'price' => 10.0,
+                    'price' => 10,
                     'quantity' => 2,
-                    'subtotal' => 20.0,
-                    'options' => null
+                    'subtotal' => 20,
+                    'options' => null,
+                    'priceFormatted' => '€ 10.00',
+                    'subtotalFormatted' => '€ 20.00'
                 ]
             ],
-            'totalAmount' => 20.0,
-            'totalQuantity' => 2
+            'totalAmount' => 20,
+            'totalQuantity' => 2,
+            'totalAmountFormatted' => '€ 20.00'
         ], $this->cart->getContents());
     }
 
@@ -137,27 +146,32 @@ class CartTest extends BaseTestCase
                     'id' => 'item-id',
                     'image' => null,
                     'name' => 'Item',
-                    'price' => 10.0,
+                    'price' => 10,
                     'quantity' => 1,
-                    'subtotal' => 10.0,
+                    'subtotal' => 10,
                     'options' => [
                         'size' => 'small'
-                    ]
+                    ],
+                    'priceFormatted' => '€ 10.00',
+                    'subtotalFormatted' => '€ 10.00'
                 ],
                 $lineItemId2 => [
                     'id' => 'item-id',
                     'image' => null,
                     'name' => 'Item',
-                    'price' => 10.0,
+                    'price' => 10,
                     'quantity' => 1,
-                    'subtotal' => 10.0,
+                    'subtotal' => 10,
                     'options' => [
                         'size' => 'medium'
-                    ]
+                    ],
+                    'priceFormatted' => '€ 10.00',
+                    'subtotalFormatted' => '€ 10.00'
                 ]
             ],
-            'totalAmount' => 20.0,
-            'totalQuantity' => 2
+            'totalAmount' => 20,
+            'totalQuantity' => 2,
+            'totalAmountFormatted' => '€ 20.00'
         ], $this->cart->getContents());
     }
 
@@ -238,14 +252,17 @@ class CartTest extends BaseTestCase
                     'id' => 'item-id',
                     'image' => null,
                     'name' => 'Item',
-                    'price' => 10.0,
+                    'price' => 10,
                     'quantity' => 2,
-                    'subtotal' => 20.0,
-                    'options' => null
+                    'subtotal' => 20,
+                    'options' => null,
+                    'priceFormatted' => '€ 10.00',
+                    'subtotalFormatted' => '€ 20.00'
                 ]
             ],
-            'totalAmount' => 20.0,
-            'totalQuantity' => 2
+            'totalAmount' => 20,
+            'totalQuantity' => 2,
+            'totalAmountFormatted' => '€ 20.00'
         ], $this->cart->getContents());
 
         // act
@@ -258,14 +275,17 @@ class CartTest extends BaseTestCase
                     'id' => 'item-id',
                     'image' => null,
                     'name' => 'Item',
-                    'price' => 10.0,
+                    'price' => 10,
                     'quantity' => 1,
-                    'subtotal' => 10.0,
-                    'options' => null
+                    'subtotal' => 10,
+                    'options' => null,
+                    'priceFormatted' => '€ 10.00',
+                    'subtotalFormatted' => '€ 10.00'
                 ]
             ],
-            'totalAmount' => 10.0,
-            'totalQuantity' => 1
+            'totalAmount' => 10,
+            'totalQuantity' => 1,
+            'totalAmountFormatted' => '€ 10.00'
         ], $this->cart->getContents());
     }
 
@@ -308,14 +328,17 @@ class CartTest extends BaseTestCase
                     'id' => 'item-id',
                     'image' => null,
                     'name' => 'Item',
-                    'price' => 10.0,
+                    'price' => 10,
                     'quantity' => 1,
-                    'subtotal' => 10.0,
-                    'options' => null
+                    'subtotal' => 10,
+                    'options' => null,
+                    'priceFormatted' => '€ 10.00',
+                    'subtotalFormatted' => '€ 10.00'
                 ]
             ],
-            'totalAmount' => 10.0,
-            'totalQuantity' => 1
+            'totalAmount' => 10,
+            'totalQuantity' => 1,
+            'totalAmountFormatted' => '€ 10.00'
         ], $this->cart->getContents());
 
         // act
@@ -349,14 +372,17 @@ class CartTest extends BaseTestCase
                     'id' => 'item-id',
                     'image' => null,
                     'name' => 'Item',
-                    'price' => 10.0,
+                    'price' => 10,
                     'quantity' => 1,
-                    'subtotal' => 10.0,
-                    'options' => null
+                    'subtotal' => 10,
+                    'options' => null,
+                    'priceFormatted' => '€ 10.00',
+                    'subtotalFormatted' => '€ 10.00'
                 ]
             ],
-            'totalAmount' => 10.0,
-            'totalQuantity' => 1
+            'totalAmount' => 10,
+            'totalQuantity' => 1,
+            'totalAmountFormatted' => '€ 10.00'
         ], $this->cart->getContents());
 
         // act
@@ -378,7 +404,7 @@ class CartTest extends BaseTestCase
 
     public function testGetTotalAmount(): void
     {
-        $this->assertSame(0.0, $this->cart->getTotalAmount());
+        $this->assertSame(0, $this->cart->getTotalAmount());
     }
 
     public function testGetTotalQuantity(): void

@@ -26,7 +26,7 @@ class StripeCheckoutTest extends BaseTestCase
                 'stripePublicKey' => 'pk_test_abc123',
                 'stripeSecretKey' => 'sk_test_abc123',
                 'stripeWebhookSecret' => 'whsec_abc123',
-                'currency' => 'eur',
+                'currency' => 'EUR',
                 'uiMode' => 'hosted',
                 'successUrl' => 'https://example.com/success',
                 'cancelUrl' => 'https://example.com/cancel',
@@ -35,13 +35,15 @@ class StripeCheckoutTest extends BaseTestCase
                 'stripePublicKey' => 'pk_test_abc123',
                 'stripeSecretKey' => 'sk_test_abc123',
                 'stripeWebhookSecret' => 'whsec_abc123',
-                'currency' => 'eur',
+                'currency' => 'EUR',
                 'uiMode' => 'embedded',
                 'returnUrl' => 'https://example.com/return',
             ]
         ];
 
-        $this->cart = new Cart();
+        $this->cart = new Cart([
+            'currency' => 'EUR'
+        ]);
     }
 
     protected function tearDown(): void

@@ -72,12 +72,13 @@ return [
                     }
 
                     $cart = cart();
+                    $productContent = $productPage->content();
 
                     $cart->addItem([
                         'id' => $productPage->id(),
-                        'image' => $productPage->cover()->toFile()->url(),
-                        'name' => $productPage->title()->value(),
-                        'price' => (float) $productPage->price()->value(),
+                        'image' => $productContent->get('cover')->toFile()->url(),
+                        'name' => $productContent->get('title')->value(),
+                        'price' => (float) $productContent->get('price')->value(),
                         'quantity' => (int) $data['quantity'],
                         'options' => $data['options']
                     ]);

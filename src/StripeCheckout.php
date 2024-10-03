@@ -13,6 +13,7 @@ use Stripe\Exception\ApiErrorException;
 use Stripe\Exception\SignatureVerificationException;
 use Stripe\StripeClient;
 use Stripe\Webhook;
+use Symfony\Component\Intl\Currencies;
 use Symfony\Component\OptionsResolver\Options;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\NotBlank;
@@ -50,12 +51,12 @@ class StripeCheckout
         $resolver->setAllowedValues('stripePublicKey', Validation::createIsValidCallable(new NotBlank()));
         $resolver->setAllowedValues('stripeSecretKey', Validation::createIsValidCallable(new NotBlank()));
         $resolver->setAllowedValues('stripeWebhookSecret', Validation::createIsValidCallable(new NotBlank()));
-        $resolver->setAllowedValues('currency', Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setAllowedValues('currency', Currencies::getCurrencyCodes());
         $resolver->setAllowedValues('uiMode', [self::UI_MODE_HOSTED, self::UI_MODE_EMBEDDED]);
 
         // https://docs.stripe.com/currencies#presentment-currencies
         $resolver->setNormalizer('currency', function (Options $options, string $currency): string {
-            return strtolower($currency);
+            return strtoupper($currency);
         });
 
         $uiMode = $options['uiMode'] ?? null;
@@ -220,7 +221,9 @@ class StripeCheckout
             // https://docs.stripe.com/api/checkout/sessions/create?lang=php#create_checkout_session-line_items
             $lineItems[] = [
                 'price_data' => [
-                    'currency' => $currency,
+                    // present currency in lowercase
+                    // https://docs.stripe.com/currencies#presentment-currencies
+                    'currency' => strtolower($currency),
                     // Stripe expects amounts to be provided in the currency smallest unit
                     // https://docs.stripe.com/currencies#zero-decimal
                     'unit_amount' => MoneyFormatter::toMinorUnit($item['price'], $currency),
