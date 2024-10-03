@@ -1,13 +1,11 @@
 <?php
 
-namespace ProgrammatorDev\StripeCheckout\Test\Integration;
+namespace ProgrammatorDev\StripeCheckout\Test;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Cart;
 use ProgrammatorDev\StripeCheckout\Exception\CartIsEmptyException;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
-use ProgrammatorDev\StripeCheckout\Test\BaseTestCase;
-use ProgrammatorDev\StripeCheckout\Test\MockStripeClient;
 use Stripe\ApiRequestor;
 use Stripe\Checkout\Session;
 use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;

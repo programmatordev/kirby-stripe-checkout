@@ -4,6 +4,7 @@ use Kirby\Cms\App;
 use Kirby\Toolkit\Date;
 use Kirby\Toolkit\Str;
 use ProgrammatorDev\StripeCheckout\Exception\ProductDoesNotExistException;
+use ProgrammatorDev\StripeCheckout\MoneyFormatter;
 use Stripe\Exception\SignatureVerificationException;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\AtLeastOneOf;
@@ -159,16 +160,23 @@ return [
                         // because if an order is (tried to) be created with the same slug (which is based on the payment_intent)
                         // it will fail
                         case 'checkout.session.completed':
+                            // get order currency
+                            $currency = $stripeCheckout->getCurrency();
+                            // get order total amount
+                            $totalAmount = MoneyFormatter::fromMinorUnit($checkoutSession->payment_intent->amount, $currency);
                             // create line items structure
                             $lineItems = [];
 
                             foreach ($checkoutSession->line_items->data as $lineItem) {
+                                $price = MoneyFormatter::fromMinorUnit($lineItem->price->unit_amount, $currency);
+                                $subtotal = MoneyFormatter::fromMinorUnit($lineItem->amount_subtotal, $currency);
+
                                 $lineItems[] = [
                                     'name' => $lineItem->price->product->name,
                                     'options' => $lineItem->price->product->description,
-                                    'price' => $lineItem->price->unit_amount,
+                                    'price' => MoneyFormatter::format($price, $currency),
                                     'quantity' => $lineItem->quantity,
-                                    'subtotal' => $lineItem->amount_subtotal
+                                    'subtotal' => MoneyFormatter::format($subtotal, $currency)
                                 ];
                             }
 
@@ -183,7 +191,7 @@ return [
                                     'email' => $checkoutSession->customer_details->email,
                                     'paymentMethod' => $checkoutSession->payment_intent->payment_method->type,
                                     'lineItems' => $lineItems,
-                                    'totalAmount' => $checkoutSession->payment_intent->amount,
+                                    'totalAmount' => MoneyFormatter::format($totalAmount, $currency),
                                     'events' => [
                                         [
                                             'id' => $event->id,

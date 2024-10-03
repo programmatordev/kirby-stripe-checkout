@@ -2,6 +2,10 @@
 
 namespace ProgrammatorDev\StripeCheckout;
 
+use Brick\Math\Exception\MathException;
+use Brick\Math\Exception\NumberFormatException;
+use Brick\Math\Exception\RoundingNecessaryException;
+use Brick\Money\Exception\UnknownCurrencyException;
 use ProgrammatorDev\StripeCheckout\Exception\CartIsEmptyException;
 use Stripe\Checkout\Session;
 use Stripe\Event;
@@ -86,6 +90,10 @@ class StripeCheckout
     /**
      * @throws ApiErrorException
      * @throws CartIsEmptyException
+     * @throws MathException
+     * @throws NumberFormatException
+     * @throws RoundingNecessaryException
+     * @throws UnknownCurrencyException
      */
     public function createSession(Cart $cart): Session
     {
@@ -179,8 +187,15 @@ class StripeCheckout
         return $this->options['cancelUrl'] ?? null;
     }
 
+    /**
+     * @throws RoundingNecessaryException
+     * @throws MathException
+     * @throws UnknownCurrencyException
+     * @throws NumberFormatException
+     */
     protected function convertCartToLineItems(Cart $cart): array
     {
+        $currency = $this->options['currency'];
         $lineItems = [];
 
         foreach ($cart->getItems() as $item) {
@@ -205,10 +220,10 @@ class StripeCheckout
             // https://docs.stripe.com/api/checkout/sessions/create?lang=php#create_checkout_session-line_items
             $lineItems[] = [
                 'price_data' => [
-                    'currency' => $this->options['currency'],
-                    // Stripe only accepts zero-decimal amounts
+                    'currency' => $currency,
+                    // Stripe expects amounts to be provided in the currency smallest unit
                     // https://docs.stripe.com/currencies#zero-decimal
-                    'unit_amount' => (int) round($item['price'] * 100),
+                    'unit_amount' => MoneyFormatter::toMinorUnit($item['price'], $currency),
                     'product_data' => $productData
                 ],
                 'quantity' => $item['quantity'],

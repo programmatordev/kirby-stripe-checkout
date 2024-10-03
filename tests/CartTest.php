@@ -1,11 +1,10 @@
 <?php
 
-namespace ProgrammatorDev\StripeCheckout\Test\Integration;
+namespace ProgrammatorDev\StripeCheckout\Test;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Cart;
 use ProgrammatorDev\StripeCheckout\Exception\CartItemDoesNotExistException;
-use ProgrammatorDev\StripeCheckout\Test\BaseTestCase;
 use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
 use Symfony\Component\OptionsResolver\Exception\MissingOptionsException;
 
