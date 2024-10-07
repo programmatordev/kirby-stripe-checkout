@@ -3,8 +3,8 @@ title: Order
 icon: cart
 
 status:
-  draft: Error
-  unlisted: Incomplete
+  draft: Failed
+  unlisted: Pending
   listed: Complete
 
 options:
@@ -33,7 +33,7 @@ fields:
     type: structure
     columns:
       name: true
-      options: true
+      description: true
       price:
         align: right
       quantity:
@@ -44,8 +44,8 @@ fields:
       name:
         label: Name
         type: text
-      options:
-        label: Options
+      description:
+        label: Description
         type: text
       price:
         label: Price
@@ -64,7 +64,7 @@ fields:
     type: structure
     columns:
       id: true
-      name: true
+      type: true
       paymentStatus: true
       date:
         align: right
@@ -72,12 +72,15 @@ fields:
       id:
         label: ID
         type: text
-      name:
+      type:
         label: Type
         type: text
       paymentStatus:
         label: Payment status
         type: text
+      message:
+        label: Message
+        type: writer
       date:
         label: Date
         type: text

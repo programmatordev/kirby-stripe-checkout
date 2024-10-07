@@ -174,7 +174,7 @@ return [
 
                                 $lineItems[] = [
                                     'name' => $lineItem->price->product->name,
-                                    'options' => $lineItem->price->product->description,
+                                    'description' => $lineItem->price->product->description,
                                     'price' => MoneyFormatter::format($price, $currency),
                                     'quantity' => $lineItem->quantity,
                                     'subtotal' => MoneyFormatter::format($subtotal, $currency)
@@ -196,8 +196,9 @@ return [
                                     'events' => [
                                         [
                                             'id' => $event->id,
-                                            'name' => $event->type,
+                                            'type' => $event->type,
                                             'paymentStatus' => $checkoutSession->payment_status,
+                                            'message' => $checkoutSession->payment_intent?->last_payment_error->message ?? null,
                                             'date' => Date::createFromFormat('U', $event->created)->format('Y-m-d H:i:s')
                                         ]
                                     ]
@@ -236,8 +237,9 @@ return [
                             // add new event
                             $orderEvents[] = [
                                 'id' => $event->id,
-                                'name' => $event->type,
+                                'type' => $event->type,
                                 'paymentStatus' => $checkoutSession->payment_status,
+                                'message' => $checkoutSession->payment_intent?->last_payment_error->message ?? null,
                                 'date' => Date::createFromFormat('U', $event->created)->format('Y-m-d H:i:s')
                             ];
 
