@@ -6,6 +6,7 @@ use Brick\Math\Exception\MathException;
 use Brick\Math\Exception\NumberFormatException;
 use Brick\Math\Exception\RoundingNecessaryException;
 use Brick\Money\Exception\UnknownCurrencyException;
+use Kirby\Uuid\Uuid;
 use ProgrammatorDev\StripeCheckout\Exception\CartIsEmptyException;
 use Stripe\Checkout\Session;
 use Stripe\Event;
@@ -109,6 +110,11 @@ class StripeCheckout
             'mode' => 'payment',
             'ui_mode' => $uiMode,
             'line_items' => $this->convertCartToLineItems($cart),
+            'metadata' => [
+                // generate a unique id for the order
+                // required in webhooks to sync the different event payment steps
+                'order_id' => Uuid::generate()
+            ]
         ];
 
         // add session params according to uiMode

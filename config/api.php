@@ -158,8 +158,7 @@ return [
 
                     switch ($event->type) {
                         // no need to handle duplicate events here
-                        // because if an order is (tried to) be created with the same slug (which is based on the payment_intent)
-                        // it will fail
+                        // because if an order is (tried to) be created with the same slug it will fail
                         case 'checkout.session.completed':
                             // get order currency
                             $currency = $stripeCheckout->getCurrency();
@@ -189,14 +188,15 @@ return [
 
                             // create order
                             $orderPage = $kirby->page('orders')->createChild([
-                                'slug' => Str::slug($checkoutSession->payment_intent->id),
+                                'slug' => $checkoutSession->metadata['order_id'],
                                 'template' => 'order',
                                 'model' => 'order',
                                 'draft' => false,
                                 'content' => [
+                                    'paymentIntentId' => $checkoutSession->payment_intent?->id ?? null,
                                     'createdAt' => Date::now()->format('Y-m-d H:i:s'),
                                     'email' => $checkoutSession->customer_details->email,
-                                    'paymentMethod' => $checkoutSession->payment_intent->payment_method->type,
+                                    'paymentMethod' => $checkoutSession->payment_intent?->payment_method->type ?? 'no_cost',
                                     'lineItems' => $lineItems,
                                     'subtotalAmount' => MoneyFormatter::format($subtotalAmount, $currency),
                                     'discountAmount' => MoneyFormatter::format($discountAmount, $currency),
@@ -223,7 +223,7 @@ return [
                         case 'checkout.session.async_payment_succeeded':
                         case 'checkout.session.async_payment_failed':
                             // find existing order page
-                            $pageId = sprintf('orders/%s', Str::slug($checkoutSession->payment_intent->id));
+                            $pageId = sprintf('orders/%s', $checkoutSession->metadata['order_id']);
                             $orderPage = $kirby->page($pageId);
 
                             // get existing events

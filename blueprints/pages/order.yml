@@ -19,7 +19,12 @@ options:
   sort: false
 
 fields:
+  paymentIntentId:
+    width: 1/2
+    label: Stripe ID
+    type: text
   createdAt:
+    width: 1/2
     label: Created at
     type: text
   email:
