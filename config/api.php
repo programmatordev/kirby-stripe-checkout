@@ -163,21 +163,27 @@ return [
                         case 'checkout.session.completed':
                             // get order currency
                             $currency = $stripeCheckout->getCurrency();
-                            // get order total amount
-                            $totalAmount = MoneyFormatter::fromMinorUnit($checkoutSession->payment_intent->amount, $currency);
+                            // get order amounts
+                            $subtotalAmount = MoneyFormatter::fromMinorUnit($checkoutSession->amount_subtotal, $currency);
+                            $discountAmount = MoneyFormatter::fromMinorUnit($checkoutSession->total_details->amount_discount, $currency);
+                            $totalAmount = MoneyFormatter::fromMinorUnit($checkoutSession->amount_total, $currency);
                             // create line items structure
                             $lineItems = [];
 
                             foreach ($checkoutSession->line_items->data as $lineItem) {
                                 $price = MoneyFormatter::fromMinorUnit($lineItem->price->unit_amount, $currency);
                                 $subtotal = MoneyFormatter::fromMinorUnit($lineItem->amount_subtotal, $currency);
+                                $discount = MoneyFormatter::fromMinorUnit($lineItem->amount_discount, $currency);
+                                $total = MoneyFormatter::fromMinorUnit($lineItem->amount_total, $currency);
 
                                 $lineItems[] = [
                                     'name' => $lineItem->price->product->name,
                                     'description' => $lineItem->price->product->description,
                                     'price' => MoneyFormatter::format($price, $currency),
                                     'quantity' => $lineItem->quantity,
-                                    'subtotal' => MoneyFormatter::format($subtotal, $currency)
+                                    'subtotal' => MoneyFormatter::format($subtotal, $currency),
+                                    'discount' => MoneyFormatter::format($discount, $currency),
+                                    'total' => MoneyFormatter::format($total, $currency)
                                 ];
                             }
 
@@ -192,6 +198,8 @@ return [
                                     'email' => $checkoutSession->customer_details->email,
                                     'paymentMethod' => $checkoutSession->payment_intent->payment_method->type,
                                     'lineItems' => $lineItems,
+                                    'subtotalAmount' => MoneyFormatter::format($subtotalAmount, $currency),
+                                    'discountAmount' => MoneyFormatter::format($discountAmount, $currency),
                                     'totalAmount' => MoneyFormatter::format($totalAmount, $currency),
                                     'events' => [
                                         [

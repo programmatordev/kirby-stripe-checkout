@@ -5,7 +5,7 @@ icon: cart
 status:
   draft: Failed
   unlisted: Pending
-  listed: Complete
+  listed: Completed
 
 options:
   changeSlug: false
@@ -40,6 +40,10 @@ fields:
         align: right
       subtotal:
         align: right
+      discount:
+        align: right
+      total:
+        align: right
     fields:
       name:
         label: Name
@@ -56,7 +60,22 @@ fields:
       subtotal:
         label: Subtotal
         type: text
+      discount:
+        label: Discount
+        type: text
+      total:
+        label: Total
+        type: text
+  subtotalAmount:
+    width: 1/3
+    label: Subtotal amount
+    type: text
+  discountAmount:
+    width: 1/3
+    label: Discount amount
+    type: text
   totalAmount:
+    width: 1/3
     label: Total amount
     type: text
   events:
