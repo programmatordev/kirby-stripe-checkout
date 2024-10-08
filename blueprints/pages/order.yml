@@ -71,16 +71,45 @@ fields:
       total:
         label: Total
         type: text
+  shippingDetails:
+    label: Shipping details
+    type: object
+    fields:
+      name:
+        label: Name
+        type: text
+      country:
+        label: Country
+        type: text
+      line1:
+        label: Address line 1
+        type: text
+      line2:
+        label: Address line 2
+        type: text
+      postalCode:
+        label: Postal code
+        type: text
+      city:
+        label: City
+        type: text
+      state:
+        label: State
+        type: text
   subtotalAmount:
-    width: 1/3
+    width: 1/4
     label: Subtotal amount
     type: text
   discountAmount:
-    width: 1/3
+    width: 1/4
     label: Discount amount
     type: text
+  shippingAmount:
+    width: 1/4
+    label: Shipping amount
+    type: text
   totalAmount:
-    width: 1/3
+    width: 1/4
     label: Total amount
     type: text
   events:

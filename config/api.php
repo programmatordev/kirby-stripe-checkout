@@ -2,7 +2,6 @@
 
 use Kirby\Cms\App;
 use Kirby\Toolkit\Date;
-use Kirby\Toolkit\Str;
 use ProgrammatorDev\StripeCheckout\Exception\ProductDoesNotExistException;
 use ProgrammatorDev\StripeCheckout\MoneyFormatter;
 use Stripe\Exception\SignatureVerificationException;
@@ -150,7 +149,11 @@ return [
 
                     // get checkout session with required data
                     $checkoutSession = $stripeCheckout->retrieveSession($event->data->object->id, [
-                        'expand' => ['line_items.data.price.product', 'payment_intent.payment_method']
+                        'expand' => [
+                            'line_items.data.price.product',
+                            'payment_intent.payment_method',
+                            'shipping_cost.shipping_rate'
+                        ]
                     ]);
 
                     // impersonate kirby to have permissions to create pages
@@ -162,10 +165,6 @@ return [
                         case 'checkout.session.completed':
                             // get order currency
                             $currency = $stripeCheckout->getCurrency();
-                            // get order amounts
-                            $subtotalAmount = MoneyFormatter::fromMinorUnit($checkoutSession->amount_subtotal, $currency);
-                            $discountAmount = MoneyFormatter::fromMinorUnit($checkoutSession->total_details->amount_discount, $currency);
-                            $totalAmount = MoneyFormatter::fromMinorUnit($checkoutSession->amount_total, $currency);
                             // create line items structure
                             $lineItems = [];
 
@@ -186,6 +185,12 @@ return [
                                 ];
                             }
 
+                            // get order amounts
+                            $subtotalAmount = MoneyFormatter::fromMinorUnit($checkoutSession->amount_subtotal, $currency);
+                            $discountAmount = MoneyFormatter::fromMinorUnit($checkoutSession->total_details->amount_discount, $currency);
+                            $shippingAmount = MoneyFormatter::fromMinorUnit($checkoutSession->total_details->amount_shipping, $currency);
+                            $totalAmount = MoneyFormatter::fromMinorUnit($checkoutSession->amount_total, $currency);
+
                             // create order
                             $orderPage = $kirby->page('orders')->createChild([
                                 'slug' => $checkoutSession->metadata['order_id'],
@@ -198,8 +203,18 @@ return [
                                     'email' => $checkoutSession->customer_details->email,
                                     'paymentMethod' => $checkoutSession->payment_intent?->payment_method->type ?? 'no_cost',
                                     'lineItems' => $lineItems,
+                                    'shippingDetails' => [
+                                        'name' => $checkoutSession->shipping_details?->name ?? null,
+                                        'country' => $checkoutSession->shipping_details?->address->country ?? null,
+                                        'line1' => $checkoutSession->shipping_details?->address->line1 ?? null,
+                                        'line2' => $checkoutSession->shipping_details?->address->line2 ?? null,
+                                        'postalCode' => $checkoutSession->shipping_details?->address->postal_code ?? null,
+                                        'city' => $checkoutSession->shipping_details?->address->city ?? null,
+                                        'state' => $checkoutSession->shipping_details?->address->state ?? null
+                                    ],
                                     'subtotalAmount' => MoneyFormatter::format($subtotalAmount, $currency),
                                     'discountAmount' => MoneyFormatter::format($discountAmount, $currency),
+                                    'shippingAmount' => MoneyFormatter::format($shippingAmount, $currency),
                                     'totalAmount' => MoneyFormatter::format($totalAmount, $currency),
                                     'events' => [
                                         [
