@@ -1,0 +1,87 @@
+title: Shipping
+
+icon: box
+
+options:
+  changeSlug: false
+  changeStatus: false
+  changeTemplate: false
+  create: false
+  delete: false
+  duplicate: false
+  move: false
+  preview: false
+
+fields:
+  enabled:
+    label: Enabled
+    type: toggle
+    translate: false
+  allowedCountries:
+    label: Allowed countries
+    type: multiselect
+    options:
+      type: api
+      url: "{{ site.url }}/api/{{ user.language }}/stripe/countries"
+    translate: false
+    min: 1
+    when:
+      enabled: true
+  shippingRates:
+    label: Shipping rates
+    type: structure
+    columns:
+      name: true
+      amount: true
+    fields:
+      name:
+        label: Name
+        type: text
+        required: true
+      amount:
+        label: Amount
+        type: number
+        step: .01
+        required: true
+        min: 0
+        translate: false
+      deliveryEstimateMinimumValue:
+        label: Delivery estimate minimum
+        type: number
+        width: 1/2
+        step: 1
+        min: 1
+        translate: false
+      deliveryEstimateMinimumUnit:
+        label: false
+        type: select
+        width: 1/2
+        default: business_day
+        options:
+          hour: Hours
+          day: Days
+          business_day: Business days
+          week: Weeks
+          month: Months
+        translate: false
+      deliveryEstimateMaximumValue:
+        label: Delivery estimate maximum
+        type: number
+        width: 1/2
+        step: 1
+        min: 1
+        translate: false
+      deliveryEstimateMaximumUnit:
+        label: false
+        type: select
+        width: 1/2
+        default: business_day
+        options:
+          hour: Hours
+          day: Days
+          business_day: Business days
+          week: Weeks
+          month: Months
+        translate: false
+    when:
+      enabled: true

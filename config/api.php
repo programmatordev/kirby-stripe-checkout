@@ -5,6 +5,7 @@ use Kirby\Toolkit\Date;
 use ProgrammatorDev\StripeCheckout\Exception\ProductDoesNotExistException;
 use ProgrammatorDev\StripeCheckout\MoneyFormatter;
 use Stripe\Exception\SignatureVerificationException;
+use Symfony\Component\Intl\Countries;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\AtLeastOneOf;
 use Symfony\Component\Validator\Constraints\GreaterThan;
@@ -12,7 +13,7 @@ use Symfony\Component\Validator\Constraints\IsNull;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Validation;
 
-function resolveAddItemData(array $data): array
+function resolveAddCartItemData(array $data): array
 {
     $resolver = new OptionsResolver();
 
@@ -28,7 +29,7 @@ function resolveAddItemData(array $data): array
     return $resolver->resolve($data);
 }
 
-function resolveUpdateItemData(array $data): array
+function resolveUpdateCartItemData(array $data): array
 {
     $resolver = new OptionsResolver();
 
@@ -63,7 +64,7 @@ return [
                 'auth' => false,
                 'action' => function() use ($kirby) {
                     $data = $kirby->request()->body()->toArray();
-                    $data = resolveAddItemData($data);
+                    $data = resolveAddCartItemData($data);
 
                     // find page
                     if (($productPage = page($data['id'])) === null) {
@@ -95,7 +96,7 @@ return [
                 'auth' => false,
                 'action' => function(string $lineItemId) use ($kirby) {
                     $data = $kirby->request()->body()->toArray();
-                    $data = resolveUpdateItemData($data);
+                    $data = resolveUpdateCartItemData($data);
 
                     $cart = cart();
                     $cart->updateItem($lineItemId, (int) $data['quantity']);
@@ -119,6 +120,38 @@ return [
                         'status' => 'ok',
                         'data' => $cart->getContents()
                     ];
+                }
+            ],
+            // get Stripe allowed countries for shipping
+            [
+                'pattern' => '(:any)/stripe/countries',
+                'method' => 'GET',
+                'auth' => false,
+                'action' => function(string $language) use ($kirby) {
+                    $countryNames = Countries::getNames($language);
+
+                    // remove unsupported countries
+                    // https://docs.stripe.com/api/checkout/sessions/object?lang=php#checkout_session_object-shipping_address_collection-allowed_countries
+                    unset(
+                        $countryNames['AS'],
+                        $countryNames['CX'],
+                        $countryNames['CC'],
+                        $countryNames['CU'],
+                        $countryNames['HM'],
+                        $countryNames['IR'],
+                        $countryNames['KP'],
+                        $countryNames['MH'],
+                        $countryNames['FM'],
+                        $countryNames['NF'],
+                        $countryNames['MP'],
+                        $countryNames['PW'],
+                        $countryNames['SD'],
+                        $countryNames['SY'],
+                        $countryNames['UM'],
+                        $countryNames['VI'],
+                    );
+
+                    return $countryNames;
                 }
             ],
             // handle webhooks to fulfill payments (or failure to do so)
