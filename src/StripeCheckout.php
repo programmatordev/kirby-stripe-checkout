@@ -6,6 +6,7 @@ use Brick\Math\Exception\MathException;
 use Brick\Math\Exception\NumberFormatException;
 use Brick\Math\Exception\RoundingNecessaryException;
 use Brick\Money\Exception\UnknownCurrencyException;
+use Kirby\Cms\Page;
 use Kirby\Uuid\Uuid;
 use ProgrammatorDev\StripeCheckout\Exception\CartIsEmptyException;
 use Stripe\Checkout\Session;
@@ -26,14 +27,17 @@ class StripeCheckout
     public const UI_MODE_HOSTED = 'hosted';
     public const UI_MODE_EMBEDDED = 'embedded';
 
+    private array $options;
+
     private StripeClient $stripe;
 
-    private array $options;
+    private ?Page $shippingPage;
 
     public function __construct(array $options)
     {
         $this->options = $this->resolveOptions($options);
         $this->stripe = new StripeClient($this->options['stripeSecretKey']);
+        $this->shippingPage = kirby()->page('shipping');
     }
 
     private function resolveOptions(array $options): array
@@ -124,6 +128,13 @@ class StripeCheckout
         }
         else if ($uiMode === self::UI_MODE_EMBEDDED) {
             $params['return_url'] = $this->options['returnUrl'];
+        }
+
+        // add shipping params if page exists and is enabled
+        // https://docs.stripe.com/payments/during-payment/charge-shipping?payment-ui=checkout&lang=php
+        if ($this->shippingPage !== null && $this->shippingPage->enabled()->toBool() === true) {
+            $params['shipping_address_collection']['allowed_countries'] = $this->shippingPage->allowedCountries()->split();
+            $params['shipping_options'] = $this->convertShippingPageToShippingOptions();
         }
 
         // trigger event to allow session parameters manipulation
@@ -240,6 +251,45 @@ class StripeCheckout
         }
 
         return $lineItems;
+    }
+
+    private function convertShippingPageToShippingOptions(): array
+    {
+        $currency = $this->options['currency'];
+        $shippingOptions = [];
+
+        // get shipping rates and handle them if they exist
+        foreach ($this->shippingPage->shippingRates()->toStructure() as $shippingRate) {
+            $shippingRateData = [
+                'type' => 'fixed_amount',
+                'fixed_amount' => [
+                    'amount' => MoneyFormatter::toMinorUnit($shippingRate->amount()->value(), $currency),
+                    'currency' => $currency,
+                ],
+                'display_name' => $shippingRate->name()->value()
+            ];
+
+            // add minimum delivery estimate if it exists
+            if ($shippingRate->deliveryEstimateMinimumValue()->value() !== '') {
+                $shippingRateData['delivery_estimate']['minimum'] = [
+                    'unit' => $shippingRate->deliveryEstimateMinimumUnit()->value(),
+                    'value' => $shippingRate->deliveryEstimateMinimumValue()->value(),
+                ];
+            }
+
+            // add maximum delivery estimate if it exists
+            if ($shippingRate->deliveryEstimateMaximumValue()->value() !== '') {
+                $shippingRateData['delivery_estimate']['maximum'] = [
+                    'unit' => $shippingRate->deliveryEstimateMaximumUnit()->value(),
+                    'value' => $shippingRate->deliveryEstimateMaximumValue()->value(),
+                ];
+            }
+
+            // add shipping rate to shipping options
+            $shippingOptions[] = ['shipping_rate_data' => $shippingRateData];
+        }
+
+        return $shippingOptions;
     }
 
     protected function addSessionIdParamToUrl(string $url): string

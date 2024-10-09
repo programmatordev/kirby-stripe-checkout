@@ -72,13 +72,11 @@ return [
                     }
 
                     $cart = cart();
-                    $productContent = $productPage->content();
-
                     $cart->addItem([
                         'id' => $productPage->id(),
-                        'image' => $productContent->get('cover')->toFile()->url(),
-                        'name' => $productContent->get('title')->value(),
-                        'price' => (float) $productContent->get('price')->value(),
+                        'image' => $productPage->cover()->toFile()->url(),
+                        'name' => $productPage->title()->value(),
+                        'price' => (float) $productPage->price()->value(),
                         'quantity' => (int) $data['quantity'],
                         'options' => $data['options']
                     ]);
@@ -275,10 +273,7 @@ return [
                             $orderPage = $kirby->page($pageId);
 
                             // get existing events
-                            $orderEvents = $orderPage->content()
-                                ->get('events')
-                                ->toStructure()
-                                ->toArray();
+                            $orderEvents = $orderPage->events()->toStructure()->toArray();
 
                             // check if event id was already processed in the past
                             // immediately exit if it was
