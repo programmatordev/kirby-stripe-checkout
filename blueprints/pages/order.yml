@@ -96,6 +96,9 @@ fields:
       state:
         label: State
         type: text
+      shippingRate:
+        label: Shipping rate
+        type: text
   subtotalAmount:
     width: 1/4
     label: Subtotal amount

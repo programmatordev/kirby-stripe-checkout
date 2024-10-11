@@ -222,6 +222,19 @@ return [
                             $shippingAmount = MoneyFormatter::fromMinorUnit($checkoutSession->total_details->amount_shipping, $currency);
                             $totalAmount = MoneyFormatter::fromMinorUnit($checkoutSession->amount_total, $currency);
 
+                            // shipping
+                            // only populate if there is data
+                            $shippingDetails = $checkoutSession->shipping_details === null ? null : [
+                                'name' => $checkoutSession->shipping_details?->name ?? null,
+                                'country' => $checkoutSession->shipping_details?->address->country ?? null,
+                                'line1' => $checkoutSession->shipping_details?->address->line1 ?? null,
+                                'line2' => $checkoutSession->shipping_details?->address->line2 ?? null,
+                                'postalCode' => $checkoutSession->shipping_details?->address->postal_code ?? null,
+                                'city' => $checkoutSession->shipping_details?->address->city ?? null,
+                                'state' => $checkoutSession->shipping_details?->address->state ?? null,
+                                'shippingRate' => $checkoutSession->shipping_cost?->shipping_rate->display_name ?? null
+                            ];
+
                             // create order
                             $orderPage = $kirby->page('orders')->createChild([
                                 'slug' => $checkoutSession->metadata['order_id'],
@@ -234,15 +247,7 @@ return [
                                     'email' => $checkoutSession->customer_details->email,
                                     'paymentMethod' => $checkoutSession->payment_intent?->payment_method->type ?? 'no_cost',
                                     'lineItems' => $lineItems,
-                                    'shippingDetails' => [
-                                        'name' => $checkoutSession->shipping_details?->name ?? null,
-                                        'country' => $checkoutSession->shipping_details?->address->country ?? null,
-                                        'line1' => $checkoutSession->shipping_details?->address->line1 ?? null,
-                                        'line2' => $checkoutSession->shipping_details?->address->line2 ?? null,
-                                        'postalCode' => $checkoutSession->shipping_details?->address->postal_code ?? null,
-                                        'city' => $checkoutSession->shipping_details?->address->city ?? null,
-                                        'state' => $checkoutSession->shipping_details?->address->state ?? null
-                                    ],
+                                    'shippingDetails' => $shippingDetails,
                                     'subtotalAmount' => MoneyFormatter::format($subtotalAmount, $currency),
                                     'discountAmount' => MoneyFormatter::format($discountAmount, $currency),
                                     'shippingAmount' => MoneyFormatter::format($shippingAmount, $currency),

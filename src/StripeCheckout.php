@@ -40,59 +40,6 @@ class StripeCheckout
         $this->shippingPage = kirby()->page('shipping');
     }
 
-    private function resolveOptions(array $options): array
-    {
-        $resolver = new OptionsResolver();
-        $resolver->setIgnoreUndefined();
-
-        $resolver->setRequired(['stripePublicKey', 'stripeSecretKey', 'stripeWebhookSecret', 'currency', 'uiMode']);
-
-        $resolver->setAllowedTypes('stripePublicKey', 'string');
-        $resolver->setAllowedTypes('stripeSecretKey', 'string');
-        $resolver->setAllowedTypes('stripeWebhookSecret', 'string');
-        $resolver->setAllowedTypes('currency', 'string');
-        $resolver->setAllowedTypes('uiMode', 'string');
-
-        $resolver->setAllowedValues('stripePublicKey', Validation::createIsValidCallable(new NotBlank()));
-        $resolver->setAllowedValues('stripeSecretKey', Validation::createIsValidCallable(new NotBlank()));
-        $resolver->setAllowedValues('stripeWebhookSecret', Validation::createIsValidCallable(new NotBlank()));
-        $resolver->setAllowedValues('currency', Currencies::getCurrencyCodes());
-        $resolver->setAllowedValues('uiMode', [self::UI_MODE_HOSTED, self::UI_MODE_EMBEDDED]);
-
-        // https://docs.stripe.com/currencies#presentment-currencies
-        $resolver->setNormalizer('currency', function (Options $options, string $currency): string {
-            return strtoupper($currency);
-        });
-
-        $uiMode = $options['uiMode'] ?? null;
-
-        if ($uiMode === self::UI_MODE_HOSTED) {
-            $resolver->setRequired(['successUrl', 'cancelUrl']);
-
-            $resolver->setAllowedTypes('successUrl', 'string');
-            $resolver->setAllowedTypes('cancelUrl', 'string');
-
-            $resolver->setAllowedValues('successUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
-            $resolver->setAllowedValues('cancelUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
-
-            $resolver->setNormalizer('successUrl', function (Options $options, string $successUrl): string {
-                return $this->addSessionIdParamToUrl($successUrl);
-            });
-        }
-        else if ($uiMode === self::UI_MODE_EMBEDDED) {
-            $resolver->setRequired(['returnUrl']);
-
-            $resolver->setAllowedTypes('returnUrl', 'string');
-            $resolver->setAllowedValues('returnUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
-
-            $resolver->setNormalizer('returnUrl', function (Options $options, string $returnUrl): string {
-                return $this->addSessionIdParamToUrl($returnUrl);
-            });
-        }
-
-        return $resolver->resolve($options);
-    }
-
     /**
      * @throws ApiErrorException
      * @throws CartIsEmptyException
@@ -301,4 +248,56 @@ class StripeCheckout
         return $url;
     }
 
+    private function resolveOptions(array $options): array
+    {
+        $resolver = new OptionsResolver();
+        $resolver->setIgnoreUndefined();
+
+        $resolver->setRequired(['stripePublicKey', 'stripeSecretKey', 'stripeWebhookSecret', 'currency', 'uiMode']);
+
+        $resolver->setAllowedTypes('stripePublicKey', 'string');
+        $resolver->setAllowedTypes('stripeSecretKey', 'string');
+        $resolver->setAllowedTypes('stripeWebhookSecret', 'string');
+        $resolver->setAllowedTypes('currency', 'string');
+        $resolver->setAllowedTypes('uiMode', 'string');
+
+        $resolver->setAllowedValues('stripePublicKey', Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setAllowedValues('stripeSecretKey', Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setAllowedValues('stripeWebhookSecret', Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setAllowedValues('currency', Currencies::getCurrencyCodes());
+        $resolver->setAllowedValues('uiMode', [self::UI_MODE_HOSTED, self::UI_MODE_EMBEDDED]);
+
+        // https://docs.stripe.com/currencies#presentment-currencies
+        $resolver->setNormalizer('currency', function (Options $options, string $currency): string {
+            return strtoupper($currency);
+        });
+
+        $uiMode = $options['uiMode'] ?? null;
+
+        if ($uiMode === self::UI_MODE_HOSTED) {
+            $resolver->setRequired(['successUrl', 'cancelUrl']);
+
+            $resolver->setAllowedTypes('successUrl', 'string');
+            $resolver->setAllowedTypes('cancelUrl', 'string');
+
+            $resolver->setAllowedValues('successUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
+            $resolver->setAllowedValues('cancelUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
+
+            $resolver->setNormalizer('successUrl', function (Options $options, string $successUrl): string {
+                return $this->addSessionIdParamToUrl($successUrl);
+            });
+        }
+        else if ($uiMode === self::UI_MODE_EMBEDDED) {
+            $resolver->setRequired(['returnUrl']);
+
+            $resolver->setAllowedTypes('returnUrl', 'string');
+            $resolver->setAllowedValues('returnUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
+
+            $resolver->setNormalizer('returnUrl', function (Options $options, string $returnUrl): string {
+                return $this->addSessionIdParamToUrl($returnUrl);
+            });
+        }
+
+        return $resolver->resolve($options);
+    }
 }
