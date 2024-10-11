@@ -99,6 +99,31 @@ fields:
       shippingRate:
         label: Shipping rate
         type: text
+  billingDetails:
+    label: Billing details
+    type: object
+    fields:
+      name:
+        label: Name
+        type: text
+      country:
+        label: Country
+        type: text
+      line1:
+        label: Address line 1
+        type: text
+      line2:
+        label: Address line 2
+        type: text
+      postalCode:
+        label: Postal code
+        type: text
+      city:
+        label: City
+        type: text
+      state:
+        label: State
+        type: text
   subtotalAmount:
     width: 1/4
     label: Subtotal amount

@@ -235,6 +235,18 @@ return [
                                 'shippingRate' => $checkoutSession->shipping_cost?->shipping_rate->display_name ?? null
                             ];
 
+                            // billing
+                            // only populate if there is data
+                            $billingDetails = $checkoutSession->payment_intent?->payment_method->billing_details->name === null ? null : [
+                                'name' => $checkoutSession->payment_intent->payment_method->billing_details->name ?? null,
+                                'country' => $checkoutSession->payment_intent->payment_method->billing_details->address->country ?? null,
+                                'line1' => $checkoutSession->payment_intent->payment_method->billing_details->address->line1 ?? null,
+                                'line2' => $checkoutSession->payment_intent->payment_method->billing_details->address->line2 ?? null,
+                                'postalCode' => $checkoutSession->payment_intent->payment_method->billing_details->address->postal_code ?? null,
+                                'city' => $checkoutSession->payment_intent->payment_method->billing_details->address->city ?? null,
+                                'state' => $checkoutSession->payment_intent->payment_method->billing_details->address->state ?? null
+                            ];
+
                             // create order
                             $orderPage = $kirby->page('orders')->createChild([
                                 'slug' => $checkoutSession->metadata['order_id'],
@@ -248,6 +260,7 @@ return [
                                     'paymentMethod' => $checkoutSession->payment_intent?->payment_method->type ?? 'no_cost',
                                     'lineItems' => $lineItems,
                                     'shippingDetails' => $shippingDetails,
+                                    'billingDetails' => $billingDetails,
                                     'subtotalAmount' => MoneyFormatter::format($subtotalAmount, $currency),
                                     'discountAmount' => MoneyFormatter::format($discountAmount, $currency),
                                     'shippingAmount' => MoneyFormatter::format($shippingAmount, $currency),
