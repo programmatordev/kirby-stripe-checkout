@@ -124,6 +124,19 @@ fields:
       state:
         label: State
         type: text
+  taxId:
+    label: Tax ID
+    type: object
+    fields:
+      name:
+        label: Name
+        type: text
+      type:
+        label: Type
+        type: text
+      value:
+        label: Value
+        type: text
   subtotalAmount:
     width: 1/4
     label: Subtotal amount

@@ -125,8 +125,8 @@ return [
                 'pattern' => '(:any)/stripe/countries',
                 'method' => 'GET',
                 'auth' => false,
-                'action' => function(string $language) use ($kirby) {
-                    $countryNames = Countries::getNames($language);
+                'action' => function(string $locale) use ($kirby) {
+                    $countryNames = Countries::getNames($locale);
 
                     // remove unsupported countries
                     // https://docs.stripe.com/api/checkout/sessions/object?lang=php#checkout_session_object-shipping_address_collection-allowed_countries
@@ -247,6 +247,14 @@ return [
                                 'state' => $checkoutSession->payment_intent->payment_method->billing_details->address->state ?? null
                             ];
 
+                            // tax id
+                            // only populate if there is data
+                            $taxId = empty($checkoutSession->customer_details->tax_ids) ? null : [
+                                'name' => $checkoutSession->customer_details->name,
+                                'type' => $checkoutSession->customer_details->tax_ids[0]->type,
+                                'value' => $checkoutSession->customer_details->tax_ids[0]->value
+                            ];
+
                             // create order
                             $orderPage = $kirby->page('orders')->createChild([
                                 'slug' => $checkoutSession->metadata['order_id'],
@@ -261,6 +269,7 @@ return [
                                     'lineItems' => $lineItems,
                                     'shippingDetails' => $shippingDetails,
                                     'billingDetails' => $billingDetails,
+                                    'taxId' => $taxId,
                                     'subtotalAmount' => MoneyFormatter::format($subtotalAmount, $currency),
                                     'discountAmount' => MoneyFormatter::format($discountAmount, $currency),
                                     'shippingAmount' => MoneyFormatter::format($shippingAmount, $currency),
