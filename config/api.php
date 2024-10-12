@@ -222,8 +222,7 @@ return [
                             $shippingAmount = MoneyFormatter::fromMinorUnit($checkoutSession->total_details->amount_shipping, $currency);
                             $totalAmount = MoneyFormatter::fromMinorUnit($checkoutSession->amount_total, $currency);
 
-                            // shipping
-                            // only populate if there is data
+                            // shipping details
                             $shippingDetails = $checkoutSession->shipping_details === null ? null : [
                                 'name' => $checkoutSession->shipping_details?->name ?? null,
                                 'country' => $checkoutSession->shipping_details?->address->country ?? null,
@@ -235,8 +234,7 @@ return [
                                 'shippingRate' => $checkoutSession->shipping_cost?->shipping_rate->display_name ?? null
                             ];
 
-                            // billing
-                            // only populate if there is data
+                            // billing details
                             $billingDetails = $checkoutSession->payment_intent?->payment_method->billing_details->name === null ? null : [
                                 'name' => $checkoutSession->payment_intent->payment_method->billing_details->name ?? null,
                                 'country' => $checkoutSession->payment_intent->payment_method->billing_details->address->country ?? null,
@@ -248,12 +246,21 @@ return [
                             ];
 
                             // tax id
-                            // only populate if there is data
                             $taxId = empty($checkoutSession->customer_details->tax_ids) ? null : [
                                 'name' => $checkoutSession->customer_details->name,
                                 'type' => $checkoutSession->customer_details->tax_ids[0]->type,
                                 'value' => $checkoutSession->customer_details->tax_ids[0]->value
                             ];
+
+                            // custom fields
+                            $customFields = [];
+
+                            foreach ($checkoutSession->custom_fields as $customField) {
+                                $customFields[] = [
+                                    'name' => $customField->label->custom,
+                                    'value' => $customField->{$customField->type}->value
+                                ];
+                            }
 
                             // create order
                             $orderPage = $kirby->page('orders')->createChild([
@@ -274,6 +281,7 @@ return [
                                     'discountAmount' => MoneyFormatter::format($discountAmount, $currency),
                                     'shippingAmount' => MoneyFormatter::format($shippingAmount, $currency),
                                     'totalAmount' => MoneyFormatter::format($totalAmount, $currency),
+                                    'customFields' => $customFields,
                                     'events' => [
                                         [
                                             'id' => $event->id,

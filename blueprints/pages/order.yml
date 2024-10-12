@@ -153,6 +153,16 @@ fields:
     width: 1/4
     label: Total amount
     type: text
+  customFields:
+    label: Custom fields
+    type: structure
+    fields:
+      name:
+        label: Name
+        type: text
+      value:
+        label: Value
+        type: text
   events:
     label: Events
     type: structure
