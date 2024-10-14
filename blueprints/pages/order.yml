@@ -18,180 +18,196 @@ options:
   preview: false
   sort: false
 
-fields:
-  paymentIntentId:
-    width: 1/2
-    label: Stripe ID
-    type: text
-  createdAt:
-    width: 1/2
-    label: Created at
-    type: text
-  customer:
-    label: Customer
-    type: object
-    fields:
-      email:
-        label: Email
-        type: email
-      name:
-        label: Name
-        type: text
-      phone:
-        label: Phone
-        type: text
-  paymentMethod:
-    label: Payment method
-    type: text
-  lineItems:
-    label: Line items
-    type: structure
+tabs:
+  overview:
     columns:
-      name: true
-      description: true
-      price:
-        align: right
-      quantity:
-        align: right
-      subtotal:
-        align: right
-      discount:
-        align: right
-      total:
-        align: right
-    fields:
-      name:
-        label: Name
-        type: text
-      description:
-        label: Description
-        type: text
-      price:
-        label: Price
-        type: text
-      quantity:
-        label: Quantity
-        type: number
-      subtotal:
-        label: Subtotal
-        type: text
-      discount:
-        label: Discount
-        type: text
-      total:
-        label: Total
-        type: text
-  shippingDetails:
-    label: Shipping details
-    type: object
-    fields:
-      name:
-        label: Name
-        type: text
-      country:
-        label: Country
-        type: text
-      line1:
-        label: Address line 1
-        type: text
-      line2:
-        label: Address line 2
-        type: text
-      postalCode:
-        label: Postal code
-        type: text
-      city:
-        label: City
-        type: text
-      state:
-        label: State
-        type: text
-  shippingOption:
-    label: Shipping option
-    type: text
-  billingDetails:
-    label: Billing details
-    type: object
-    fields:
-      name:
-        label: Name
-        type: text
-      country:
-        label: Country
-        type: text
-      line1:
-        label: Address line 1
-        type: text
-      line2:
-        label: Address line 2
-        type: text
-      postalCode:
-        label: Postal code
-        type: text
-      city:
-        label: City
-        type: text
-      state:
-        label: State
-        type: text
-  taxId:
-    label: Tax ID
-    type: object
-    fields:
-      type:
-        label: Type
-        type: text
-      value:
-        label: Value
-        type: text
-  subtotalAmount:
-    width: 1/4
-    label: Subtotal amount
-    type: text
-  discountAmount:
-    width: 1/4
-    label: Discount amount
-    type: text
-  shippingAmount:
-    width: 1/4
-    label: Shipping amount
-    type: text
-  totalAmount:
-    width: 1/4
-    label: Total amount
-    type: text
-  customFields:
-    label: Custom fields
-    type: structure
-    fields:
-      name:
-        label: Name
-        type: text
-      value:
-        label: Value
-        type: text
-  events:
-    label: Events
-    type: structure
+      left:
+        sticky: true
+        width: 1/3
+        fields:
+          createdAt:
+            label: Created at
+            type: text
+          paymentMethod:
+            label: Payment method
+            type: text
+          customFields:
+            label: Custom fields
+            type: structure
+            fields:
+              name:
+                label: Name
+                type: text
+              value:
+                label: Value
+                type: text
+      right:
+        width: 2/3
+        fields:
+          customer:
+            label: Customer
+            type: object
+            fields:
+              email:
+                label: Email
+                type: email
+              name:
+                label: Name
+                type: text
+              phone:
+                label: Phone
+                type: text
+          lineItems:
+            label: Line items
+            type: structure
+            columns:
+              name: true
+              description: true
+              price:
+                align: right
+              quantity:
+                align: right
+              subtotal:
+                align: right
+              discount:
+                align: right
+              total:
+                align: right
+            fields:
+              name:
+                label: Name
+                type: text
+              description:
+                label: Description
+                type: text
+              price:
+                label: Price
+                type: text
+              quantity:
+                label: Quantity
+                type: number
+              subtotal:
+                label: Subtotal
+                type: text
+              discount:
+                label: Discount
+                type: text
+              total:
+                label: Total
+                type: text
+          subtotalAmount:
+            width: 1/4
+            label: Subtotal
+            type: text
+          discountAmount:
+            width: 1/4
+            label: Discount
+            type: text
+          shippingAmount:
+            width: 1/4
+            label: Shipping
+            type: text
+          totalAmount:
+            width: 1/4
+            label: Total
+            type: text
+          shippingDetails:
+            label: Shipping details
+            type: object
+            fields:
+              name:
+                label: Name
+                type: text
+              country:
+                label: Country
+                type: text
+              line1:
+                label: Address, line 1
+                type: text
+              line2:
+                label: Address, line 2
+                type: text
+              postalCode:
+                label: Postal code
+                type: text
+              city:
+                label: City
+                type: text
+              state:
+                label: State
+                type: text
+          shippingOption:
+            label: Shipping option
+            type: text
+          billingDetails:
+            label: Billing details
+            type: object
+            fields:
+              name:
+                label: Name
+                type: text
+              country:
+                label: Country
+                type: text
+              line1:
+                label: Address, line 1
+                type: text
+              line2:
+                label: Address, line 2
+                type: text
+              postalCode:
+                label: Postal code
+                type: text
+              city:
+                label: City
+                type: text
+              state:
+                label: State
+                type: text
+          taxId:
+            label: Tax ID
+            type: object
+            fields:
+              type:
+                label: Type
+                type: text
+              value:
+                label: Value
+                type: text
+  stripe:
     columns:
-      id: true
-      type: true
-      paymentStatus: true
-      date:
-        align: right
-    fields:
-      id:
-        label: ID
-        type: text
-      type:
-        label: Type
-        type: text
-      paymentStatus:
-        label: Payment status
-        type: text
-      message:
-        label: Message
-        type: writer
-      date:
-        label: Date
-        type: text
+      left:
+        width: 1/3
+        fields:
+          paymentIntentId:
+            label: Payment ID
+            type: text
+      right:
+        width: 2/3
+        fields:
+          events:
+            label: Event logs
+            type: structure
+            sortable: false
+            columns:
+              id: true
+              type: true
+              paymentStatus: true
+              date:
+                align: right
+            fields:
+              id:
+                label: ID
+                type: text
+              type:
+                label: Type
+                type: text
+              paymentStatus:
+                label: Payment status
+                type: text
+              message:
+                label: Message
+                type: writer
+              date:
+                label: Date
+                type: text
