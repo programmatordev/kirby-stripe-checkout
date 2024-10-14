@@ -12,7 +12,7 @@ class MockStripeClient implements ClientInterface
         private readonly array $headers = []
     ) {}
 
-    public function request($method, $absUrl, $headers, $params, $hasFile): array
+    public function request($method, $absUrl, $headers, $params, $hasFile, $apiMode = 'v1'): array
     {
         return [$this->body, $this->statusCode, $this->headers];
     }

@@ -65,4 +65,16 @@ class MoneyFormatter
         // format(1000, 'JPY') => ¥ 1,000
         return sprintf('%s %s', $symbol, $amountFormatted);
     }
+
+    /**
+     * @throws RoundingNecessaryException
+     * @throws MathException
+     * @throws UnknownCurrencyException
+     * @throws NumberFormatException
+     */
+    public static function formatFromMinorUnit(int $minorAmount, string $currency): string
+    {
+        $amount = self::fromMinorUnit($minorAmount, $currency);
+        return self::format($amount, $currency);
+    }
 }

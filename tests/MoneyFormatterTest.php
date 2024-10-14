@@ -23,4 +23,10 @@ class MoneyFormatterTest extends BaseTestCase
         $this->assertSame('€ 1,000.00', MoneyFormatter::format(1000, 'EUR'));
         $this->assertSame('¥ 1,000', MoneyFormatter::format(1000, 'JPY'));
     }
+
+    public function testFormatFromMinorUnit(): void
+    {
+        $this->assertSame('€ 1,000.00', MoneyFormatter::formatFromMinorUnit(100000, 'EUR'));
+        $this->assertSame('¥ 1,000', MoneyFormatter::formatFromMinorUnit(1000, 'JPY'));
+    }
 }
