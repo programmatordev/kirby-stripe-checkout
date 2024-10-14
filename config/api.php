@@ -200,54 +200,43 @@ return [
                             $lineItems = [];
 
                             foreach ($checkoutSession->line_items->data as $lineItem) {
-                                $price = MoneyFormatter::fromMinorUnit($lineItem->price->unit_amount, $currency);
-                                $subtotal = MoneyFormatter::fromMinorUnit($lineItem->amount_subtotal, $currency);
-                                $discount = MoneyFormatter::fromMinorUnit($lineItem->amount_discount, $currency);
-                                $total = MoneyFormatter::fromMinorUnit($lineItem->amount_total, $currency);
-
                                 $lineItems[] = [
                                     'name' => $lineItem->price->product->name,
                                     'description' => $lineItem->price->product->description,
-                                    'price' => MoneyFormatter::format($price, $currency),
+                                    'price' => MoneyFormatter::formatFromMinorUnit($lineItem->price->unit_amount, $currency),
                                     'quantity' => $lineItem->quantity,
-                                    'subtotal' => MoneyFormatter::format($subtotal, $currency),
-                                    'discount' => MoneyFormatter::format($discount, $currency),
-                                    'total' => MoneyFormatter::format($total, $currency)
+                                    'subtotal' => MoneyFormatter::formatFromMinorUnit($lineItem->amount_subtotal, $currency),
+                                    'discount' => MoneyFormatter::formatFromMinorUnit($lineItem->amount_discount, $currency),
+                                    'total' => MoneyFormatter::formatFromMinorUnit($lineItem->amount_total, $currency)
                                 ];
                             }
 
-                            // get order amounts
-                            $subtotalAmount = MoneyFormatter::fromMinorUnit($checkoutSession->amount_subtotal, $currency);
-                            $discountAmount = MoneyFormatter::fromMinorUnit($checkoutSession->total_details->amount_discount, $currency);
-                            $shippingAmount = MoneyFormatter::fromMinorUnit($checkoutSession->total_details->amount_shipping, $currency);
-                            $totalAmount = MoneyFormatter::fromMinorUnit($checkoutSession->amount_total, $currency);
-
                             // shipping details
                             $shippingDetails = $checkoutSession->shipping_details === null ? null : [
-                                'name' => $checkoutSession->shipping_details?->name ?? null,
-                                'country' => $checkoutSession->shipping_details?->address->country ?? null,
-                                'line1' => $checkoutSession->shipping_details?->address->line1 ?? null,
-                                'line2' => $checkoutSession->shipping_details?->address->line2 ?? null,
-                                'postalCode' => $checkoutSession->shipping_details?->address->postal_code ?? null,
-                                'city' => $checkoutSession->shipping_details?->address->city ?? null,
-                                'state' => $checkoutSession->shipping_details?->address->state ?? null,
-                                'shippingRate' => $checkoutSession->shipping_cost?->shipping_rate->display_name ?? null
+                                'name' => $checkoutSession->shipping_details->name ?? null,
+                                'country' => $checkoutSession->shipping_details->address->country ?? null,
+                                'line1' => $checkoutSession->shipping_details->address->line1 ?? null,
+                                'line2' => $checkoutSession->shipping_details->address->line2 ?? null,
+                                'postalCode' => $checkoutSession->shipping_details->address->postal_code ?? null,
+                                'city' => $checkoutSession->shipping_details->address->city ?? null,
+                                'state' => $checkoutSession->shipping_details->address->state ?? null
                             ];
 
                             // billing details
-                            $billingDetails = $checkoutSession->payment_intent?->payment_method->billing_details->name === null ? null : [
-                                'name' => $checkoutSession->payment_intent->payment_method->billing_details->name ?? null,
-                                'country' => $checkoutSession->payment_intent->payment_method->billing_details->address->country ?? null,
-                                'line1' => $checkoutSession->payment_intent->payment_method->billing_details->address->line1 ?? null,
-                                'line2' => $checkoutSession->payment_intent->payment_method->billing_details->address->line2 ?? null,
-                                'postalCode' => $checkoutSession->payment_intent->payment_method->billing_details->address->postal_code ?? null,
-                                'city' => $checkoutSession->payment_intent->payment_method->billing_details->address->city ?? null,
-                                'state' => $checkoutSession->payment_intent->payment_method->billing_details->address->state ?? null
+                            // customer_details is always be populated with billing info,
+                            // even when there is no payment_intent (no-cost orders)
+                            $billingDetails = $checkoutSession->customer_details->address?->country === null ? null : [
+                                'name' => $checkoutSession->customer_details->name ?? null,
+                                'country' => $checkoutSession->customer_details->address->country ?? null,
+                                'line1' => $checkoutSession->customer_details->address->line1 ?? null,
+                                'line2' => $checkoutSession->customer_details->payment_method->billing_details->address->line2 ?? null,
+                                'postalCode' => $checkoutSession->customer_details->address->postal_code ?? null,
+                                'city' => $checkoutSession->customer_details->address->city ?? null,
+                                'state' => $checkoutSession->customer_details->address->state ?? null
                             ];
 
                             // tax id
                             $taxId = empty($checkoutSession->customer_details->tax_ids) ? null : [
-                                'name' => $checkoutSession->customer_details->name,
                                 'type' => $checkoutSession->customer_details->tax_ids[0]->type,
                                 'value' => $checkoutSession->customer_details->tax_ids[0]->value
                             ];
@@ -271,16 +260,21 @@ return [
                                 'content' => [
                                     'paymentIntentId' => $checkoutSession->payment_intent?->id ?? null,
                                     'createdAt' => Date::now()->format('Y-m-d H:i:s'),
-                                    'email' => $checkoutSession->customer_details->email,
+                                    'customer' => [
+                                        'email' => $checkoutSession->customer_details->email,
+                                        'name' => $checkoutSession->customer_details->name ?? null,
+                                        'phone' => $checkoutSession->customer_details->phone ?? null,
+                                    ],
                                     'paymentMethod' => $checkoutSession->payment_intent?->payment_method->type ?? 'no_cost',
                                     'lineItems' => $lineItems,
                                     'shippingDetails' => $shippingDetails,
+                                    'shippingOption' => $checkoutSession->shipping_cost?->shipping_rate->display_name ?? null,
                                     'billingDetails' => $billingDetails,
                                     'taxId' => $taxId,
-                                    'subtotalAmount' => MoneyFormatter::format($subtotalAmount, $currency),
-                                    'discountAmount' => MoneyFormatter::format($discountAmount, $currency),
-                                    'shippingAmount' => MoneyFormatter::format($shippingAmount, $currency),
-                                    'totalAmount' => MoneyFormatter::format($totalAmount, $currency),
+                                    'subtotalAmount' => MoneyFormatter::formatFromMinorUnit($checkoutSession->amount_subtotal, $currency),
+                                    'discountAmount' => MoneyFormatter::formatFromMinorUnit($checkoutSession->total_details->amount_discount, $currency),
+                                    'shippingAmount' => MoneyFormatter::formatFromMinorUnit($checkoutSession->total_details->amount_shipping, $currency),
+                                    'totalAmount' => MoneyFormatter::formatFromMinorUnit($checkoutSession->amount_total, $currency),
                                     'customFields' => $customFields,
                                     'events' => [
                                         [

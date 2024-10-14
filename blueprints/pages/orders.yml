@@ -21,11 +21,11 @@ sections:
     empty: No orders yet
   pendingPayment:
     extends: stripe.checkout.sections/orders
-    label: Pending payment
+    label: Pending payments
     status: unlisted
     empty: No pending payments
   failedPayment:
     extends: stripe.checkout.sections/orders
-    label: Failed payment
+    label: Failed payments
     status: draft
     empty: No failed payments

@@ -27,9 +27,19 @@ fields:
     width: 1/2
     label: Created at
     type: text
-  email:
-    label: Email
-    type: email
+  customer:
+    label: Customer
+    type: object
+    fields:
+      email:
+        label: Email
+        type: email
+      name:
+        label: Name
+        type: text
+      phone:
+        label: Phone
+        type: text
   paymentMethod:
     label: Payment method
     type: text
@@ -96,9 +106,9 @@ fields:
       state:
         label: State
         type: text
-      shippingRate:
-        label: Shipping rate
-        type: text
+  shippingOption:
+    label: Shipping option
+    type: text
   billingDetails:
     label: Billing details
     type: object
@@ -128,9 +138,6 @@ fields:
     label: Tax ID
     type: object
     fields:
-      name:
-        label: Name
-        type: text
       type:
         label: Type
         type: text

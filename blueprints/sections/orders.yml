@@ -5,6 +5,7 @@ columns:
     label: ID
   email:
     label: Email
+    value: "{{ page.customer.toObject().email }}"
   paymentmethod:
     label: Payment method
   totalamount:
