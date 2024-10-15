@@ -56,8 +56,8 @@ class StripeCheckout
 
         $uiMode = $this->options['uiMode'];
 
-        // set base session options
-        $params = [
+        // set base session params
+        $sessionParams = [
             'mode' => 'payment',
             'ui_mode' => $uiMode,
             'line_items' => $this->convertCartToLineItems($cart),
@@ -70,25 +70,29 @@ class StripeCheckout
 
         // add session params according to uiMode
         if ($uiMode === self::UI_MODE_HOSTED) {
-            $params['success_url'] = $this->options['successUrl'];
-            $params['cancel_url'] = $this->options['cancelUrl'];
+            $sessionParams['success_url'] = $this->options['successUrl'];
+            $sessionParams['cancel_url'] = $this->options['cancelUrl'];
         }
         else if ($uiMode === self::UI_MODE_EMBEDDED) {
-            $params['return_url'] = $this->options['returnUrl'];
+            $sessionParams['return_url'] = $this->options['returnUrl'];
         }
 
         // add shipping params if page exists and is enabled
         // https://docs.stripe.com/payments/during-payment/charge-shipping?payment-ui=checkout&lang=php
         if ($this->shippingPage !== null && $this->shippingPage->enabled()->toBool() === true) {
-            $params['shipping_address_collection']['allowed_countries'] = $this->shippingPage->allowedCountries()->split();
-            $params['shipping_options'] = $this->convertShippingPageToShippingOptions();
+            $sessionParams['shipping_address_collection']['allowed_countries'] = $this->shippingPage->allowedCountries()->split();
+            $sessionParams['shipping_options'] = $this->convertShippingPageToShippingOptions();
         }
 
         // trigger event to allow session parameters manipulation
         // https://docs.stripe.com/api/checkout/sessions/create?lang=php
-        $params = kirby()->apply('stripe.checkout.sessionCreate:before', compact('params'), 'params');
+        $sessionParams = kirby()->apply(
+            'stripe.checkout.sessionCreate:before',
+            compact('sessionParams'),
+            'sessionParams'
+        );
 
-        return $this->stripe->checkout->sessions->create($params);
+        return $this->stripe->checkout->sessions->create($sessionParams);
     }
 
     /**
