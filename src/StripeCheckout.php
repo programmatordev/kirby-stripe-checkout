@@ -27,6 +27,9 @@ class StripeCheckout
     public const UI_MODE_HOSTED = 'hosted';
     public const UI_MODE_EMBEDDED = 'embedded';
 
+    public const PAYMENT_STATUS_PAID = 'paid';
+    public const PAYMENT_STATUS_UNPAID = 'unpaid';
+
     private array $options;
 
     private StripeClient $stripe;

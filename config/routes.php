@@ -79,7 +79,7 @@ return function(App $kirby) {
                 }
 
                 // get checkout session with required data
-                $session = $stripeCheckout->retrieveSession($event->data->object->id, [
+                $checkoutSession = $stripeCheckout->retrieveSession($event->data->object->id, [
                     'expand' => [
                         'line_items.data.price.product',
                         'payment_intent.payment_method',
@@ -99,7 +99,7 @@ return function(App $kirby) {
                         // create line items structure
                         $lineItems = [];
 
-                        foreach ($session->line_items->data as $lineItem) {
+                        foreach ($checkoutSession->line_items->data as $lineItem) {
                             $lineItems[] = [
                                 'name' => $lineItem->price->product->name,
                                 'description' => $lineItem->price->product->description,
@@ -112,39 +112,39 @@ return function(App $kirby) {
                         }
 
                         // shipping details
-                        $shippingDetails = $session->shipping_details === null ? null : [
-                            'name' => $session->shipping_details->name ?? null,
-                            'country' => $session->shipping_details->address->country ?? null,
-                            'line1' => $session->shipping_details->address->line1 ?? null,
-                            'line2' => $session->shipping_details->address->line2 ?? null,
-                            'postalCode' => $session->shipping_details->address->postal_code ?? null,
-                            'city' => $session->shipping_details->address->city ?? null,
-                            'state' => $session->shipping_details->address->state ?? null
+                        $shippingDetails = $checkoutSession->shipping_details === null ? null : [
+                            'name' => $checkoutSession->shipping_details->name ?? null,
+                            'country' => $checkoutSession->shipping_details->address->country ?? null,
+                            'line1' => $checkoutSession->shipping_details->address->line1 ?? null,
+                            'line2' => $checkoutSession->shipping_details->address->line2 ?? null,
+                            'postalCode' => $checkoutSession->shipping_details->address->postal_code ?? null,
+                            'city' => $checkoutSession->shipping_details->address->city ?? null,
+                            'state' => $checkoutSession->shipping_details->address->state ?? null
                         ];
 
                         // billing details
                         // customer_details is always be populated with billing info,
                         // even when there is no payment_intent (no-cost orders)
-                        $billingDetails = $session->customer_details->address?->country === null ? null : [
-                            'name' => $session->customer_details->name ?? null,
-                            'country' => $session->customer_details->address->country ?? null,
-                            'line1' => $session->customer_details->address->line1 ?? null,
-                            'line2' => $session->customer_details->payment_method->billing_details->address->line2 ?? null,
-                            'postalCode' => $session->customer_details->address->postal_code ?? null,
-                            'city' => $session->customer_details->address->city ?? null,
-                            'state' => $session->customer_details->address->state ?? null
+                        $billingDetails = $checkoutSession->customer_details->address?->country === null ? null : [
+                            'name' => $checkoutSession->customer_details->name ?? null,
+                            'country' => $checkoutSession->customer_details->address->country ?? null,
+                            'line1' => $checkoutSession->customer_details->address->line1 ?? null,
+                            'line2' => $checkoutSession->customer_details->payment_method->billing_details->address->line2 ?? null,
+                            'postalCode' => $checkoutSession->customer_details->address->postal_code ?? null,
+                            'city' => $checkoutSession->customer_details->address->city ?? null,
+                            'state' => $checkoutSession->customer_details->address->state ?? null
                         ];
 
                         // tax id
-                        $taxId = empty($session->customer_details->tax_ids) ? null : [
-                            'type' => $session->customer_details->tax_ids[0]->type,
-                            'value' => $session->customer_details->tax_ids[0]->value
+                        $taxId = empty($checkoutSession->customer_details->tax_ids) ? null : [
+                            'type' => $checkoutSession->customer_details->tax_ids[0]->type,
+                            'value' => $checkoutSession->customer_details->tax_ids[0]->value
                         ];
 
                         // custom fields
                         $customFields = [];
 
-                        foreach ($session->custom_fields as $customField) {
+                        foreach ($checkoutSession->custom_fields as $customField) {
                             $customFields[] = [
                                 'name' => $customField->label->custom,
                                 'value' => $customField->{$customField->type}->value
@@ -153,30 +153,30 @@ return function(App $kirby) {
 
                         // set order content
                         $orderContent = [
-                            'paymentIntentId' => $session->payment_intent?->id ?? null,
+                            'paymentIntentId' => $checkoutSession->payment_intent?->id ?? null,
                             'createdAt' => Date::now()->format('Y-m-d H:i:s'),
                             'customer' => [
-                                'email' => $session->customer_details->email,
-                                'name' => $session->customer_details->name ?? null,
-                                'phone' => $session->customer_details->phone ?? null,
+                                'email' => $checkoutSession->customer_details->email,
+                                'name' => $checkoutSession->customer_details->name ?? null,
+                                'phone' => $checkoutSession->customer_details->phone ?? null,
                             ],
-                            'paymentMethod' => $session->payment_intent?->payment_method->type ?? 'no_cost',
+                            'paymentMethod' => $checkoutSession->payment_intent?->payment_method->type ?? 'no_cost',
                             'lineItems' => $lineItems,
                             'shippingDetails' => $shippingDetails,
-                            'shippingOption' => $session->shipping_cost?->shipping_rate->display_name ?? null,
+                            'shippingOption' => $checkoutSession->shipping_cost?->shipping_rate->display_name ?? null,
                             'billingDetails' => $billingDetails,
                             'taxId' => $taxId,
-                            'subtotalAmount' => MoneyFormatter::formatFromMinorUnit($session->amount_subtotal, $currency),
-                            'discountAmount' => MoneyFormatter::formatFromMinorUnit($session->total_details->amount_discount, $currency),
-                            'shippingAmount' => MoneyFormatter::formatFromMinorUnit($session->total_details->amount_shipping, $currency),
-                            'totalAmount' => MoneyFormatter::formatFromMinorUnit($session->amount_total, $currency),
+                            'subtotalAmount' => MoneyFormatter::formatFromMinorUnit($checkoutSession->amount_subtotal, $currency),
+                            'discountAmount' => MoneyFormatter::formatFromMinorUnit($checkoutSession->total_details->amount_discount, $currency),
+                            'shippingAmount' => MoneyFormatter::formatFromMinorUnit($checkoutSession->total_details->amount_shipping, $currency),
+                            'totalAmount' => MoneyFormatter::formatFromMinorUnit($checkoutSession->amount_total, $currency),
                             'customFields' => $customFields,
                             'events' => [
                                 [
                                     'id' => $event->id,
                                     'type' => $event->type,
-                                    'paymentStatus' => $session->payment_status,
-                                    'message' => $session->payment_intent?->last_payment_error->message ?? null,
+                                    'paymentStatus' => $checkoutSession->payment_status,
+                                    'message' => $checkoutSession->payment_intent?->last_payment_error->message ?? null,
                                     'date' => Date::createFromFormat('U', $event->created)->format('Y-m-d H:i:s')
                                 ]
                             ]
@@ -185,30 +185,44 @@ return function(App $kirby) {
                         // trigger event to allow order content manipulation
                         $orderContent = kirby()->apply(
                             'stripe.checkout.orderCreate:before',
-                            compact('orderContent', 'session'),
+                            compact('orderContent', 'checkoutSession'),
                             'orderContent'
                         );
 
                         // create order
                         $orderPage = $kirby->page('orders')->createChild([
-                            'slug' => $session->metadata['order_id'],
+                            'slug' => $checkoutSession->metadata['order_id'],
                             'template' => 'order',
                             'model' => 'order',
                             'draft' => false,
                             'content' => $orderContent
                         ]);
 
-                        // if payment status is "paid"
-                        // set order as completed
-                        if ($session->payment_status === 'paid') {
+                        // set order status and trigger events according to payment status
+                        // if payment status is not "unpaid", set order and trigger payment event as completed
+                        if ($checkoutSession->payment_status !== StripeCheckout::PAYMENT_STATUS_UNPAID) {
                             $orderPage->changeStatus('listed');
+
+                            $kirby->trigger(
+                                'stripe.checkout.payment:completed',
+                                compact('orderPage', 'checkoutSession')
+                            );
+                        }
+                        // if payment is "unpaid", it means it will be (possibly) paid in the future
+                        // so let async events to handle the order and payment triggers for later
+                        // for now just trigger that payment is pending
+                        else {
+                            $kirby->trigger(
+                                'stripe.checkout.payment:pending',
+                                compact('orderPage', 'checkoutSession')
+                            );
                         }
 
                         break;
                     case 'checkout.session.async_payment_succeeded':
                     case 'checkout.session.async_payment_failed':
                         // find existing order page
-                        $pageId = sprintf('orders/%s', $session->metadata['order_id']);
+                        $pageId = sprintf('orders/%s', $checkoutSession->metadata['order_id']);
                         $orderPage = $kirby->page($pageId);
 
                         // get existing events
@@ -228,19 +242,33 @@ return function(App $kirby) {
                         $orderEvents[] = [
                             'id' => $event->id,
                             'type' => $event->type,
-                            'paymentStatus' => $session->payment_status,
-                            'message' => $session->payment_intent?->last_payment_error->message ?? null,
+                            'paymentStatus' => $checkoutSession->payment_status,
+                            'message' => $checkoutSession->payment_intent?->last_payment_error->message ?? null,
                             'date' => Date::createFromFormat('U', $event->created)->format('Y-m-d H:i:s')
                         ];
 
                         // update page events
                         $orderPage->update(['events' => $orderEvents]);
 
-                        // set order status according to event received
-                        match ($event->type) {
-                            'checkout.session.async_payment_succeeded' => $orderPage->changeStatus('listed'),
-                            'checkout.session.async_payment_failed' => $orderPage->changeStatus('draft'),
-                        };
+                        // set order status and trigger events according to event received
+                        // if payment succeeded, set order and trigger payment event as completed
+                        if ($event->type === 'checkout.session.async_payment_succeeded') {
+                            $orderPage->changeStatus('listed');
+
+                            $kirby->trigger(
+                                'stripe.checkout.payment:completed',
+                                compact('orderPage', 'checkoutSession')
+                            );
+                        }
+                        // if payment failed, set order and trigger payment event as failed
+                        else if ($event->type === 'checkout.session.async_payment_failed') {
+                            $orderPage->changeStatus('draft');
+
+                            $kirby->trigger(
+                                'stripe.checkout.payment:failed',
+                                compact('orderPage', 'checkoutSession')
+                            );
+                        }
 
                         break;
                 }
