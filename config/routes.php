@@ -204,7 +204,7 @@ return function(App $kirby) {
                             $orderPage->changeStatus('listed');
 
                             $kirby->trigger(
-                                'stripe.checkout.payment:completed',
+                                'stripe.checkout.payment:succeeded',
                                 compact('orderPage', 'checkoutSession')
                             );
                         }
@@ -256,7 +256,7 @@ return function(App $kirby) {
                             $orderPage->changeStatus('listed');
 
                             $kirby->trigger(
-                                'stripe.checkout.payment:completed',
+                                'stripe.checkout.payment:succeeded',
                                 compact('orderPage', 'checkoutSession')
                             );
                         }
