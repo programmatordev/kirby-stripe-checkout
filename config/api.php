@@ -68,15 +68,25 @@ return [
                         throw new ProductDoesNotExistException('Product does not exist.');
                     }
 
-                    $cart = cart();
-                    $cart->addItem([
+                    // set item data to add to cart
+                    $itemData = [
                         'id' => $productPage->id(),
                         'image' => $productPage->cover()->toFile()->url(),
                         'name' => $productPage->title()->value(),
-                        'price' => (float) $productPage->price()->value(),
+                        'price' => $productPage->price()->toFloat(),
                         'quantity' => (int) $data['quantity'],
                         'options' => $data['options']
-                    ]);
+                    ];
+
+                    // trigger event to allow cart item data manipulation
+                    $itemData = kirby()->apply(
+                        'stripe.checkout.cartItemAdd:before',
+                        compact('itemData', 'productPage'),
+                        'itemData'
+                    );
+
+                    $cart = cart();
+                    $cart->addItem($itemData);
 
                     return [
                         'status' => 'ok',
