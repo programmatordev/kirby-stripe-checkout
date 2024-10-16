@@ -4,7 +4,8 @@ use Kirby\Cms\App;
 use Kirby\Toolkit\Date;
 use ProgrammatorDev\StripeCheckout\Exception\StripeCheckoutUiModeIsInvalidException;
 use ProgrammatorDev\StripeCheckout\MoneyFormatter;
-use ProgrammatorDev\StripeCheckout\StripeCheckout;
+use Stripe\Checkout\Session;
+use Stripe\Event;
 use Stripe\Exception\SignatureVerificationException;
 
 return function(App $kirby) {
@@ -16,7 +17,7 @@ return function(App $kirby) {
             'action' => function() use ($kirby) {
                 $stripeCheckout = stripeCheckout();
 
-                if ($stripeCheckout->getUiMode() !== StripeCheckout::UI_MODE_HOSTED) {
+                if ($stripeCheckout->getUiMode() !== Session::UI_MODE_HOSTED) {
                     throw new StripeCheckoutUiModeIsInvalidException(
                         'This endpoint is reserved for Stripe Checkout in "hosted" mode.'
                     );
@@ -37,7 +38,7 @@ return function(App $kirby) {
             'action' => function() use ($kirby) {
                 $stripeCheckout = stripeCheckout();
 
-                if ($stripeCheckout->getUiMode() !== StripeCheckout::UI_MODE_EMBEDDED) {
+                if ($stripeCheckout->getUiMode() !== Session::UI_MODE_EMBEDDED) {
                     throw new StripeCheckoutUiModeIsInvalidException(
                         'This endpoint is reserved for Stripe Checkout in "embedded" mode.'
                     );
@@ -93,7 +94,7 @@ return function(App $kirby) {
                 switch ($event->type) {
                     // no need to handle duplicate events here
                     // because if an order is (tried to) be created with the same slug it will fail
-                    case 'checkout.session.completed':
+                    case Event::CHECKOUT_SESSION_COMPLETED:
                         // get order currency
                         $currency = $stripeCheckout->getCurrency();
                         // create line items structure
@@ -200,7 +201,7 @@ return function(App $kirby) {
 
                         // set order status and trigger events according to payment status
                         // if payment status is not "unpaid", set order and trigger payment event as completed
-                        if ($checkoutSession->payment_status !== StripeCheckout::PAYMENT_STATUS_UNPAID) {
+                        if ($checkoutSession->payment_status !== Session::PAYMENT_STATUS_UNPAID) {
                             $orderPage->changeStatus('listed');
 
                             $kirby->trigger(
@@ -219,8 +220,8 @@ return function(App $kirby) {
                         }
 
                         break;
-                    case 'checkout.session.async_payment_succeeded':
-                    case 'checkout.session.async_payment_failed':
+                    case Event::CHECKOUT_SESSION_ASYNC_PAYMENT_SUCCEEDED:
+                    case Event::CHECKOUT_SESSION_ASYNC_PAYMENT_FAILED:
                         // find existing order page
                         $pageId = sprintf('orders/%s', $checkoutSession->metadata['order_id']);
                         $orderPage = $kirby->page($pageId);
@@ -252,7 +253,7 @@ return function(App $kirby) {
 
                         // set order status and trigger events according to event received
                         // if payment succeeded, set order and trigger payment event as completed
-                        if ($event->type === 'checkout.session.async_payment_succeeded') {
+                        if ($event->type === Event::CHECKOUT_SESSION_ASYNC_PAYMENT_SUCCEEDED) {
                             $orderPage->changeStatus('listed');
 
                             $kirby->trigger(
@@ -261,7 +262,7 @@ return function(App $kirby) {
                             );
                         }
                         // if payment failed, set order and trigger payment event as failed
-                        else if ($event->type === 'checkout.session.async_payment_failed') {
+                        else if ($event->type === Event::CHECKOUT_SESSION_ASYNC_PAYMENT_FAILED) {
                             $orderPage->changeStatus('draft');
 
                             $kirby->trigger(

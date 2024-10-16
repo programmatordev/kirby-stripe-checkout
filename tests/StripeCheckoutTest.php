@@ -226,14 +226,14 @@ class StripeCheckoutTest extends BaseTestCase
         ]);
 
         $stripeCheckout = new class($this->options['hosted']) extends StripeCheckout {
-            public function convertCartToLineItems(Cart $cart): array
+            public function getLineItems(Cart $cart): array
             {
-                return parent::convertCartToLineItems($cart);
+                return parent::getLineItems($cart);
             }
         };
 
         // act
-        $lineItems = $stripeCheckout->convertCartToLineItems($this->cart);
+        $lineItems = $stripeCheckout->getLineItems($this->cart);
 
         // assert
         $this->assertEquals([
@@ -267,20 +267,20 @@ class StripeCheckoutTest extends BaseTestCase
     {
         // arrange
         $stripeCheckout = new class($this->options['hosted']) extends StripeCheckout {
-            public function addSessionIdParamToUrl(string $url): string
+            public function addSessionIdToUrlQuery(string $url): string
             {
-                return parent::addSessionIdParamToUrl($url);
+                return parent::addSessionIdToUrlQuery($url);
             }
         };
 
         // assert
         $this->assertSame(
             'https://example.com/success?session_id={CHECKOUT_SESSION_ID}',
-            $stripeCheckout->addSessionIdParamToUrl('https://example.com/success')
+            $stripeCheckout->addSessionIdToUrlQuery('https://example.com/success')
         );
         $this->assertSame(
             'https://example.com/success?action=purchase&session_id={CHECKOUT_SESSION_ID}',
-            $stripeCheckout->addSessionIdParamToUrl('https://example.com/success?action=purchase')
+            $stripeCheckout->addSessionIdToUrlQuery('https://example.com/success?action=purchase')
         );
     }
 
