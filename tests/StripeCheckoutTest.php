@@ -30,6 +30,8 @@ class StripeCheckoutTest extends BaseTestCase
                 'uiMode' => 'hosted',
                 'successUrl' => 'https://example.com/success',
                 'cancelUrl' => 'https://example.com/cancel',
+                'ordersPage' => 'orders',
+                'settingsPage' => 'checkout-settings'
             ],
             'embedded' => [
                 'stripePublicKey' => 'pk_test_abc123',
@@ -38,6 +40,8 @@ class StripeCheckoutTest extends BaseTestCase
                 'currency' => 'EUR',
                 'uiMode' => 'embedded',
                 'returnUrl' => 'https://example.com/return',
+                'ordersPage' => 'orders',
+                'settingsPage' => 'checkout-settings',
             ]
         ];
 
@@ -75,6 +79,8 @@ class StripeCheckoutTest extends BaseTestCase
         yield 'hosted missing uiMode' => ['hosted', 'uiMode'];
         yield 'hosted missing successUrl' => ['hosted', 'successUrl'];
         yield 'hosted missing cancelUrl' => ['hosted', 'cancelUrl'];
+        yield 'hosted missing ordersPage' => ['hosted', 'ordersPage'];
+        yield 'hosted missing settingsPage' => ['hosted', 'settingsPage'];
         // embedded
         yield 'embedded missing stripePublicKey' => ['embedded', 'stripePublicKey'];
         yield 'embedded missing stripeSecretKey' => ['embedded', 'stripeSecretKey'];
@@ -82,6 +88,8 @@ class StripeCheckoutTest extends BaseTestCase
         yield 'embedded missing currency' => ['embedded', 'currency'];
         yield 'embedded missing uiMode' => ['embedded', 'uiMode'];
         yield 'embedded missing returnUrl' => ['embedded', 'returnUrl'];
+        yield 'embedded missing ordersPage' => ['embedded', 'ordersPage'];
+        yield 'embedded missing settingsPage' => ['embedded', 'settingsPage'];
     }
 
     #[DataProvider('provideInitializeWithInvalidOptionsData')]
@@ -114,6 +122,8 @@ class StripeCheckoutTest extends BaseTestCase
         yield 'hosted invalid type cancelUrl' => ['hosted', 'cancelUrl', 1];
         yield 'hosted invalid url cancelUrl' => ['hosted', 'cancelUrl', 'invalid'];
         yield 'hosted empty cancelUrl' => ['hosted', 'cancelUrl', ''];
+        yield 'hosted empty ordersPage' => ['hosted', 'ordersPage', ''];
+        yield 'hosted empty settingsPage' => ['hosted', 'settingsPage', ''];
         // embedded
         yield 'embedded invalid stripePublicKey' => ['embedded', 'stripePublicKey', 1];
         yield 'embedded empty stripePublicKey' => ['embedded', 'stripePublicKey', ''];
@@ -127,6 +137,8 @@ class StripeCheckoutTest extends BaseTestCase
         yield 'embedded invalid type returnUrl' => ['embedded', 'returnUrl', 1];
         yield 'embedded invalid url returnUrl' => ['embedded', 'returnUrl', 'invalid'];
         yield 'embedded empty returnUrl' => ['embedded', 'returnUrl', ''];
+        yield 'embedded empty ordersPage' => ['embedded', 'ordersPage', ''];
+        yield 'embedded empty settingsPage' => ['embedded', 'settingsPage', ''];
     }
 
     #[DataProvider('provideUiModeData')]
@@ -183,6 +195,8 @@ class StripeCheckoutTest extends BaseTestCase
         $this->assertSame($stripeCheckout->getStripeWebhookSecret(), $options['stripeWebhookSecret']);
         $this->assertSame($stripeCheckout->getCurrency(), $options['currency']);
         $this->assertSame($stripeCheckout->getUiMode(), $options['uiMode']);
+        $this->assertSame($stripeCheckout->getOrdersPage(), $options['ordersPage']);
+        $this->assertSame($stripeCheckout->getSettingsPage(), $options['settingsPage']);
 
         if ($uiMode === 'hosted') {
             // success url is always appended with a session_id parameter

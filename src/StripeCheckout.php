@@ -34,7 +34,7 @@ class StripeCheckout
     {
         $this->options = $this->resolveOptions($options);
         $this->stripe = new StripeClient($this->options['stripeSecretKey']);
-        $this->settingsPage = kirby()->page('checkout-settings');
+        $this->settingsPage = kirby()->page($this->options['settingsPage']);
     }
 
     /**
@@ -51,12 +51,10 @@ class StripeCheckout
             throw new CartIsEmptyException('Cart is empty.');
         }
 
-        $uiMode = $this->options['uiMode'];
-
         // set base session params
         $sessionParams = [
             'mode' => Session::MODE_PAYMENT,
-            'ui_mode' => $uiMode,
+            'ui_mode' => $this->options['uiMode'],
             'line_items' => $this->getLineItems($cart),
             'metadata' => [
                 // generate a unique id for the order
@@ -66,11 +64,11 @@ class StripeCheckout
         ];
 
         // add session params according to uiMode
-        if ($uiMode === Session::UI_MODE_HOSTED) {
+        if ($this->options['uiMode'] === Session::UI_MODE_HOSTED) {
             $sessionParams['success_url'] = $this->options['successUrl'];
             $sessionParams['cancel_url'] = $this->options['cancelUrl'];
         }
-        else if ($uiMode === Session::UI_MODE_EMBEDDED) {
+        else if ($this->options['uiMode'] === Session::UI_MODE_EMBEDDED) {
             $sessionParams['return_url'] = $this->options['returnUrl'];
         }
 
@@ -153,6 +151,16 @@ class StripeCheckout
         return $this->options['cancelUrl'] ?? null;
     }
 
+    public function getOrdersPage(): string
+    {
+        return $this->options['ordersPage'];
+    }
+
+    public function getSettingsPage(): string
+    {
+        return $this->options['settingsPage'];
+    }
+
     /**
      * @throws RoundingNecessaryException
      * @throws MathException
@@ -161,7 +169,6 @@ class StripeCheckout
      */
     protected function getLineItems(Cart $cart): array
     {
-        $currency = $this->options['currency'];
         $lineItems = [];
 
         foreach ($cart->getItems() as $item) {
@@ -188,10 +195,10 @@ class StripeCheckout
                 'price_data' => [
                     // present currency in lowercase
                     // https://docs.stripe.com/currencies#presentment-currencies
-                    'currency' => strtolower($currency),
+                    'currency' => strtolower($this->options['currency']),
                     // Stripe expects amounts to be provided in the currency smallest unit
                     // https://docs.stripe.com/currencies#zero-decimal
-                    'unit_amount' => MoneyFormatter::toMinorUnit($item['price'], $currency),
+                    'unit_amount' => MoneyFormatter::toMinorUnit($item['price'], $this->options['currency']),
                     'product_data' => $productData
                 ],
                 'quantity' => $item['quantity'],
@@ -214,7 +221,6 @@ class StripeCheckout
             return [];
         }
 
-        $currency = $this->options['currency'];
         $shippingOptions = [];
 
         // get shipping rates and handle them if they exist
@@ -222,8 +228,8 @@ class StripeCheckout
             $shippingRateData = [
                 'type' => 'fixed_amount',
                 'fixed_amount' => [
-                    'amount' => MoneyFormatter::toMinorUnit($shippingOption->amount()->value(), $currency),
-                    'currency' => $currency,
+                    'amount' => MoneyFormatter::toMinorUnit($shippingOption->amount()->value(), $this->options['currency']),
+                    'currency' => $this->options['currency'],
                 ],
                 'display_name' => $shippingOption->name()->value()
             ];
@@ -265,19 +271,31 @@ class StripeCheckout
         $resolver = new OptionsResolver();
         $resolver->setIgnoreUndefined();
 
-        $resolver->setRequired(['stripePublicKey', 'stripeSecretKey', 'stripeWebhookSecret', 'currency', 'uiMode']);
+        $resolver->setRequired([
+            'stripePublicKey',
+            'stripeSecretKey',
+            'stripeWebhookSecret',
+            'currency',
+            'uiMode',
+            'ordersPage',
+            'settingsPage'
+        ]);
 
         $resolver->setAllowedTypes('stripePublicKey', 'string');
         $resolver->setAllowedTypes('stripeSecretKey', 'string');
         $resolver->setAllowedTypes('stripeWebhookSecret', 'string');
         $resolver->setAllowedTypes('currency', 'string');
         $resolver->setAllowedTypes('uiMode', 'string');
+        $resolver->setAllowedTypes('ordersPage', 'string');
+        $resolver->setAllowedTypes('settingsPage', 'string');
 
         $resolver->setAllowedValues('stripePublicKey', Validation::createIsValidCallable(new NotBlank()));
         $resolver->setAllowedValues('stripeSecretKey', Validation::createIsValidCallable(new NotBlank()));
         $resolver->setAllowedValues('stripeWebhookSecret', Validation::createIsValidCallable(new NotBlank()));
         $resolver->setAllowedValues('currency', Currencies::getCurrencyCodes());
         $resolver->setAllowedValues('uiMode', [Session::UI_MODE_HOSTED, Session::UI_MODE_EMBEDDED]);
+        $resolver->setAllowedValues('ordersPage', Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setAllowedValues('settingsPage', Validation::createIsValidCallable(new NotBlank()));
 
         // https://docs.stripe.com/currencies#presentment-currencies
         $resolver->setNormalizer('currency', function (Options $options, string $currency): string {

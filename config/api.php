@@ -15,10 +15,13 @@ function resolveAddCartItemData(array $data): array
     $resolver = new OptionsResolver();
 
     $resolver->setDefaults(['options' => null]);
+
     $resolver->setRequired(['id', 'quantity']);
+
     $resolver->setAllowedTypes('id', 'string');
     $resolver->setAllowedTypes('quantity', ['int']);
     $resolver->setAllowedTypes('options', ['null', 'scalar[]']);
+
     $resolver->setAllowedValues('id', Validation::createIsValidCallable(new NotBlank()));
     $resolver->setAllowedValues('quantity', Validation::createIsValidCallable(new GreaterThan(0)));
     $resolver->setAllowedValues('options', Validation::createIsValidCallable(new AtLeastOneOf([new IsNull(), new NotBlank()])));
@@ -31,7 +34,9 @@ function resolveUpdateCartItemData(array $data): array
     $resolver = new OptionsResolver();
 
     $resolver->setRequired(['quantity']);
+
     $resolver->setAllowedTypes('quantity', ['int']);
+
     $resolver->setAllowedValues('quantity', Validation::createIsValidCallable(new GreaterThan(0)));
 
     return $resolver->resolve($data);

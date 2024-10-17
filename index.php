@@ -43,7 +43,9 @@ App::plugin('programmatordev/stripe-checkout', [
         'uiMode' => 'hosted',
         'returnUrl' => null,
         'successUrl' => null,
-        'cancelUrl' => null
+        'cancelUrl' => null,
+        'ordersPage' => 'orders',
+        'settingsPage' => 'checkout-settings'
     ],
     'blueprints' => [
         // fields

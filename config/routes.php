@@ -191,13 +191,14 @@ return function(App $kirby) {
                         );
 
                         // create order
-                        $orderPage = $kirby->page('orders')->createChild([
-                            'slug' => $checkoutSession->metadata['order_id'],
-                            'template' => 'order',
-                            'model' => 'order',
-                            'draft' => false,
-                            'content' => $orderContent
-                        ]);
+                        $orderPage = $kirby->page($stripeCheckout->getOrdersPage())
+                            ->createChild([
+                                'slug' => $checkoutSession->metadata['order_id'],
+                                'template' => 'order',
+                                'model' => 'order',
+                                'draft' => false,
+                                'content' => $orderContent
+                            ]);
 
                         // set order status and trigger events according to payment status
                         // if payment status is not "unpaid", set order and trigger payment event as completed
@@ -227,7 +228,9 @@ return function(App $kirby) {
                         $orderPage = $kirby->page($pageId);
 
                         // get existing events
-                        $orderEvents = $orderPage->events()->toStructure()->toArray();
+                        $orderEvents = $orderPage->events()
+                            ->toStructure()
+                            ->toArray();
 
                         // check if event id was already processed in the past
                         // immediately exit if it was
