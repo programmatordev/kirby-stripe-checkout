@@ -224,8 +224,13 @@ return function(App $kirby) {
                     case Event::CHECKOUT_SESSION_ASYNC_PAYMENT_SUCCEEDED:
                     case Event::CHECKOUT_SESSION_ASYNC_PAYMENT_FAILED:
                         // find existing order page
-                        $pageId = sprintf('orders/%s', $checkoutSession->metadata['order_id']);
-                        $orderPage = $kirby->page($pageId);
+                        $orderPage = $kirby->page(
+                            sprintf(
+                                '%s/%s',
+                                $stripeCheckout->getOrdersPage(),
+                                $checkoutSession->metadata['order_id']
+                            )
+                        );
 
                         // get existing events
                         $orderEvents = $orderPage->events()
