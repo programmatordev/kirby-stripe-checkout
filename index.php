@@ -16,9 +16,10 @@ use ProgrammatorDev\StripeCheckout\StripeCheckout;
  */
 function cart(array $options = []): Cart
 {
-    $options = array_merge([
-        'currency' => kirby()->option('programmatordev.stripe-checkout.currency')
-    ], $options);
+    $options = array_merge(
+        ['currency' => kirby()->option('programmatordev.stripe-checkout.currency')],
+        $options
+    );
 
     return new Cart($options);
 }
@@ -56,7 +57,7 @@ App::plugin('programmatordev/stripe-checkout', [
         'stripe.checkout.pages/product-options' => __DIR__ . '/blueprints/pages/product-options.yml',
         'stripe.checkout.pages/orders' => __DIR__ . '/blueprints/pages/orders.yml',
         'stripe.checkout.pages/order' => __DIR__ . '/blueprints/pages/order.yml',
-        'stripe.checkout.pages/shipping' => __DIR__ . '/blueprints/pages/shipping.yml',
+        'stripe.checkout.pages/checkout-settings' => __DIR__ . '/blueprints/pages/checkout-settings.yml',
     ],
     'siteMethods' => require __DIR__ . '/config/siteMethods.php',
     'routes' => require __DIR__ . '/config/routes.php',

@@ -1,6 +1,6 @@
-title: Shipping
+title: Checkout Settings
 
-icon: box
+icon: cog
 
 options:
   changeSlug: false
@@ -13,11 +13,11 @@ options:
   preview: false
 
 fields:
-  enabled:
-    label: Enabled
+  shippingEnabled:
+    label: Shipping
     type: toggle
     translate: false
-  allowedCountries:
+  shippingAllowedCountries:
     label: Allowed countries
     type: multiselect
     options:
@@ -26,13 +26,14 @@ fields:
     translate: false
     min: 1
     when:
-      enabled: true
-  shippingRates:
-    label: Shipping rates
+      shippingEnabled: true
+  shippingOptions:
+    label: Delivery options
     type: structure
     columns:
       name: true
-      amount: true
+      amount:
+        align: right
     fields:
       name:
         label: Name
@@ -46,16 +47,18 @@ fields:
         min: 0
         translate: false
       deliveryEstimateMinimumValue:
-        label: Delivery estimate minimum
+        label: Minimum delivery estimate
         type: number
         width: 1/2
         step: 1
         min: 1
         translate: false
+        help: Leave empty if there is no minimum delivery estimate
       deliveryEstimateMinimumUnit:
         label: false
         type: select
         width: 1/2
+        required: true
         default: business_day
         options:
           hour: Hours
@@ -65,16 +68,18 @@ fields:
           month: Months
         translate: false
       deliveryEstimateMaximumValue:
-        label: Delivery estimate maximum
+        label: Maximum delivery estimate
         type: number
         width: 1/2
         step: 1
         min: 1
         translate: false
+        help: Leave empty if there is no maximum delivery estimate
       deliveryEstimateMaximumUnit:
         label: false
         type: select
         width: 1/2
+        required: true
         default: business_day
         options:
           hour: Hours
@@ -84,4 +89,4 @@ fields:
           month: Months
         translate: false
     when:
-      enabled: true
+      shippingEnabled: true

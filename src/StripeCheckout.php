@@ -28,66 +28,13 @@ class StripeCheckout
 
     private StripeClient $stripe;
 
-    private ?Page $shippingPage;
+    private ?Page $settingsPage;
 
     public function __construct(array $options)
     {
         $this->options = $this->resolveOptions($options);
         $this->stripe = new StripeClient($this->options['stripeSecretKey']);
-        $this->shippingPage = kirby()->page('shipping');
-    }
-
-    private function resolveOptions(array $options): array
-    {
-        $resolver = new OptionsResolver();
-        $resolver->setIgnoreUndefined();
-
-        $resolver->setRequired(['stripePublicKey', 'stripeSecretKey', 'stripeWebhookSecret', 'currency', 'uiMode']);
-
-        $resolver->setAllowedTypes('stripePublicKey', 'string');
-        $resolver->setAllowedTypes('stripeSecretKey', 'string');
-        $resolver->setAllowedTypes('stripeWebhookSecret', 'string');
-        $resolver->setAllowedTypes('currency', 'string');
-        $resolver->setAllowedTypes('uiMode', 'string');
-
-        $resolver->setAllowedValues('stripePublicKey', Validation::createIsValidCallable(new NotBlank()));
-        $resolver->setAllowedValues('stripeSecretKey', Validation::createIsValidCallable(new NotBlank()));
-        $resolver->setAllowedValues('stripeWebhookSecret', Validation::createIsValidCallable(new NotBlank()));
-        $resolver->setAllowedValues('currency', Currencies::getCurrencyCodes());
-        $resolver->setAllowedValues('uiMode', [Session::UI_MODE_HOSTED, Session::UI_MODE_EMBEDDED]);
-
-        // https://docs.stripe.com/currencies#presentment-currencies
-        $resolver->setNormalizer('currency', function (Options $options, string $currency): string {
-            return strtoupper($currency);
-        });
-
-        $uiMode = $options['uiMode'] ?? null;
-
-        if ($uiMode === Session::UI_MODE_HOSTED) {
-            $resolver->setRequired(['successUrl', 'cancelUrl']);
-
-            $resolver->setAllowedTypes('successUrl', 'string');
-            $resolver->setAllowedTypes('cancelUrl', 'string');
-
-            $resolver->setAllowedValues('successUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
-            $resolver->setAllowedValues('cancelUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
-
-            $resolver->setNormalizer('successUrl', function (Options $options, string $successUrl): string {
-                return $this->addSessionIdToUrlQuery($successUrl);
-            });
-        }
-        else if ($uiMode === Session::UI_MODE_EMBEDDED) {
-            $resolver->setRequired(['returnUrl']);
-
-            $resolver->setAllowedTypes('returnUrl', 'string');
-            $resolver->setAllowedValues('returnUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
-
-            $resolver->setNormalizer('returnUrl', function (Options $options, string $returnUrl): string {
-                return $this->addSessionIdToUrlQuery($returnUrl);
-            });
-        }
-
-        return $resolver->resolve($options);
+        $this->settingsPage = kirby()->page('checkout-settings');
     }
 
     /**
@@ -129,8 +76,8 @@ class StripeCheckout
 
         // add shipping params if page exists and is enabled
         // https://docs.stripe.com/payments/during-payment/charge-shipping?payment-ui=checkout&lang=php
-        if ($this->shippingPage !== null && $this->shippingPage->enabled()->toBool() === true) {
-            $sessionParams['shipping_address_collection']['allowed_countries'] = $this->shippingPage->allowedCountries()->split();
+        if ($this->settingsPage?->shippingEnabled()->toBool() === true) {
+            $sessionParams['shipping_address_collection']['allowed_countries'] = $this->settingsPage->shippingAllowedCountries()->split();
             $sessionParams['shipping_options'] = $this->getShippingOptions();
         }
 
@@ -262,8 +209,8 @@ class StripeCheckout
      */
     private function getShippingOptions(): array
     {
-        // if there is no shipping page, return empty
-        if ($this->shippingPage === null) {
+        // if there is no settings page or shipping is disabled
+        if ($this->settingsPage?->shippingEnabled()->toBool() !== true) {
             return [];
         }
 
@@ -271,29 +218,29 @@ class StripeCheckout
         $shippingOptions = [];
 
         // get shipping rates and handle them if they exist
-        foreach ($this->shippingPage->shippingRates()->toStructure() as $shippingRate) {
+        foreach ($this->settingsPage->shippingOptions()->toStructure() as $shippingOption) {
             $shippingRateData = [
                 'type' => 'fixed_amount',
                 'fixed_amount' => [
-                    'amount' => MoneyFormatter::toMinorUnit($shippingRate->amount()->value(), $currency),
+                    'amount' => MoneyFormatter::toMinorUnit($shippingOption->amount()->value(), $currency),
                     'currency' => $currency,
                 ],
-                'display_name' => $shippingRate->name()->value()
+                'display_name' => $shippingOption->name()->value()
             ];
 
             // add minimum delivery estimate if it exists
-            if ($shippingRate->deliveryEstimateMinimumValue()->value() !== '') {
+            if ($shippingOption->deliveryEstimateMinimumValue()->isNotEmpty()) {
                 $shippingRateData['delivery_estimate']['minimum'] = [
-                    'unit' => $shippingRate->deliveryEstimateMinimumUnit()->value(),
-                    'value' => $shippingRate->deliveryEstimateMinimumValue()->value(),
+                    'unit' => $shippingOption->deliveryEstimateMinimumUnit()->value(),
+                    'value' => $shippingOption->deliveryEstimateMinimumValue()->value(),
                 ];
             }
 
             // add maximum delivery estimate if it exists
-            if ($shippingRate->deliveryEstimateMaximumValue()->value() !== '') {
+            if ($shippingOption->deliveryEstimateMaximumValue()->isNotEmpty()) {
                 $shippingRateData['delivery_estimate']['maximum'] = [
-                    'unit' => $shippingRate->deliveryEstimateMaximumUnit()->value(),
-                    'value' => $shippingRate->deliveryEstimateMaximumValue()->value(),
+                    'unit' => $shippingOption->deliveryEstimateMaximumUnit()->value(),
+                    'value' => $shippingOption->deliveryEstimateMaximumValue()->value(),
                 ];
             }
 
@@ -311,5 +258,58 @@ class StripeCheckout
         $url .= (parse_url($url, PHP_URL_QUERY) ? '&' : '?') . 'session_id={CHECKOUT_SESSION_ID}';
 
         return $url;
+    }
+
+    private function resolveOptions(array $options): array
+    {
+        $resolver = new OptionsResolver();
+        $resolver->setIgnoreUndefined();
+
+        $resolver->setRequired(['stripePublicKey', 'stripeSecretKey', 'stripeWebhookSecret', 'currency', 'uiMode']);
+
+        $resolver->setAllowedTypes('stripePublicKey', 'string');
+        $resolver->setAllowedTypes('stripeSecretKey', 'string');
+        $resolver->setAllowedTypes('stripeWebhookSecret', 'string');
+        $resolver->setAllowedTypes('currency', 'string');
+        $resolver->setAllowedTypes('uiMode', 'string');
+
+        $resolver->setAllowedValues('stripePublicKey', Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setAllowedValues('stripeSecretKey', Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setAllowedValues('stripeWebhookSecret', Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setAllowedValues('currency', Currencies::getCurrencyCodes());
+        $resolver->setAllowedValues('uiMode', [Session::UI_MODE_HOSTED, Session::UI_MODE_EMBEDDED]);
+
+        // https://docs.stripe.com/currencies#presentment-currencies
+        $resolver->setNormalizer('currency', function (Options $options, string $currency): string {
+            return strtoupper($currency);
+        });
+
+        $uiMode = $options['uiMode'] ?? null;
+
+        if ($uiMode === Session::UI_MODE_HOSTED) {
+            $resolver->setRequired(['successUrl', 'cancelUrl']);
+
+            $resolver->setAllowedTypes('successUrl', 'string');
+            $resolver->setAllowedTypes('cancelUrl', 'string');
+
+            $resolver->setAllowedValues('successUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
+            $resolver->setAllowedValues('cancelUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
+
+            $resolver->setNormalizer('successUrl', function (Options $options, string $successUrl): string {
+                return $this->addSessionIdToUrlQuery($successUrl);
+            });
+        }
+        else if ($uiMode === Session::UI_MODE_EMBEDDED) {
+            $resolver->setRequired(['returnUrl']);
+
+            $resolver->setAllowedTypes('returnUrl', 'string');
+            $resolver->setAllowedValues('returnUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
+
+            $resolver->setNormalizer('returnUrl', function (Options $options, string $returnUrl): string {
+                return $this->addSessionIdToUrlQuery($returnUrl);
+            });
+        }
+
+        return $resolver->resolve($options);
     }
 }
