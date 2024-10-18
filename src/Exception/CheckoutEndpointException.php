@@ -2,4 +2,4 @@
 
 namespace ProgrammatorDev\StripeCheckout\Exception;
 
-class ProductNotFoundException extends \Exception {}
+class CheckoutEndpointException extends \Exception {}

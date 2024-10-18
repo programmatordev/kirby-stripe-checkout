@@ -2,7 +2,7 @@
 
 use Kirby\Cms\App;
 use Kirby\Toolkit\Date;
-use ProgrammatorDev\StripeCheckout\Exception\InvalidCheckoutUiModeException;
+use ProgrammatorDev\StripeCheckout\Exception\CheckoutEndpointException;
 use ProgrammatorDev\StripeCheckout\MoneyFormatter;
 use Stripe\Checkout\Session;
 use Stripe\Event;
@@ -18,7 +18,7 @@ return function(App $kirby) {
                 $stripeCheckout = stripeCheckout();
 
                 if ($stripeCheckout->getUiMode() !== Session::UI_MODE_HOSTED) {
-                    throw new InvalidCheckoutUiModeException(
+                    throw new CheckoutEndpointException(
                         'This endpoint is reserved for Stripe Checkout in "hosted" mode.'
                     );
                 }
@@ -39,7 +39,7 @@ return function(App $kirby) {
                 $stripeCheckout = stripeCheckout();
 
                 if ($stripeCheckout->getUiMode() !== Session::UI_MODE_EMBEDDED) {
-                    throw new InvalidCheckoutUiModeException(
+                    throw new CheckoutEndpointException(
                         'This endpoint is reserved for Stripe Checkout in "embedded" mode.'
                     );
                 }
@@ -66,7 +66,7 @@ return function(App $kirby) {
 
                 try {
                     // validate webhook event
-                    $event = $stripeCheckout->constructWebhookEvent($payload, $sigHeader);
+                    $event = $stripeCheckout->constructEvent($payload, $sigHeader);
                 }
                 catch (UnexpectedValueException) {
                     // invalid payload

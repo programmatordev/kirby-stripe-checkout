@@ -2,4 +2,4 @@
 
 namespace ProgrammatorDev\StripeCheckout\Exception;
 
-class CartItemNotFoundException extends \Exception {}
+class CheckoutSessionException extends \Exception {}

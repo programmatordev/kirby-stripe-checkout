@@ -1,7 +1,7 @@
 <?php
 
 use Kirby\Cms\App;
-use ProgrammatorDev\StripeCheckout\Exception\ProductNotFoundException;
+use ProgrammatorDev\StripeCheckout\Exception\CartException;
 use Symfony\Component\Intl\Countries;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\AtLeastOneOf;
@@ -10,7 +10,7 @@ use Symfony\Component\Validator\Constraints\IsNull;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Validation;
 
-function resolveAddCartItemData(array $data): array
+function resolveCartItemCreate(array $data): array
 {
     $resolver = new OptionsResolver();
 
@@ -19,7 +19,7 @@ function resolveAddCartItemData(array $data): array
     $resolver->setRequired(['id', 'quantity']);
 
     $resolver->setAllowedTypes('id', 'string');
-    $resolver->setAllowedTypes('quantity', ['int']);
+    $resolver->setAllowedTypes('quantity', 'int');
     $resolver->setAllowedTypes('options', ['null', 'scalar[]']);
 
     $resolver->setAllowedValues('id', Validation::createIsValidCallable(new NotBlank()));
@@ -29,13 +29,13 @@ function resolveAddCartItemData(array $data): array
     return $resolver->resolve($data);
 }
 
-function resolveUpdateCartItemData(array $data): array
+function resolveCartItemUpdate(array $data): array
 {
     $resolver = new OptionsResolver();
 
     $resolver->setRequired(['quantity']);
 
-    $resolver->setAllowedTypes('quantity', ['int']);
+    $resolver->setAllowedTypes('quantity', 'int');
 
     $resolver->setAllowedValues('quantity', Validation::createIsValidCallable(new GreaterThan(0)));
 
@@ -66,11 +66,11 @@ return [
                 'auth' => false,
                 'action' => function() use ($kirby) {
                     $data = $kirby->request()->body()->toArray();
-                    $data = resolveAddCartItemData($data);
+                    $data = resolveCartItemCreate($data);
 
                     // find page
                     if (($productPage = page($data['id'])) === null) {
-                        throw new ProductNotFoundException('Product does not exist.');
+                        throw new CartException('Product does not exist.');
                     }
 
                     // set item data to add to cart
@@ -106,7 +106,7 @@ return [
                 'auth' => false,
                 'action' => function(string $lineItemId) use ($kirby) {
                     $data = $kirby->request()->body()->toArray();
-                    $data = resolveUpdateCartItemData($data);
+                    $data = resolveCartItemUpdate($data);
 
                     $cart = cart();
                     $cart->updateItem($lineItemId, (int) $data['quantity']);

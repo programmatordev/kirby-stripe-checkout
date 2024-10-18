@@ -6,7 +6,7 @@ use Brick\Math\Exception\NumberFormatException;
 use Brick\Math\Exception\RoundingNecessaryException;
 use Brick\Money\Exception\UnknownCurrencyException;
 use Kirby\Session\Session;
-use ProgrammatorDev\StripeCheckout\Exception\CartItemNotFoundException;
+use ProgrammatorDev\StripeCheckout\Exception\CartException;
 use Symfony\Component\Intl\Currencies;
 use Symfony\Component\OptionsResolver\Options;
 use Symfony\Component\OptionsResolver\OptionsResolver;
@@ -49,6 +49,11 @@ class Cart
         $this->contents = $this->session->get(self::SESSION_NAME) ?? $this->defaultContents;
     }
 
+    /**
+     * @throws UnknownCurrencyException
+     * @throws NumberFormatException
+     * @throws RoundingNecessaryException
+     */
     public function addItem(array $data): string
     {
         $item = $this->resolveItem($data);
@@ -74,12 +79,15 @@ class Cart
     }
 
     /**
-     * @throws CartItemNotFoundException
+     * @throws CartException
+     * @throws NumberFormatException
+     * @throws RoundingNecessaryException
+     * @throws UnknownCurrencyException
      */
     public function updateItem(string $lineItemId, int $quantity): void
     {
         if (($item = $this->getContentsItem($lineItemId)) === null) {
-            throw new CartItemNotFoundException('Cart item does not exist.');
+            throw new CartException('Cart item does not exist.');
         }
 
         $item['quantity'] = $quantity;
@@ -91,12 +99,15 @@ class Cart
     }
 
     /**
-     * @throws CartItemNotFoundException
+     * @throws CartException
+     * @throws NumberFormatException
+     * @throws RoundingNecessaryException
+     * @throws UnknownCurrencyException
      */
     public function removeItem(string $lineItemId): void
     {
         if ($this->getContentsItem($lineItemId) === null) {
-            throw new CartItemNotFoundException('Cart item does not exist.');
+            throw new CartException('Cart item does not exist.');
         }
 
         $this->removeContentsItem($lineItemId);
@@ -161,7 +172,6 @@ class Cart
 
         foreach ($this->contents['items'] as $lineItemId => $item) {
             $item['subtotal'] = $item['price'] * $item['quantity'];
-
             $item['priceFormatted'] = MoneyFormatter::format($item['price'], $this->options['currency']);
             $item['subtotalFormatted'] = MoneyFormatter::format($item['subtotal'], $this->options['currency']);
 
@@ -173,7 +183,6 @@ class Cart
 
         $this->contents['totalAmount'] = $totalAmount;
         $this->contents['totalQuantity'] = $totalQuantity;
-
         $this->contents['totalAmountFormatted'] = MoneyFormatter::format($totalAmount, $this->options['currency']);
     }
 
@@ -187,7 +196,9 @@ class Cart
         $resolver = new OptionsResolver();
 
         $resolver->setRequired(['currency']);
+
         $resolver->setAllowedTypes('currency', 'string');
+
         $resolver->setAllowedValues('currency', Currencies::getCurrencyCodes());
 
         $resolver->setNormalizer('currency', function (Options $options, string $currency): string {

@@ -2,4 +2,4 @@
 
 namespace ProgrammatorDev\StripeCheckout\Exception;
 
-class InvalidCheckoutUiModeException extends \Exception {}
+class CartException extends \Exception {}
