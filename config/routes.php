@@ -3,6 +3,7 @@
 use Kirby\Cms\App;
 use Kirby\Toolkit\Date;
 use ProgrammatorDev\StripeCheckout\Exception\CheckoutEndpointException;
+use ProgrammatorDev\StripeCheckout\Exception\CheckoutWebhookException;
 use ProgrammatorDev\StripeCheckout\MoneyFormatter;
 use Stripe\Checkout\Session;
 use Stripe\Event;
@@ -68,15 +69,13 @@ return function(App $kirby) {
                     // validate webhook event
                     $event = $stripeCheckout->constructEvent($payload, $sigHeader);
                 }
+                // invalid payload
                 catch (UnexpectedValueException) {
-                    // invalid payload
-                    http_response_code(400);
-                    exit;
+                    throw new CheckoutWebhookException('Invalid payload.');
                 }
+                // invalid signature
                 catch (SignatureVerificationException) {
-                    // invalid signature
-                    http_response_code(400);
-                    exit;
+                    throw new CheckoutWebhookException('Invalid signature.');
                 }
 
                 // get checkout session with required data
@@ -232,6 +231,11 @@ return function(App $kirby) {
                             )
                         );
 
+                        // order does not exist
+                        if ($orderPage === null) {
+                            throw new CheckoutWebhookException('Order does not exist.');
+                        }
+
                         // get existing events
                         $orderEvents = $orderPage->events()
                             ->toStructure()
@@ -242,8 +246,7 @@ return function(App $kirby) {
                         // https://docs.stripe.com/webhooks#handle-duplicate-events
                         foreach ($orderEvents as $orderEvent) {
                             if ($orderEvent['id'] === $event->id) {
-                                http_response_code(400);
-                                exit;
+                                throw new CheckoutWebhookException('Duplicate order event.');
                             }
                         }
 

@@ -2,4 +2,7 @@
 
 namespace ProgrammatorDev\StripeCheckout\Exception;
 
-class CartException extends \Exception {}
+class CartException extends \Exception
+{
+    protected $code = 422;
+}
