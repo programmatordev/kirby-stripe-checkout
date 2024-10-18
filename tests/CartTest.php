@@ -4,7 +4,7 @@ namespace ProgrammatorDev\StripeCheckout\Test;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Cart;
-use ProgrammatorDev\StripeCheckout\Exception\CartItemDoesNotExistException;
+use ProgrammatorDev\StripeCheckout\Exception\CartItemNotFoundException;
 use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
 use Symfony\Component\OptionsResolver\Exception\MissingOptionsException;
 
@@ -291,7 +291,7 @@ class CartTest extends BaseTestCase
 
     public function testUpdateItemThatDoesNotExist(): void
     {
-        $this->expectException(CartItemDoesNotExistException::class);
+        $this->expectException(CartItemNotFoundException::class);
 
         $this->cart->updateItem('does-not-exist', 1);
     }
@@ -350,7 +350,7 @@ class CartTest extends BaseTestCase
 
     public function testRemoveItemThatDoesNotExist(): void
     {
-        $this->expectException(CartItemDoesNotExistException::class);
+        $this->expectException(CartItemNotFoundException::class);
 
         $this->cart->removeItem('does-not-exist');
     }

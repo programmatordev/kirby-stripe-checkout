@@ -6,7 +6,7 @@ use Brick\Math\Exception\NumberFormatException;
 use Brick\Math\Exception\RoundingNecessaryException;
 use Brick\Money\Exception\UnknownCurrencyException;
 use Kirby\Session\Session;
-use ProgrammatorDev\StripeCheckout\Exception\CartItemDoesNotExistException;
+use ProgrammatorDev\StripeCheckout\Exception\CartItemNotFoundException;
 use Symfony\Component\Intl\Currencies;
 use Symfony\Component\OptionsResolver\Options;
 use Symfony\Component\OptionsResolver\OptionsResolver;
@@ -74,12 +74,12 @@ class Cart
     }
 
     /**
-     * @throws CartItemDoesNotExistException
+     * @throws CartItemNotFoundException
      */
     public function updateItem(string $lineItemId, int $quantity): void
     {
         if (($item = $this->getContentsItem($lineItemId)) === null) {
-            throw new CartItemDoesNotExistException('Cart item does not exist.');
+            throw new CartItemNotFoundException('Cart item does not exist.');
         }
 
         $item['quantity'] = $quantity;
@@ -91,12 +91,12 @@ class Cart
     }
 
     /**
-     * @throws CartItemDoesNotExistException
+     * @throws CartItemNotFoundException
      */
     public function removeItem(string $lineItemId): void
     {
         if ($this->getContentsItem($lineItemId) === null) {
-            throw new CartItemDoesNotExistException('Cart item does not exist.');
+            throw new CartItemNotFoundException('Cart item does not exist.');
         }
 
         $this->removeContentsItem($lineItemId);

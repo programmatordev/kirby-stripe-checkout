@@ -2,4 +2,4 @@
 
 namespace ProgrammatorDev\StripeCheckout\Exception;
 
-class ProductDoesNotExistException extends \Exception {}
+class InvalidCheckoutUiModeException extends \Exception {}

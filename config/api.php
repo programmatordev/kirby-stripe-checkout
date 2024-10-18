@@ -1,7 +1,7 @@
 <?php
 
 use Kirby\Cms\App;
-use ProgrammatorDev\StripeCheckout\Exception\ProductDoesNotExistException;
+use ProgrammatorDev\StripeCheckout\Exception\ProductNotFoundException;
 use Symfony\Component\Intl\Countries;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\AtLeastOneOf;
@@ -70,7 +70,7 @@ return [
 
                     // find page
                     if (($productPage = page($data['id'])) === null) {
-                        throw new ProductDoesNotExistException('Product does not exist.');
+                        throw new ProductNotFoundException('Product does not exist.');
                     }
 
                     // set item data to add to cart

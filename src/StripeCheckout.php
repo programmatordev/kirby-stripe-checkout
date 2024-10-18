@@ -8,7 +8,7 @@ use Brick\Math\Exception\RoundingNecessaryException;
 use Brick\Money\Exception\UnknownCurrencyException;
 use Kirby\Cms\Page;
 use Kirby\Uuid\Uuid;
-use ProgrammatorDev\StripeCheckout\Exception\CartIsEmptyException;
+use ProgrammatorDev\StripeCheckout\Exception\EmptyCartException;
 use Stripe\Checkout\Session;
 use Stripe\Event;
 use Stripe\Exception\ApiErrorException;
@@ -39,7 +39,7 @@ class StripeCheckout
 
     /**
      * @throws ApiErrorException
-     * @throws CartIsEmptyException
+     * @throws EmptyCartException
      * @throws MathException
      * @throws NumberFormatException
      * @throws RoundingNecessaryException
@@ -48,7 +48,7 @@ class StripeCheckout
     public function createSession(Cart $cart): Session
     {
         if ($cart->getTotalQuantity() === 0) {
-            throw new CartIsEmptyException('Cart is empty.');
+            throw new EmptyCartException('Cart is empty.');
         }
 
         // set base session params

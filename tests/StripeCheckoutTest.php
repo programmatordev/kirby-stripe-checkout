@@ -4,7 +4,7 @@ namespace ProgrammatorDev\StripeCheckout\Test;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Cart;
-use ProgrammatorDev\StripeCheckout\Exception\CartIsEmptyException;
+use ProgrammatorDev\StripeCheckout\Exception\EmptyCartException;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 use Stripe\ApiRequestor;
 use Stripe\Checkout\Session;
@@ -165,7 +165,7 @@ class StripeCheckoutTest extends BaseTestCase
     #[DataProvider('provideUiModeData')]
     public function testCreateSessionWithEmptyCart(string $uiMode): void
     {
-        $this->expectException(CartIsEmptyException::class);
+        $this->expectException(EmptyCartException::class);
 
         $stripeCheckout = new StripeCheckout($this->options[$uiMode]);
         $stripeCheckout->createSession($this->cart);
