@@ -271,61 +271,69 @@ class StripeCheckout
         $resolver = new OptionsResolver();
         $resolver->setIgnoreUndefined();
 
-        $resolver->setRequired([
-            'stripePublicKey',
-            'stripeSecretKey',
-            'stripeWebhookSecret',
-            'currency',
-            'uiMode',
-            'ordersPage',
-            'settingsPage'
-        ]);
+        $resolver->define('stripePublicKey')
+            ->required()
+            ->allowedTypes('string')
+            ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
 
-        $resolver->setAllowedTypes('stripePublicKey', 'string');
-        $resolver->setAllowedTypes('stripeSecretKey', 'string');
-        $resolver->setAllowedTypes('stripeWebhookSecret', 'string');
-        $resolver->setAllowedTypes('currency', 'string');
-        $resolver->setAllowedTypes('uiMode', 'string');
-        $resolver->setAllowedTypes('ordersPage', 'string');
-        $resolver->setAllowedTypes('settingsPage', 'string');
+        $resolver->define('stripeSecretKey')
+            ->required()
+            ->allowedTypes('string')
+            ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
 
-        $resolver->setAllowedValues('stripePublicKey', Validation::createIsValidCallable(new NotBlank()));
-        $resolver->setAllowedValues('stripeSecretKey', Validation::createIsValidCallable(new NotBlank()));
-        $resolver->setAllowedValues('stripeWebhookSecret', Validation::createIsValidCallable(new NotBlank()));
-        $resolver->setAllowedValues('currency', Currencies::getCurrencyCodes());
-        $resolver->setAllowedValues('uiMode', [Session::UI_MODE_HOSTED, Session::UI_MODE_EMBEDDED]);
-        $resolver->setAllowedValues('ordersPage', Validation::createIsValidCallable(new NotBlank()));
-        $resolver->setAllowedValues('settingsPage', Validation::createIsValidCallable(new NotBlank()));
+        $resolver->define('stripeWebhookSecret')
+            ->required()
+            ->allowedTypes('string')
+            ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
 
-        // https://docs.stripe.com/currencies#presentment-currencies
-        $resolver->setNormalizer('currency', function (Options $options, string $currency): string {
-            return strtoupper($currency);
-        });
+        $resolver->define('currency')
+            ->required()
+            ->allowedTypes('string')
+            ->allowedValues(...Currencies::getCurrencyCodes())
+            ->normalize(function (Options $options, string $currency): string {
+                return strtoupper($currency);
+            });
 
+        $resolver->define('uiMode')
+            ->required()
+            ->allowedTypes('string')
+            ->allowedValues(Session::UI_MODE_HOSTED, Session::UI_MODE_EMBEDDED);
+
+        $resolver->define('ordersPage')
+            ->required()
+            ->allowedTypes('string')
+            ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
+
+        $resolver->define('settingsPage')
+            ->required()
+            ->allowedTypes('string')
+            ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
+
+        // conditional options based on ui mode
         $uiMode = $options['uiMode'] ?? null;
 
         if ($uiMode === Session::UI_MODE_HOSTED) {
-            $resolver->setRequired(['successUrl', 'cancelUrl']);
+            $resolver->define('successUrl')
+                ->required()
+                ->allowedTypes('string')
+                ->allowedValues(Validation::createIsValidCallable(new NotBlank(), new Url()))
+                ->normalize(function (Options $options, string $successUrl): string {
+                    return $this->addSessionIdToUrlQuery($successUrl);
+                });
 
-            $resolver->setAllowedTypes('successUrl', 'string');
-            $resolver->setAllowedTypes('cancelUrl', 'string');
-
-            $resolver->setAllowedValues('successUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
-            $resolver->setAllowedValues('cancelUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
-
-            $resolver->setNormalizer('successUrl', function (Options $options, string $successUrl): string {
-                return $this->addSessionIdToUrlQuery($successUrl);
-            });
+            $resolver->define('cancelUrl')
+                ->required()
+                ->allowedTypes('string')
+                ->allowedValues(Validation::createIsValidCallable(new NotBlank(), new Url()));
         }
         else if ($uiMode === Session::UI_MODE_EMBEDDED) {
-            $resolver->setRequired(['returnUrl']);
-
-            $resolver->setAllowedTypes('returnUrl', 'string');
-            $resolver->setAllowedValues('returnUrl', Validation::createIsValidCallable(new NotBlank(), new Url()));
-
-            $resolver->setNormalizer('returnUrl', function (Options $options, string $returnUrl): string {
-                return $this->addSessionIdToUrlQuery($returnUrl);
-            });
+            $resolver->define('returnUrl')
+                ->required()
+                ->allowedTypes('string')
+                ->allowedValues(Validation::createIsValidCallable(new NotBlank(), new Url()))
+                ->normalize(function (Options $options, string $returnUrl): string {
+                    return $this->addSessionIdToUrlQuery($returnUrl);
+                });
         }
 
         return $resolver->resolve($options);

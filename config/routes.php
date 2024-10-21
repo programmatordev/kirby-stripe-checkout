@@ -246,7 +246,7 @@ return function(App $kirby) {
                         // https://docs.stripe.com/webhooks#handle-duplicate-events
                         foreach ($orderEvents as $orderEvent) {
                             if ($orderEvent['id'] === $event->id) {
-                                throw new CheckoutWebhookException('Duplicate order event.');
+                                throw new CheckoutWebhookException('Duplicate event.');
                             }
                         }
 

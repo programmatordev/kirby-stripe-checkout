@@ -36,7 +36,6 @@ class Cart
     public function __construct(array $options = [])
     {
         $this->options = $this->resolveOptions($options);
-
         $this->session = kirby()->session(['long' => true]);
 
         $this->defaultContents = [
@@ -195,15 +194,13 @@ class Cart
     {
         $resolver = new OptionsResolver();
 
-        $resolver->setRequired(['currency']);
-
-        $resolver->setAllowedTypes('currency', 'string');
-
-        $resolver->setAllowedValues('currency', Currencies::getCurrencyCodes());
-
-        $resolver->setNormalizer('currency', function (Options $options, string $currency): string {
-            return strtoupper($currency);
-        });
+        $resolver->define('currency')
+            ->required()
+            ->allowedTypes('string')
+            ->allowedValues(...Currencies::getCurrencyCodes())
+            ->normalize(function (Options $options, string $currency): string {
+                return strtoupper($currency);
+            });
 
         return $resolver->resolve($options);
     }
@@ -213,26 +210,35 @@ class Cart
         $resolver = new OptionsResolver();
         $resolver->setIgnoreUndefined();
 
-        $resolver->setDefaults([
-            'image' => null,
-            'options' => null
-        ]);
+        $resolver->define('id')
+            ->required()
+            ->allowedTypes('string')
+            ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
 
-        $resolver->setRequired(['id', 'name', 'price', 'quantity']);
+        $resolver->define('name')
+            ->required()
+            ->allowedTypes('string')
+            ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
 
-        $resolver->setAllowedTypes('id', 'string');
-        $resolver->setAllowedTypes('name', 'string');
-        $resolver->setAllowedTypes('image', ['null', 'string']);
-        $resolver->setAllowedTypes('price', ['int', 'float']);
-        $resolver->setAllowedTypes('quantity', 'int');
-        $resolver->setAllowedTypes('options', ['null', 'scalar[]']);
+        $resolver->define('price')
+            ->required()
+            ->allowedTypes('int', 'float')
+            ->allowedValues(Validation::createIsValidCallable(new GreaterThan(0)));
 
-        $resolver->setAllowedValues('id', Validation::createIsValidCallable(new NotBlank()));
-        $resolver->setAllowedValues('name', Validation::createIsValidCallable(new NotBlank()));
-        $resolver->setAllowedValues('image', Validation::createIsValidCallable(new AtLeastOneOf([new IsNull(), new NotBlank()])));
-        $resolver->setAllowedValues('price', Validation::createIsValidCallable(new GreaterThan(0)));
-        $resolver->setAllowedValues('quantity', Validation::createIsValidCallable(new GreaterThan(0)));
-        $resolver->setAllowedValues('options', Validation::createIsValidCallable(new AtLeastOneOf([new IsNull(), new NotBlank()])));
+        $resolver->define('quantity')
+            ->required()
+            ->allowedTypes('int')
+            ->allowedValues(Validation::createIsValidCallable(new GreaterThan(0)));
+
+        $resolver->define('image')
+            ->default(null)
+            ->allowedTypes('null', 'string')
+            ->allowedValues(Validation::createIsValidCallable(new AtLeastOneOf([new IsNull(), new NotBlank()])));
+
+        $resolver->define('options')
+            ->default(null)
+            ->allowedTypes('null', 'array')
+            ->allowedValues(Validation::createIsValidCallable(new AtLeastOneOf([new IsNull(), new NotBlank()])));
 
         return $resolver->resolve($data);
     }
