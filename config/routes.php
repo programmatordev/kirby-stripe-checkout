@@ -14,6 +14,7 @@ return function(App $kirby) {
         // handle checkout request
         [
             'pattern' => 'stripe/checkout',
+            'language' => '*',
             'method' => 'GET',
             'action' => function() use ($kirby) {
                 $stripeCheckout = stripeCheckout();
@@ -35,6 +36,7 @@ return function(App $kirby) {
         // get checkout client secret when in "embedded" mode
         [
             'pattern' => 'stripe/checkout/embedded',
+            'language' => '*',
             'method' => 'POST',
             'action' => function() use ($kirby) {
                 $stripeCheckout = stripeCheckout();
@@ -89,6 +91,8 @@ return function(App $kirby) {
 
                 // impersonate kirby to have permissions to create pages
                 $kirby->impersonate('kirby');
+                // set the language that was used when the user made the order
+                $kirby->setCurrentLanguage($checkoutSession->metadata['language_code'] ?? null);
 
                 switch ($event->type) {
                     // no need to handle duplicate events here

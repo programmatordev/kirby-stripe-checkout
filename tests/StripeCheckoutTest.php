@@ -28,8 +28,8 @@ class StripeCheckoutTest extends BaseTestCase
                 'stripeWebhookSecret' => 'whsec_abc123',
                 'currency' => 'EUR',
                 'uiMode' => 'hosted',
-                'successUrl' => 'https://example.com/success',
-                'cancelUrl' => 'https://example.com/cancel',
+                'successPage' => 'home',
+                'cancelPage' => 'home',
                 'ordersPage' => 'orders',
                 'settingsPage' => 'checkout-settings'
             ],
@@ -39,7 +39,7 @@ class StripeCheckoutTest extends BaseTestCase
                 'stripeWebhookSecret' => 'whsec_abc123',
                 'currency' => 'EUR',
                 'uiMode' => 'embedded',
-                'returnUrl' => 'https://example.com/return',
+                'returnPage' => 'home',
                 'ordersPage' => 'orders',
                 'settingsPage' => 'checkout-settings',
             ]
@@ -77,8 +77,8 @@ class StripeCheckoutTest extends BaseTestCase
         yield 'hosted missing stripeWebhookSecret' => ['hosted', 'stripeWebhookSecret'];
         yield 'hosted missing currency' => ['hosted', 'currency'];
         yield 'hosted missing uiMode' => ['hosted', 'uiMode'];
-        yield 'hosted missing successUrl' => ['hosted', 'successUrl'];
-        yield 'hosted missing cancelUrl' => ['hosted', 'cancelUrl'];
+        yield 'hosted missing successPage' => ['hosted', 'successPage'];
+        yield 'hosted missing cancelPage' => ['hosted', 'cancelPage'];
         yield 'hosted missing ordersPage' => ['hosted', 'ordersPage'];
         yield 'hosted missing settingsPage' => ['hosted', 'settingsPage'];
         // embedded
@@ -87,7 +87,7 @@ class StripeCheckoutTest extends BaseTestCase
         yield 'embedded missing stripeWebhookSecret' => ['embedded', 'stripeWebhookSecret'];
         yield 'embedded missing currency' => ['embedded', 'currency'];
         yield 'embedded missing uiMode' => ['embedded', 'uiMode'];
-        yield 'embedded missing returnUrl' => ['embedded', 'returnUrl'];
+        yield 'embedded missing returnPage' => ['embedded', 'returnPage'];
         yield 'embedded missing ordersPage' => ['embedded', 'ordersPage'];
         yield 'embedded missing settingsPage' => ['embedded', 'settingsPage'];
     }
@@ -116,12 +116,8 @@ class StripeCheckoutTest extends BaseTestCase
         yield 'hosted invalid currency' => ['hosted', 'currency', 1];
         yield 'hosted empty currency' => ['hosted', 'currency', ''];
         yield 'hosted invalid uiMode' => ['hosted', 'uiMode', 'invalid'];
-        yield 'hosted invalid type successUrl' => ['hosted', 'successUrl', 1];
-        yield 'hosted invalid url successUrl' => ['hosted', 'successUrl', 'invalid'];
-        yield 'hosted empty successUrl' => ['hosted', 'successUrl', ''];
-        yield 'hosted invalid type cancelUrl' => ['hosted', 'cancelUrl', 1];
-        yield 'hosted invalid url cancelUrl' => ['hosted', 'cancelUrl', 'invalid'];
-        yield 'hosted empty cancelUrl' => ['hosted', 'cancelUrl', ''];
+        yield 'hosted empty successPage' => ['hosted', 'successPage', ''];
+        yield 'hosted empty cancelPage' => ['hosted', 'cancelPage', ''];
         yield 'hosted empty ordersPage' => ['hosted', 'ordersPage', ''];
         yield 'hosted empty settingsPage' => ['hosted', 'settingsPage', ''];
         // embedded
@@ -134,9 +130,7 @@ class StripeCheckoutTest extends BaseTestCase
         yield 'embedded invalid currency' => ['embedded', 'currency', 1];
         yield 'embedded empty currency' => ['embedded', 'currency', ''];
         yield 'embedded invalid uiMode' => ['embedded', 'uiMode', 'invalid'];
-        yield 'embedded invalid type returnUrl' => ['embedded', 'returnUrl', 1];
-        yield 'embedded invalid url returnUrl' => ['embedded', 'returnUrl', 'invalid'];
-        yield 'embedded empty returnUrl' => ['embedded', 'returnUrl', ''];
+        yield 'embedded empty returnPage' => ['embedded', 'returnPage', ''];
         yield 'embedded empty ordersPage' => ['embedded', 'ordersPage', ''];
         yield 'embedded empty settingsPage' => ['embedded', 'settingsPage', ''];
     }
@@ -199,26 +193,20 @@ class StripeCheckoutTest extends BaseTestCase
         $this->assertSame($stripeCheckout->getSettingsPage(), $options['settingsPage']);
 
         if ($uiMode === 'hosted') {
-            // success url is always appended with a session_id parameter
-            $options['successUrl'] .= '?session_id={CHECKOUT_SESSION_ID}';
-
             $this->assertSame($stripeCheckout->getOptions(), $options);
-            $this->assertSame($stripeCheckout->getReturnUrl(), null);
-            $this->assertSame($stripeCheckout->getSuccessUrl(), $options['successUrl']);
-            $this->assertSame($stripeCheckout->getCancelUrl(), $options['cancelUrl']);
+            $this->assertSame($stripeCheckout->getReturnPage(), null);
+            $this->assertSame($stripeCheckout->getSuccessPage(), $options['successPage']);
+            $this->assertSame($stripeCheckout->getCancelPage(), $options['cancelPage']);
         }
         else if ($uiMode === 'embedded') {
-            // return url is always appended with a session_id parameter
-            $options['returnUrl'] .= '?session_id={CHECKOUT_SESSION_ID}';
-
             $this->assertSame($stripeCheckout->getOptions(), $options);
-            $this->assertSame($stripeCheckout->getReturnUrl(), $options['returnUrl']);
-            $this->assertSame($stripeCheckout->getSuccessUrl(), null);
-            $this->assertSame($stripeCheckout->getCancelUrl(), null);
+            $this->assertSame($stripeCheckout->getReturnPage(), $options['returnPage']);
+            $this->assertSame($stripeCheckout->getSuccessPage(), null);
+            $this->assertSame($stripeCheckout->getCancelPage(), null);
         }
     }
 
-    public function testConvertCartToLineItems(): void
+    public function testGetLineItems(): void
     {
         // arrange
         $this->cart->addItem([
@@ -277,7 +265,21 @@ class StripeCheckoutTest extends BaseTestCase
         ], $lineItems);
     }
 
-    public function testAddSessionIdParamToUrl(): void
+    public function testGetPageUrlWithInvalidId(): void
+    {
+        // arrange
+        $stripeCheckout = new class($this->options['hosted']) extends StripeCheckout {
+            public function getPageUrl(string $pageId, ?string $languageCode = null, bool $addSessionParam = false): string
+            {
+                return parent::getPageUrl($pageId, $languageCode, $addSessionParam);
+            }
+        };
+
+        $this->expectException(CheckoutSessionException::class);
+        $stripeCheckout->getPageUrl('invalid-page');
+    }
+
+    public function testAddSessionIdToUrlQuery(): void
     {
         // arrange
         $stripeCheckout = new class($this->options['hosted']) extends StripeCheckout {

@@ -19,7 +19,6 @@ use Symfony\Component\Intl\Currencies;
 use Symfony\Component\OptionsResolver\Options;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\NotBlank;
-use Symfony\Component\Validator\Constraints\Url;
 use Symfony\Component\Validator\Validation;
 
 class StripeCheckout
@@ -51,6 +50,9 @@ class StripeCheckout
             throw new CheckoutSessionException('Cart is empty.');
         }
 
+        // get current user language
+        $languageCode = kirby()->language()?->code();
+
         // set base session params
         $sessionParams = [
             'mode' => Session::MODE_PAYMENT,
@@ -59,17 +61,21 @@ class StripeCheckout
             'metadata' => [
                 // generate a unique id for the order
                 // required in webhooks to sync the different event payment steps
-                'order_id' => Uuid::generate()
+                'order_id' => Uuid::generate(),
+                // save language to know which one was used when ordering
+                // useful to set language programmatically on webhooks
+                // example: to use with hooks when sending emails (with the same language as ordered)
+                'language_code' => $languageCode
             ]
         ];
 
         // add session params according to uiMode
         if ($this->options['uiMode'] === Session::UI_MODE_HOSTED) {
-            $sessionParams['success_url'] = $this->options['successUrl'];
-            $sessionParams['cancel_url'] = $this->options['cancelUrl'];
+            $sessionParams['success_url'] = $this->getPageUrl($this->options['successPage'], $languageCode, true);
+            $sessionParams['cancel_url'] = $this->getPageUrl($this->options['cancelPage'], $languageCode);
         }
         else if ($this->options['uiMode'] === Session::UI_MODE_EMBEDDED) {
-            $sessionParams['return_url'] = $this->options['returnUrl'];
+            $sessionParams['return_url'] = $this->getPageUrl($this->options['returnPage'], $languageCode, true);
         }
 
         // add shipping params if page exists and is enabled
@@ -136,19 +142,19 @@ class StripeCheckout
         return $this->options['uiMode'];
     }
 
-    public function getReturnUrl(): ?string
+    public function getReturnPage(): ?string
     {
-        return $this->options['returnUrl'] ?? null;
+        return $this->options['returnPage'] ?? null;
     }
 
-    public function getSuccessUrl(): ?string
+    public function getSuccessPage(): ?string
     {
-        return $this->options['successUrl'] ?? null;
+        return $this->options['successPage'] ?? null;
     }
 
-    public function getCancelUrl(): ?string
+    public function getCancelPage(): ?string
     {
-        return $this->options['cancelUrl'] ?? null;
+        return $this->options['cancelPage'] ?? null;
     }
 
     public function getOrdersPage(): string
@@ -257,6 +263,28 @@ class StripeCheckout
         return $shippingOptions;
     }
 
+    /**
+     * @throws CheckoutSessionException
+     */
+    protected function getPageUrl(string $pageId, ?string $languageCode = null, bool $addSessionParam = false): string
+    {
+        $page = page($pageId);
+
+        if ($page === null) {
+            throw new CheckoutSessionException(
+                sprintf('Page with id "%s" was not found.', $pageId)
+            );
+        }
+
+        $url = $page->url($languageCode);
+
+        if ($addSessionParam === true) {
+            $url = $this->addSessionIdToUrlQuery($url);
+        }
+
+        return $url;
+    }
+
     protected function addSessionIdToUrlQuery(string $url): string
     {
         // always include the {CHECKOUT_SESSION_ID} template variable in the URL
@@ -313,27 +341,21 @@ class StripeCheckout
         $uiMode = $options['uiMode'] ?? null;
 
         if ($uiMode === Session::UI_MODE_HOSTED) {
-            $resolver->define('successUrl')
+            $resolver->define('successPage')
                 ->required()
                 ->allowedTypes('string')
-                ->allowedValues(Validation::createIsValidCallable(new NotBlank(), new Url()))
-                ->normalize(function (Options $options, string $successUrl): string {
-                    return $this->addSessionIdToUrlQuery($successUrl);
-                });
+                ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
 
-            $resolver->define('cancelUrl')
+            $resolver->define('cancelPage')
                 ->required()
                 ->allowedTypes('string')
-                ->allowedValues(Validation::createIsValidCallable(new NotBlank(), new Url()));
+                ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
         }
         else if ($uiMode === Session::UI_MODE_EMBEDDED) {
-            $resolver->define('returnUrl')
+            $resolver->define('returnPage')
                 ->required()
                 ->allowedTypes('string')
-                ->allowedValues(Validation::createIsValidCallable(new NotBlank(), new Url()))
-                ->normalize(function (Options $options, string $returnUrl): string {
-                    return $this->addSessionIdToUrlQuery($returnUrl);
-                });
+                ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
         }
 
         return $resolver->resolve($options);
