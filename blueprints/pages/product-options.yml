@@ -1,8 +1,0 @@
-title: Product with Options
-
-extends: stripe.checkout.pages/product
-
-columns:
-  left:
-    fields:
-      options: stripe.checkout.fields/options
