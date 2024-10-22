@@ -20,11 +20,11 @@ fields:
   shippingAllowedCountries:
     label: Allowed countries
     type: multiselect
+    min: 1
     options:
       type: api
-      url: "{{ site.url }}/api/{{ user.language }}/stripe/countries"
+      url: "{{ kirby.url }}/api/stripe/countries?locale={{ user.language }}"
     translate: false
-    min: 1
     when:
       shippingEnabled: true
   shippingOptions:
@@ -42,16 +42,16 @@ fields:
       amount:
         label: Amount
         type: number
-        step: .01
         required: true
         min: 0
+        step: .01
         translate: false
       deliveryEstimateMinimumValue:
         label: Minimum delivery estimate
         type: number
         width: 1/2
-        step: 1
         min: 1
+        step: 1
         translate: false
         help: Leave empty if there is no minimum delivery estimate
       deliveryEstimateMinimumUnit:
@@ -71,8 +71,8 @@ fields:
         label: Maximum delivery estimate
         type: number
         width: 1/2
-        step: 1
         min: 1
+        step: 1
         translate: false
         help: Leave empty if there is no maximum delivery estimate
       deliveryEstimateMaximumUnit:

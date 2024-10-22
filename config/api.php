@@ -136,10 +136,13 @@ return [
             ],
             // get Stripe allowed countries for shipping
             [
-                'pattern' => '(:any)/stripe/countries',
+                'pattern' => 'stripe/countries',
                 'method' => 'GET',
                 'auth' => false,
-                'action' => function(string $locale) use ($kirby) {
+                'action' => function() use ($kirby) {
+                    // locale to display country names
+                    // example: https://domain.com/api/stripe/countries?locale=pt_PT
+                    $locale = get('locale') ?? null;
                     $countryNames = Countries::getNames($locale);
 
                     // remove unsupported countries
