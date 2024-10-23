@@ -199,7 +199,7 @@ tabs:
               id: true
               type: true
               paymentStatus: true
-              date:
+              createdAt:
                 align: right
             fields:
               id:
@@ -214,6 +214,6 @@ tabs:
               message:
                 label: stripe-checkout.fields.order.events.message.label
                 type: writer
-              date:
-                label: stripe-checkout.fields.order.events.date.label
+              createdAt:
+                label: stripe-checkout.fields.order.events.createdAt.label
                 type: text

@@ -58,7 +58,7 @@ fields.order.events.id.label: ID
 fields.order.events.type.label: Type
 fields.order.events.paymentStatus.label: Payment status
 fields.order.events.message.label: Message
-fields.order.events.date.label: Date
+fields.order.events.createdAt.label: Date
 
 sections.orders.label: Orders
 sections.orders.empty: No orders yet

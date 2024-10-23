@@ -181,7 +181,7 @@ return function(App $kirby) {
                                     'type' => $event->type,
                                     'paymentStatus' => $checkoutSession->payment_status,
                                     'message' => $checkoutSession->payment_intent?->last_payment_error->message ?? null,
-                                    'date' => Date::createFromFormat('U', $event->created)->format('Y-m-d H:i:s')
+                                    'createdAt' => Date::createFromFormat('U', $event->created)->format('Y-m-d H:i:s')
                                 ]
                             ]
                         ];
@@ -260,7 +260,7 @@ return function(App $kirby) {
                             'type' => $event->type,
                             'paymentStatus' => $checkoutSession->payment_status,
                             'message' => $checkoutSession->payment_intent?->last_payment_error->message ?? null,
-                            'date' => Date::createFromFormat('U', $event->created)->format('Y-m-d H:i:s')
+                            'createdAt' => Date::createFromFormat('U', $event->created)->format('Y-m-d H:i:s')
                         ];
 
                         // update page events
