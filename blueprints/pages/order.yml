@@ -1,11 +1,11 @@
-title: Order
+title: stripe-checkout.pages.order.title
 
 icon: cart
 
 status:
-  draft: Failed
-  unlisted: Pending
-  listed: Completed
+  draft: stripe-checkout.pages.order.status.draft
+  unlisted: stripe-checkout.pages.order.status.unlisted
+  listed: stripe-checkout.pages.order.status.listed
 
 options:
   changeSlug: false
@@ -20,45 +20,47 @@ options:
 
 tabs:
   overview:
+    label: stripe-checkout.pages.order.tabs.overview.label
     columns:
       left:
         sticky: true
         width: 1/3
         fields:
           createdAt:
-            label: Created at
+            label: stripe-checkout.fields.order.createdAt.label
             type: text
           paymentMethod:
-            label: Payment method
+            label: stripe-checkout.fields.order.paymentMethod.label
             type: text
           customFields:
-            label: Custom fields
+            label: stripe-checkout.fields.order.customFields.label
             type: structure
+            empty: stripe-checkout.fields.order.customFields.empty
             fields:
               name:
-                label: Name
+                label: stripe-checkout.fields.order.customFields.name.label
                 type: text
               value:
-                label: Value
+                label: stripe-checkout.fields.order.customFields.value.label
                 type: text
       right:
         width: 2/3
         fields:
           customer:
-            label: Customer
+            label: stripe-checkout.fields.order.customer.label
             type: object
             fields:
               email:
-                label: Email
+                label: stripe-checkout.fields.order.customer.email.label
                 type: email
               name:
-                label: Name
+                label: stripe-checkout.fields.order.customer.name.label
                 type: text
               phone:
-                label: Phone
+                label: stripe-checkout.fields.order.customer.phone.label
                 type: text
           lineItems:
-            label: Line items
+            label: stripe-checkout.fields.order.lineItems.label
             type: structure
             columns:
               name: true
@@ -75,118 +77,122 @@ tabs:
                 align: right
             fields:
               name:
-                label: Name
+                label: stripe-checkout.fields.order.lineItems.name.label
                 type: text
               description:
-                label: Description
+                label: stripe-checkout.fields.order.lineItems.description.label
                 type: text
               price:
-                label: Price
+                label: stripe-checkout.fields.order.lineItems.price.label
                 type: text
               quantity:
-                label: Quantity
+                label: stripe-checkout.fields.order.lineItems.quantity.label
                 type: number
               subtotal:
-                label: Subtotal
+                label: stripe-checkout.fields.order.lineItems.subtotal.label
                 type: text
               discount:
-                label: Discount
+                label: stripe-checkout.fields.order.lineItems.discount.label
                 type: text
               total:
-                label: Total
+                label: stripe-checkout.fields.order.lineItems.total.label
                 type: text
           subtotalAmount:
             width: 1/4
-            label: Subtotal
+            label: stripe-checkout.fields.order.subtotalAmount.label
             type: text
           discountAmount:
             width: 1/4
-            label: Discount
+            label: stripe-checkout.fields.order.discountAmount.label
             type: text
           shippingAmount:
             width: 1/4
-            label: Shipping
+            label: stripe-checkout.fields.order.shippingAmount.label
             type: text
           totalAmount:
             width: 1/4
-            label: Total
+            label: stripe-checkout.fields.order.totalAmount.label
             type: text
           shippingDetails:
-            label: Shipping details
+            label: stripe-checkout.fields.order.shippingDetails.label
             type: object
+            empty: stripe-checkout.fields.order.shippingDetails.empty
             fields:
               name:
-                label: Name
+                label: stripe-checkout.fields.order.address.name.label
                 type: text
               country:
-                label: Country
+                label: stripe-checkout.fields.order.address.country.label
                 type: text
               line1:
-                label: Address, line 1
+                label: stripe-checkout.fields.order.address.line1.label
                 type: text
               line2:
-                label: Address, line 2
+                label: stripe-checkout.fields.order.address.line2.label
                 type: text
               postalCode:
-                label: Postal code
+                label: stripe-checkout.fields.order.address.postalCode.label
                 type: text
               city:
-                label: City
+                label: stripe-checkout.fields.order.address.city.label
                 type: text
               state:
-                label: State
+                label: stripe-checkout.fields.order.address.state.label
                 type: text
           shippingOption:
-            label: Shipping option
+            label: stripe-checkout.fields.order.shippingOption.label
             type: text
           billingDetails:
-            label: Billing details
+            label: stripe-checkout.fields.order.billingDetails.label
             type: object
+            empty: stripe-checkout.fields.order.billingDetails.empty
             fields:
               name:
-                label: Name
+                label: stripe-checkout.fields.order.address.name.label
                 type: text
               country:
-                label: Country
+                label: stripe-checkout.fields.order.address.country.label
                 type: text
               line1:
-                label: Address, line 1
+                label: stripe-checkout.fields.order.address.line1.label
                 type: text
               line2:
-                label: Address, line 2
+                label: stripe-checkout.fields.order.address.line2.label
                 type: text
               postalCode:
-                label: Postal code
+                label: stripe-checkout.fields.order.address.postalCode.label
                 type: text
               city:
-                label: City
+                label: stripe-checkout.fields.order.address.city.label
                 type: text
               state:
-                label: State
+                label: stripe-checkout.fields.order.address.state.label
                 type: text
           taxId:
-            label: Tax ID
+            label: stripe-checkout.fields.order.taxId.label
             type: object
+            empty: stripe-checkout.fields.order.taxId.empty
             fields:
               type:
-                label: Type
+                label: stripe-checkout.fields.order.taxId.type.label
                 type: text
               value:
-                label: Value
+                label: stripe-checkout.fields.order.taxId.value.label
                 type: text
   stripe:
+    label: stripe-checkout.pages.order.tabs.stripe.label
     columns:
       left:
         width: 1/3
         fields:
           paymentIntentId:
-            label: Payment ID
+            label: stripe-checkout.fields.order.paymentIntentId.label
             type: text
       right:
         width: 2/3
         fields:
           events:
-            label: Event logs
+            label: stripe-checkout.fields.order.events.label
             type: structure
             sortable: false
             columns:
@@ -197,17 +203,17 @@ tabs:
                 align: right
             fields:
               id:
-                label: ID
+                label: stripe-checkout.fields.order.events.id.label
                 type: text
               type:
-                label: Type
+                label: stripe-checkout.fields.order.events.type.label
                 type: text
               paymentStatus:
-                label: Payment status
+                label: stripe-checkout.fields.order.events.paymentStatus.label
                 type: text
               message:
-                label: Message
+                label: stripe-checkout.fields.order.events.message.label
                 type: writer
               date:
-                label: Date
+                label: stripe-checkout.fields.order.events.date.label
                 type: text

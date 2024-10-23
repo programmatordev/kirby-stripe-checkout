@@ -1,4 +1,4 @@
-label: Price
+label: stripe-checkout.fields.product.price.label
 type: number
 required: true
 step: .01

@@ -87,7 +87,7 @@ return [
 
                     // trigger event to allow cart item data manipulation
                     $itemData = kirby()->apply(
-                        'stripe.checkout.cartItemAdd:before',
+                        'stripe-checkout.cartItemAdd:before',
                         compact('itemData', 'productPage'),
                         'itemData'
                     );

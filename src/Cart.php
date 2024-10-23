@@ -18,7 +18,7 @@ use Symfony\Component\Validator\Validation;
 
 class Cart
 {
-    private const SESSION_NAME = 'stripe.checkout.cart';
+    private const SESSION_NAME = 'stripe-checkout.cart';
 
     private array $options;
 

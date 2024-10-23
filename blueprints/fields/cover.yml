@@ -1,6 +1,6 @@
 # TODO restrict uploads to images only
 
-label: Image
+label: stripe-checkout.fields.product.cover.label
 type: files
 required: true
 multiple: false

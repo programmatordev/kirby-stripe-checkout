@@ -2,17 +2,17 @@ type: pages
 layout: table
 columns:
   title:
-    label: ID
+    label: stripe-checkout.sections.orders.title.label
   email:
-    label: Email
+    label: stripe-checkout.sections.orders.email.label
     value: "{{ page.customer.toObject().email }}"
   paymentmethod:
-    label: Payment method
+    label: stripe-checkout.sections.orders.paymentMethod.label
   totalamount:
-    label: Total amount
+    label: stripe-checkout.sections.orders.totalAmount.label
     align: right
   createdat:
-    label: Date
+    label: stripe-checkout.sections.orders.createdAt.label
     value: "{{ page.createdAt.toDate('Y-m-d') }}"
     align: right
 sortBy: createdAt desc

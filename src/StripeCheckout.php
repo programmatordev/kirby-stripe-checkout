@@ -88,7 +88,7 @@ class StripeCheckout
         // trigger event to allow session parameters manipulation
         // https://docs.stripe.com/api/checkout/sessions/create?lang=php
         $sessionParams = kirby()->apply(
-            'stripe.checkout.sessionCreate:before',
+            'stripe-checkout.sessionCreate:before',
             compact('sessionParams'),
             'sessionParams'
         );
@@ -241,18 +241,18 @@ class StripeCheckout
             ];
 
             // add minimum delivery estimate if it exists
-            if ($shippingOption->deliveryEstimateMinimumValue()->isNotEmpty()) {
+            if ($shippingOption->deliveryEstimateMinimum()->isNotEmpty()) {
                 $shippingRateData['delivery_estimate']['minimum'] = [
                     'unit' => $shippingOption->deliveryEstimateMinimumUnit()->value(),
-                    'value' => $shippingOption->deliveryEstimateMinimumValue()->value(),
+                    'value' => $shippingOption->deliveryEstimateMinimum()->value(),
                 ];
             }
 
             // add maximum delivery estimate if it exists
-            if ($shippingOption->deliveryEstimateMaximumValue()->isNotEmpty()) {
+            if ($shippingOption->deliveryEstimateMaximum()->isNotEmpty()) {
                 $shippingRateData['delivery_estimate']['maximum'] = [
                     'unit' => $shippingOption->deliveryEstimateMaximumUnit()->value(),
-                    'value' => $shippingOption->deliveryEstimateMaximumValue()->value(),
+                    'value' => $shippingOption->deliveryEstimateMaximum()->value(),
                 ];
             }
 

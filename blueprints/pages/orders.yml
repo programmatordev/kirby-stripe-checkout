@@ -1,4 +1,4 @@
-title: Orders
+title: stripe-checkout.pages.orders.title
 
 icon: cart
 
@@ -15,17 +15,17 @@ options:
 
 sections:
   orders:
-    extends: stripe.checkout.sections/orders
-    label: Orders
+    extends: stripe-checkout.sections/orders
+    label: stripe-checkout.sections.orders.label
     status: listed
-    empty: No orders yet
-  pendingPayment:
-    extends: stripe.checkout.sections/orders
-    label: Pending payments
+    empty: stripe-checkout.sections.orders.empty
+  pendingPayments:
+    extends: stripe-checkout.sections/orders
+    label: stripe-checkout.sections.pendingPayments.label
     status: unlisted
-    empty: No pending payments
-  failedPayment:
-    extends: stripe.checkout.sections/orders
-    label: Failed payments
+    empty: stripe-checkout.sections.pendingPayments.empty
+  failedPayments:
+    extends: stripe-checkout.sections/orders
+    label: stripe-checkout.sections.failedPayments.label
     status: draft
-    empty: No failed payments
+    empty: stripe-checkout.sections.failedPayments.empty

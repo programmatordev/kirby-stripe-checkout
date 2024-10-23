@@ -188,7 +188,7 @@ return function(App $kirby) {
 
                         // trigger event to allow order content manipulation
                         $orderContent = kirby()->apply(
-                            'stripe.checkout.orderCreate:before',
+                            'stripe-checkout.orderCreate:before',
                             compact('orderContent', 'checkoutSession'),
                             'orderContent'
                         );
@@ -209,7 +209,7 @@ return function(App $kirby) {
                             $orderPage->changeStatus('listed');
 
                             $kirby->trigger(
-                                'stripe.checkout.payment:succeeded',
+                                'stripe-checkout.payment:succeeded',
                                 compact('orderPage', 'checkoutSession')
                             );
                         }
@@ -218,7 +218,7 @@ return function(App $kirby) {
                         // for now just trigger that payment is pending
                         else {
                             $kirby->trigger(
-                                'stripe.checkout.payment:pending',
+                                'stripe-checkout.payment:pending',
                                 compact('orderPage', 'checkoutSession')
                             );
                         }
@@ -272,7 +272,7 @@ return function(App $kirby) {
                             $orderPage->changeStatus('listed');
 
                             $kirby->trigger(
-                                'stripe.checkout.payment:succeeded',
+                                'stripe-checkout.payment:succeeded',
                                 compact('orderPage', 'checkoutSession')
                             );
                         }
@@ -281,7 +281,7 @@ return function(App $kirby) {
                             $orderPage->changeStatus('draft');
 
                             $kirby->trigger(
-                                'stripe.checkout.payment:failed',
+                                'stripe-checkout.payment:failed',
                                 compact('orderPage', 'checkoutSession')
                             );
                         }

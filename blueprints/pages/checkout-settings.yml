@@ -1,4 +1,4 @@
-title: Checkout Settings
+title: stripe-checkout.pages.settings.title
 
 icon: cog
 
@@ -14,11 +14,11 @@ options:
 
 fields:
   shippingEnabled:
-    label: Shipping
+    label: stripe-checkout.fields.settings.shippingEnabled.label
     type: toggle
     translate: false
   shippingAllowedCountries:
-    label: Allowed countries
+    label: stripe-checkout.fields.settings.shippingAllowedCountries.label
     type: multiselect
     min: 1
     options:
@@ -28,7 +28,7 @@ fields:
     when:
       shippingEnabled: true
   shippingOptions:
-    label: Delivery options
+    label: stripe-checkout.fields.settings.shippingOptions.label
     type: structure
     columns:
       name: true
@@ -36,24 +36,24 @@ fields:
         align: right
     fields:
       name:
-        label: Name
+        label: stripe-checkout.fields.settings.shippingOptions.name.label
         type: text
         required: true
       amount:
-        label: Amount
+        label: stripe-checkout.fields.settings.shippingOptions.amount.label
         type: number
         required: true
         min: 0
         step: .01
         translate: false
-      deliveryEstimateMinimumValue:
-        label: Minimum delivery estimate
+      deliveryEstimateMinimum:
+        label: stripe-checkout.fields.settings.shippingOptions.deliveryEstimateMinimum.label
         type: number
         width: 1/2
         min: 1
         step: 1
         translate: false
-        help: Leave empty if there is no minimum delivery estimate
+        help: stripe-checkout.fields.settings.shippingOptions.deliveryEstimateMinimum.help
       deliveryEstimateMinimumUnit:
         label: false
         type: select
@@ -61,20 +61,20 @@ fields:
         required: true
         default: business_day
         options:
-          hour: Hours
-          day: Days
-          business_day: Business days
-          week: Weeks
-          month: Months
+          hour: "{{ t('stripe-checkout.fields.settings.shippingOptions.deliveryEstimateUnit.options.hour') }}"
+          day: "{{ t('stripe-checkout.fields.settings.shippingOptions.deliveryEstimateUnit.options.day') }}"
+          business_day: "{{ t('stripe-checkout.fields.settings.shippingOptions.deliveryEstimateUnit.options.businessDay') }}"
+          week: "{{ t('stripe-checkout.fields.settings.shippingOptions.deliveryEstimateUnit.options.week') }}"
+          month: "{{ t('stripe-checkout.fields.settings.shippingOptions.deliveryEstimateUnit.options.month') }}"
         translate: false
-      deliveryEstimateMaximumValue:
-        label: Maximum delivery estimate
+      deliveryEstimateMaximum:
+        label: stripe-checkout.fields.settings.shippingOptions.deliveryEstimateMaximum.label
         type: number
         width: 1/2
         min: 1
         step: 1
         translate: false
-        help: Leave empty if there is no maximum delivery estimate
+        help: stripe-checkout.fields.settings.shippingOptions.deliveryEstimateMaximum.help
       deliveryEstimateMaximumUnit:
         label: false
         type: select
@@ -82,11 +82,11 @@ fields:
         required: true
         default: business_day
         options:
-          hour: Hours
-          day: Days
-          business_day: Business days
-          week: Weeks
-          month: Months
+          hour: "{{ t('stripe-checkout.fields.settings.shippingOptions.deliveryEstimateUnit.options.hour') }}"
+          day: "{{ t('stripe-checkout.fields.settings.shippingOptions.deliveryEstimateUnit.options.day') }}"
+          business_day: "{{ t('stripe-checkout.fields.settings.shippingOptions.deliveryEstimateUnit.options.businessDay') }}"
+          week: "{{ t('stripe-checkout.fields.settings.shippingOptions.deliveryEstimateUnit.options.week') }}"
+          month: "{{ t('stripe-checkout.fields.settings.shippingOptions.deliveryEstimateUnit.options.month') }}"
         translate: false
     when:
       shippingEnabled: true
