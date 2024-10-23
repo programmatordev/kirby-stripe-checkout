@@ -268,7 +268,7 @@ class StripeCheckout
      */
     protected function getPageUrl(string $pageId, ?string $languageCode = null, bool $addSessionParam = false): string
     {
-        $page = page($pageId);
+        $page = kirby()->page($pageId);
 
         if ($page === null) {
             throw new CheckoutSessionException(

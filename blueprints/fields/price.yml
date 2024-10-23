@@ -4,4 +4,5 @@ required: true
 step: .01
 min: .01
 width: 1/2
+before: "{{ site.stripeCurrencySymbol }}"
 translate: false

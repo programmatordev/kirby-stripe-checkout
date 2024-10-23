@@ -45,6 +45,7 @@ fields:
         required: true
         min: 0
         step: .01
+        before: "{{ site.stripeCurrencySymbol }}"
         translate: false
       deliveryEstimateMinimum:
         label: stripe-checkout.fields.settings.shippingOptions.deliveryEstimateMinimum.label

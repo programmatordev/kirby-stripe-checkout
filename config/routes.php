@@ -187,7 +187,7 @@ return function(App $kirby) {
                         ];
 
                         // trigger event to allow order content manipulation
-                        $orderContent = kirby()->apply(
+                        $orderContent = $kirby->apply(
                             'stripe-checkout.order.create:before',
                             compact('orderContent', 'checkoutSession'),
                             'orderContent'

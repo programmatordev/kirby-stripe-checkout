@@ -21,7 +21,6 @@ class MoneyFormatter
     {
         // normalize currency
         $currency = strtoupper($currency);
-
         return Money::of($amount, $currency)->getMinorAmount()->toInt();
     }
 
