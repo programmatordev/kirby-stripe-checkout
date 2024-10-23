@@ -88,7 +88,7 @@ class StripeCheckout
         // trigger event to allow session parameters manipulation
         // https://docs.stripe.com/api/checkout/sessions/create?lang=php
         $sessionParams = kirby()->apply(
-            'stripe-checkout.sessionCreate:before',
+            'stripe-checkout.session.create:before',
             compact('sessionParams'),
             'sessionParams'
         );
