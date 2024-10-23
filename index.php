@@ -43,8 +43,8 @@ App::plugin('programmatordev/stripe-checkout', [
         'stripePublicKey' => null,
         'stripeSecretKey' => null,
         'stripeWebhookSecret' => null,
-        'currency' => 'EUR',
         'uiMode' => 'hosted',
+        'currency' => 'EUR',
         'returnPage' => null,
         'successPage' => null,
         'cancelPage' => null,
@@ -68,7 +68,8 @@ App::plugin('programmatordev/stripe-checkout', [
     'translations' => A::keyBy(
         A::map(
             Dir::read(__DIR__ . '/translations'),
-            function ($file) {
+            function ($file): array
+            {
                 $translations = [];
 
                 foreach (Yaml::read(__DIR__ . '/translations/' . $file) as $key => $value) {
