@@ -23,7 +23,7 @@ fields:
     min: 1
     options:
       type: api
-      url: "{{ kirby.url }}/api/stripe/countries?locale={{ user.language }}"
+      url: "{{ site.stripeCountriesUrl(user.language) }}"
     translate: false
     when:
       shippingEnabled: true
