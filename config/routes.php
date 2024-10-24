@@ -2,6 +2,7 @@
 
 use Kirby\Cms\App;
 use Kirby\Toolkit\Date;
+use Kirby\Toolkit\Str;
 use ProgrammatorDev\StripeCheckout\Exception\CheckoutEndpointException;
 use ProgrammatorDev\StripeCheckout\Exception\CheckoutWebhookException;
 use ProgrammatorDev\StripeCheckout\MoneyFormatter;
@@ -157,6 +158,18 @@ return function(App $kirby) {
                             ];
                         }
 
+                        // if there was no payment intent,
+                        // it means that there was no payment involved
+                        // which means that it was a no-cost order
+                        $paymentType = $checkoutSession->payment_intent?->payment_method->type ?? 'no_cost';
+                        // find payment method translation
+                        // if translation does not exist, try to generate a more user-friendly name
+                        // (for example: "apple_pay" to "Apple Pay")
+                        $paymentMethod = t(
+                            sprintf('stripe-checkout.paymentMethods.%s', $paymentType),
+                            Str::ucwords(Str::replace($paymentType, '_', ' '))
+                        );
+
                         // set order content
                         $orderContent = [
                             'paymentIntentId' => $checkoutSession->payment_intent?->id ?? null,
@@ -166,7 +179,7 @@ return function(App $kirby) {
                                 'name' => $checkoutSession->customer_details->name ?? null,
                                 'phone' => $checkoutSession->customer_details->phone ?? null,
                             ],
-                            'paymentMethod' => $checkoutSession->payment_intent?->payment_method->type ?? 'no_cost',
+                            'paymentMethod' => $paymentMethod,
                             'lineItems' => $lineItems,
                             'shippingDetails' => $shippingDetails,
                             'shippingOption' => $checkoutSession->shipping_cost?->shipping_rate->display_name ?? null,

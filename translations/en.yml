@@ -81,3 +81,10 @@ pages.order.status.unlisted: Pending
 pages.order.status.listed: Completed
 pages.order.tabs.overview.label: Overview
 pages.order.tabs.stripe.label: Stripe
+
+# Stripe payment methods
+# must match the following options
+# https://docs.stripe.com/api/checkout/sessions/object?lang=php#checkout_session_object-payment_method_options
+paymentMethods.card: Credit card
+paymentMethods.multibanco: Multibanco
+paymentMethods.no_cost: No-cost order
