@@ -10,7 +10,7 @@ use Symfony\Component\Validator\Constraints\IsNull;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Validation;
 
-function resolveCartItemCreate(array $data): array
+function resolveCartItemAdd(array $data): array
 {
     $resolver = new OptionsResolver();
 
@@ -68,7 +68,7 @@ return [
                 'auth' => false,
                 'action' => function() use ($kirby) {
                     $data = $kirby->request()->body()->toArray();
-                    $data = resolveCartItemCreate($data);
+                    $data = resolveCartItemAdd($data);
 
                     // find page
                     if (($productPage = page($data['id'])) === null) {
