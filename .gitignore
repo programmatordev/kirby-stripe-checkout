@@ -1,8 +1,8 @@
 # Vendor files
 # ------------
 
-/vendor
 /node_modules
+/vendor
 
 # Package managers
 # ------------

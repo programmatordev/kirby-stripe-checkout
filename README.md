@@ -1,63 +1,77 @@
-# Kirby Pluginkit: Example plugin for Kirby
+# Kirby Stripe Checkout
 
-> Variant "Setup with Composer dependencies"
+[Stripe Checkout](https://stripe.com/en-pt/payments/checkout) for [Kirby CMS](https://getkirby.com).
 
-This is a boilerplate for a Kirby plugin that can be installed via all three [supported installation methods](https://getkirby.com/docs/guide/plugins/plugin-setup-basic#the-three-plugin-installation-methods).
+> [!IMPORTANT]
+> This plugin is still in its early stages.
+> This means that it should not be considered stable even though it is currently being used in production.
+> Expect some breaking changes until version `1.0`.
 
-You can find a list of Pluginkit variants on the [`master` branch](https://github.com/getkirby/pluginkit/tree/master).
+## Features
 
-****
+- Stripe Checkout for both hosted and embedded UI modes;
+- Handles instant and async payments (credit card, bank transfer, etc.);
+- Orders panel page. Overview of all orders and respective data (customer, line items, shipping, billing, etc.);
+- Checkout Settings panel page. Currently only able to manage shipping settings (allowed countries, shipping rates, etc.);
+- Events for all payments status (completed, pending and failed), order creation, Checkout session creation and so on;
+- Cart management;
+- ...and more.
 
-## How to use the Pluginkit
+## Requirements
 
-1. Fork this repository
-2. Change the plugin name and description in the `composer.json`
-3. Change the plugin name in the `index.php`
-4. Change the license if you don't want to publish under MIT
-5. Add your plugin code to the `index.php` and the `src` directory
-6. Require Composer dependencies with `composer require`
-7. Update this `README` with instructions for your plugin
-
-We have a tutorial on how to build your own plugin based on the Pluginkit [in the Kirby documentation](https://getkirby.com/docs/guide/plugins/plugin-setup-composer).
-
-What follows is an example README for your plugin.
-
-****
+- Kirby CMS `4.0` or higher;
+- [Stripe account](https://dashboard.stripe.com/register).
 
 ## Installation
 
-### Download
+Install the plugin via [Composer](https://getcomposer.org/):
 
-Download and copy this repository to `/site/plugins/{{ plugin-name }}`.
-
-### Git submodule
-
+```bash
+composer require programmatordev/kirby-stripe-checkout
 ```
-git submodule add https://github.com/{{ your-name }}/{{ plugin-name }}.git site/plugins/{{ plugin-name }}
-```
-
-### Composer
-
-```
-composer require {{ your-name }}/{{ plugin-name }}
-```
-
-## Setup
-
-*Additional instructions on how to configure the plugin (e.g. blueprint setup, config options, etc.)*
 
 ## Options
 
 *Document the options and APIs that this plugin offers*
 
+## Setup
+
+More complex plugins are not always easy to set up in Kirby.
+This is one of those plugins.
+
+> [!NOTE]
+> A Kirby Stripe Checkout Starter repository will be created in the future with a ready-to-use setup.
+
+Important to note that these steps take into account a setup for a project in **production**.
+Notes are available for **development** when necessary.
+
+Before starting, make sure that you already have a [Stripe account](#requirements).
+
+`STEP 1`
+
+Grab your Stripe Public Key and Secret Key from the Stripe Dashboard.
+These are required in the
+
+## Events
+
+## Site Methods
+
+## Cart
+
+## Translations
+
 ## Development
 
 *Add instructions on how to help working on the plugin (e.g. npm setup, Composer dev dependencies, etc.)*
 
+## Production
+
+## Contributing
+
+Any form of contribution to improve this library (including requests) will be welcome and appreciated.
+Make sure to open a pull request or issue.
+
 ## License
 
-MIT
-
-## Credits
-
-- [Your Name](https://github.com/ghost)
+This project is licensed under the MIT license.
+Please see the [LICENSE](LICENSE) file distributed with this source code for further information regarding copyright and licensing.

@@ -87,4 +87,5 @@ pages.order.tabs.stripe.label: Stripe
 # https://docs.stripe.com/api/checkout/sessions/object?lang=php#checkout_session_object-payment_method_options
 paymentMethods.card: Cartão de crédito
 paymentMethods.multibanco: Multibanco
+paymentMethods.paypal: Paypal
 paymentMethods.no_cost: Encomenda sem custos
