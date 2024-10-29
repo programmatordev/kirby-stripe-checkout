@@ -17,6 +17,8 @@
 - Cart management;
 - ...and more.
 
+## Documentation
+
 ## Requirements
 
 - Kirby CMS `4.0` or higher;
@@ -32,33 +34,225 @@ composer require programmatordev/kirby-stripe-checkout
 
 ## Options
 
-*Document the options and APIs that this plugin offers*
+Default options:
 
-## Setup
+```php
+// config.php
 
-More complex plugins are not always easy to set up in Kirby.
-This is one of those plugins.
+return [
+    'programmatordev.stripe-checkout' => [
+        'stripePublicKey' => null,
+        'stripeSecretKey' => null,
+        'stripeWebhookSecret' => null,
+        'currency' => 'EUR',
+        'uiMode' => 'hosted',
+        'successPage' => null,
+        'cancelPage' => null,
+        'returnPage' => null,
+        'ordersPage' => 'orders',
+        'settingsPage' => 'checkout-settings'
+    ]
+];
+```
 
-> [!NOTE]
-> A Kirby Stripe Checkout Starter repository will be created in the future with a ready-to-use setup.
+> [!TIP]
+> It is recommended that you use a library that enables environment variables
+> to store your project credentials in a separate place from your code
+> and to have separate development and production access keys.
 
-Important to note that these steps take into account a setup for a project in **production**.
-Notes are available for **development** when necessary.
+### `stripePublicKey`
 
-Before starting, make sure that you already have a [Stripe account](#requirements).
+type: `string` `required`
 
-`STEP 1`
+Stripe public key found on the Stripe Dashboard.
 
-Grab your Stripe Public Key and Secret Key from the Stripe Dashboard.
-These are required in the
+### `stripeSecretKey`
 
-## Events
+type: `string` `required`
+
+Stripe secret key found on the Stripe Dashboard.
+
+### `stripeWebhookSecret`
+
+type: `string` `required`
+
+Webhook secret found when creating a Webhook in the Stripe Dashboard.
+
+Check the [Setup](#setup) section for more information.
+
+### `currency`
+
+type: `string` default: `EUR` `required`
+
+Three-letter [ISO currency code](https://www.iso.org/iso-4217-currency-codes.html).
+Must be a [supported currency](https://stripe.com/docs/currencies).
+
+### `uiMode`
+
+type: `string` default: `hosted` `required`
+
+The UI mode of the Checkout Session.
+
+Available options:
+- `hosted` the Checkout Session will be displayed on a hosted page that users will be redirected to;
+- `embedded` the Checkout Session will be displayed as an embedded form on the website page.
+
+### `successPage`
+
+type: `string`
+
+This option is `required` if `uiMode` is set to `hosted`.
+
+Page to where a user will be redirected when a Checkout Session is completed (form successfully submitted).
+
+Must be a valid Kirby page `id`.
+The `id` is used, instead of a URL, to make sure that the user is redirected correctly in case of multi-language setups.
+
+### `cancelPage`
+
+type: `string`
+
+This option is `required` if `uiMode` is set to `hosted`.
+
+Page to where a user will be redirected if decides to cancel the payment and return to the website.
+
+Must be a valid Kirby page `id`.
+The `id` is used, instead of a URL, to make sure that the user is redirected correctly in case of multi-language setups.
+
+### `returnPage`
+
+type: `string`
+
+This option is `required` if `uiMode` is set to `embedded`.
+
+Page to where a user will be redirected when a Checkout Session is completed (form successfully submitted).
+
+Must be a valid Kirby page `id`.
+The `id` is used, instead of a URL, to make sure that the user is redirected correctly in case of multi-language setups.
+
+### `ordersPage`
+
+type: `string` default: `orders` `required`
+
+Kirby Panel page with the overview of all orders.
+
+Must be a valid Kirby page `id`.
+
+Check the [Setup](#setup) section for more information.
+
+### `settingsPage`
+
+type: `string` default: `checkout-settings` `required`
+
+Kirby Panel page with Checkout settings.
+
+Must be a valid Kirby page `id`.
+
+Check the [Setup](#setup) section for more information.
+
+## Hooks
+
+### `stripe-checkout.session.created:before`
+
+Triggered before creating a Checkout Session.
+Useful to set additional Checkout Session parameters.
+
+You can check all the available parameters in the Stripe API [documentation page](https://docs.stripe.com/api/checkout/sessions/create?lang=php).
+
+```php
+// config.php
+
+return [
+    'hooks' => [
+        'stripe-checkout.session.created:before' => function (array $sessionParams): array
+        {
+            // for example, if you want to enable promotion codes
+            // https://docs.stripe.com/api/checkout/sessions/create?lang=php#create_checkout_session-allow_promotion_codes
+            $sessionParams['allow_promotion_codes'] = true;
+
+            return $sessionParams;
+        }
+    ]
+];
+```
+
+> [!WARNING]
+> Take into account that the `sessionParams` variable contains data required to initialize a Checkout Session.
+> You may change these but at your own risk.
+
+### `stripe-checkout.order.created:before`
+
+Triggered before creating an Order page in the Panel.
+Useful to set additional Order data in case you add additional fields in the blueprint or want to change existing ones.
+
+```php
+// config.php
+
+return [
+    'hooks' => [
+        'stripe-checkout.order.created:before' => function (array $orderContent, \Stripe\Checkout\Session $checkoutSession): array
+        {
+            // change order content
+            // ...
+
+            return $orderContent;
+        }
+    ]
+];
+```
+
+> [!WARNING]
+> Take into account that the `orderContent` variable contains all data required to create an Order page.
+> You may change these but at your own risk.
+
+### `stripe-checkout.payment:succeeded`
+
+Triggered when a payment is completed successfully.
+
+> [!IMPORTANT]
+> This hook is triggered for both sync and async payments.
+> An example of a sync payment is when a customer pays using a credit card as the payment method.
+> An example of an async payment is when a customer wants to pay through a bank transfer.
+> In this case, the hook will only be triggered when the actual bank transfer is successfully performed.
+> Check the [stripe-checkout.payment:pending](#stripe-checkoutpaymentpending) hook to handle pending payments.
+
+Useful, for example, to email the costumer about the order.
+
+```php
+// config.php
+
+return [
+    'hooks' => [
+        'stripe-checkout.payment:succeeded' => function (\Kirby\Cms\Page $orderPage, \Stripe\Checkout\Session $checkoutSession): void
+        {
+            kirby()->email([
+                'from' => 'orders@myshop.com',
+                'to' => $orderPage->customer()->toObject()->email()->value(),
+                'subject' => 'Order success!',
+                'body' => 'Order will be processed soon.',
+            ]);
+        }
+    ]
+];
+```
+
+> [!WARNING]
+> Take into account that the `orderContent` variable contains all data required to create an Order page.
+> You may change these but at your own risk.
+
+### `stripe-checkout.payment:pending`
+
+### `stripe-checkout.payment:failed`
+
+### `stripe-checkout.cart.addItem:before`
 
 ## Site Methods
 
 ## Cart
 
 ## Translations
+
+## Setup
 
 ## Development
 
