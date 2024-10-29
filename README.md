@@ -60,6 +60,17 @@ return [
 > to store your project credentials in a separate place from your code
 > and to have separate development and production access keys.
 
+- [stripePublicKey](#stripepublickey)
+- [stripeSecretKey](#stripesecretkey)
+- [stripeWebhookSecret](#stripewebhooksecret)
+- [uiMode](#uimode)
+- [currency](#currency)
+- [successPage](#successpage)
+- [cancelPage](#cancelpage)
+- [returnPage](#returnpage)
+- [ordersPage](#orderspage)
+- [settingsPage](#settingspage)
+
 ### `stripePublicKey`
 
 type: `string` `required`
@@ -76,7 +87,7 @@ Stripe secret key found on the Stripe Dashboard.
 
 type: `string` `required`
 
-Webhook secret found when creating a Webhook in the Stripe Dashboard.
+Webhook secret found when a Webhook is created in the Stripe Dashboard.
 
 Check the [Setup](#setup) section for more information.
 
@@ -152,6 +163,13 @@ Check the [Setup](#setup) section for more information.
 
 ## Hooks
 
+- [stripe-checkout.session.created:before](#stripe-checkoutsessioncreatedbefore)
+- [stripe-checkout.order.created:before](#stripe-checkoutordercreatedbefore)
+- [stripe-checkout.payment:succeeded](#stripe-checkoutpaymentsucceeded)
+- [stripe-checkout.payment:pending](#stripe-checkoutpaymentpending)
+- [stripe-checkout.payment:failed](#stripe-checkoutpaymentfailed)
+- [stripe-checkout.cart.addItem:before](#stripe-checkoutcartadditembefore)
+
 ### `stripe-checkout.session.created:before`
 
 Triggered before creating a Checkout Session.
@@ -188,9 +206,11 @@ Useful to set additional Order data in case you add additional fields in the blu
 ```php
 // config.php
 
+use Stripe\Checkout\Session;
+
 return [
     'hooks' => [
-        'stripe-checkout.order.created:before' => function (array $orderContent, \Stripe\Checkout\Session $checkoutSession): array
+        'stripe-checkout.order.created:before' => function (array $orderContent, Session $checkoutSession): array
         {
             // change order content
             // ...
@@ -216,37 +236,118 @@ Triggered when a payment is completed successfully.
 > In this case, the hook will only be triggered when the actual bank transfer is successfully performed.
 > Check the [stripe-checkout.payment:pending](#stripe-checkoutpaymentpending) hook to handle pending payments.
 
-Useful, for example, to email the costumer about the order.
-
 ```php
 // config.php
 
+use Kirby\Cms\Page;
+use Stripe\Checkout\Session;
+
 return [
     'hooks' => [
-        'stripe-checkout.payment:succeeded' => function (\Kirby\Cms\Page $orderPage, \Stripe\Checkout\Session $checkoutSession): void
+        'stripe-checkout.payment:succeeded' => function (Page $orderPage, Session $checkoutSession): void
         {
+            // email the customer when the payment succeeds
             kirby()->email([
                 'from' => 'orders@myshop.com',
                 'to' => $orderPage->customer()->toObject()->email()->value(),
-                'subject' => 'Order success!',
-                'body' => 'Order will be processed soon.',
+                'subject' => 'Thank you for your order!',
+                'body' => 'Your order will be processed soon.',
             ]);
         }
     ]
 ];
 ```
 
-> [!WARNING]
-> Take into account that the `orderContent` variable contains all data required to create an Order page.
-> You may change these but at your own risk.
-
 ### `stripe-checkout.payment:pending`
+
+Triggered when an order is pending payment.
+
+This happens when a customer uses an async payment method, like a bank transfer,
+where the Checkout form is submitted successfully, but the payment is yet to be made.
+
+```php
+// config.php
+
+use Kirby\Cms\Page;
+use Stripe\Checkout\Session;
+
+return [
+    'hooks' => [
+        'stripe-checkout.payment:pending' => function (Page $orderPage, Session $checkoutSession): void
+        {
+            // email the customer when the payment is pending
+            kirby()->email([
+                'from' => 'orders@myshop.com',
+                'to' => $orderPage->customer()->toObject()->email()->value(),
+                'subject' => 'Thank you for your order!',
+                'body' => 'Your order is pending payment.',
+            ]);
+        }
+    ]
+];
+```
 
 ### `stripe-checkout.payment:failed`
 
+Triggered when a payment has failed.
+
+This happens when a customer uses an async payment method, like a bank transfer,
+where the Checkout form is submitted successfully, but the payment has failed
+(for example, the deadline for the payment has expired).
+
+```php
+// config.php
+
+use Kirby\Cms\Page;
+use Stripe\Checkout\Session;
+
+return [
+    'hooks' => [
+        'stripe-checkout.payment:failed' => function (Page $orderPage, Session $checkoutSession): void
+        {
+            // email the customer when the payment has failed
+            kirby()->email([
+                'from' => 'orders@myshop.com',
+                'to' => $orderPage->customer()->toObject()->email()->value(),
+                'subject' => 'Bad news!',
+                'body' => 'Your order has been canceled because the payment has failed.',
+            ]);
+        }
+    ]
+];
+```
+
 ### `stripe-checkout.cart.addItem:before`
 
+Triggered before adding an item to the cart.
+
+Check the [Cart](#cart) section for more information.
+
+```php
+// config.php
+
+use Kirby\Cms\Page;
+
+return [
+    'hooks' => [
+        'stripe-checkout.cart.addItem:before' => function (array $itemContent, Page $productPage): array
+        {
+            // change cart item content
+            // ...
+
+            return $itemContent;
+        }
+    ]
+];
+```
+
+> [!WARNING]
+> Take into account that the `itemContent` variable contains data required to add an item to the cart.
+> You may change these but at your own risk.
+
 ## Site Methods
+
+
 
 ## Cart
 

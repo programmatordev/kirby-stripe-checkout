@@ -76,7 +76,7 @@ return [
                     }
 
                     // set item data to add to cart
-                    $itemData = [
+                    $itemContent = [
                         'id' => $productPage->id(),
                         'image' => $productPage->cover()->toFile()->url(),
                         'name' => $productPage->title()->value(),
@@ -86,14 +86,14 @@ return [
                     ];
 
                     // trigger event to allow cart item data manipulation
-                    $itemData = kirby()->apply(
+                    $itemContent = kirby()->apply(
                         'stripe-checkout.cart.addItem:before',
-                        compact('itemData', 'productPage'),
-                        'itemData'
+                        compact('itemContent', 'productPage'),
+                        'itemContent'
                     );
 
                     $cart = cart();
-                    $cart->addItem($itemData);
+                    $cart->addItem($itemContent);
 
                     return [
                         'status' => 'ok',
