@@ -60,6 +60,8 @@ return [
 > to store your project credentials in a separate place from your code
 > and to have separate development and production access keys.
 
+List of all available options:
+
 - [stripePublicKey](#stripepublickey)
 - [stripeSecretKey](#stripesecretkey)
 - [stripeWebhookSecret](#stripewebhooksecret)
@@ -347,9 +349,74 @@ return [
 
 ## Site Methods
 
+List of all available site helper methods, used with the `site()` function or in blueprints with `{{ site }}`:
 
+- [stripeCurrencySymbol](#stripecurrencysymbol)
+- [stripeCountriesUrl](#stripecountriesurl)
+- [stripeCheckoutUrl](#stripecheckouturl)
+- [stripeCheckoutEmbeddedUrl](#stripecheckoutembeddedurl)
+
+### `stripeCurrencySymbol`
+
+```php
+stripeCurrencySymbol(): string
+```
+
+Get the configured currency symbol.
+The symbol is obtained based on the [`currency`](#currency) option.
+
+```php
+// if currency is "EUR", it will return "€"
+site()->stripeCurrencySymbol();
+```
+
+### `stripeCountriesUrl`
+
+```php
+stripeCountriesUrl(?string $locale = null): string
+```
+
+URL to get all Stripe supported countries in JSON format.
+
+```php
+// will return the URL to get all supported countries
+site()->stripeCountriesUrl();
+
+// you can also set the locale to generate the URL for a specific locale
+site()->stripeCountriesUrl('pt_PT');
+```
+
+### `stripeCheckoutUrl`
+
+```php
+sitreCheckoutUrl(): string
+```
+
+URL that handles the Checkout Session and redirects the customer when `uiMode` is `hosted`.
+
+Check the [Setup](#setup) section for more information.
+
+```php
+site()->stripeCheckouturl();
+```
+
+### `stripeCheckoutEmbeddedUrl`
+
+```php
+stripeCheckoutEmbeddedUrl(): string
+```
+
+URL that handles the Checkout Session and fetches the client secret when `uiMode` is `embedded`.
+
+Check the [Setup](#setup) section for more information.
+
+```php
+site()->stripeCheckoutEmbeddedUrl();
+```
 
 ## Cart
+
+
 
 ## Translations
 
