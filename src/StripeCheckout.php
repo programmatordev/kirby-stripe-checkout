@@ -33,7 +33,7 @@ class StripeCheckout
     {
         $this->options = $this->resolveOptions($options);
         $this->stripe = new StripeClient($this->options['stripeSecretKey']);
-        $this->settingsPage = kirby()->page($this->options['settingsPage']);
+        $this->settingsPage = page($this->options['settingsPage']);
     }
 
     /**
@@ -268,7 +268,7 @@ class StripeCheckout
      */
     protected function getPageUrl(string $pageId, ?string $languageCode = null, bool $addSessionParam = false): string
     {
-        $page = kirby()->page($pageId);
+        $page = page($pageId);
 
         if ($page === null) {
             throw new CheckoutSessionException(

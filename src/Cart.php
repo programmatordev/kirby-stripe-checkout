@@ -52,25 +52,50 @@ class Cart
      * @throws UnknownCurrencyException
      * @throws NumberFormatException
      * @throws RoundingNecessaryException
+     * @throws CartException
      */
     public function addItem(array $data): string
     {
-        $item = $this->resolveItem($data);
+        $data = $this->resolveAddItem($data);
+
+        // find page
+        if (($productPage = page($data['id'])) === null) {
+            throw new CartException('Product does not exist.');
+        }
+
+        // check if "price" field exists
+        if ($productPage->price()->value() === null) {
+            throw new CartException('Product requires a "price" field.');
+        }
 
         // create unique item id based on product id and given options
         // this means that it is possible to add the same product but with different options
         // and be treated as separate items (the same shoes with different sizes are different items in the cart)
-        $lineItemId = ($item['options'] === null)
-            ? md5($item['id'])
-            : md5($item['id'] . serialize($item['options']));
+        $lineItemId = ($data['options'] === null)
+            ? md5($data['id'])
+            : md5($data['id'] . serialize($data['options']));
 
         // if the same exact item is already in the cart
         // sum the new quantity with the quantity of the existing item
-        if (($contentsItem = $this->getContentsItem($lineItemId)) !== null) {
-            $item['quantity'] += $contentsItem['quantity'];
+        if (($item = $this->getContentsItem($lineItemId)) !== null) {
+            $data['quantity'] += $item['quantity'];
         }
 
-        $this->setContentsItem($lineItemId, $item);
+        // set complete data
+        $data = array_merge($data, [
+            'name' => $productPage->title()->value(),
+            'price' => $productPage->price()->toFloat(),
+            'image' => $productPage->cover()->toFile()?->url(),
+        ]);
+
+        // trigger event to allow cart item data change
+        $data = kirby()->apply(
+            'stripe-checkout.cart.addItem:before',
+            ['itemContent' => $data, 'productPage' => $productPage],
+            'itemContent'
+        );
+
+        $this->setContentsItem($lineItemId, $data);
         $this->updateTotals();
         $this->saveToSession();
 
@@ -83,14 +108,18 @@ class Cart
      * @throws RoundingNecessaryException
      * @throws UnknownCurrencyException
      */
-    public function updateItem(string $lineItemId, int $quantity): void
+    public function updateItem(string $lineItemId, array $data): void
     {
+        $data = $this->resolveUpdateItem($data);
+
         if (($item = $this->getContentsItem($lineItemId)) === null) {
             throw new CartException('Cart item does not exist.');
         }
 
-        $item['quantity'] = $quantity;
-        $item = $this->resolveItem($item);
+        // only quality is allowed to be updated
+        $item = array_merge($item, [
+            'quantity' => (int) $data['quantity']
+        ]);
 
         $this->setContentsItem($lineItemId, $item);
         $this->updateTotals();
@@ -151,6 +180,7 @@ class Cart
 
     private function setContentsItem($lineItemId, array $data): void
     {
+        $data = $this->resolveSetContentsItem($data);
         $this->contents['items'][$lineItemId] = $data;
     }
 
@@ -205,7 +235,41 @@ class Cart
         return $resolver->resolve($options);
     }
 
-    private function resolveItem(array $data): array
+    private function resolveUpdateItem(array $data): array
+    {
+        $resolver = new OptionsResolver();
+
+        $resolver->define('quantity')
+            ->required()
+            ->allowedTypes('int')
+            ->allowedValues(Validation::createIsValidCallable(new GreaterThan(0)));
+
+        return $resolver->resolve($data);
+    }
+
+    private function resolveAddItem(array $data): array
+    {
+        $resolver = new OptionsResolver();
+
+        $resolver->define('id')
+            ->required()
+            ->allowedTypes('string')
+            ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
+
+        $resolver->define('quantity')
+            ->required()
+            ->allowedTypes('int')
+            ->allowedValues(Validation::createIsValidCallable(new GreaterThan(0)));
+
+        $resolver->define('options')
+            ->default(null)
+            ->allowedTypes('null', 'array')
+            ->allowedValues(Validation::createIsValidCallable(new AtLeastOneOf([new IsNull(), new NotBlank()])));
+
+        return $resolver->resolve($data);
+    }
+
+    private function resolveSetContentsItem(array $data): array
     {
         $resolver = new OptionsResolver();
         $resolver->setIgnoreUndefined();

@@ -397,7 +397,7 @@ URL that handles the Checkout Session and redirects the customer when `uiMode` i
 Check the [Setup](#setup) section for more information.
 
 ```php
-site()->stripeCheckouturl();
+site()->stripeCheckoutUrl();
 ```
 
 ### `stripeCheckoutEmbeddedUrl`
@@ -416,7 +416,7 @@ site()->stripeCheckoutEmbeddedUrl();
 
 ## Cart
 
-
+A cart management system already exists and is required to create a Checkout Session.
 
 ## Translations
 

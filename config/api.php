@@ -1,48 +1,7 @@
 <?php
 
 use Kirby\Cms\App;
-use ProgrammatorDev\StripeCheckout\Exception\CartException;
 use Symfony\Component\Intl\Countries;
-use Symfony\Component\OptionsResolver\OptionsResolver;
-use Symfony\Component\Validator\Constraints\AtLeastOneOf;
-use Symfony\Component\Validator\Constraints\GreaterThan;
-use Symfony\Component\Validator\Constraints\IsNull;
-use Symfony\Component\Validator\Constraints\NotBlank;
-use Symfony\Component\Validator\Validation;
-
-function resolveCartItemAdd(array $data): array
-{
-    $resolver = new OptionsResolver();
-
-    $resolver->define('id')
-        ->required()
-        ->allowedTypes('string')
-        ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
-
-    $resolver->define('quantity')
-        ->required()
-        ->allowedTypes('int')
-        ->allowedValues(Validation::createIsValidCallable(new GreaterThan(0)));
-
-    $resolver->define('options')
-        ->default(null)
-        ->allowedTypes('null', 'scalar[]')
-        ->allowedValues(Validation::createIsValidCallable(new AtLeastOneOf([new IsNull(), new NotBlank()])));
-
-    return $resolver->resolve($data);
-}
-
-function resolveCartItemUpdate(array $data): array
-{
-    $resolver = new OptionsResolver();
-
-    $resolver->define('quantity')
-        ->required()
-        ->allowedTypes('int')
-        ->allowedValues(Validation::createIsValidCallable(new GreaterThan(0)));
-
-    return $resolver->resolve($data);
-}
 
 return [
     'routes' => function(App $kirby) {
@@ -68,32 +27,9 @@ return [
                 'auth' => false,
                 'action' => function() use ($kirby) {
                     $data = $kirby->request()->body()->toArray();
-                    $data = resolveCartItemAdd($data);
-
-                    // find page
-                    if (($productPage = page($data['id'])) === null) {
-                        throw new CartException('Product does not exist.');
-                    }
-
-                    // set item data to add to cart
-                    $itemContent = [
-                        'id' => $productPage->id(),
-                        'image' => $productPage->cover()->toFile()->url(),
-                        'name' => $productPage->title()->value(),
-                        'price' => $productPage->price()->toFloat(),
-                        'quantity' => (int) $data['quantity'],
-                        'options' => $data['options']
-                    ];
-
-                    // trigger event to allow cart item data manipulation
-                    $itemContent = kirby()->apply(
-                        'stripe-checkout.cart.addItem:before',
-                        compact('itemContent', 'productPage'),
-                        'itemContent'
-                    );
 
                     $cart = cart();
-                    $cart->addItem($itemContent);
+                    $cart->addItem($data);
 
                     return [
                         'status' => 'ok',
@@ -108,10 +44,9 @@ return [
                 'auth' => false,
                 'action' => function(string $lineItemId) use ($kirby) {
                     $data = $kirby->request()->body()->toArray();
-                    $data = resolveCartItemUpdate($data);
 
                     $cart = cart();
-                    $cart->updateItem($lineItemId, (int) $data['quantity']);
+                    $cart->updateItem($lineItemId, $data);
 
                     return [
                         'status' => 'ok',
