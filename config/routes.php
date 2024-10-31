@@ -163,7 +163,7 @@ return function(App $kirby) {
                         // which means that it was a no-cost order
                         $paymentType = $checkoutSession->payment_intent?->payment_method->type ?? 'no_cost';
                         // find payment method translation
-                        // if translation does not exist, try to generate a more user-friendly name
+                        // if translation does not exist, try to generate a user-friendly name
                         // (for example: "apple_pay" to "Apple Pay")
                         $paymentMethod = t(
                             sprintf('stripe-checkout.paymentMethods.%s', $paymentType),
@@ -204,11 +204,10 @@ return function(App $kirby) {
                         ];
 
                         // trigger event to allow order content manipulation
-                        $orderContent = $kirby->apply(
-                            'stripe-checkout.order.create:before',
-                            compact('orderContent', 'checkoutSession'),
-                            'orderContent'
-                        );
+                        $orderContent = $kirby->apply('stripe-checkout.order.create:before', [
+                            'orderContent' => $orderContent,
+                            'checkoutSession' => $checkoutSession
+                        ], 'orderContent');
 
                         // create order
                         $orderPage = $kirby->page($stripeCheckout->getOrdersPage())
@@ -225,19 +224,19 @@ return function(App $kirby) {
                         if ($checkoutSession->payment_status !== Session::PAYMENT_STATUS_UNPAID) {
                             $orderPage->changeStatus('listed');
 
-                            $kirby->trigger(
-                                'stripe-checkout.payment:succeeded',
-                                compact('orderPage', 'checkoutSession')
-                            );
+                            $kirby->trigger('stripe-checkout.payment:succeeded', [
+                                'orderPage' => $orderPage,
+                                'checkoutSession' => $checkoutSession
+                            ]);
                         }
                         // if payment is "unpaid", it means it will be (possibly) paid in the future
                         // so let async events to handle the order and payment triggers for later
                         // for now just trigger that payment is pending
                         else {
-                            $kirby->trigger(
-                                'stripe-checkout.payment:pending',
-                                compact('orderPage', 'checkoutSession')
-                            );
+                            $kirby->trigger('stripe-checkout.payment:pending', [
+                                'orderPage' => $orderPage,
+                                'checkoutSession' => $checkoutSession
+                            ]);
                         }
 
                         break;
@@ -290,19 +289,19 @@ return function(App $kirby) {
                         if ($event->type === Event::CHECKOUT_SESSION_ASYNC_PAYMENT_SUCCEEDED) {
                             $orderPage->changeStatus('listed');
 
-                            $kirby->trigger(
-                                'stripe-checkout.payment:succeeded',
-                                compact('orderPage', 'checkoutSession')
-                            );
+                            $kirby->trigger('stripe-checkout.payment:succeeded', [
+                                'orderPage' => $orderPage,
+                                'checkoutSession' => $checkoutSession
+                            ]);
                         }
                         // if payment failed, set order and trigger payment event as failed
                         else if ($event->type === Event::CHECKOUT_SESSION_ASYNC_PAYMENT_FAILED) {
                             $orderPage->changeStatus('draft');
 
-                            $kirby->trigger(
-                                'stripe-checkout.payment:failed',
-                                compact('orderPage', 'checkoutSession')
-                            );
+                            $kirby->trigger('stripe-checkout.payment:failed', [
+                                'orderPage' => $orderPage,
+                                'checkoutSession' => $checkoutSession
+                            ]);
                         }
 
                         break;

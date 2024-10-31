@@ -416,7 +416,240 @@ site()->stripeCheckoutEmbeddedUrl();
 
 ## Cart
 
-A cart management system already exists and is required to create a Checkout Session.
+A cart management system already exists and is required to be able to create a Checkout Session.
+The reason for this is that the checkout line items are generated based on the current cart contents.
+This means that the cart must have at least one added item, otherwise it will throw an error.
+
+### Function
+
+A `cart()` function is available to manage the cart contents.
+
+```php
+use ProgrammatorDev\StripeCheckout\Cart;
+
+cart(): Cart
+```
+
+Default options:
+
+```php
+cart([
+    // the same as configured in the plugin options
+    'currency' => option('programmatordev.stripe-checkout.currency')
+]);
+```
+
+Available methods:
+
+- [addItem](#additem)
+- [updateItem](#updateitem)
+- [removeItem](#removeitem)
+- [getItems](#getitems)
+- [getTotalQuantity](#gettotalquantity)
+- [getTotalAmount](#gettotalamount)
+- [getTotalAmountFormatted](#gettotalamountformatted)
+- [getContents](#getcontents)
+- [destroy](#destroy)
+
+#### `addItem`
+
+```php
+addItem(array $data): string
+```
+
+Adds an item to the cart.
+
+The `id` and `quantity` values are required.
+An additional `options` value is available to set the options of a product (color, size, etc.).
+
+Important to note that the `id` must be a valid Kirby page id and the page must include a valid `price` field.
+Otherwise, an exception will be thrown.
+Check the [Setup](#setup) section for more information.
+
+Information related to the `price`, `name` and `image` are added to the item based on the given `id` (and related Kirby page).
+
+If the item that is being added already exists in the cart, the sum of its quantities will be made into a single item.
+
+If the same item is added but with different options, it will be considered different items in the cart.
+For example, a t-shirt with color blue, and the same t-shirt with color red will be different items.
+
+A line item id is returned that uniquely identifies the item in the cart.
+
+```php
+$cart = cart();
+
+// a line item id is returned and uniquely identifies that item in the cart
+$lineItemId = $cart->addItem([
+    'id' => 'products/cd',
+    'quantity' => 1
+]);
+
+// you can add options per item
+$lineItemId = $cart->addItem([
+    'id' => 'products/t-shirt',
+    'quantity' => 1,
+    'options' => [
+        'Color' => 'Green',
+        'Size' => 'Medium'
+    ]
+]);
+```
+
+#### `updateItem`
+
+```php
+updateItem(string $lineItemId, array $data): void
+```
+
+Updates and item in the cart.
+
+Currently, it is only possible to update the `quantity` of the item in the cart.
+
+```php
+$cart = cart();
+
+$lineItemId = $cart->addItem([
+    'id' => 'products/cd',
+    'quantity' => 2
+]);
+
+$cart->updateItem($lineItemId, [
+    'quantity' => 1
+]);
+```
+
+#### `removeItem`
+
+```php
+removeItem(string $lineItemId): void
+```
+
+Removes an item from the cart.
+
+```php
+$cart = cart();
+
+$lineItemId = $cart->addItem([
+    'id' => 'products/cd',
+    'quantity' => 1
+]);
+
+$cart->removeItem($lineItemId);
+```
+
+#### `getItems`
+
+```php
+getItems(): array
+```
+
+Get all items in the cart.
+
+```php
+$cart = cart();
+$items = $cart->getItems();
+
+foreach ($items as $lineItemId => $item) {
+    print_r($item);
+    // Array(
+    //  'id' => 'products/item',
+    //  'image' => 'https://path.com/to/image.jpg',
+    //  'name' => 'Item',
+    //  'price' => 10,
+    //  'quantity' => 2,
+    //  'subtotal' => 20,
+    //  'options' => null,
+    //  'priceFormatted' => '€ 10.00',
+    //  'subtotalFormatted' => '€ 20.00'
+    // )
+}
+```
+
+#### `getTotalQuantity`
+
+```php
+getTotalQuantity(): int
+```
+
+Get total quantity of items in the cart.
+
+```php
+$cart = cart();
+echo $cart->getTotalQuantity(); // 3
+```
+
+#### `getTotalAmount`
+
+```php
+getTotalAmount(): int|float
+```
+
+Get total amount in the cart.
+
+```php
+$cart = cart();
+echo $cart->getTotalAmount(); // 100
+```
+
+#### `getTotalAmountFormatted`
+
+```php
+getTotalAmountFormatted(): string
+```
+
+Get total amount in the cart formatted according to currency.
+
+```php
+$cart = cart();
+echo $cart->getTotalAmountFormatted(); // € 100.00
+```
+
+#### `getContents`
+
+```php
+getContents(): array
+```
+
+Get all contents and related data from the cart.
+
+```php
+$cart = cart();
+
+print_r($cart->getContents());
+// Array(
+//  'items' => Array(
+//    'line_item_id_hash' => Array(
+//      'id' => 'products/item',
+//      'image' => 'https://path.com/to/image.jpg',
+//      'name' => 'Item',
+//      'price' => 10,
+//      'quantity' => 2,
+//      'subtotal' => 20,
+//      'options' => null,
+//      'priceFormatted' => '€ 10.00',
+//      'subtotalFormatted' => '€ 20.00'
+//    )
+//  )
+//  'totalAmount' => 20,
+//  'totalQuantity' => 2,
+//  'totalAmountFormatted' => '€ 20.00'
+// )
+```
+
+#### `destroy`
+
+```php
+destroy(): void
+```
+
+Destroy all contents and reset cart to initial state.
+
+```php
+$cart = cart();
+$cart->destroy();
+```
+
+### Endpoints
 
 ## Translations
 

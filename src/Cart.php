@@ -81,7 +81,7 @@ class Cart
             $data['quantity'] += $item['quantity'];
         }
 
-        // set complete data
+        // set complete item data
         $data = array_merge($data, [
             'name' => $productPage->title()->value(),
             'price' => $productPage->price()->toFloat(),
@@ -89,11 +89,10 @@ class Cart
         ]);
 
         // trigger event to allow cart item data change
-        $data = kirby()->apply(
-            'stripe-checkout.cart.addItem:before',
-            ['itemContent' => $data, 'productPage' => $productPage],
-            'itemContent'
-        );
+        $data = kirby()->apply('stripe-checkout.cart.addItem:before', [
+            'itemContent' => $data,
+            'productPage' => $productPage
+        ], 'itemContent');
 
         $this->setContentsItem($lineItemId, $data);
         $this->updateTotals();
@@ -148,14 +147,19 @@ class Cart
         return $this->contents['items'];
     }
 
+    public function getTotalQuantity(): int
+    {
+        return $this->contents['totalQuantity'];
+    }
+
     public function getTotalAmount(): int|float
     {
         return $this->contents['totalAmount'];
     }
 
-    public function getTotalQuantity(): int
+    public function getTotalAmountFormatted(): string
     {
-        return $this->contents['totalQuantity'];
+        return $this->contents['totalAmountFormatted'];
     }
 
     public function destroy(): void

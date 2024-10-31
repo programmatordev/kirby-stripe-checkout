@@ -85,13 +85,11 @@ class StripeCheckout
             $sessionParams['shipping_options'] = $this->getShippingOptions();
         }
 
-        // trigger event to allow session parameters manipulation
+        // trigger event to allow session parameters change
         // https://docs.stripe.com/api/checkout/sessions/create?lang=php
-        $sessionParams = kirby()->apply(
-            'stripe-checkout.session.create:before',
-            compact('sessionParams'),
-            'sessionParams'
-        );
+        $sessionParams = kirby()->apply('stripe-checkout.session.create:before', [
+            'sessionParams' => $sessionParams,
+        ], 'sessionParams');
 
         return $this->stripe->checkout->sessions->create($sessionParams);
     }
