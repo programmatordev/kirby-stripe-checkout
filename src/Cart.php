@@ -276,7 +276,10 @@ class Cart
     private function resolveSetContentsItem(array $data): array
     {
         $resolver = new OptionsResolver();
-        $resolver->setIgnoreUndefined();
+
+        $resolver->define('subtotal');
+        $resolver->define('priceFormatted');
+        $resolver->define('subtotalFormatted');
 
         $resolver->define('id')
             ->required()
