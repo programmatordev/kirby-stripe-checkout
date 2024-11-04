@@ -115,10 +115,8 @@ class Cart
             throw new CartException('Cart item does not exist.');
         }
 
-        // only quality is allowed to be updated
-        $item = array_merge($item, [
-            'quantity' => (int) $data['quantity']
-        ]);
+        // update item with new data
+        $item = array_merge($item, $data);
 
         $this->setContentsItem($lineItemId, $item);
         $this->updateTotals();
@@ -277,6 +275,7 @@ class Cart
     {
         $resolver = new OptionsResolver();
 
+        // calculated fields
         $resolver->define('subtotal');
         $resolver->define('priceFormatted');
         $resolver->define('subtotalFormatted');

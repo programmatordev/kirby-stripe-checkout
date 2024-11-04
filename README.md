@@ -420,7 +420,7 @@ A cart management system already exists and is required to be able to create a C
 The reason for this is that the checkout line items are generated based on the current cart contents.
 This means that the cart must have at least one added item, otherwise it will throw an error.
 
-### Function
+### PHP
 
 A `cart()` function is available to manage the cart contents.
 
@@ -618,7 +618,7 @@ $cart = cart();
 print_r($cart->getContents());
 // Array(
 //  'items' => Array(
-//    'line_item_id_hash' => Array(
+//    'line-item-id-hash' => Array(
 //      'id' => 'products/item',
 //      'image' => 'https://path.com/to/image.jpg',
 //      'name' => 'Item',
@@ -649,11 +649,223 @@ $cart = cart();
 $cart->destroy();
 ```
 
-### Endpoints
+### JavaScript
+
+A JavaScript library is currently being developed.
+Meanwhile, checkout the [API endpoints](#api-endpoints) section below for examples on how to use with JavaScript.
+
+### API Endpoints
+
+Endpoints are available to help manage the cart system in the frontend.
+You can make requests to these to add, update and remove items and get the cart contents.
+
+All successful responses will have the following structure:
+
+```json
+{
+  "status": "ok",
+  "data": {
+    "items": {
+      "line-item-id-hash": {
+        "id": "products/item",
+        "image": "https://path.com/to/image.jpg",
+        "name": "Item",
+        "price": 10,
+        "quantity": 2,
+        "subtotal": 20,
+        "options": null,
+        "priceFormatted": "€ 10.00",
+        "subtotalFormatted": "€ 20.00"
+      }
+    },
+    "totalAmount": 20,
+    "totalQuantity": 2,
+    "totalAmountFormatted": "€ 20.00"
+  }
+}
+```
+
+In case of error:
+
+```json
+{
+  "status": "error",
+  "message": "Product does not exist."
+}
+```
+
+### `GET /api/cart`
+
+Get cart contents.
+
+```js
+const response = await fetch('api/cart', {
+  method: "GET"
+});
+```
+
+### `POST /api/cart/items`
+
+Adds item to the cart.
+
+```js
+const response = await fetch('api/cart/items', {
+  method: "POST",
+  body: JSON.stringify({
+    id: 'products/item',
+    quantity: 1,
+    // optional
+    options: {
+      'Size': 'Medium'
+    }
+  })
+});
+```
+
+### `PATCH /api/cart/items/:lineItemId`
+
+Updates item in the cart.
+
+```js
+const lineItemId = 'line-item-id-hash';
+const response = await fetch('api/cart/items/' + lineItemId, {
+  method: "PATCH",
+  body: JSON.stringify({
+    quantity: 1
+  })
+});
+```
+
+### `DELETE /api/cart/items/:lineItemId`
+
+Removes item from the cart.
+
+```js
+const lineItemId = 'line-item-id-hash';
+const response = await fetch('api/cart/items/' + lineItemId, {
+  method: "DELETE"
+});
+```
 
 ## Translations
 
+Currently, this plugin is only available in English and Portuguese (Portugal).
+
+If you want to add a new language, go to the `translations` directory and create a new YAML file named with the locale that you wish to translate.
+For example, if you want to add the German translation, create a `de.yml` file.
+
+It will be very appreciated if you can contribute by making a pull request with the translation you wish to add.
+
 ## Setup
+
+Below are the steps required to set up a Stripe Checkout online shop, both in `hosted` and `embedded` mode.
+
+> [!TIP]
+> It is recommended that you use a library that enables environment variables
+> to store your project credentials in a separate place from your code
+> and to have separate development and production access keys.
+
+Considering that you already have a Stripe account:
+
+### Step 1.
+
+Grab your public and secret keys from the Stripe Dashboard
+and add them to the [`stripePublicKey`](#stripepublickey) and [`stripeSecretKey`](#stripesecretkey) options.
+
+> [!IMPORTANT]
+> Make sure to grab the test keys when in development mode,
+> and only use the production keys when the website is in production.
+
+### Step 2.
+
+Create a webhook to listen to Stripe Checkout events.
+
+When creating a webhook in the Stripe Dashboard (should be in the Developers page),
+make sure to select the following Checkout events, otherwise it will not work correctly:
+- `checkout.session.completed`
+- `checkout.session.async_payment_succeeded`
+- `checkout.session.async_payment_failed`
+
+The endpoint URL must be set to the following: `https://yourdomain.com/stripe/checkout/webhook`.
+This is, your base URL followed by `/stripe/checkout/webhook`.
+
+When the webhook is created, grab its secret key and add it to the [`stripeWebhookSecret`](#stripewebhooksecret) option.
+
+> [!IMPORTANT]
+> The webhook will not work properly when developing locally,
+> since the request cannot reach a local domain that only exists on your computer.
+> Check the [Development](#development) section for more information on how to work with webhooks in development.
+
+### Step 3.
+
+For the panel, you need to create a `orders` and a `order` blueprint.
+You can change the `orders` name with the [`ordersPage`](#orderspage) option.
+
+```yaml
+# blueprints/pages/orders.yml
+
+extends: stripe-checkout.pages/orders
+```
+
+```yaml
+# blueprints/pages/order.yml
+
+extends: stripe-checkout.pages/order
+```
+
+### Step 4.
+
+Similar to the previous step, create a `checkout-settings` blueprint.
+You can change the `checkout-settings` name with the [`settingsPage`](#settingspage) option.
+
+```yaml
+# blueprints/pages/checkout-settings.yml
+
+extends: stripe-checkout.pages/checkout-settings
+```
+
+### Step 5.
+
+You can create a product blueprint with any name.
+
+Just make sure that you have a `price` field (it is required).
+To add an image, add a `cover` field (it is optional).
+
+The plugin already comes with a product page blueprint, or both blueprints fields, in case you want to use them.
+
+Using the product page blueprint:
+
+```yaml
+# blueprints/pages/product
+
+extends: stripe-checkout.pages/product
+```
+
+Using the `price` and `cover` fields blueprints:
+
+```yaml
+# blueprints/pages/product
+
+title: stripe-checkout.pages.product.title
+
+columns:
+  left:
+    width: 2/3
+    fields:
+      price: stripe-checkout.fields/price
+  right:
+    width: 1/3
+    fields:
+      cover: stripe-checkout.fields/cover
+```
+
+### `hosted` versus `embedded` mode
+
+Mode explanation
+
+### Step 6: `hosted` mode.
+
+### Step 6: `embedded` mode.
 
 ## Development
 
