@@ -9,15 +9,26 @@
 
 ## Features
 
-- Stripe Checkout for both hosted and embedded UI modes;
-- Handles instant and async payments (credit card, bank transfer, etc.);
-- Orders panel page. Overview of all orders and respective data (customer, line items, shipping, billing, etc.);
-- Checkout Settings panel page. Currently only able to manage shipping settings (allowed countries, shipping rates, etc.);
-- Events for all payments status (completed, pending and failed), order creation, Checkout session creation and so on;
-- Cart management;
+- 🔥 Stripe Checkout for both `hosted` and `embedded` modes;
+- 💸 Handles sync and async payments (credit card, bank transfer, etc.);
+- 📦 Orders panel page;
+- ⚙️ Checkout Settings panel page;
+- 🪝 Hooks for all payments status (completed, pending and failed), orders, Checkout sessions, and more;
+- 🛒 Cart management;
 - ...and more.
 
 ## Documentation
+
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Options](#options)
+- [Hooks](#hooks)
+- [Site methods](#site-methods)
+- [Cart](#cart)
+- [Translations](#translations)
+- [Setup](#setup)
+- [Development](#development)
+- [Production](#production)
 
 ## Requirements
 
@@ -666,21 +677,32 @@ All successful responses will have the following structure:
   "status": "ok",
   "data": {
     "items": {
-      "line-item-id-hash": {
-        "id": "products/item",
+      "line-item-id-1": {
+        "id": "products/item-1",
         "image": "https://path.com/to/image.jpg",
-        "name": "Item",
+        "name": "Item 1",
         "price": 10,
         "quantity": 2,
         "subtotal": 20,
         "options": null,
         "priceFormatted": "€ 10.00",
         "subtotalFormatted": "€ 20.00"
+      },
+      "line-item-id-2": {
+        "id": "products/item-2",
+        "image": "https://path.com/to/image.jpg",
+        "name": "Item 2",
+        "price": 10,
+        "quantity": 1,
+        "subtotal": 10,
+        "options": null,
+        "priceFormatted": "€ 10.00",
+        "subtotalFormatted": "€ 10.00"
       }
     },
-    "totalAmount": 20,
-    "totalQuantity": 2,
-    "totalAmountFormatted": "€ 20.00"
+    "totalAmount": 30,
+    "totalQuantity": 3,
+    "totalAmountFormatted": "€ 30.00"
   }
 }
 ```
@@ -972,11 +994,12 @@ If you want to trigger the events without the need to submit the form every time
 (make sure to open another terminal window, do not close the window where you ran the `listen` command):
 
 ```bash
-stripe trigger checkout.session.async_payment_succeeded --add checkout_session:metadata.order_id=abc123
+stripe trigger checkout.session.async_payment_succeeded --add checkout_session:metadata.order_id=xxxxxx
 ```
 
-This command will trigger the `checkout.session.async_payment_succeeded` (you can trigger eny event).
-Just make sure to always include the `--add checkout_session:metadata.order_id=abc123`.
+This command will trigger the `checkout.session.async_payment_succeeded` event (you can trigger any event).
+Just make sure to always include the `--add checkout_session:metadata.order_id=xxxxxx`.
+
 This is required because the plugin needs to share the Kirby order id across all events (to be in sync).
 You can set any `order_id` value, as long as it is alphanumeric.
 
