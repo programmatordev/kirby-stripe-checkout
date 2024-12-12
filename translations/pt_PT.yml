@@ -72,7 +72,6 @@ sections.pendingPayments.empty: Nenhum pagamento pendente
 sections.failedPayments.label: Pagamentos falhados
 sections.failedPayments.empty: Nenhum pagamento falhado
 
-pages.product.title: Produto
 pages.settings.title: Configurações de Checkout
 pages.orders.title: Encomendas
 pages.order.title: Encomenda

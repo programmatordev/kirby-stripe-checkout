@@ -12,50 +12,36 @@ use Stripe\Exception\SignatureVerificationException;
 
 return function(App $kirby) {
     return [
-        // handle checkout request
+        // handle checkout according to Stripe ui mode
         [
             'pattern' => 'stripe/checkout',
             'language' => '*',
             'method' => 'GET',
             'action' => function() use ($kirby) {
-                $stripeCheckout = stripeCheckout();
-
-                if ($stripeCheckout->getUiMode() !== Session::UI_MODE_HOSTED) {
-                    throw new CheckoutEndpointException(
-                        'This endpoint is reserved for Stripe Checkout in "hosted" mode.'
-                    );
+                try {
+                    $cart = cart();
+                    $stripeCheckout = stripeCheckout();
+                    $checkoutSession = $stripeCheckout->createSession($cart);
+                }
+                catch (Exception $exception) {
+                    throw new CheckoutEndpointException($exception->getMessage());
                 }
 
-                $cart = cart();
-                $checkoutSession = $stripeCheckout->createSession($cart);
-
-                // redirect to hosted payment form
-                // https://docs.stripe.com/checkout/quickstart#redirect
-                go($checkoutSession->url);
-            }
-        ],
-        // get checkout client secret when in "embedded" mode
-        [
-            'pattern' => 'stripe/checkout/embedded',
-            'language' => '*',
-            'method' => 'POST',
-            'action' => function() use ($kirby) {
-                $stripeCheckout = stripeCheckout();
-
-                if ($stripeCheckout->getUiMode() !== Session::UI_MODE_EMBEDDED) {
-                    throw new CheckoutEndpointException(
-                        'This endpoint is reserved for Stripe Checkout in "embedded" mode.'
-                    );
+                if ($stripeCheckout->getUiMode() === Session::UI_MODE_HOSTED) {
+                    // redirect to hosted payment form
+                    // https://docs.stripe.com/checkout/quickstart#redirect
+                    go($checkoutSession->url);
                 }
 
-                $cart = cart();
-                $checkoutSession = $stripeCheckout->createSession($cart);
+                if ($stripeCheckout->getUiMode() === Session::UI_MODE_EMBEDDED) {
+                    // return JSON with required data for embedded checkout
+                    // https://docs.stripe.com/checkout/embedded/quickstart#fetch-checkout-session
+                    return [
+                        'clientSecret' => $checkoutSession->client_secret
+                    ];
+                }
 
-                // return JSON with required data for embedded checkout
-                // https://docs.stripe.com/checkout/embedded/quickstart#fetch-checkout-session
-                return [
-                    'clientSecret' => $checkoutSession->client_secret
-                ];
+                throw new CheckoutEndpointException('Invalid Stripe UI mode.');
             }
         ],
         // handle webhooks to fulfill payments (or failure to do so)

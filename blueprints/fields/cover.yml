@@ -5,5 +5,4 @@ type: files
 required: true
 multiple: false
 query: page.images
-layout: cards
 translate: false

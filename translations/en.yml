@@ -72,7 +72,6 @@ sections.pendingPayments.empty: No pending payments
 sections.failedPayments.label: Failed payments
 sections.failedPayments.empty: No failed payments
 
-pages.product.title: Product
 pages.settings.title: Checkout Settings
 pages.orders.title: Orders
 pages.order.title: Order

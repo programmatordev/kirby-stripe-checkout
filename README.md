@@ -4,7 +4,7 @@
 
 > [!IMPORTANT]
 > This plugin is still in its early stages.
-> This means that it should not be considered stable even though it is currently being used in production.
+> This means that it should not be considered stable, so use it at your own risk.
 > Expect some breaking changes until version `1.0`.
 
 ## Features
@@ -362,10 +362,26 @@ return [
 
 List of all available site helper methods, used with the `site()` function or in blueprints with `{{ site }}`:
 
+- [stripeCheckoutUrl](#stripecheckouturl)
 - [stripeCurrencySymbol](#stripecurrencysymbol)
 - [stripeCountriesUrl](#stripecountriesurl)
-- [stripeCheckoutUrl](#stripecheckouturl)
-- [stripeCheckoutEmbeddedUrl](#stripecheckoutembeddedurl)
+
+### `stripeCheckoutUrl`
+
+```php
+stripeCheckoutUrl(): string
+```
+
+URL that handles the Checkout Session according to the `uiMode` config option:
+
+- `hosted` will redirect the user to a page hosted by Stripe;
+- `embedded` will return a client secret required to mount the embedded form on your website.
+
+Check the [Setup](#setup) section for more information.
+
+```php
+site()->stripeCheckoutUrl();
+```
 
 ### `stripeCurrencySymbol`
 
@@ -395,34 +411,6 @@ site()->stripeCountriesUrl();
 
 // you can also set the locale to generate the URL for a specific locale
 site()->stripeCountriesUrl('pt_PT');
-```
-
-### `stripeCheckoutUrl`
-
-```php
-sitreCheckoutUrl(): string
-```
-
-URL that handles the Checkout Session and redirects the customer when `uiMode` is `hosted`.
-
-Check the [Setup](#setup) section for more information.
-
-```php
-site()->stripeCheckoutUrl();
-```
-
-### `stripeCheckoutEmbeddedUrl`
-
-```php
-stripeCheckoutEmbeddedUrl(): string
-```
-
-URL that handles the Checkout Session and fetches the client secret when `uiMode` is `embedded`.
-
-Check the [Setup](#setup) section for more information.
-
-```php
-site()->stripeCheckoutEmbeddedUrl();
 ```
 
 ## Cart
@@ -835,10 +823,14 @@ extends: stripe-checkout.pages/orders
 extends: stripe-checkout.pages/order
 ```
 
-### Step 4.
+### Step 4 (optional).
 
 Similar to the previous step, create a `checkout-settings` blueprint.
 You can change the `checkout-settings` name with the [`settingsPage`](#settingspage) option.
+
+Currently, the only existing settings are to manage shipping data, like allowed countries and shipping rates.
+If you don't need this information for your website (for example, if you are selling digital assets, where shipping information is not needed),
+you can skip this step.
 
 ```yaml
 # blueprints/pages/checkout-settings.yml
@@ -853,17 +845,7 @@ You can create a product blueprint with any name.
 Just make sure that you have a `price` field (it is required).
 To add an image, add a `cover` field (it is optional).
 
-The plugin already comes with a product page blueprint, or both blueprints fields, in case you want to use them.
-
-Using the product page blueprint:
-
-```yaml
-# blueprints/pages/product.yml
-
-extends: stripe-checkout.pages/product
-```
-
-Using the `price` and `cover` fields blueprints:
+The plugin already comes with both blueprints fields, in case you want to use them:
 
 ```yaml
 # blueprints/pages/product.yml
@@ -882,7 +864,7 @@ Depending on the mode you are using, jump to the respective step bellow:
 - [Step 6: `hosted` mode](#step-6-hosted-mode)
 - [Step 6: `embedded` mode](#step-6-embedded-mode)
 
-For more information about the difference between both modes, jump to the [`uiMode`](#uimode) option.
+For more information about the difference between both modes, check the [`uiMode`](#uimode) option.
 
 ### Step 6: `hosted` mode.
 
@@ -910,7 +892,7 @@ It is also required to set the [`successPage`](#successpage) and the [`cancelPag
 ### Step 6: `embedded` mode.
 
 When in `embedded` mode, you need to use the [Stripe.js](https://docs.stripe.com/js) library
-as well as the site method [`stripeCheckoutEmbeddedUrl()`](#stripecheckoutembeddedurl).
+as well as the site method [`stripeCheckoutUrl()`](#stripecheckouturl).
 
 You have to create your own checkout page.
 
@@ -932,8 +914,8 @@ Something like:
 
       async function initialize() {
         const fetchClientSecret = async () => {
-          // use the stripeCheckoutEmbeddedUrl() method to fetch the client secret
-          const response = await fetch('<?= $site->stripeCheckoutEmbeddedUrl() ?>', { method: 'POST' });
+          // use the stripeCheckoutUrl() method to fetch the client secret
+          const response = await fetch('<?= $site->stripeCheckoutUrl() ?>');
           const { clientSecret } = await response.json();
 
           return clientSecret;

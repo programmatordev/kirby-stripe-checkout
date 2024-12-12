@@ -58,7 +58,6 @@ App::plugin('programmatordev/stripe-checkout', [
         // sections
         'stripe-checkout.sections/orders' => __DIR__ . '/blueprints/sections/orders.yml',
         // pages
-        'stripe-checkout.pages/product' => __DIR__ . '/blueprints/pages/product.yml',
         'stripe-checkout.pages/orders' => __DIR__ . '/blueprints/pages/orders.yml',
         'stripe-checkout.pages/order' => __DIR__ . '/blueprints/pages/order.yml',
         'stripe-checkout.pages/checkout-settings' => __DIR__ . '/blueprints/pages/checkout-settings.yml',
