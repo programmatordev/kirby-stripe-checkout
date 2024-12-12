@@ -2,6 +2,7 @@
 
 namespace ProgrammatorDev\StripeCheckout\Test;
 
+use Kirby\Cms\Page;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Cart;
 use ProgrammatorDev\StripeCheckout\Exception\CartException;
@@ -13,6 +14,8 @@ class CartTest extends BaseTestCase
     private Cart $cart;
 
     private array $defaultContents;
+
+    private Page $productPage;
 
     protected function setUp(): void
     {
@@ -28,13 +31,26 @@ class CartTest extends BaseTestCase
             'totalQuantity' => 0,
             'totalAmountFormatted' => '€ 0.00'
         ];
+
+        $this->productPage = site()
+            ->createChild([
+                'slug' => 'product-test',
+                'template' => 'product',
+                'content' => [
+                    'title' => 'Product Test',
+                    'price' => 10
+                ]
+            ])
+            ->changeStatus('listed');
     }
 
     protected function tearDown(): void
     {
         parent::tearDown();
 
+        // destroy data after each test
         $this->cart->destroy();
+        $this->productPage->delete(true);
     }
 
     public function testAddItem(): void
@@ -44,10 +60,7 @@ class CartTest extends BaseTestCase
 
         // act
         $lineItemId = $this->cart->addItem([
-            'id' => 'item-id',
-            'image' => 'image.jpg',
-            'name' => 'Item',
-            'price' => 10,
+            'id' => 'product-test',
             'quantity' => 1,
         ]);
 
@@ -55,9 +68,9 @@ class CartTest extends BaseTestCase
         $this->assertEqualsCanonicalizing([
             'items' => [
                 $lineItemId => [
-                    'id' => 'item-id',
-                    'image' => 'image.jpg',
-                    'name' => 'Item',
+                    'id' => 'product-test',
+                    'image' => null,
+                    'name' => 'Product Test',
                     'price' => 10,
                     'quantity' => 1,
                     'subtotal' => 10,
@@ -79,16 +92,12 @@ class CartTest extends BaseTestCase
 
         // act
         $lineItemId = $this->cart->addItem([
-            'id' => 'item-id',
-            'name' => 'Item',
-            'price' => 10,
+            'id' => 'product-test',
             'quantity' => 1,
         ]);
 
         $this->cart->addItem([
-            'id' => 'item-id',
-            'name' => 'Item',
-            'price' => 10,
+            'id' => 'product-test',
             'quantity' => 1,
         ]);
 
@@ -96,9 +105,9 @@ class CartTest extends BaseTestCase
         $this->assertEqualsCanonicalizing([
             'items' => [
                 $lineItemId => [
-                    'id' => 'item-id',
+                    'id' => 'product-test',
                     'image' => null,
-                    'name' => 'Item',
+                    'name' => 'Product Test',
                     'price' => 10,
                     'quantity' => 2,
                     'subtotal' => 20,
@@ -120,9 +129,7 @@ class CartTest extends BaseTestCase
 
         // act
         $lineItemId1 = $this->cart->addItem([
-            'id' => 'item-id',
-            'name' => 'Item',
-            'price' => 10,
+            'id' => 'product-test',
             'quantity' => 1,
             'options' => [
                 'size' => 'small'
@@ -130,9 +137,7 @@ class CartTest extends BaseTestCase
         ]);
 
         $lineItemId2 = $this->cart->addItem([
-            'id' => 'item-id',
-            'name' => 'Item',
-            'price' => 10,
+            'id' => 'product-test',
             'quantity' => 1,
             'options' => [
                 'size' => 'medium'
@@ -143,9 +148,9 @@ class CartTest extends BaseTestCase
         $this->assertEqualsCanonicalizing([
             'items' => [
                 $lineItemId1 => [
-                    'id' => 'item-id',
+                    'id' => 'product-test',
                     'image' => null,
-                    'name' => 'Item',
+                    'name' => 'Product Test',
                     'price' => 10,
                     'quantity' => 1,
                     'subtotal' => 10,
@@ -156,9 +161,9 @@ class CartTest extends BaseTestCase
                     'subtotalFormatted' => '€ 10.00'
                 ],
                 $lineItemId2 => [
-                    'id' => 'item-id',
+                    'id' => 'product-test',
                     'image' => null,
-                    'name' => 'Item',
+                    'name' => 'Product Test',
                     'price' => 10,
                     'quantity' => 1,
                     'subtotal' => 10,
@@ -179,9 +184,7 @@ class CartTest extends BaseTestCase
     public function testAddItemWithMissingOptions(string $missingOption): void
     {
         $item = [
-            'id' => 'item-id',
-            'name' => 'Item',
-            'price' => 10,
+            'id' => 'product-test',
             'quantity' => 1
         ];
 
@@ -195,8 +198,6 @@ class CartTest extends BaseTestCase
     public static function provideAddItemWithMissingOptionsData(): \Generator
     {
         yield 'missing id' => ['id'];
-        yield 'missing name' => ['name'];
-        yield 'missing price' => ['price'];
         yield 'missing quantity' => ['quantity'];
     }
 
@@ -204,10 +205,7 @@ class CartTest extends BaseTestCase
     public function testAddItemWithInvalidOptions(string $optionName, mixed $invalidValue): void
     {
         $item = [
-            'id' => 'item-id',
-            'image' => null,
-            'name' => 'Item',
-            'price' => 10,
+            'id' => 'product-test',
             'quantity' => 1,
             'options' => null
         ];
@@ -223,25 +221,49 @@ class CartTest extends BaseTestCase
     {
         yield 'invalid id' => ['id', 1];
         yield 'empty id' => ['id', ''];
-        yield 'invalid image' => ['image', 1];
-        yield 'empty image' => ['image', ''];
-        yield 'invalid name' => ['name', 1];
-        yield 'empty name' => ['name', ''];
-        yield 'invalid price' => ['price', 'invalid'];
-        yield 'zero price' => ['price', 0];
         yield 'invalid quantity' => ['quantity', 'invalid'];
         yield 'zero quantity' => ['quantity', 0];
         yield 'invalid options' => ['options', 'invalid'];
         yield 'empty options' => ['options', []];
     }
 
+    public function testAddItemWhenProductDoesNotExist(): void
+    {
+        $this->expectException(CartException::class);
+        $this->expectExceptionMessage('Product does not exist.');
+
+        $this->cart->addItem([
+            'id' => 'does-not-exist',
+            'quantity' => 1,
+        ]);
+    }
+
+    #[DataProvider('provideAddItemWhenProductIsNotListedData')]
+    public function testAddItemWhenProductIsNotListed(string $status): void
+    {
+        $this->expectException(CartException::class);
+        $this->expectExceptionMessage('Product does not exist.');
+
+        $this->productPage->changeStatus($status);
+
+        $this->cart->addItem([
+            'id' => 'product-test',
+            'quantity' => 1,
+        ]);
+    }
+
+    public static function provideAddItemWhenProductIsNotListedData(): \Generator
+    {
+        yield 'unlisted' => ['unlisted'];
+        // TODO understand why a draft page is not being deleted programmatically
+//        yield 'draft' => ['draft'];
+    }
+
     public function testUpdateItem(): void
     {
         // arrange
         $lineItemId = $this->cart->addItem([
-            'id' => 'item-id',
-            'name' => 'Item',
-            'price' => 10,
+            'id' => 'product-test',
             'quantity' => 2,
         ]);
 
@@ -249,9 +271,9 @@ class CartTest extends BaseTestCase
         $this->assertEqualsCanonicalizing([
             'items' => [
                 $lineItemId => [
-                    'id' => 'item-id',
+                    'id' => 'product-test',
                     'image' => null,
-                    'name' => 'Item',
+                    'name' => 'Product Test',
                     'price' => 10,
                     'quantity' => 2,
                     'subtotal' => 20,
@@ -266,15 +288,17 @@ class CartTest extends BaseTestCase
         ], $this->cart->getContents());
 
         // act
-        $this->cart->updateItem($lineItemId, 1);
+        $this->cart->updateItem($lineItemId, [
+            'quantity' => 1
+        ]);
 
         // assert
         $this->assertEqualsCanonicalizing([
             'items' => [
                 $lineItemId => [
-                    'id' => 'item-id',
+                    'id' => 'product-test',
                     'image' => null,
-                    'name' => 'Item',
+                    'name' => 'Product Test',
                     'price' => 10,
                     'quantity' => 1,
                     'subtotal' => 10,
@@ -293,41 +317,41 @@ class CartTest extends BaseTestCase
     {
         $this->expectException(CartException::class);
 
-        $this->cart->updateItem('does-not-exist', 1);
+        $this->cart->updateItem('does-not-exist', [
+            'quantity' => 1
+        ]);
     }
 
     public function testUpdateItemWithInvalidQuantity(): void
     {
         // arrange
         $lineItemId = $this->cart->addItem([
-            'id' => 'item-id',
-            'name' => 'Item',
-            'price' => 10,
-            'quantity' => 2,
+            'id' => 'product-test',
+            'quantity' => 2
         ]);
 
         $this->expectException(InvalidOptionsException::class);
 
-        $this->cart->updateItem($lineItemId, 0);
+        $this->cart->updateItem($lineItemId, [
+            'quantity' => 0
+        ]);
     }
 
     public function testRemoveItem(): void
     {
         // arrange
         $lineItemId = $this->cart->addItem([
-            'id' => 'item-id',
-            'name' => 'Item',
-            'price' => 10,
-            'quantity' => 1,
+            'id' => 'product-test',
+            'quantity' => 1
         ]);
 
         // pre-assertions
         $this->assertEqualsCanonicalizing([
             'items' => [
                 $lineItemId => [
-                    'id' => 'item-id',
+                    'id' => 'product-test',
                     'image' => null,
-                    'name' => 'Item',
+                    'name' => 'Product Test',
                     'price' => 10,
                     'quantity' => 1,
                     'subtotal' => 10,
@@ -359,19 +383,17 @@ class CartTest extends BaseTestCase
     {
         // arrange
         $lineItemId = $this->cart->addItem([
-            'id' => 'item-id',
-            'name' => 'Item',
-            'price' => 10,
-            'quantity' => 1,
+            'id' => 'product-test',
+            'quantity' => 1
         ]);
 
         // pre-assertions
         $this->assertEqualsCanonicalizing([
             'items' => [
                 $lineItemId => [
-                    'id' => 'item-id',
+                    'id' => 'product-test',
                     'image' => null,
-                    'name' => 'Item',
+                    'name' => 'Product Test',
                     'price' => 10,
                     'quantity' => 1,
                     'subtotal' => 10,

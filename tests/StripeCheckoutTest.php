@@ -2,6 +2,7 @@
 
 namespace ProgrammatorDev\StripeCheckout\Test;
 
+use Kirby\Cms\Page;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Cart;
 use ProgrammatorDev\StripeCheckout\Exception\CheckoutSessionException;
@@ -16,6 +17,8 @@ class StripeCheckoutTest extends BaseTestCase
     private array $options;
 
     private Cart $cart;
+
+    private Page $productPage;
 
     protected function setUp(): void
     {
@@ -48,13 +51,26 @@ class StripeCheckoutTest extends BaseTestCase
         $this->cart = new Cart([
             'currency' => 'EUR'
         ]);
+
+        $this->productPage = site()
+            ->createChild([
+                'slug' => 'product-test',
+                'template' => 'product',
+                'content' => [
+                    'title' => 'Product Test',
+                    'price' => 10
+                ]
+            ])
+            ->changeStatus('listed');
     }
 
     protected function tearDown(): void
     {
         parent::tearDown();
 
+        // destroy data after each test
         $this->cart->destroy();
+        $this->productPage->delete(true);
     }
 
     #[DataProvider('provideInitializeWithMissingOptionsData')]
@@ -145,10 +161,7 @@ class StripeCheckoutTest extends BaseTestCase
 
         // arrange
         $this->cart->addItem([
-            'id' => 'item-id-1',
-            'name' => 'Item 1',
-            'image' => 'image.jpg',
-            'price' => 10,
+            'id' => 'product-test',
             'quantity' => 1
         ]);
 
@@ -210,17 +223,11 @@ class StripeCheckoutTest extends BaseTestCase
     {
         // arrange
         $this->cart->addItem([
-            'id' => 'item-id-1',
-            'name' => 'Item 1',
-            'image' => 'image.jpg',
-            'price' => 10,
+            'id' => 'product-test',
             'quantity' => 1
         ]);
         $this->cart->addItem([
-            'id' => 'item-id-2',
-            'name' => 'Item 2',
-            'image' => 'image.jpg',
-            'price' => 20,
+            'id' => 'product-test',
             'quantity' => 2,
             'options' => [
                 'Name' => 'Value'
@@ -244,8 +251,7 @@ class StripeCheckoutTest extends BaseTestCase
                     'currency' => 'eur',
                     'unit_amount' => 1000,
                     'product_data' => [
-                        'name' => 'Item 1',
-                        'images' => ['image.jpg']
+                        'name' => 'Product Test'
                     ]
                 ],
                 'quantity' => 1,
@@ -253,10 +259,9 @@ class StripeCheckoutTest extends BaseTestCase
             [
                 'price_data' => [
                     'currency' => 'eur',
-                    'unit_amount' => 2000,
+                    'unit_amount' => 1000,
                     'product_data' => [
-                        'name' => 'Item 2',
-                        'images' => ['image.jpg'],
+                        'name' => 'Product Test',
                         'description' => 'Name: Value'
                     ]
                 ],
