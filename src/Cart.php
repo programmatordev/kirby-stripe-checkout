@@ -63,6 +63,12 @@ class Cart
             throw new CartException('Product does not exist.');
         }
 
+        // check if product is listed
+        // draft and unlisted products are not allowed
+        if (!$productPage->isListed()) {
+            throw new CartException('Product does not exist.');
+        }
+
         // check if "price" field exists
         if ($productPage->price()->value() === null) {
             throw new CartException('Product requires a "price" field.');
