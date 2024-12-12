@@ -178,9 +178,13 @@ class StripeCheckout
         foreach ($cart->getItems() as $item) {
             // initial product data
             $productData = [
-                'name' => $item['name'],
-                'images' => [$item['image']]
+                'name' => $item['name']
             ];
+
+            // if product has an image, add to data
+            if ($item['image'] !== null) {
+                $productData['images'] = [$item['image']];
+            }
 
             if (!empty($item['options'])) {
                 $description = [];
