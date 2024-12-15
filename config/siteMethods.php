@@ -9,6 +9,11 @@ return [
         /** @var Site $this */
         return sprintf('%s/%s', $this->url(), 'stripe/checkout');
     },
+    'stripeCheckoutEmbeddedUrl' => function(): string
+    {
+        /** @var Site $this */
+        return sprintf('%s/%s', $this->url(), 'stripe/checkout/embedded');
+    },
     'stripeCurrencySymbol' => function(): string
     {
         $currency = strtoupper(option('programmatordev.stripe-checkout.currency'));

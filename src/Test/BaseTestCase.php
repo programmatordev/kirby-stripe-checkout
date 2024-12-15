@@ -12,5 +12,4 @@ class BaseTestCase extends TestCase
 
         kirby()->impersonate('kirby');
     }
-
 }

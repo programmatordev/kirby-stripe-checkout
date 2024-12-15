@@ -363,6 +363,7 @@ return [
 List of all available site helper methods, used with the `site()` function or in blueprints with `{{ site }}`:
 
 - [stripeCheckoutUrl](#stripecheckouturl)
+- [stripeCheckoutEmbeddedUrl](#stripecheckoutembeddedurl)
 - [stripeCurrencySymbol](#stripecurrencysymbol)
 - [stripeCountriesUrl](#stripecountriesurl)
 
@@ -372,15 +373,26 @@ List of all available site helper methods, used with the `site()` function or in
 stripeCheckoutUrl(): string
 ```
 
-URL that handles the Checkout Session according to the `uiMode` config option:
-
-- `hosted` will redirect the user to a page hosted by Stripe;
-- `embedded` will return a client secret required to mount the embedded form on your website.
+URL that handles the Checkout Session and redirects the customer when `uiMode` is `hosted`.
 
 Check the [Setup](#setup) section for more information.
 
 ```php
 site()->stripeCheckoutUrl();
+```
+
+### `stripeCheckoutEmbeddedUrl`
+
+```php
+stripeCheckoutEmbeddedUrl(): string
+```
+
+URL that handles the Checkout Session and fetches the client secret when `uiMode` is `embedded`.
+
+Check the [Setup](#setup) section for more information.
+
+```php
+site()->stripeCheckoutEmbeddedUrl();
 ```
 
 ### `stripeCurrencySymbol`
@@ -892,7 +904,7 @@ It is also required to set the [`successPage`](#successpage) and the [`cancelPag
 ### Step 6: `embedded` mode.
 
 When in `embedded` mode, you need to use the [Stripe.js](https://docs.stripe.com/js) library
-as well as the site method [`stripeCheckoutUrl()`](#stripecheckouturl).
+as well as the site method [`stripeCheckoutEmbeddedUrl()`](#stripecheckoutembeddedurl).
 
 You have to create your own checkout page.
 
@@ -914,8 +926,9 @@ Something like:
 
       async function initialize() {
         const fetchClientSecret = async () => {
-          // use the stripeCheckoutUrl() method to fetch the client secret
-          const response = await fetch('<?= $site->stripeCheckoutUrl() ?>');
+          // use the stripeCheckoutEmbeddedUrl() method to fetch the client secret
+          // make sure it is a POST request
+          const response = await fetch('<?= $site->stripeCheckoutEmbeddedUrl() ?>', { method: 'POST' });
           const { clientSecret } = await response.json();
 
           return clientSecret;
@@ -986,6 +999,14 @@ This is required because the plugin needs to share the Kirby order id across all
 You can set any `order_id` value, as long as it is alphanumeric.
 
 ## Production
+
+Make sure to change the [`stripePublicKey`](#stripepublickey), [`stripeSecretKey`](#stripesecretkey)
+and [`stripeWebhookSecret`](#stripewebhooksecret) options for their respective live values.
+
+> [!TIP]
+> It is recommended that you use a library that enables environment variables
+> to store your project credentials in a separate place from your code
+> and to have separate development and production access keys.
 
 ## Contributing
 

@@ -12,7 +12,7 @@ use Stripe\Exception\SignatureVerificationException;
 
 return function(App $kirby) {
     return [
-        // handle checkout according to Stripe ui mode
+        // handle checkout "hosted" mode
         [
             'pattern' => 'stripe/checkout',
             'language' => '*',
@@ -27,21 +27,43 @@ return function(App $kirby) {
                     throw new CheckoutEndpointException($exception->getMessage());
                 }
 
-                if ($stripeCheckout->getUiMode() === Session::UI_MODE_HOSTED) {
-                    // redirect to hosted payment form
-                    // https://docs.stripe.com/checkout/quickstart#redirect
-                    go($checkoutSession->url);
+                if ($stripeCheckout->getUiMode() !== Session::UI_MODE_HOSTED) {
+                    throw new CheckoutEndpointException(
+                        'This endpoint is reserved for Stripe Checkout in "hosted" mode.'
+                    );
                 }
 
-                if ($stripeCheckout->getUiMode() === Session::UI_MODE_EMBEDDED) {
-                    // return JSON with required data for embedded checkout
-                    // https://docs.stripe.com/checkout/embedded/quickstart#fetch-checkout-session
-                    return [
-                        'clientSecret' => $checkoutSession->client_secret
-                    ];
+                // redirect to hosted payment form
+                // https://docs.stripe.com/checkout/quickstart#redirect
+                go($checkoutSession->url);
+            }
+        ],
+        // handle checkout "embedded" mode
+        [
+            'pattern' => 'stripe/checkout/embedded',
+            'language' => '*',
+            'method' => 'POST',
+            'action' => function() use ($kirby) {
+                try {
+                    $cart = cart();
+                    $stripeCheckout = stripeCheckout();
+                    $checkoutSession = $stripeCheckout->createSession($cart);
+                }
+                catch (Exception $exception) {
+                    throw new CheckoutEndpointException($exception->getMessage());
                 }
 
-                throw new CheckoutEndpointException('Invalid Stripe UI mode.');
+                if ($stripeCheckout->getUiMode() !== Session::UI_MODE_EMBEDDED) {
+                    throw new CheckoutEndpointException(
+                        'This endpoint is reserved for Stripe Checkout in "embedded" mode.'
+                    );
+                }
+
+                // return JSON with required data for embedded checkout
+                // https://docs.stripe.com/checkout/embedded/quickstart#fetch-checkout-session
+                return [
+                    'clientSecret' => $checkoutSession->client_secret
+                ];
             }
         ],
         // handle webhooks to fulfill payments (or failure to do so)
