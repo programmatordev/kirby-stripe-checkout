@@ -2,10 +2,10 @@
 
 [Stripe Checkout](https://stripe.com/en-pt/payments/checkout) for [Kirby CMS](https://getkirby.com).
 
-> [!IMPORTANT]
+> [!CAUTION]
 > This plugin is still in its early stages.
 > This means that it should not be considered stable, so use it at your own risk.
-> Expect some breaking changes until version `1.0`.
+> Expect breaking changes until version `1.0`.
 
 ## Features
 
