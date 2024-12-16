@@ -18,6 +18,8 @@ class StripeCheckoutTest extends BaseTestCase
 
     private Cart $cart;
 
+    private Page $testPage;
+
     private Page $productPage;
 
     protected function setUp(): void
@@ -31,8 +33,8 @@ class StripeCheckoutTest extends BaseTestCase
                 'stripeWebhookSecret' => 'whsec_abc123',
                 'currency' => 'EUR',
                 'uiMode' => 'hosted',
-                'successPage' => 'home',
-                'cancelPage' => 'home',
+                'successPage' => 'test',
+                'cancelPage' => 'test',
                 'ordersPage' => 'orders',
                 'settingsPage' => 'checkout-settings'
             ],
@@ -42,7 +44,7 @@ class StripeCheckoutTest extends BaseTestCase
                 'stripeWebhookSecret' => 'whsec_abc123',
                 'currency' => 'EUR',
                 'uiMode' => 'embedded',
-                'returnPage' => 'home',
+                'returnPage' => 'test',
                 'ordersPage' => 'orders',
                 'settingsPage' => 'checkout-settings',
             ]
@@ -52,12 +54,19 @@ class StripeCheckoutTest extends BaseTestCase
             'currency' => 'EUR'
         ]);
 
+        $this->testPage = site()
+            ->createChild([
+                'slug' => 'test',
+                'template' => 'default',
+                'isDraft' => false
+            ]);
+
         $this->productPage = site()
             ->createChild([
-                'slug' => 'product-test',
+                'slug' => 'product',
                 'template' => 'product',
                 'content' => [
-                    'title' => 'Product Test',
+                    'title' => 'Product',
                     'price' => 10
                 ]
             ])
@@ -70,6 +79,7 @@ class StripeCheckoutTest extends BaseTestCase
 
         // destroy data after each test
         $this->cart->destroy();
+        $this->testPage->delete(true);
         $this->productPage->delete(true);
     }
 
@@ -161,7 +171,7 @@ class StripeCheckoutTest extends BaseTestCase
 
         // arrange
         $this->cart->addItem([
-            'id' => 'product-test',
+            'id' => 'product',
             'quantity' => 1
         ]);
 
@@ -223,11 +233,11 @@ class StripeCheckoutTest extends BaseTestCase
     {
         // arrange
         $this->cart->addItem([
-            'id' => 'product-test',
+            'id' => 'product',
             'quantity' => 1
         ]);
         $this->cart->addItem([
-            'id' => 'product-test',
+            'id' => 'product',
             'quantity' => 2,
             'options' => [
                 'Name' => 'Value'
@@ -251,7 +261,7 @@ class StripeCheckoutTest extends BaseTestCase
                     'currency' => 'eur',
                     'unit_amount' => 1000,
                     'product_data' => [
-                        'name' => 'Product Test'
+                        'name' => 'Product'
                     ]
                 ],
                 'quantity' => 1,
@@ -261,7 +271,7 @@ class StripeCheckoutTest extends BaseTestCase
                     'currency' => 'eur',
                     'unit_amount' => 1000,
                     'product_data' => [
-                        'name' => 'Product Test',
+                        'name' => 'Product',
                         'description' => 'Name: Value'
                     ]
                 ],

@@ -15,6 +15,8 @@ class CartTest extends BaseTestCase
 
     private array $defaultContents;
 
+    private Page $testPage;
+
     private Page $productPage;
 
     protected function setUp(): void
@@ -32,12 +34,19 @@ class CartTest extends BaseTestCase
             'totalAmountFormatted' => '€ 0.00'
         ];
 
+        $this->testPage = site()
+            ->createChild([
+                'slug' => 'test',
+                'template' => 'default',
+                'isDraft' => false
+            ]);
+
         $this->productPage = site()
             ->createChild([
-                'slug' => 'product-test',
+                'slug' => 'product',
                 'template' => 'product',
                 'content' => [
-                    'title' => 'Product Test',
+                    'title' => 'Product',
                     'price' => 10
                 ]
             ])
@@ -50,6 +59,7 @@ class CartTest extends BaseTestCase
 
         // destroy data after each test
         $this->cart->destroy();
+        $this->testPage->delete(true);
         $this->productPage->delete(true);
     }
 
@@ -60,7 +70,7 @@ class CartTest extends BaseTestCase
 
         // act
         $lineItemId = $this->cart->addItem([
-            'id' => 'product-test',
+            'id' => 'product',
             'quantity' => 1,
         ]);
 
@@ -68,9 +78,9 @@ class CartTest extends BaseTestCase
         $this->assertEqualsCanonicalizing([
             'items' => [
                 $lineItemId => [
-                    'id' => 'product-test',
+                    'id' => 'product',
                     'image' => null,
-                    'name' => 'Product Test',
+                    'name' => 'Product',
                     'price' => 10,
                     'quantity' => 1,
                     'subtotal' => 10,
@@ -92,12 +102,12 @@ class CartTest extends BaseTestCase
 
         // act
         $lineItemId = $this->cart->addItem([
-            'id' => 'product-test',
+            'id' => 'product',
             'quantity' => 1,
         ]);
 
         $this->cart->addItem([
-            'id' => 'product-test',
+            'id' => 'product',
             'quantity' => 1,
         ]);
 
@@ -105,9 +115,9 @@ class CartTest extends BaseTestCase
         $this->assertEqualsCanonicalizing([
             'items' => [
                 $lineItemId => [
-                    'id' => 'product-test',
+                    'id' => 'product',
                     'image' => null,
-                    'name' => 'Product Test',
+                    'name' => 'Product',
                     'price' => 10,
                     'quantity' => 2,
                     'subtotal' => 20,
@@ -129,7 +139,7 @@ class CartTest extends BaseTestCase
 
         // act
         $lineItemId1 = $this->cart->addItem([
-            'id' => 'product-test',
+            'id' => 'product',
             'quantity' => 1,
             'options' => [
                 'size' => 'small'
@@ -137,7 +147,7 @@ class CartTest extends BaseTestCase
         ]);
 
         $lineItemId2 = $this->cart->addItem([
-            'id' => 'product-test',
+            'id' => 'product',
             'quantity' => 1,
             'options' => [
                 'size' => 'medium'
@@ -148,9 +158,9 @@ class CartTest extends BaseTestCase
         $this->assertEqualsCanonicalizing([
             'items' => [
                 $lineItemId1 => [
-                    'id' => 'product-test',
+                    'id' => 'product',
                     'image' => null,
-                    'name' => 'Product Test',
+                    'name' => 'Product',
                     'price' => 10,
                     'quantity' => 1,
                     'subtotal' => 10,
@@ -161,9 +171,9 @@ class CartTest extends BaseTestCase
                     'subtotalFormatted' => '€ 10.00'
                 ],
                 $lineItemId2 => [
-                    'id' => 'product-test',
+                    'id' => 'product',
                     'image' => null,
-                    'name' => 'Product Test',
+                    'name' => 'Product',
                     'price' => 10,
                     'quantity' => 1,
                     'subtotal' => 10,
@@ -184,7 +194,7 @@ class CartTest extends BaseTestCase
     public function testAddItemWithMissingOptions(string $missingOption): void
     {
         $item = [
-            'id' => 'product-test',
+            'id' => 'product',
             'quantity' => 1
         ];
 
@@ -205,7 +215,7 @@ class CartTest extends BaseTestCase
     public function testAddItemWithInvalidOptions(string $optionName, mixed $invalidValue): void
     {
         $item = [
-            'id' => 'product-test',
+            'id' => 'product',
             'quantity' => 1,
             'options' => null
         ];
@@ -247,7 +257,7 @@ class CartTest extends BaseTestCase
         $this->productPage->changeStatus($status);
 
         $this->cart->addItem([
-            'id' => 'product-test',
+            'id' => 'product',
             'quantity' => 1,
         ]);
     }
@@ -263,7 +273,7 @@ class CartTest extends BaseTestCase
     {
         // arrange
         $lineItemId = $this->cart->addItem([
-            'id' => 'product-test',
+            'id' => 'product',
             'quantity' => 2,
         ]);
 
@@ -271,9 +281,9 @@ class CartTest extends BaseTestCase
         $this->assertEqualsCanonicalizing([
             'items' => [
                 $lineItemId => [
-                    'id' => 'product-test',
+                    'id' => 'product',
                     'image' => null,
-                    'name' => 'Product Test',
+                    'name' => 'Product',
                     'price' => 10,
                     'quantity' => 2,
                     'subtotal' => 20,
@@ -296,9 +306,9 @@ class CartTest extends BaseTestCase
         $this->assertEqualsCanonicalizing([
             'items' => [
                 $lineItemId => [
-                    'id' => 'product-test',
+                    'id' => 'product',
                     'image' => null,
-                    'name' => 'Product Test',
+                    'name' => 'Product',
                     'price' => 10,
                     'quantity' => 1,
                     'subtotal' => 10,
@@ -326,7 +336,7 @@ class CartTest extends BaseTestCase
     {
         // arrange
         $lineItemId = $this->cart->addItem([
-            'id' => 'product-test',
+            'id' => 'product',
             'quantity' => 2
         ]);
 
@@ -341,7 +351,7 @@ class CartTest extends BaseTestCase
     {
         // arrange
         $lineItemId = $this->cart->addItem([
-            'id' => 'product-test',
+            'id' => 'product',
             'quantity' => 1
         ]);
 
@@ -349,9 +359,9 @@ class CartTest extends BaseTestCase
         $this->assertEqualsCanonicalizing([
             'items' => [
                 $lineItemId => [
-                    'id' => 'product-test',
+                    'id' => 'product',
                     'image' => null,
-                    'name' => 'Product Test',
+                    'name' => 'Product',
                     'price' => 10,
                     'quantity' => 1,
                     'subtotal' => 10,
@@ -383,7 +393,7 @@ class CartTest extends BaseTestCase
     {
         // arrange
         $lineItemId = $this->cart->addItem([
-            'id' => 'product-test',
+            'id' => 'product',
             'quantity' => 1
         ]);
 
@@ -391,9 +401,9 @@ class CartTest extends BaseTestCase
         $this->assertEqualsCanonicalizing([
             'items' => [
                 $lineItemId => [
-                    'id' => 'product-test',
+                    'id' => 'product',
                     'image' => null,
-                    'name' => 'Product Test',
+                    'name' => 'Product',
                     'price' => 10,
                     'quantity' => 1,
                     'subtotal' => 10,
