@@ -1,0 +1,21 @@
+type: pages
+layout: table
+columns:
+  title:
+    label: stripe-checkout.sections.orders.title.label
+  email:
+    label: stripe-checkout.sections.orders.email.label
+    value: "{{ page.customer.toObject().email }}"
+  paymentmethod:
+    label: stripe-checkout.sections.orders.paymentMethod.label
+  totalamount:
+    label: stripe-checkout.sections.orders.totalAmount.label
+    align: right
+  createdat:
+    label: stripe-checkout.sections.orders.createdAt.label
+    value: "{{ page.createdAt.toDate('Y-m-d') }}"
+    align: right
+sortBy: createdAt desc
+create: false
+search: true
+sortable: false

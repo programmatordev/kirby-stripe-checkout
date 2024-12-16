@@ -1,0 +1,219 @@
+title: stripe-checkout.pages.order.title
+
+icon: cart
+
+status:
+  draft: stripe-checkout.pages.order.status.draft
+  unlisted: stripe-checkout.pages.order.status.unlisted
+  listed: stripe-checkout.pages.order.status.listed
+
+options:
+  changeSlug: false
+  changeStatus: false
+  changeTemplate: false
+  changeTitle: false
+  delete: false
+  duplicate: false
+  move: false
+  preview: false
+  sort: false
+
+tabs:
+  overview:
+    label: stripe-checkout.pages.order.tabs.overview.label
+    columns:
+      left:
+        sticky: true
+        width: 1/3
+        fields:
+          createdAt:
+            label: stripe-checkout.fields.order.createdAt.label
+            type: text
+          paymentMethod:
+            label: stripe-checkout.fields.order.paymentMethod.label
+            type: text
+          customFields:
+            label: stripe-checkout.fields.order.customFields.label
+            type: structure
+            empty: stripe-checkout.fields.order.customFields.empty
+            fields:
+              name:
+                label: stripe-checkout.fields.order.customFields.name.label
+                type: text
+              value:
+                label: stripe-checkout.fields.order.customFields.value.label
+                type: text
+      right:
+        width: 2/3
+        fields:
+          customer:
+            label: stripe-checkout.fields.order.customer.label
+            type: object
+            fields:
+              email:
+                label: stripe-checkout.fields.order.customer.email.label
+                type: email
+              name:
+                label: stripe-checkout.fields.order.customer.name.label
+                type: text
+              phone:
+                label: stripe-checkout.fields.order.customer.phone.label
+                type: text
+          lineItems:
+            label: stripe-checkout.fields.order.lineItems.label
+            type: structure
+            columns:
+              name: true
+              description: true
+              price:
+                align: right
+              quantity:
+                align: right
+              subtotal:
+                align: right
+              discount:
+                align: right
+              total:
+                align: right
+            fields:
+              name:
+                label: stripe-checkout.fields.order.lineItems.name.label
+                type: text
+              description:
+                label: stripe-checkout.fields.order.lineItems.description.label
+                type: text
+              price:
+                label: stripe-checkout.fields.order.lineItems.price.label
+                type: text
+              quantity:
+                label: stripe-checkout.fields.order.lineItems.quantity.label
+                type: number
+              subtotal:
+                label: stripe-checkout.fields.order.lineItems.subtotal.label
+                type: text
+              discount:
+                label: stripe-checkout.fields.order.lineItems.discount.label
+                type: text
+              total:
+                label: stripe-checkout.fields.order.lineItems.total.label
+                type: text
+          subtotalAmount:
+            width: 1/4
+            label: stripe-checkout.fields.order.subtotalAmount.label
+            type: text
+          discountAmount:
+            width: 1/4
+            label: stripe-checkout.fields.order.discountAmount.label
+            type: text
+          shippingAmount:
+            width: 1/4
+            label: stripe-checkout.fields.order.shippingAmount.label
+            type: text
+          totalAmount:
+            width: 1/4
+            label: stripe-checkout.fields.order.totalAmount.label
+            type: text
+          shippingDetails:
+            label: stripe-checkout.fields.order.shippingDetails.label
+            type: object
+            empty: stripe-checkout.fields.order.shippingDetails.empty
+            fields:
+              name:
+                label: stripe-checkout.fields.order.address.name.label
+                type: text
+              country:
+                label: stripe-checkout.fields.order.address.country.label
+                type: text
+              line1:
+                label: stripe-checkout.fields.order.address.line1.label
+                type: text
+              line2:
+                label: stripe-checkout.fields.order.address.line2.label
+                type: text
+              postalCode:
+                label: stripe-checkout.fields.order.address.postalCode.label
+                type: text
+              city:
+                label: stripe-checkout.fields.order.address.city.label
+                type: text
+              state:
+                label: stripe-checkout.fields.order.address.state.label
+                type: text
+          shippingOption:
+            label: stripe-checkout.fields.order.shippingOption.label
+            type: text
+          billingDetails:
+            label: stripe-checkout.fields.order.billingDetails.label
+            type: object
+            empty: stripe-checkout.fields.order.billingDetails.empty
+            fields:
+              name:
+                label: stripe-checkout.fields.order.address.name.label
+                type: text
+              country:
+                label: stripe-checkout.fields.order.address.country.label
+                type: text
+              line1:
+                label: stripe-checkout.fields.order.address.line1.label
+                type: text
+              line2:
+                label: stripe-checkout.fields.order.address.line2.label
+                type: text
+              postalCode:
+                label: stripe-checkout.fields.order.address.postalCode.label
+                type: text
+              city:
+                label: stripe-checkout.fields.order.address.city.label
+                type: text
+              state:
+                label: stripe-checkout.fields.order.address.state.label
+                type: text
+          taxId:
+            label: stripe-checkout.fields.order.taxId.label
+            type: object
+            empty: stripe-checkout.fields.order.taxId.empty
+            fields:
+              type:
+                label: stripe-checkout.fields.order.taxId.type.label
+                type: text
+              value:
+                label: stripe-checkout.fields.order.taxId.value.label
+                type: text
+  stripe:
+    label: stripe-checkout.pages.order.tabs.stripe.label
+    columns:
+      left:
+        width: 1/3
+        fields:
+          paymentIntentId:
+            label: stripe-checkout.fields.order.paymentIntentId.label
+            type: text
+      right:
+        width: 2/3
+        fields:
+          events:
+            label: stripe-checkout.fields.order.events.label
+            type: structure
+            sortable: false
+            columns:
+              id: true
+              type: true
+              paymentStatus: true
+              createdAt:
+                align: right
+            fields:
+              id:
+                label: stripe-checkout.fields.order.events.id.label
+                type: text
+              type:
+                label: stripe-checkout.fields.order.events.type.label
+                type: text
+              paymentStatus:
+                label: stripe-checkout.fields.order.events.paymentStatus.label
+                type: text
+              message:
+                label: stripe-checkout.fields.order.events.message.label
+                type: writer
+              createdAt:
+                label: stripe-checkout.fields.order.events.createdAt.label
+                type: text

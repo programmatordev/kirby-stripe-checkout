@@ -1,0 +1,8 @@
+# TODO restrict uploads to images only
+
+label: stripe-checkout.fields.product.cover.label
+type: files
+required: true
+multiple: false
+query: page.images
+translate: false

@@ -1,0 +1,31 @@
+title: stripe-checkout.pages.orders.title
+
+icon: cart
+
+options:
+  changeSlug: false
+  changeStatus: false
+  changeTemplate: false
+  create: false
+  delete: false
+  duplicate: false
+  move: false
+  preview: false
+  update: false
+
+sections:
+  orders:
+    extends: stripe-checkout.sections/orders
+    label: stripe-checkout.sections.orders.label
+    status: listed
+    empty: stripe-checkout.sections.orders.empty
+  pendingPayments:
+    extends: stripe-checkout.sections/orders
+    label: stripe-checkout.sections.pendingPayments.label
+    status: unlisted
+    empty: stripe-checkout.sections.pendingPayments.empty
+  failedPayments:
+    extends: stripe-checkout.sections/orders
+    label: stripe-checkout.sections.failedPayments.label
+    status: draft
+    empty: stripe-checkout.sections.failedPayments.empty

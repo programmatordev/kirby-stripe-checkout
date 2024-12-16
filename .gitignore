@@ -1,0 +1,37 @@
+# Vendor files
+# ------------
+
+/node_modules
+/vendor
+
+# Package managers
+# ------------
+
+composer.lock
+package-lock.json
+
+# Test files
+# ------------
+.phpunit.result.cache
+
+# System files
+# ------------
+
+Icon
+.DS_Store
+
+# Editors
+# (sensitive workspace files)
+# ---------------------------
+*.sublime-workspace
+/.vscode
+/.idea
+
+# Development files
+# ------------
+/content
+/kirby
+/media
+/site
+index.site.php
+.htaccess

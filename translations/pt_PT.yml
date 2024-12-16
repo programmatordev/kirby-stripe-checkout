@@ -1,0 +1,90 @@
+fields.product.price.label: Preço
+fields.product.cover.label: Imagem
+fields.settings.shippingEnabled.label: Morada de envio
+fields.settings.shippingAllowedCountries.label: Países permitidos
+fields.settings.shippingOptions.label: Opções de envio
+fields.settings.shippingOptions.name.label: Nome
+fields.settings.shippingOptions.amount.label: Valor
+fields.settings.shippingOptions.deliveryEstimateMinimum.label: Estimativa de entrega mínima
+fields.settings.shippingOptions.deliveryEstimateMinimum.help: Deixar vazio caso não haja estimativa de entrega mínima
+fields.settings.shippingOptions.deliveryEstimateMaximum.label: Estimativa de entrega máxima
+fields.settings.shippingOptions.deliveryEstimateMaximum.help: Deixar vazio caso não haja estimativa de entrega máxima
+fields.settings.shippingOptions.deliveryEstimateUnit.options.hour: Horas
+fields.settings.shippingOptions.deliveryEstimateUnit.options.day: Dias
+fields.settings.shippingOptions.deliveryEstimateUnit.options.businessDay: Dias úteis
+fields.settings.shippingOptions.deliveryEstimateUnit.options.week: Semanas
+fields.settings.shippingOptions.deliveryEstimateUnit.options.month: Meses
+fields.order.createdAt.label: Criada em
+fields.order.paymentMethod.label: Método de pagamento
+fields.order.customFields.label: Campos personalizados
+fields.order.customFields.empty: Sem informação
+fields.order.customFields.name.label: Nome
+fields.order.customFields.value.label: Valor
+fields.order.customer.label: Cliente
+fields.order.customer.email.label: Email
+fields.order.customer.name.label: Nome
+fields.order.customer.phone.label: Telefone
+fields.order.lineItems.label: Items
+fields.order.lineItems.name.label: Nome
+fields.order.lineItems.description.label: Descrição
+fields.order.lineItems.price.label: Preço
+fields.order.lineItems.quantity.label: Quantidade
+fields.order.lineItems.subtotal.label: Subtotal
+fields.order.lineItems.discount.label: Desconto
+fields.order.lineItems.total.label: Total
+fields.order.subtotalAmount.label: Subtotal
+fields.order.discountAmount.label: Desconto
+fields.order.shippingAmount.label: Portes de envio
+fields.order.totalAmount.label: Total
+fields.order.address.name.label: Nome
+fields.order.address.country.label: País
+fields.order.address.line1.label: Morada, linha 1
+fields.order.address.line2.label: Morada, linha 2
+fields.order.address.postalCode.label: Código postal
+fields.order.address.city.label: Cidade
+fields.order.address.state.label: Estado
+fields.order.shippingDetails.label: Detalhes de envio
+fields.order.shippingDetails.empty: Sem informação
+fields.order.shippingOption.label: Opção de envio
+fields.order.billingDetails.label: Detalhes de faturação
+fields.order.billingDetails.empty: Sem informação
+fields.order.taxId.label: Identificação fiscal
+fields.order.taxId.empty: Sem informação
+fields.order.taxId.type.label: Tipo
+fields.order.taxId.value.label: Valor
+fields.order.paymentIntentId.label: ID de pagamento
+fields.order.events.label: Registo de eventos
+fields.order.events.id.label: ID
+fields.order.events.type.label: Tipo
+fields.order.events.paymentStatus.label: Estado de pagamento
+fields.order.events.message.label: Mensagem
+fields.order.events.createdAt.label: Criado em
+
+sections.orders.label: Encomendas
+sections.orders.empty: Nenhuma encomenda ainda
+sections.orders.title.label: ID
+sections.orders.email.label: Email
+sections.orders.paymentMethod.label: Método de pagamento
+sections.orders.totalAmount.label: Valor total
+sections.orders.createdAt.label: Criada em
+sections.pendingPayments.label: Pagamentos pendentes
+sections.pendingPayments.empty: Nenhum pagamento pendente
+sections.failedPayments.label: Pagamentos falhados
+sections.failedPayments.empty: Nenhum pagamento falhado
+
+pages.settings.title: Configurações de Checkout
+pages.orders.title: Encomendas
+pages.order.title: Encomenda
+pages.order.status.draft: Falhada
+pages.order.status.unlisted: Pendente
+pages.order.status.listed: Finalizada
+pages.order.tabs.overview.label: Encomenda
+pages.order.tabs.stripe.label: Stripe
+
+# Stripe payment methods
+# must match the following options
+# https://docs.stripe.com/api/checkout/sessions/object?lang=php#checkout_session_object-payment_method_options
+paymentMethods.card: Cartão de crédito
+paymentMethods.multibanco: Multibanco
+paymentMethods.paypal: Paypal
+paymentMethods.no_cost: Encomenda sem custos
