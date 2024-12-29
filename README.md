@@ -65,7 +65,8 @@ return [
         'cancelPage' => null,
         'returnPage' => null,
         'ordersPage' => 'orders',
-        'settingsPage' => 'checkout-settings'
+        'settingsPage' => 'checkout-settings',
+        'cartSnippet' => null
     ]
 ];
 ```
@@ -87,6 +88,7 @@ List of all available options:
 - [returnPage](#returnpage)
 - [ordersPage](#orderspage)
 - [settingsPage](#settingspage)
+- [cartSnippet](#cartsnippet)
 
 ### `stripePublicKey`
 
@@ -177,6 +179,15 @@ Kirby Panel page with Checkout settings.
 Must be a valid Kirby page `id`.
 
 Check the [Setup](#setup) section for more information.
+
+### `cartSnippet`
+
+type: `?string` default: `null`
+
+When set, it will look for the snippet with the same name and return the HTML content on every cart API response.
+Useful when adding, updating or removing cart contents, and you want to update the HTML on every request.
+
+If snippet does not exist or is empty, it will return `null`.
 
 ## Hooks
 
@@ -349,8 +360,11 @@ return [
     'hooks' => [
         'stripe-checkout.cart.addItem:before' => function (array $itemContent, Page $productPage): array
         {
-            // change cart item content
-            // ...
+            // crop image before adding to the cart
+            $itemContent['image'] = $productPage->cover()
+                ->toFile()
+                ->crop(300, 250)
+                ->url();
 
             return $itemContent;
         }
@@ -442,7 +456,7 @@ A `cart()` function is available to manage the cart contents.
 ```php
 use ProgrammatorDev\StripeCheckout\Cart;
 
-cart(): Cart
+cart(array $options = []): Cart
 ```
 
 Default options:
@@ -450,7 +464,8 @@ Default options:
 ```php
 cart([
     // the same as configured in the plugin options
-    'currency' => option('programmatordev.stripe-checkout.currency')
+    'currency' => option('programmatordev.stripe-checkout.currency'),
+    'cartSnippet' => option('programmatordev.stripe-checkout.cartSnippet')
 ]);
 ```
 
@@ -464,6 +479,7 @@ Available methods:
 - [getTotalAmount](#gettotalamount)
 - [getTotalAmountFormatted](#gettotalamountformatted)
 - [getContents](#getcontents)
+- [getCartSnippet](#getcartsnippet)
 - [destroy](#destroy)
 
 #### `addItem`
@@ -651,6 +667,19 @@ print_r($cart->getContents());
 // )
 ```
 
+#### `getCartSnippet`
+
+```php
+getCartSnippet(): ?string
+```
+
+Get cart snippet if set in the [`cartSnippet`](#cartsnippet) option.
+
+```php
+$cart = cart();
+echo $cart->getCartSnippet(); // <div> <!-- HTML content --> </div>
+```
+
 #### `destroy`
 
 ```php
@@ -672,7 +701,7 @@ Meanwhile, check the [API endpoints](#api-endpoints) section below for examples 
 ### API endpoints
 
 Endpoints are available to help manage the cart system in the frontend.
-You can make requests to these to add, update and remove items and get the cart contents.
+You can make requests to these to add, update and remove items, get the cart contents or its snippet.
 
 All successful responses will have the following structure:
 
@@ -707,7 +736,8 @@ All successful responses will have the following structure:
     "totalAmount": 30,
     "totalQuantity": 3,
     "totalAmountFormatted": "€ 30.00"
-  }
+  },
+  "snippet": null
 }
 ```
 
@@ -735,8 +765,8 @@ const response = await fetch('api/cart', {
 Adds item to the cart.
 
 ```js
-const response = await fetch('api/cart/items', {
-  method: "POST",
+const response = await fetch('/api/cart/items', {
+  method: 'POST',
   body: JSON.stringify({
     id: 'products/item',
     quantity: 1,
@@ -754,8 +784,8 @@ Updates item in the cart.
 
 ```js
 const lineItemId = 'line-item-id-hash';
-const response = await fetch('api/cart/items/' + lineItemId, {
-  method: "PATCH",
+const response = await fetch(`/api/cart/items/${lineItemId}`, {
+  method: 'PATCH',
   body: JSON.stringify({
     quantity: 1
   })
@@ -768,9 +798,28 @@ Removes item from the cart.
 
 ```js
 const lineItemId = 'line-item-id-hash';
-const response = await fetch('api/cart/items/' + lineItemId, {
-  method: "DELETE"
+const response = await fetch(`/api/cart/items/${lineItemId}`, {
+  method: 'DELETE'
 });
+```
+
+### `GET /api/cart/snippet`
+
+Get cart snippet.
+
+```js
+const response = await fetch('/api/cart/snippet', {
+  method: 'GET'
+});
+```
+
+Response:
+
+```json
+{
+  "status": "ok",
+  "snippet": "<div> <!-- HTML content --> </div>"
+}
 ```
 
 ## Translations
