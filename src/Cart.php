@@ -166,15 +166,18 @@ class Cart
         return $this->contents['totalAmountFormatted'];
     }
 
-    public function destroy(): void
-    {
-        $this->contents = $this->defaultContents;
-        $this->session->remove(self::SESSION_NAME);
-    }
-
     public function getContents(): array
     {
         return $this->contents;
+    }
+
+    public function getCartSnippet(): ?string
+    {
+        // get snippet html
+        $snippet = snippet($this->options['cartSnippet'], [], true);
+
+        // return null if snippet was not found or is empty
+        return !empty($snippet) ? $snippet : null;
     }
 
     private function getContentsItem($lineItemId): ?array
@@ -228,6 +231,12 @@ class Cart
         $this->session->set(self::SESSION_NAME, $this->contents);
     }
 
+    public function destroy(): void
+    {
+        $this->contents = $this->defaultContents;
+        $this->session->remove(self::SESSION_NAME);
+    }
+
     private function resolveOptions(array $options): array
     {
         $resolver = new OptionsResolver();
@@ -239,6 +248,11 @@ class Cart
             ->normalize(function (Options $options, string $currency): string {
                 return strtoupper($currency);
             });
+
+        $resolver->define('cartSnippet')
+            ->default(null)
+            ->allowedTypes('null', 'string')
+            ->allowedValues(Validation::createIsValidCallable(new AtLeastOneOf([new IsNull(), new NotBlank()])));
 
         return $resolver->resolve($options);
     }
