@@ -16,7 +16,8 @@ return [
 
                     return [
                         'status' => 'ok',
-                        'data' => $cart->getContents()
+                        'data' => $cart->getContents(),
+                        'snippet' => $cart->getCartSnippet()
                     ];
                 }
             ],
@@ -33,7 +34,8 @@ return [
 
                     return [
                         'status' => 'ok',
-                        'data' => $cart->getContents()
+                        'data' => $cart->getContents(),
+                        'snippet' => $cart->getCartSnippet()
                     ];
                 }
             ],
@@ -50,7 +52,8 @@ return [
 
                     return [
                         'status' => 'ok',
-                        'data' => $cart->getContents()
+                        'data' => $cart->getContents(),
+                        'snippet' => $cart->getCartSnippet()
                     ];
                 }
             ],
@@ -65,7 +68,22 @@ return [
 
                     return [
                         'status' => 'ok',
-                        'data' => $cart->getContents()
+                        'data' => $cart->getContents(),
+                        'snippet' => $cart->getCartSnippet()
+                    ];
+                }
+            ],
+            // get cart snippet
+            [
+                'pattern' => 'cart/snippet',
+                'method' => 'GET',
+                'auth' => false,
+                'action' => function() use ($kirby) {
+                    $cart = cart();
+
+                    return [
+                        'status' => 'ok',
+                        'snippet' => $cart->getCartSnippet()
                     ];
                 }
             ],

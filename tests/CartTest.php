@@ -24,7 +24,8 @@ class CartTest extends BaseTestCase
         parent::setUp();
 
         $this->cart = new Cart([
-            'currency' => 'EUR'
+            'currency' => 'EUR',
+            'cartSnippet' => null
         ]);
 
         $this->defaultContents = [
@@ -61,6 +62,47 @@ class CartTest extends BaseTestCase
         $this->cart->destroy();
         $this->testPage->delete(true);
         $this->productPage->delete(true);
+    }
+
+    #[DataProvider('provideInitializeWithMissingOptionsData')]
+    public function testInitializeWithMissingOptions(string $missingOption): void
+    {
+        $options = [
+            'currency' => 'EUR'
+        ];
+
+        unset($options[$missingOption]);
+
+        $this->expectException(MissingOptionsException::class);
+
+        new Cart($options);
+    }
+
+    public static function provideInitializeWithMissingOptionsData(): \Generator
+    {
+        yield 'missing currency' => ['currency'];
+    }
+
+    #[DataProvider('provideInitializeWithInvalidOptionsData')]
+    public function testInitializeWithInvalidOptions(string $optionName, mixed $invalidValue): void
+    {
+        $options = [
+            'currency' => 'EUR',
+            'cartSnippet' => null
+        ];
+
+        $options[$optionName] = $invalidValue;
+
+        $this->expectException(InvalidOptionsException::class);
+
+        new Cart($options);
+    }
+
+    public static function provideInitializeWithInvalidOptionsData(): \Generator
+    {
+        yield 'invalid currency' => ['currency', 'INV'];
+        yield 'empty currency' => ['currency', ''];
+        yield 'empty cart snippet' => ['cartSnippet', ''];
     }
 
     public function testAddItem(): void
@@ -442,5 +484,10 @@ class CartTest extends BaseTestCase
     public function testGetTotalQuantity(): void
     {
         $this->assertSame(0, $this->cart->getTotalQuantity());
+    }
+
+    public function testGetCartSnippet(): void
+    {
+        $this->assertSame(null, $this->cart->getCartSnippet());
     }
 }
