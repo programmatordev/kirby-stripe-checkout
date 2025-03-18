@@ -36,6 +36,7 @@
 
 ## Requirements
 
+- PHP 8.2 or higher;
 - Kirby CMS `4.0` or higher;
 - [Stripe account](https://dashboard.stripe.com/register).
 
