@@ -191,14 +191,14 @@ If snippet does not exist or is empty, it will return `null`.
 
 ## Hooks
 
-- [stripe-checkout.session.created:before](#stripe-checkoutsessioncreatedbefore)
-- [stripe-checkout.order.created:before](#stripe-checkoutordercreatedbefore)
+- [stripe-checkout.session.create:before](#stripe-checkoutsessioncreatebefore)
+- [stripe-checkout.order.create:before](#stripe-checkoutordercreatebefore)
 - [stripe-checkout.payment:succeeded](#stripe-checkoutpaymentsucceeded)
 - [stripe-checkout.payment:pending](#stripe-checkoutpaymentpending)
 - [stripe-checkout.payment:failed](#stripe-checkoutpaymentfailed)
 - [stripe-checkout.cart.addItem:before](#stripe-checkoutcartadditembefore)
 
-### `stripe-checkout.session.created:before`
+### `stripe-checkout.session.create:before`
 
 Triggered before creating a Checkout Session.
 Useful to set additional Checkout Session parameters.
@@ -210,7 +210,7 @@ You can check all the available parameters in the Stripe API [documentation page
 
 return [
     'hooks' => [
-        'stripe-checkout.session.created:before' => function (array $sessionParams): array
+        'stripe-checkout.session.create:before' => function (array $sessionParams): array
         {
             // for example, if you want to enable promotion codes
             // https://docs.stripe.com/api/checkout/sessions/create?lang=php#create_checkout_session-allow_promotion_codes
@@ -226,7 +226,7 @@ return [
 > Take into account that the `sessionParams` variable contains data required to initialize a Checkout Session.
 > You may change these but at your own risk.
 
-### `stripe-checkout.order.created:before`
+### `stripe-checkout.order.create:before`
 
 Triggered before creating an Order page in the Panel.
 Useful to set additional Order data in case you add additional fields in the blueprint or want to change existing ones.
@@ -238,7 +238,7 @@ use Stripe\Checkout\Session;
 
 return [
     'hooks' => [
-        'stripe-checkout.order.created:before' => function (array $orderContent, Session $checkoutSession): array
+        'stripe-checkout.order.create:before' => function (array $orderContent, Session $checkoutSession): array
         {
             // change order content
             // ...
