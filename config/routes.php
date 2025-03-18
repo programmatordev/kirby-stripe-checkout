@@ -19,9 +19,8 @@ return function(App $kirby) {
             'method' => 'GET',
             'action' => function() use ($kirby) {
                 try {
-                    $cart = cart();
                     $stripeCheckout = stripeCheckout();
-                    $checkoutSession = $stripeCheckout->createSession($cart);
+                    $checkoutSession = $stripeCheckout->createSession();
                 }
                 catch (Exception $exception) {
                     throw new CheckoutEndpointException($exception->getMessage());
@@ -45,9 +44,8 @@ return function(App $kirby) {
             'method' => 'POST',
             'action' => function() use ($kirby) {
                 try {
-                    $cart = cart();
                     $stripeCheckout = stripeCheckout();
-                    $checkoutSession = $stripeCheckout->createSession($cart);
+                    $checkoutSession = $stripeCheckout->createSession();
                 }
                 catch (Exception $exception) {
                     throw new CheckoutEndpointException($exception->getMessage());

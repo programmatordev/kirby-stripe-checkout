@@ -12,12 +12,10 @@ return [
                 'method' => 'GET',
                 'auth' => false,
                 'action' => function() use ($kirby) {
-                    $cart = cart();
-
                     return [
                         'status' => 'ok',
-                        'data' => $cart->getContents(),
-                        'snippet' => $cart->getCartSnippet()
+                        'data' => cart()->getContents(),
+                        'snippet' => cart()->getCartSnippet()
                     ];
                 }
             ],
@@ -29,13 +27,12 @@ return [
                 'action' => function() use ($kirby) {
                     $data = $kirby->request()->body()->toArray();
 
-                    $cart = cart();
-                    $cart->addItem($data);
+                    cart()->addItem($data);
 
                     return [
                         'status' => 'ok',
-                        'data' => $cart->getContents(),
-                        'snippet' => $cart->getCartSnippet()
+                        'data' => cart()->getContents(),
+                        'snippet' => cart()->getCartSnippet()
                     ];
                 }
             ],
@@ -47,13 +44,12 @@ return [
                 'action' => function(string $lineItemId) use ($kirby) {
                     $data = $kirby->request()->body()->toArray();
 
-                    $cart = cart();
-                    $cart->updateItem($lineItemId, $data);
+                    cart()->updateItem($lineItemId, $data);
 
                     return [
                         'status' => 'ok',
-                        'data' => $cart->getContents(),
-                        'snippet' => $cart->getCartSnippet()
+                        'data' => cart()->getContents(),
+                        'snippet' => cart()->getCartSnippet()
                     ];
                 }
             ],
@@ -63,13 +59,12 @@ return [
                 'method' => 'DELETE',
                 'auth' => false,
                 'action' => function(string $lineItemId) use ($kirby) {
-                    $cart = cart();
-                    $cart->removeItem($lineItemId);
+                    cart()->removeItem($lineItemId);
 
                     return [
                         'status' => 'ok',
-                        'data' => $cart->getContents(),
-                        'snippet' => $cart->getCartSnippet()
+                        'data' => cart()->getContents(),
+                        'snippet' => cart()->getCartSnippet()
                     ];
                 }
             ],
@@ -79,11 +74,9 @@ return [
                 'method' => 'GET',
                 'auth' => false,
                 'action' => function() use ($kirby) {
-                    $cart = cart();
-
                     return [
                         'status' => 'ok',
-                        'snippet' => $cart->getCartSnippet()
+                        'snippet' => cart()->getCartSnippet()
                     ];
                 }
             ],

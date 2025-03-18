@@ -28,6 +28,8 @@ class Cart
 
     private array $contents;
 
+    private static ?self $instance = null;
+
     /**
      * @throws UnknownCurrencyException
      * @throws NumberFormatException
@@ -35,7 +37,12 @@ class Cart
      */
     public function __construct(array $options = [])
     {
-        $this->options = $this->resolveOptions($options);
+        $defaultOptions = [
+            'currency' => option('programmatordev.stripe-checkout.currency'),
+            'cartSnippet' => option('programmatordev.stripe-checkout.cartSnippet')
+        ];
+
+        $this->options = $this->resolveOptions(array_merge($defaultOptions, $options));
         $this->session = kirby()->session(['long' => true]);
 
         $this->defaultContents = [
@@ -46,6 +53,20 @@ class Cart
         ];
 
         $this->contents = $this->session->get(self::SESSION_NAME) ?? $this->defaultContents;
+    }
+
+    /**
+     * @throws UnknownCurrencyException
+     */
+    public static function instance(array $options = []): self
+    {
+        if (self::$instance !== null) {
+            return self::$instance;
+        }
+
+        self::$instance = new self($options);
+
+        return self::$instance;
     }
 
     /**

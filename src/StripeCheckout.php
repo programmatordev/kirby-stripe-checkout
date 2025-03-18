@@ -29,11 +29,26 @@ class StripeCheckout
 
     private ?Page $settingsPage;
 
+    private static ?self $instance = null;
+
     public function __construct(array $options)
     {
-        $this->options = $this->resolveOptions($options);
+        $defaultOptions = option('programmatordev.stripe-checkout');
+
+        $this->options = $this->resolveOptions(array_merge($defaultOptions, $options));
         $this->stripe = new StripeClient($this->options['stripeSecretKey']);
         $this->settingsPage = page($this->options['settingsPage']);
+    }
+
+    public static function instance(array $options = []): self
+    {
+        if (self::$instance !== null) {
+            return self::$instance;
+        }
+
+        self::$instance = new self($options);
+
+        return self::$instance;
     }
 
     /**
@@ -44,8 +59,10 @@ class StripeCheckout
      * @throws RoundingNecessaryException
      * @throws UnknownCurrencyException
      */
-    public function createSession(Cart $cart): Session
+    public function createSession(): Session
     {
+        $cart = cart();
+
         if ($cart->getTotalQuantity() === 0) {
             throw new CheckoutSessionException('Cart is empty.');
         }
