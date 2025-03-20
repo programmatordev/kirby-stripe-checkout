@@ -12,7 +12,7 @@ use Stripe\Checkout\Session;
 use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
 use Symfony\Component\OptionsResolver\Exception\MissingOptionsException;
 
-class StripeCheckoutTest extends BaseTestCase
+class StripeCheckoutTest extends AbstractTestCase
 {
     private array $options;
 

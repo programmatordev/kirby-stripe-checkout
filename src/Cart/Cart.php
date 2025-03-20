@@ -189,6 +189,33 @@ class Cart
         $this->initialize();
     }
 
+    public function toArray(): array
+    {
+        $data = [
+            'items' => [],
+            'totalAmount' => $this->totalAmount(),
+            'totalQuantity' => $this->totalQuantity(),
+            'currency' => $this->currency(),
+            'currencySymbol' => $this->currencySymbol(),
+        ];
+
+        /** @var Item $item */
+        foreach ($this->items as $key => $item) {
+            $data['items'][] = [
+                'key' => $key,
+                'id' => $item->id(),
+                'name' => $item->name(),
+                'price' => $item->price(),
+                'quantity' => $item->quantity(),
+                'totalAmount' => $item->totalAmount(),
+                'options' => $item->options(),
+                'thumbnail' => $item->thumbnail()?->url(),
+            ];
+        }
+
+        return $data;
+    }
+
     private function updateTotal(): void
     {
         $totalAmount = 0;
@@ -206,25 +233,7 @@ class Cart
 
     private function saveSession(): void
     {
-        $data = [
-            'items' => [],
-            'totalAmount' => $this->totalAmount(),
-            'totalQuantity' => $this->totalQuantity(),
-            'currency' => $this->currency(),
-            'currencySymbol' => $this->currencySymbol(),
-        ];
-
-        /** @var Item $item */
-        foreach ($this->items as $key => $item) {
-            $data['items'][] = [
-                'key' => $key,
-                'id' => $item->id(),
-                'quantity' => $item->quantity(),
-                'options' => $item->options()
-            ];
-        }
-
-        $this->session->data()->set(self::SESSION_NAME, $data);
+        $this->session->data()->set(self::SESSION_NAME, $this->toArray());
     }
 
     private function resolveOptions(array $options): array
