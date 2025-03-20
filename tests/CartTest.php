@@ -4,7 +4,7 @@ namespace ProgrammatorDev\StripeCheckout\Test;
 
 use Kirby\Cms\Page;
 use PHPUnit\Framework\Attributes\DataProvider;
-use ProgrammatorDev\StripeCheckout\Cart;
+use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Exception\CartException;
 use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
 use Symfony\Component\OptionsResolver\Exception\MissingOptionsException;

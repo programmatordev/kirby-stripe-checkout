@@ -4,7 +4,7 @@ namespace ProgrammatorDev\StripeCheckout\Test;
 
 use Kirby\Cms\Page;
 use PHPUnit\Framework\Attributes\DataProvider;
-use ProgrammatorDev\StripeCheckout\Cart;
+use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Exception\CheckoutSessionException;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 use Stripe\ApiRequestor;

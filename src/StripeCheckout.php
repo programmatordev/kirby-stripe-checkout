@@ -8,6 +8,7 @@ use Brick\Math\Exception\RoundingNecessaryException;
 use Brick\Money\Exception\UnknownCurrencyException;
 use Kirby\Cms\Page;
 use Kirby\Uuid\Uuid;
+use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Exception\CheckoutSessionException;
 use Stripe\Checkout\Session;
 use Stripe\Event;
