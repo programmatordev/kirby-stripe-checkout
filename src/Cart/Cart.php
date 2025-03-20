@@ -4,11 +4,10 @@ namespace ProgrammatorDev\StripeCheckout\Cart;
 
 use Kirby\Session\Session;
 use Kirby\Toolkit\Collection;
-use ProgrammatorDev\FluentValidator\Validator;
 use ProgrammatorDev\StripeCheckout\Exception\InvalidArgumentException;
 use ProgrammatorDev\StripeCheckout\Exception\NoSuchCartItemException;
 use Symfony\Component\Intl\Currencies;
-use Symfony\Component\Validator\Constraints;
+use Symfony\Component\OptionsResolver\OptionsResolver;
 
 class Cart
 {
@@ -32,13 +31,13 @@ class Cart
     public function __construct(array $options = [])
     {
         $this->options = $this->resolveOptions($options);
+        $this->session = kirby()->session(['long' => true]);
+
         $this->initialize();
     }
 
     private function initialize(): void
     {
-        $this->session = kirby()->session(['long' => true]);
-
         // set default session data if one does not exist
         if ($this->session->data()->get(self::SESSION_NAME) === null) {
             $this->session->data()->set(self::SESSION_NAME, [
@@ -230,26 +229,18 @@ class Cart
 
     private function resolveOptions(array $options): array
     {
-        // merge options with defaults
-        $options = array_merge([
+        $resolver = new OptionsResolver();
+
+        $resolver->setDefaults([
             'currency' => strtoupper(option('programmatordev.stripe-checkout.currency')),
             'cartSnippet' => option('programmatordev.stripe-checkout.cartSnippet')
-        ], $options);
+        ]);
 
-        // validate options
-        Validator::collection([
-            'currency' => [
-                new Constraints\NotBlank(),
-                new Constraints\Choice(Currencies::getCurrencyCodes())
-            ],
-            'cartSnippet' => [
-                new Constraints\AtLeastOneOf([
-                    new Constraints\IsNull(),
-                    new Constraints\NotBlank(),
-                ])
-            ]
-        ])->assert($options, 'options');
+        $resolver->setAllowedTypes('currency', ['string']);
+        $resolver->setAllowedTypes('cartSnippet', ['null', 'string']);
 
-        return $options;
+        $resolver->setAllowedValues('currency', Currencies::getCurrencyCodes());
+
+        return $resolver->resolve($options);
     }
 }

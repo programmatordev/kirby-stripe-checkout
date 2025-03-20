@@ -27,10 +27,8 @@
 		"getkirby/composer-installer": "^1.2",
 		"stripe/stripe-php": "^16.6",
 		"symfony/options-resolver": "^7.2",
-		"symfony/validator": "^7.2",
 		"brick/money": "^0.10.0",
-		"symfony/intl": "^7.2",
-		"programmatordev/fluent-validator": "^0.1.0"
+		"symfony/intl": "^7.2"
 	},
     "require-dev": {
         "getkirby/cms": "^4.6",
