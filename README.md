@@ -197,7 +197,6 @@ If snippet does not exist or is empty, it will return `null`.
 - [stripe-checkout.payment:succeeded](#stripe-checkoutpaymentsucceeded)
 - [stripe-checkout.payment:pending](#stripe-checkoutpaymentpending)
 - [stripe-checkout.payment:failed](#stripe-checkoutpaymentfailed)
-- [stripe-checkout.cart.addItem:before](#stripe-checkoutcartadditembefore)
 
 ### `stripe-checkout.session.create:before`
 
@@ -346,33 +345,6 @@ return [
 ];
 ```
 
-### `stripe-checkout.cart.addItem:before`
-
-Triggered before adding an item to the cart.
-
-Check the [Cart](#cart) section for more information.
-
-```php
-// config.php
-
-use Kirby\Cms\Page;
-
-return [
-    'hooks' => [
-        'stripe-checkout.cart.addItem:before' => function (array $itemContent, Page $productPage): array
-        {
-            // crop image before adding to the cart
-            $itemContent['image'] = $productPage->cover()
-                ->toFile()
-                ->crop(300, 250)
-                ->url();
-
-            return $itemContent;
-        }
-    ]
-];
-```
-
 > [!WARNING]
 > Take into account that the `itemContent` variable contains data required to add an item to the cart.
 > You may change these but at your own risk.
@@ -455,7 +427,7 @@ This means that the cart must have at least one added item, otherwise it will th
 A `cart()` function is available to manage the cart contents.
 
 ```php
-use ProgrammatorDev\StripeCheckout\Cart;
+use ProgrammatorDev\StripeCheckout\Cart\Cart;
 
 cart(array $options = []): Cart
 ```
@@ -475,18 +447,19 @@ Available methods:
 - [addItem](#additem)
 - [updateItem](#updateitem)
 - [removeItem](#removeitem)
-- [getItems](#getitems)
-- [getTotalQuantity](#gettotalquantity)
-- [getTotalAmount](#gettotalamount)
-- [getTotalAmountFormatted](#gettotalamountformatted)
-- [getContents](#getcontents)
-- [getCartSnippet](#getcartsnippet)
+- [items](#items)
+- [totalQuantity](#totalquantity)
+- [totalAmount](#totalamount)
+- [currency](#currency-1)
+- [currencySymbol](#currencysymbol)
+- [cartSnippet](#getcartsnippet)
 - [destroy](#destroy)
+- [toArray](#toarray)
 
 #### `addItem`
 
 ```php
-addItem(array $data): string
+addItem(string $id, int $quantity, ?array $options = null): string
 ```
 
 Adds an item to the cart.
@@ -498,62 +471,49 @@ Important to note that the `id` must be a valid Kirby page id and the page must 
 Otherwise, an exception will be thrown.
 Check the [Setup](#setup) section for more information.
 
-Information related to the `price`, `name` and `image` are added to the item based on the given `id` (and related Kirby page).
+Information related to the `price`, `name` and `thumbnail` are added to the item based on the given `id` (and related Kirby page).
 
 If the item that is being added already exists in the cart, the sum of its quantities will be made into a single item.
 
 If the same item is added but with different options, it will be considered different items in the cart.
 For example, a t-shirt with color blue, and the same t-shirt with color red will be different items.
 
-A line item id is returned that uniquely identifies the item in the cart.
+A `key` is returned that uniquely identifies the item in the cart.
 
 ```php
 $cart = cart();
 
-// a line item id is returned and uniquely identifies that item in the cart
-$lineItemId = $cart->addItem([
-    'id' => 'products/cd',
-    'quantity' => 1
-]);
+// a key is returned and uniquely identifies that item in the cart
+$key = $cart->addItem(id: 'products/cd', quantity: 1);
 
 // you can add options per item
-$lineItemId = $cart->addItem([
-    'id' => 'products/t-shirt',
-    'quantity' => 1,
-    'options' => [
-        'Color' => 'Green',
-        'Size' => 'Medium'
-    ]
-]);
+$key = $cart->addItem(
+    id: 'products/t-shirt',
+    quantity: 1,
+    options: ['Color' => 'Green', 'Size' => 'Medium']
+);
 ```
 
 #### `updateItem`
 
 ```php
-updateItem(string $lineItemId, array $data): void
+updateItem(string $key, int $quantity): void
 ```
 
-Updates and item in the cart.
-
-Currently, it is only possible to update the `quantity` of the item in the cart.
+Updates the `quantity` of an item in the cart.
 
 ```php
 $cart = cart();
 
-$lineItemId = $cart->addItem([
-    'id' => 'products/cd',
-    'quantity' => 2
-]);
+$key = $cart->addItem(id: 'products/cd', quantity: 1);
 
-$cart->updateItem($lineItemId, [
-    'quantity' => 1
-]);
+$cart->updateItem(key: $key, quantity: 3);
 ```
 
 #### `removeItem`
 
 ```php
-removeItem(string $lineItemId): void
+removeItem(string $key): void
 ```
 
 Removes an item from the cart.
@@ -561,124 +521,108 @@ Removes an item from the cart.
 ```php
 $cart = cart();
 
-$lineItemId = $cart->addItem([
-    'id' => 'products/cd',
-    'quantity' => 1
-]);
+$key = $cart->addItem(id: 'products/cd', quantity: 1);
 
-$cart->removeItem($lineItemId);
+$cart->removeItem($key);
 ```
 
-#### `getItems`
+#### `items`
 
 ```php
-getItems(): array
+use Kirby\Toolkit\Collection;
+use ProgrammatorDev\StripeCheckout\Cart\Item
+
+/** @return Collection<string, Item> */
+items(): Collection
 ```
 
-Get all items in the cart.
+Collection with all items in the cart.
 
 ```php
+use ProgrammatorDev\StripeCheckout\Cart\Item;
+
 $cart = cart();
-$items = $cart->getItems();
+$items = $cart->items();
 
-foreach ($items as $lineItemId => $item) {
-    print_r($item);
-    // Array(
-    //  'id' => 'products/item',
-    //  'image' => 'https://path.com/to/image.jpg',
-    //  'name' => 'Item',
-    //  'price' => 10,
-    //  'quantity' => 2,
-    //  'subtotal' => 20,
-    //  'options' => null,
-    //  'priceFormatted' => '€ 10.00',
-    //  'subtotalFormatted' => '€ 20.00'
-    // )
+/** @var Item $item */
+foreach ($items as $key => $item) {
+    $item->id();
+    $item->quantity()
+    $item->options();
+    $item->productPage();
+    $item->name();
+    $item->price();
+    $item->totalAmount();
+    $item->thumbnail();
 }
 ```
 
-#### `getTotalQuantity`
+#### `totalQuantity`
 
 ```php
-getTotalQuantity(): int
+totalQuantity(): int
 ```
 
 Get total quantity of items in the cart.
 
 ```php
 $cart = cart();
-echo $cart->getTotalQuantity(); // 3
+echo $cart->totalQuantity(); // 3
 ```
 
-#### `getTotalAmount`
+#### `totalAmount`
 
 ```php
-getTotalAmount(): int|float
+totalAmount(): int|float
 ```
 
 Get total amount in the cart.
 
 ```php
 $cart = cart();
-echo $cart->getTotalAmount(); // 100
+echo $cart->totalAmount(); // 100
 ```
 
-#### `getTotalAmountFormatted`
+#### `currency`
 
 ```php
-getTotalAmountFormatted(): string
+currency(): string
 ```
 
-Get total amount in the cart formatted according to currency.
-
-```php
-$cart = cart();
-echo $cart->getTotalAmountFormatted(); // € 100.00
-```
-
-#### `getContents`
-
-```php
-getContents(): array
-```
-
-Get all contents and related data from the cart.
+Get currency.
 
 ```php
 $cart = cart();
-
-print_r($cart->getContents());
-// Array(
-//  'items' => Array(
-//    'line-item-id-hash' => Array(
-//      'id' => 'products/item',
-//      'image' => 'https://path.com/to/image.jpg',
-//      'name' => 'Item',
-//      'price' => 10,
-//      'quantity' => 2,
-//      'subtotal' => 20,
-//      'options' => null,
-//      'priceFormatted' => '€ 10.00',
-//      'subtotalFormatted' => '€ 20.00'
-//    )
-//  )
-//  'totalAmount' => 20,
-//  'totalQuantity' => 2,
-//  'totalAmountFormatted' => '€ 20.00'
-// )
+echo $cart->currency(); // EUR
 ```
 
-#### `getCartSnippet`
+#### `currencySymbol`
 
 ```php
-getCartSnippet(): ?string
+currencySymbol(): string
+```
+
+Get currency symbol.
+
+```php
+$cart = cart();
+echo $cart->currencySymbol(); // €
+```
+
+#### `cartSnippet`
+
+```php
+cartSnippet(bool $render = false): ?string
 ```
 
 Get cart snippet if set in the [`cartSnippet`](#cartsnippet) option.
 
+if `render` is set to `true` it will return the rendered HTML snippet
+
 ```php
 $cart = cart();
-echo $cart->getCartSnippet(); // <div> <!-- HTML content --> </div>
+echo $cart->cartSnippet(render: false); // snippet name or null
+echo $cart->cartSnippet(render: true); // rendered snippet HTML
 ```
 
 #### `destroy`
@@ -692,6 +636,19 @@ Destroy all contents and reset cart to initial state.
 ```php
 $cart = cart();
 $cart->destroy();
+```
+
+#### `toArray`
+
+```php
+toArray(): array
+```
+
+Converts all cart contents to array
+
+```php
+$cart = cart();
+$cart->toArray();
 ```
 
 ### JavaScript
@@ -710,33 +667,34 @@ All successful responses will have the following structure:
 {
   "status": "ok",
   "data": {
-    "items": {
-      "line-item-id-1": {
+    "items": [
+      {
+        "key": "key1",
         "id": "products/item-1",
-        "image": "https://path.com/to/image.jpg",
         "name": "Item 1",
         "price": 10,
         "quantity": 2,
-        "subtotal": 20,
+        "totalAmount": 20,
         "options": null,
-        "priceFormatted": "€ 10.00",
-        "subtotalFormatted": "€ 20.00"
+        "thumbnail": null
       },
-      "line-item-id-2": {
+      {
+        "key": "key2",
         "id": "products/item-2",
-        "image": "https://path.com/to/image.jpg",
         "name": "Item 2",
         "price": 10,
         "quantity": 1,
         "subtotal": 10,
-        "options": null,
-        "priceFormatted": "€ 10.00",
-        "subtotalFormatted": "€ 10.00"
+        "options": {
+          "name": "value"
+        },
+        "thumbnail": "https://path.com/to/image.jpg"
       }
-    },
+    ],
     "totalAmount": 30,
     "totalQuantity": 3,
-    "totalAmountFormatted": "€ 30.00"
+    "currency": "EUR",
+    "currencySymbol": "€"
   },
   "snippet": null
 }
@@ -779,13 +737,13 @@ const response = await fetch('/api/cart/items', {
 });
 ```
 
-### `PATCH /api/cart/items/:lineItemId`
+### `PATCH /api/cart/items/:key`
 
 Updates item in the cart.
 
 ```js
-const lineItemId = 'line-item-id-hash';
-const response = await fetch(`/api/cart/items/${lineItemId}`, {
+const key = 'key-hash';
+const response = await fetch(`/api/cart/items/${key}`, {
   method: 'PATCH',
   body: JSON.stringify({
     quantity: 1
@@ -793,13 +751,13 @@ const response = await fetch(`/api/cart/items/${lineItemId}`, {
 });
 ```
 
-### `DELETE /api/cart/items/:lineItemId`
+### `DELETE /api/cart/items/:key`
 
 Removes item from the cart.
 
 ```js
-const lineItemId = 'line-item-id-hash';
-const response = await fetch(`/api/cart/items/${lineItemId}`, {
+const key = 'key-hash';
+const response = await fetch(`/api/cart/items/${key}`, {
   method: 'DELETE'
 });
 ```
