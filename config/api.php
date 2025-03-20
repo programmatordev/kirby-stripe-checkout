@@ -6,16 +6,18 @@ use Symfony\Component\Intl\Countries;
 return [
     'routes' => function(App $kirby) {
         return [
-            // get cart contents
+            // get cart
             [
                 'pattern' => 'cart',
                 'method' => 'GET',
                 'auth' => false,
                 'action' => function() use ($kirby) {
+                    $cart = cart();
+
                     return [
                         'status' => 'ok',
-                        'data' => cart()->getContents(),
-                        'snippet' => cart()->getCartSnippet()
+                        'data' => $cart->toArray(),
+                        'snippet' => $cart->cartSnippet(true)
                     ];
                 }
             ],
@@ -26,13 +28,20 @@ return [
                 'auth' => false,
                 'action' => function() use ($kirby) {
                     $data = $kirby->request()->body()->toArray();
+                    $cart = cart();
 
-                    cart()->addItem($data);
+                    // TODO validate data
+
+                    $cart->addItem(
+                        $data['id'],
+                        $data['quantity'],
+                        $data['options'] ?? null
+                    );
 
                     return [
                         'status' => 'ok',
-                        'data' => cart()->getContents(),
-                        'snippet' => cart()->getCartSnippet()
+                        'data' => $cart->toArray(),
+                        'snippet' => $cart->cartSnippet(true)
                     ];
                 }
             ],
@@ -41,15 +50,18 @@ return [
                 'pattern' => 'cart/items/(:alphanum)',
                 'method' => 'PATCH',
                 'auth' => false,
-                'action' => function(string $lineItemId) use ($kirby) {
+                'action' => function(string $key) use ($kirby) {
                     $data = $kirby->request()->body()->toArray();
+                    $cart = cart();
 
-                    cart()->updateItem($lineItemId, $data);
+                    // TODO validate data
+
+                    $cart->updateItem($key, $data['quantity']);
 
                     return [
                         'status' => 'ok',
-                        'data' => cart()->getContents(),
-                        'snippet' => cart()->getCartSnippet()
+                        'data' => $cart->toArray(),
+                        'snippet' => $cart->cartSnippet(true)
                     ];
                 }
             ],
@@ -58,13 +70,15 @@ return [
                 'pattern' => 'cart/items/(:alphanum)',
                 'method' => 'DELETE',
                 'auth' => false,
-                'action' => function(string $lineItemId) use ($kirby) {
-                    cart()->removeItem($lineItemId);
+                'action' => function(string $key) use ($kirby) {
+                    $cart = cart();
+
+                    $cart->removeItem($key);
 
                     return [
                         'status' => 'ok',
-                        'data' => cart()->getContents(),
-                        'snippet' => cart()->getCartSnippet()
+                        'data' => $cart->toArray(),
+                        'snippet' => $cart->cartSnippet(true)
                     ];
                 }
             ],
@@ -76,7 +90,7 @@ return [
                 'action' => function() use ($kirby) {
                     return [
                         'status' => 'ok',
-                        'snippet' => cart()->getCartSnippet()
+                        'snippet' => cart()->cartSnippet(true)
                     ];
                 }
             ],
