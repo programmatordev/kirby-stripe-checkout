@@ -6,7 +6,6 @@ use Brick\Math\Exception\MathException;
 use Brick\Math\Exception\NumberFormatException;
 use Brick\Math\Exception\RoundingNecessaryException;
 use Brick\Money\Exception\UnknownCurrencyException;
-use Kirby\Cms\Page;
 use Kirby\Uuid\Uuid;
 use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Exception\CheckoutSessionException;
@@ -27,15 +26,12 @@ class StripeCheckout
 
     private StripeClient $stripe;
 
-    private ?Page $settingsPage;
-
     private static ?self $instance = null;
 
     public function __construct(array $options = [])
     {
         $this->options = $this->resolveOptions($options);
-        $this->stripe = new StripeClient($this->options['stripeSecretKey']);
-        $this->settingsPage = page($this->options['settingsPage']);
+        $this->stripe = new StripeClient($this->stripePublicKey());
     }
 
     public static function instance(array $options = []): self
@@ -47,6 +43,56 @@ class StripeCheckout
         self::$instance = new self($options);
 
         return self::$instance;
+    }
+
+    public function stripePublicKey(): string
+    {
+        return $this->options['stripePublicKey'];
+    }
+
+    public function stripeSecretKey(): string
+    {
+        return $this->options['stripeSecretKey'];
+    }
+
+    public function stripeWebhookSecret(): string
+    {
+        return $this->options['stripeWebhookSecret'];
+    }
+
+    public function currency(): string
+    {
+        return $this->options['currency'];
+    }
+
+    public function uiMode(): string
+    {
+        return $this->options['uiMode'];
+    }
+
+    public function returnPage(): ?string
+    {
+        return $this->options['returnPage'];
+    }
+
+    public function successPage(): ?string
+    {
+        return $this->options['successPage'];
+    }
+
+    public function cancelPage(): ?string
+    {
+        return $this->options['cancelPage'];
+    }
+
+    public function ordersPage(): string
+    {
+        return $this->options['ordersPage'];
+    }
+
+    public function settingsPage(): ?string
+    {
+        return $this->options['settingsPage'];
     }
 
     /**
@@ -123,61 +169,6 @@ class StripeCheckout
     public function constructEvent(string $payload, string $sigHeader): Event
     {
         return Webhook::constructEvent($payload, $sigHeader, $this->options['stripeWebhookSecret']);
-    }
-
-    public function getOptions(): array
-    {
-        return $this->options;
-    }
-
-    public function getStripePublicKey(): string
-    {
-        return $this->options['stripePublicKey'];
-    }
-
-    public function getStripeSecretKey(): string
-    {
-        return $this->options['stripeSecretKey'];
-    }
-
-    public function getStripeWebhookSecret(): string
-    {
-        return $this->options['stripeWebhookSecret'];
-    }
-
-    public function getCurrency(): string
-    {
-        return $this->options['currency'];
-    }
-
-    public function getUiMode(): string
-    {
-        return $this->options['uiMode'];
-    }
-
-    public function getReturnPage(): ?string
-    {
-        return $this->options['returnPage'] ?? null;
-    }
-
-    public function getSuccessPage(): ?string
-    {
-        return $this->options['successPage'] ?? null;
-    }
-
-    public function getCancelPage(): ?string
-    {
-        return $this->options['cancelPage'] ?? null;
-    }
-
-    public function getOrdersPage(): string
-    {
-        return $this->options['ordersPage'];
-    }
-
-    public function getSettingsPage(): string
-    {
-        return $this->options['settingsPage'];
     }
 
     /**
@@ -327,7 +318,6 @@ class StripeCheckout
         $resolver->setAllowedTypes('cancelPage', ['null', 'string']);
         $resolver->setAllowedTypes('ordersPage', ['string']);
         $resolver->setAllowedTypes('settingsPage', ['null', 'string']);
-        $resolver->setAllowedTypes('cartSnippet', ['null', 'string']);
 
         $resolver->setAllowedValues('uiMode', [Session::UI_MODE_HOSTED, Session::UI_MODE_EMBEDDED]);
         $resolver->setAllowedValues('currency', Currencies::getCurrencyCodes());
