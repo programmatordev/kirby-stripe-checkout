@@ -345,10 +345,6 @@ return [
 ];
 ```
 
-> [!WARNING]
-> Take into account that the `itemContent` variable contains data required to add an item to the cart.
-> You may change these but at your own risk.
-
 ## Site methods
 
 List of all available site helper methods, used with the `site()` function or in blueprints with `{{ site }}`:
