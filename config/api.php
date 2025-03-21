@@ -2,20 +2,23 @@
 
 use Kirby\Cms\App;
 use Symfony\Component\Intl\Countries;
+use Symfony\Component\OptionsResolver\OptionsResolver;
 
 return [
     'routes' => function(App $kirby) {
         return [
-            // get cart contents
+            // get cart
             [
                 'pattern' => 'cart',
                 'method' => 'GET',
                 'auth' => false,
                 'action' => function() use ($kirby) {
+                    $cart = cart();
+
                     return [
                         'status' => 'ok',
-                        'data' => cart()->getContents(),
-                        'snippet' => cart()->getCartSnippet()
+                        'data' => $cart->toArray(),
+                        'snippet' => $cart->cartSnippet(true)
                     ];
                 }
             ],
@@ -26,13 +29,24 @@ return [
                 'auth' => false,
                 'action' => function() use ($kirby) {
                     $data = $kirby->request()->body()->toArray();
+                    $cart = cart();
 
-                    cart()->addItem($data);
+                    $resolver = new OptionsResolver();
+                    $resolver->setDefaults(['options' => null]);
+                    $resolver->setRequired(['id', 'quantity']);
+                    $resolver->setAllowedTypes('id', ['string']);
+                    $resolver->setAllowedTypes('quantity', ['int']);
+                    $resolver->setAllowedTypes('options', ['null', 'string[]']);
+                    $resolver->setAllowedValues('quantity', fn($quantity) => $quantity > 0);
+
+                    $data = $resolver->resolve($data);
+
+                    $cart->addItem($data['id'], $data['quantity'], $data['options']);
 
                     return [
                         'status' => 'ok',
-                        'data' => cart()->getContents(),
-                        'snippet' => cart()->getCartSnippet()
+                        'data' => $cart->toArray(),
+                        'snippet' => $cart->cartSnippet(true)
                     ];
                 }
             ],
@@ -41,15 +55,23 @@ return [
                 'pattern' => 'cart/items/(:alphanum)',
                 'method' => 'PATCH',
                 'auth' => false,
-                'action' => function(string $lineItemId) use ($kirby) {
+                'action' => function(string $key) use ($kirby) {
                     $data = $kirby->request()->body()->toArray();
+                    $cart = cart();
 
-                    cart()->updateItem($lineItemId, $data);
+                    $resolver = new OptionsResolver();
+                    $resolver->setRequired(['quantity']);
+                    $resolver->setAllowedTypes('quantity', ['int']);
+                    $resolver->setAllowedValues('quantity', fn($quantity) => $quantity > 0);
+
+                    $data = $resolver->resolve($data);
+
+                    $cart->updateItem($key, $data['quantity']);
 
                     return [
                         'status' => 'ok',
-                        'data' => cart()->getContents(),
-                        'snippet' => cart()->getCartSnippet()
+                        'data' => $cart->toArray(),
+                        'snippet' => $cart->cartSnippet(true)
                     ];
                 }
             ],
@@ -58,13 +80,15 @@ return [
                 'pattern' => 'cart/items/(:alphanum)',
                 'method' => 'DELETE',
                 'auth' => false,
-                'action' => function(string $lineItemId) use ($kirby) {
-                    cart()->removeItem($lineItemId);
+                'action' => function(string $key) use ($kirby) {
+                    $cart = cart();
+
+                    $cart->removeItem($key);
 
                     return [
                         'status' => 'ok',
-                        'data' => cart()->getContents(),
-                        'snippet' => cart()->getCartSnippet()
+                        'data' => $cart->toArray(),
+                        'snippet' => $cart->cartSnippet(true)
                     ];
                 }
             ],
@@ -76,7 +100,7 @@ return [
                 'action' => function() use ($kirby) {
                     return [
                         'status' => 'ok',
-                        'snippet' => cart()->getCartSnippet()
+                        'snippet' => cart()->cartSnippet(true)
                     ];
                 }
             ],

@@ -3,55 +3,50 @@
 namespace ProgrammatorDev\StripeCheckout\Test;
 
 use Kirby\Cms\Page;
+use Kirby\Toolkit\Collection;
 use PHPUnit\Framework\Attributes\DataProvider;
-use ProgrammatorDev\StripeCheckout\Cart;
-use ProgrammatorDev\StripeCheckout\Exception\CartException;
+use ProgrammatorDev\StripeCheckout\Cart\Cart;
+use ProgrammatorDev\StripeCheckout\Exception\InvalidArgumentException;
+use ProgrammatorDev\StripeCheckout\Exception\InvalidCartItemException;
+use ProgrammatorDev\StripeCheckout\Exception\NoSuchCartItemException;
 use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
-use Symfony\Component\OptionsResolver\Exception\MissingOptionsException;
 
-class CartTest extends BaseTestCase
+class CartTest extends AbstractTestCase
 {
     private Cart $cart;
 
-    private array $defaultContents;
-
-    private Page $testPage;
-
     private Page $productPage;
+
+    private array $defaults;
 
     protected function setUp(): void
     {
         parent::setUp();
 
+        // init cart
         $this->cart = new Cart([
             'currency' => 'EUR',
             'cartSnippet' => null
         ]);
 
-        $this->defaultContents = [
+        // create product page for testing
+        $this->productPage = site()->createChild([
+            'slug' => 'product',
+            'template' => 'product',
+            'content' => [
+                'title' => 'Product',
+                'price' => 10
+            ]
+        ])->changeStatus('listed');
+
+        // cart default data on init
+        $this->defaults = [
             'items' => [],
             'totalAmount' => 0,
             'totalQuantity' => 0,
-            'totalAmountFormatted' => '€ 0.00'
+            'currency' => 'EUR',
+            'currencySymbol' => '€',
         ];
-
-        $this->testPage = site()
-            ->createChild([
-                'slug' => 'test',
-                'template' => 'default',
-                'isDraft' => false
-            ]);
-
-        $this->productPage = site()
-            ->createChild([
-                'slug' => 'product',
-                'template' => 'product',
-                'content' => [
-                    'title' => 'Product',
-                    'price' => 10
-                ]
-            ])
-            ->changeStatus('listed');
     }
 
     protected function tearDown(): void
@@ -60,37 +55,13 @@ class CartTest extends BaseTestCase
 
         // destroy data after each test
         $this->cart->destroy();
-        $this->testPage->delete(true);
         $this->productPage->delete(true);
     }
 
-    #[DataProvider('provideInitializeWithMissingOptionsData')]
-    public function testInitializeWithMissingOptions(string $missingOption): void
+    #[DataProvider('provideInvalidOptionsData')]
+    public function testInvalidOptions(string $optionName, mixed $invalidValue): void
     {
-        $options = [
-            'currency' => 'EUR'
-        ];
-
-        unset($options[$missingOption]);
-
-        $this->expectException(MissingOptionsException::class);
-
-        new Cart($options);
-    }
-
-    public static function provideInitializeWithMissingOptionsData(): \Generator
-    {
-        yield 'missing currency' => ['currency'];
-    }
-
-    #[DataProvider('provideInitializeWithInvalidOptionsData')]
-    public function testInitializeWithInvalidOptions(string $optionName, mixed $invalidValue): void
-    {
-        $options = [
-            'currency' => 'EUR',
-            'cartSnippet' => null
-        ];
-
+        $options = ['currency' => 'EUR', 'cartSnippet' => null];
         $options[$optionName] = $invalidValue;
 
         $this->expectException(InvalidOptionsException::class);
@@ -98,396 +69,258 @@ class CartTest extends BaseTestCase
         new Cart($options);
     }
 
-    public static function provideInitializeWithInvalidOptionsData(): \Generator
+    public static function provideInvalidOptionsData(): \Generator
     {
         yield 'invalid currency' => ['currency', 'INV'];
         yield 'empty currency' => ['currency', ''];
-        yield 'empty cart snippet' => ['cartSnippet', ''];
     }
 
     public function testAddItem(): void
     {
         // pre-assertions
-        $this->assertEquals($this->defaultContents, $this->cart->getContents());
+        $this->assertEquals($this->defaults, $this->cart->toArray());
 
         // act
-        $lineItemId = $this->cart->addItem([
-            'id' => 'product',
-            'quantity' => 1,
-        ]);
+        $key = $this->cart->addItem('product', 1);
 
         // assert
-        $this->assertEqualsCanonicalizing([
+        $this->assertEquals([
             'items' => [
-                $lineItemId => [
+                [
+                    'key' => $key,
                     'id' => 'product',
-                    'image' => null,
                     'name' => 'Product',
                     'price' => 10,
                     'quantity' => 1,
-                    'subtotal' => 10,
+                    'totalAmount' => 10,
                     'options' => null,
-                    'priceFormatted' => '€ 10.00',
-                    'subtotalFormatted' => '€ 10.00'
+                    'thumbnail' => null
                 ]
             ],
             'totalAmount' => 10,
             'totalQuantity' => 1,
-            'totalAmountFormatted' => '€ 10.00'
-        ], $this->cart->getContents());
+            'currency' => 'EUR',
+            'currencySymbol' => '€'
+        ], $this->cart->toArray());
     }
 
     public function testAddItemWithSameItemInCart(): void
     {
         // pre-assertions
-        $this->assertEquals($this->defaultContents, $this->cart->getContents());
+        $this->assertEquals($this->defaults, $this->cart->toArray());
 
         // act
-        $lineItemId = $this->cart->addItem([
-            'id' => 'product',
-            'quantity' => 1,
-        ]);
-
-        $this->cart->addItem([
-            'id' => 'product',
-            'quantity' => 1,
-        ]);
+        $key = $this->cart->addItem('product', 1);
+        $this->cart->addItem('product', 1);
 
         // assert
-        $this->assertEqualsCanonicalizing([
+        $this->assertEquals([
             'items' => [
-                $lineItemId => [
+                [
+                    'key' => $key,
                     'id' => 'product',
-                    'image' => null,
                     'name' => 'Product',
                     'price' => 10,
                     'quantity' => 2,
-                    'subtotal' => 20,
+                    'totalAmount' => 20,
                     'options' => null,
-                    'priceFormatted' => '€ 10.00',
-                    'subtotalFormatted' => '€ 20.00'
+                    'thumbnail' => null
                 ]
             ],
             'totalAmount' => 20,
             'totalQuantity' => 2,
-            'totalAmountFormatted' => '€ 20.00'
-        ], $this->cart->getContents());
+            'currency' => 'EUR',
+            'currencySymbol' => '€'
+        ], $this->cart->toArray());
     }
 
     public function testAddItemWithDifferentOptions()
     {
         // pre-assertions
-        $this->assertEquals($this->defaultContents, $this->cart->getContents());
+        $this->assertEquals($this->defaults, $this->cart->toArray());
 
         // act
-        $lineItemId1 = $this->cart->addItem([
-            'id' => 'product',
-            'quantity' => 1,
-            'options' => [
-                'size' => 'small'
-            ]
-        ]);
-
-        $lineItemId2 = $this->cart->addItem([
-            'id' => 'product',
-            'quantity' => 1,
-            'options' => [
-                'size' => 'medium'
-            ]
-        ]);
+        $key1 = $this->cart->addItem('product', 1, ['size' => 'small']);
+        $key2 = $this->cart->addItem('product', 1, ['size' => 'medium']);
 
         // assert
-        $this->assertEqualsCanonicalizing([
+        $this->assertEquals([
             'items' => [
-                $lineItemId1 => [
+                [
+                    'key' => $key1,
                     'id' => 'product',
-                    'image' => null,
                     'name' => 'Product',
                     'price' => 10,
                     'quantity' => 1,
-                    'subtotal' => 10,
-                    'options' => [
-                        'size' => 'small'
-                    ],
-                    'priceFormatted' => '€ 10.00',
-                    'subtotalFormatted' => '€ 10.00'
+                    'totalAmount' => 10,
+                    'options' => ['size' => 'small'],
+                    'thumbnail' => null
                 ],
-                $lineItemId2 => [
+                [
+                    'key' => $key2,
                     'id' => 'product',
-                    'image' => null,
                     'name' => 'Product',
                     'price' => 10,
                     'quantity' => 1,
-                    'subtotal' => 10,
-                    'options' => [
-                        'size' => 'medium'
-                    ],
-                    'priceFormatted' => '€ 10.00',
-                    'subtotalFormatted' => '€ 10.00'
+                    'totalAmount' => 10,
+                    'options' => ['size' => 'medium'],
+                    'thumbnail' => null
                 ]
             ],
             'totalAmount' => 20,
             'totalQuantity' => 2,
-            'totalAmountFormatted' => '€ 20.00'
-        ], $this->cart->getContents());
+            'currency' => 'EUR',
+            'currencySymbol' => '€'
+        ], $this->cart->toArray());
     }
 
-    #[DataProvider('provideAddItemWithMissingOptionsData')]
-    public function testAddItemWithMissingOptions(string $missingOption): void
+    public function testAddItemWithInvalidQuantity(): void
     {
-        $item = [
-            'id' => 'product',
-            'quantity' => 1
-        ];
-
-        unset($item[$missingOption]);
-
-        $this->expectException(MissingOptionsException::class);
-
-        $this->cart->addItem($item);
-    }
-
-    public static function provideAddItemWithMissingOptionsData(): \Generator
-    {
-        yield 'missing id' => ['id'];
-        yield 'missing quantity' => ['quantity'];
-    }
-
-    #[DataProvider('provideAddItemWithInvalidOptionsData')]
-    public function testAddItemWithInvalidOptions(string $optionName, mixed $invalidValue): void
-    {
-        $item = [
-            'id' => 'product',
-            'quantity' => 1,
-            'options' => null
-        ];
-
-        $item[$optionName] = $invalidValue;
-
-        $this->expectException(InvalidOptionsException::class);
-
-        $this->cart->addItem($item);
-    }
-
-    public static function provideAddItemWithInvalidOptionsData(): \Generator
-    {
-        yield 'invalid id' => ['id', 1];
-        yield 'empty id' => ['id', ''];
-        yield 'invalid quantity' => ['quantity', 'invalid'];
-        yield 'zero quantity' => ['quantity', 0];
-        yield 'invalid options' => ['options', 'invalid'];
-        yield 'empty options' => ['options', []];
+        $this->expectException(InvalidArgumentException::class);
+        $this->cart->addItem('product', 0);
     }
 
     public function testAddItemWhenProductDoesNotExist(): void
     {
-        $this->expectException(CartException::class);
-        $this->expectExceptionMessage('Product does not exist.');
+        $this->expectException(InvalidCartItemException::class);
+        $this->expectExceptionMessage('Product "does-not-exist" does not exist.');
 
-        $this->cart->addItem([
-            'id' => 'does-not-exist',
-            'quantity' => 1,
-        ]);
+        $this->cart->addItem('does-not-exist', 1);
     }
 
     #[DataProvider('provideAddItemWhenProductIsNotListedData')]
     public function testAddItemWhenProductIsNotListed(string $status): void
     {
-        $this->expectException(CartException::class);
-        $this->expectExceptionMessage('Product does not exist.');
+        $this->expectException(InvalidCartItemException::class);
+        $this->expectExceptionMessage('Product "product" does not exist.');
 
         $this->productPage->changeStatus($status);
-
-        $this->cart->addItem([
-            'id' => 'product',
-            'quantity' => 1,
-        ]);
+        $this->cart->addItem('product', 1);
     }
 
     public static function provideAddItemWhenProductIsNotListedData(): \Generator
     {
         yield 'unlisted' => ['unlisted'];
         // TODO understand why a draft page is not being deleted programmatically
-//        yield 'draft' => ['draft'];
+        // yield 'draft' => ['draft'];
     }
 
     public function testUpdateItem(): void
     {
         // arrange
-        $lineItemId = $this->cart->addItem([
-            'id' => 'product',
-            'quantity' => 2,
-        ]);
+        $key = $this->cart->addItem('product', 2);
 
         // pre-assertions
-        $this->assertEqualsCanonicalizing([
+        $this->assertEquals([
             'items' => [
-                $lineItemId => [
+                [
+                    'key' => $key,
                     'id' => 'product',
-                    'image' => null,
                     'name' => 'Product',
                     'price' => 10,
                     'quantity' => 2,
-                    'subtotal' => 20,
+                    'totalAmount' => 20,
                     'options' => null,
-                    'priceFormatted' => '€ 10.00',
-                    'subtotalFormatted' => '€ 20.00'
+                    'thumbnail' => null
                 ]
             ],
             'totalAmount' => 20,
             'totalQuantity' => 2,
-            'totalAmountFormatted' => '€ 20.00'
-        ], $this->cart->getContents());
+            'currency' => 'EUR',
+            'currencySymbol' => '€'
+        ], $this->cart->toArray());
 
         // act
-        $this->cart->updateItem($lineItemId, [
-            'quantity' => 1
-        ]);
+        $this->cart->updateItem($key, 1);
 
         // assert
-        $this->assertEqualsCanonicalizing([
+        $this->assertEquals([
             'items' => [
-                $lineItemId => [
+                [
+                    'key' => $key,
                     'id' => 'product',
-                    'image' => null,
                     'name' => 'Product',
                     'price' => 10,
                     'quantity' => 1,
-                    'subtotal' => 10,
+                    'totalAmount' => 10,
                     'options' => null,
-                    'priceFormatted' => '€ 10.00',
-                    'subtotalFormatted' => '€ 10.00'
+                    'thumbnail' => null
                 ]
             ],
             'totalAmount' => 10,
             'totalQuantity' => 1,
-            'totalAmountFormatted' => '€ 10.00'
-        ], $this->cart->getContents());
+            'currency' => 'EUR',
+            'currencySymbol' => '€'
+        ], $this->cart->toArray());
     }
 
     public function testUpdateItemThatDoesNotExist(): void
     {
-        $this->expectException(CartException::class);
+        $this->expectException(NoSuchCartItemException::class);
+        $this->expectExceptionMessage('Cart item with key "does-not-exist" does not exist.');
 
-        $this->cart->updateItem('does-not-exist', [
-            'quantity' => 1
-        ]);
+        $this->cart->updateItem('does-not-exist', 1);
     }
 
     public function testUpdateItemWithInvalidQuantity(): void
     {
-        // arrange
-        $lineItemId = $this->cart->addItem([
-            'id' => 'product',
-            'quantity' => 2
-        ]);
+        $key = $this->cart->addItem('product', 2);
 
-        $this->expectException(InvalidOptionsException::class);
+        $this->expectException(InvalidArgumentException::class);
 
-        $this->cart->updateItem($lineItemId, [
-            'quantity' => 0
-        ]);
+        $this->cart->updateItem($key, 0);
     }
 
     public function testRemoveItem(): void
     {
-        // arrange
-        $lineItemId = $this->cart->addItem([
-            'id' => 'product',
-            'quantity' => 1
-        ]);
+        $key = $this->cart->addItem('product', 1);
 
-        // pre-assertions
-        $this->assertEqualsCanonicalizing([
-            'items' => [
-                $lineItemId => [
-                    'id' => 'product',
-                    'image' => null,
-                    'name' => 'Product',
-                    'price' => 10,
-                    'quantity' => 1,
-                    'subtotal' => 10,
-                    'options' => null,
-                    'priceFormatted' => '€ 10.00',
-                    'subtotalFormatted' => '€ 10.00'
-                ]
-            ],
-            'totalAmount' => 10,
-            'totalQuantity' => 1,
-            'totalAmountFormatted' => '€ 10.00'
-        ], $this->cart->getContents());
+        $this->cart->removeItem($key);
 
-        // act
-        $this->cart->removeItem($lineItemId);
-
-        // assert
-        $this->assertEquals($this->defaultContents, $this->cart->getContents());
+        $this->assertEquals($this->defaults, $this->cart->toArray());
     }
 
     public function testRemoveItemThatDoesNotExist(): void
     {
-        $this->expectException(CartException::class);
+        $this->expectException(NoSuchCartItemException::class);
+        $this->expectExceptionMessage('Cart item with key "does-not-exist" does not exist.');
 
         $this->cart->removeItem('does-not-exist');
     }
 
     public function testDestroy(): void
     {
-        // arrange
-        $lineItemId = $this->cart->addItem([
-            'id' => 'product',
-            'quantity' => 1
-        ]);
+        $this->cart->addItem('product', 1);
+        $this->cart->addItem('product', 1, ['size' => 'small']);
 
-        // pre-assertions
-        $this->assertEqualsCanonicalizing([
-            'items' => [
-                $lineItemId => [
-                    'id' => 'product',
-                    'image' => null,
-                    'name' => 'Product',
-                    'price' => 10,
-                    'quantity' => 1,
-                    'subtotal' => 10,
-                    'options' => null,
-                    'priceFormatted' => '€ 10.00',
-                    'subtotalFormatted' => '€ 10.00'
-                ]
-            ],
-            'totalAmount' => 10,
-            'totalQuantity' => 1,
-            'totalAmountFormatted' => '€ 10.00'
-        ], $this->cart->getContents());
-
-        // act
         $this->cart->destroy();
 
-        // assert
-        $this->assertEquals($this->defaultContents, $this->cart->getContents());
+        $this->assertEquals($this->defaults, $this->cart->toArray());
     }
 
-    public function testGetContents(): void
+    #[DataProvider('provideTestGetterValue')]
+    public function testGetterValue(mixed $value, string $method): void
     {
-        $this->assertEquals($this->defaultContents, $this->cart->getContents());
+        $this->assertSame($value, $this->cart->$method());
     }
 
-    public function testGetItems(): void
+    public static function provideTestGetterValue(): \Generator
     {
-        $this->assertEquals([], $this->cart->getItems());
+        yield 'total amount' => [0, 'totalAmount'];
+        yield 'total quantity' => [0, 'totalQuantity'];
+        yield 'currency' => ['EUR', 'currency'];
+        yield 'currency symbol' => ['€', 'currencySymbol'];
+        yield 'cart snippet' => [null, 'cartSnippet'];
     }
 
-    public function testGetTotalAmount(): void
+    #[DataProvider('provideTestGetterInstance')]
+    public function testGetterInstance(string $instanceClass, string $method): void
     {
-        $this->assertSame(0, $this->cart->getTotalAmount());
+        $this->assertInstanceOf($instanceClass, $this->cart->$method());
     }
 
-    public function testGetTotalQuantity(): void
+    public static function provideTestGetterInstance(): \Generator
     {
-        $this->assertSame(0, $this->cart->getTotalQuantity());
-    }
-
-    public function testGetCartSnippet(): void
-    {
-        $this->assertSame(null, $this->cart->getCartSnippet());
+        yield 'items' => [Collection::class, 'items'];
     }
 }

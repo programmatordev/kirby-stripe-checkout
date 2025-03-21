@@ -4,7 +4,7 @@ namespace ProgrammatorDev\StripeCheckout\Test;
 
 use ProgrammatorDev\StripeCheckout\MoneyFormatter;
 
-class MoneyFormatterTest extends BaseTestCase
+class MoneyFormatterTest extends AbstractTestCase
 {
     public function testToMinorUnit(): void
     {

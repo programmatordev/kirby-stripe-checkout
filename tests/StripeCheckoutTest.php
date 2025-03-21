@@ -4,7 +4,7 @@ namespace ProgrammatorDev\StripeCheckout\Test;
 
 use Kirby\Cms\Page;
 use PHPUnit\Framework\Attributes\DataProvider;
-use ProgrammatorDev\StripeCheckout\Cart;
+use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Exception\CheckoutSessionException;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 use Stripe\ApiRequestor;
@@ -12,7 +12,7 @@ use Stripe\Checkout\Session;
 use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
 use Symfony\Component\OptionsResolver\Exception\MissingOptionsException;
 
-class StripeCheckoutTest extends BaseTestCase
+class StripeCheckoutTest extends AbstractTestCase
 {
     private array $options;
 

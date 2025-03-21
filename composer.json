@@ -3,11 +3,12 @@
 	"description": "Stripe Checkout for Kirby CMS",
 	"type": "kirby-plugin",
     "license": "MIT",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "keywords": [
         "kirby",
+        "kirby-cms",
+        "kirby-plugin",
         "stripe",
-        "checkout",
         "stripe-checkout"
     ],
     "homepage": "https://github.com/programmatordev/kirby-stripe-checkout",
@@ -27,7 +28,6 @@
 		"getkirby/composer-installer": "^1.2",
 		"stripe/stripe-php": "^16.6",
 		"symfony/options-resolver": "^7.2",
-		"symfony/validator": "^7.2",
 		"brick/money": "^0.10.0",
 		"symfony/intl": "^7.2"
 	},
