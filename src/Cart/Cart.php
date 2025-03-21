@@ -49,7 +49,6 @@ class Cart
             ]);
         }
 
-        // get existing session data
         $sessionData = $this->session->data()->get(self::SESSION_NAME);
 
         // sync cart data with session data...
@@ -105,13 +104,12 @@ class Cart
 
     public function cartSnippet(bool $render = false): ?string
     {
-        // if render is false, return cartSnippet option as is
-        // otherwise try to render HTML
+        // if render is false, return cartSnippet option as is...
         if ($render === false) {
             return $this->options['cartSnippet'];
         }
 
-        // render HTML
+        // ...otherwise try to render HTML
         $snippet = snippet($this->options['cartSnippet'], return: true);
 
         return !empty($snippet) ? $snippet : null;
@@ -119,7 +117,6 @@ class Cart
 
     public function addItem(string $id, int $quantity, ?array $options = null): string
     {
-        // validate parameters
         if ($quantity <= 0) {
             throw new InvalidArgumentException('Quantity must be greater than 0.');
         }
@@ -135,7 +132,6 @@ class Cart
             $quantity += $item->quantity();
         }
 
-        // add item to cart
         $this->items()->set(
             $key,
             new Item($id, $quantity, $options)
@@ -149,7 +145,6 @@ class Cart
 
     public function updateItem(string $key, int $quantity): void
     {
-        // validate parameters
         if ($quantity <= 0) {
             throw new InvalidArgumentException('Quantity must be greater than 0.');
         }
