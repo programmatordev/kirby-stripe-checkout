@@ -17,10 +17,9 @@ use Stripe\Exception\SignatureVerificationException;
 use Stripe\StripeClient;
 use Stripe\Webhook;
 use Symfony\Component\Intl\Currencies;
+use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
 use Symfony\Component\OptionsResolver\Options;
 use Symfony\Component\OptionsResolver\OptionsResolver;
-use Symfony\Component\Validator\Constraints\NotBlank;
-use Symfony\Component\Validator\Validation;
 
 class StripeCheckout
 {
@@ -32,11 +31,9 @@ class StripeCheckout
 
     private static ?self $instance = null;
 
-    public function __construct(array $options)
+    public function __construct(array $options = [])
     {
-        $defaultOptions = option('programmatordev.stripe-checkout');
-
-        $this->options = $this->resolveOptions(array_merge($defaultOptions, $options));
+        $this->options = $this->resolveOptions($options);
         $this->stripe = new StripeClient($this->options['stripeSecretKey']);
         $this->settingsPage = page($this->options['settingsPage']);
     }
@@ -317,66 +314,53 @@ class StripeCheckout
     private function resolveOptions(array $options): array
     {
         $resolver = new OptionsResolver();
-        $resolver->setIgnoreUndefined();
 
-        $resolver->define('stripePublicKey')
-            ->required()
-            ->allowedTypes('string')
-            ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setDefaults(option('programmatordev.stripe-checkout'));
 
-        $resolver->define('stripeSecretKey')
-            ->required()
-            ->allowedTypes('string')
-            ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setAllowedTypes('stripePublicKey', ['string']);
+        $resolver->setAllowedTypes('stripeSecretKey', ['string']);
+        $resolver->setAllowedTypes('stripeWebhookSecret', ['string']);
+        $resolver->setAllowedTypes('uiMode', ['string']);
+        $resolver->setAllowedTypes('currency', ['string']);
+        $resolver->setAllowedTypes('returnPage', ['null', 'string']);
+        $resolver->setAllowedTypes('successPage', ['null', 'string']);
+        $resolver->setAllowedTypes('cancelPage', ['null', 'string']);
+        $resolver->setAllowedTypes('ordersPage', ['string']);
+        $resolver->setAllowedTypes('settingsPage', ['null', 'string']);
+        $resolver->setAllowedTypes('cartSnippet', ['null', 'string']);
 
-        $resolver->define('stripeWebhookSecret')
-            ->required()
-            ->allowedTypes('string')
-            ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setAllowedValues('uiMode', [Session::UI_MODE_HOSTED, Session::UI_MODE_EMBEDDED]);
+        $resolver->setAllowedValues('currency', Currencies::getCurrencyCodes());
 
-        $resolver->define('currency')
-            ->required()
-            ->allowedTypes('string')
-            ->allowedValues(...Currencies::getCurrencyCodes())
-            ->normalize(function (Options $options, string $currency): string {
-                return strtoupper($currency);
-            });
+        $resolver->setNormalizer('returnPage', function (Options $options, ?string $returnPage): ?string {
+            if ($options['uiMode'] === Session::UI_MODE_EMBEDDED && $returnPage === null) {
+                throw new InvalidOptionsException(
+                    sprintf('The option "returnPage" must be set when the option "uiMode" is "%s".', Session::UI_MODE_EMBEDDED)
+                );
+            }
 
-        $resolver->define('uiMode')
-            ->required()
-            ->allowedTypes('string')
-            ->allowedValues(Session::UI_MODE_HOSTED, Session::UI_MODE_EMBEDDED);
+            return $returnPage;
+        });
 
-        $resolver->define('ordersPage')
-            ->required()
-            ->allowedTypes('string')
-            ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setNormalizer('successPage', function (Options $options, ?string $successPage): ?string {
+            if ($options['uiMode'] === Session::UI_MODE_HOSTED && $successPage === null) {
+                throw new InvalidOptionsException(
+                    sprintf('The option "successPage" must be set when the option "uiMode" is "%s".', Session::UI_MODE_HOSTED)
+                );
+            }
 
-        $resolver->define('settingsPage')
-            ->required()
-            ->allowedTypes('string')
-            ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
+            return $successPage;
+        });
 
-        // conditional options based on ui mode
-        $uiMode = $options['uiMode'] ?? null;
+        $resolver->setNormalizer('cancelPage', function (Options $options, ?string $cancelPage): ?string {
+            if ($options['uiMode'] === Session::UI_MODE_HOSTED && $cancelPage === null) {
+                throw new InvalidOptionsException(
+                    sprintf('The option "cancelPage" must be set when the option "uiMode" is "%s".', Session::UI_MODE_HOSTED)
+                );
+            }
 
-        if ($uiMode === Session::UI_MODE_HOSTED) {
-            $resolver->define('successPage')
-                ->required()
-                ->allowedTypes('string')
-                ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
-
-            $resolver->define('cancelPage')
-                ->required()
-                ->allowedTypes('string')
-                ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
-        }
-        else if ($uiMode === Session::UI_MODE_EMBEDDED) {
-            $resolver->define('returnPage')
-                ->required()
-                ->allowedTypes('string')
-                ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
-        }
+            return $cancelPage;
+        });
 
         return $resolver->resolve($options);
     }
