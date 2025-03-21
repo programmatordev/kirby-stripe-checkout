@@ -1,5 +1,5 @@
 fields.product.price.label: Price
-fields.product.cover.label: Image
+fields.product.thumbnail.label: Thumbnail
 fields.settings.shippingEnabled.label: Shipping
 fields.settings.shippingAllowedCountries.label: Allowed countries
 fields.settings.shippingOptions.label: Delivery options

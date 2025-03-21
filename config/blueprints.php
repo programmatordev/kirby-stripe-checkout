@@ -3,7 +3,7 @@
 return [
     // fields
     'stripe-checkout.fields/price' => __DIR__ . '/../blueprints/fields/price.yml',
-    'stripe-checkout.fields/cover' => __DIR__ . '/../blueprints/fields/cover.yml',
+    'stripe-checkout.fields/thumbnail' => __DIR__ . '/../blueprints/fields/thumbnail.yml',
     // sections
     'stripe-checkout.sections/orders' => __DIR__ . '/../blueprints/sections/orders.yml',
     // pages
