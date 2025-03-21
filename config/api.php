@@ -37,7 +37,7 @@ return [
                     $resolver->setAllowedTypes('id', ['string']);
                     $resolver->setAllowedTypes('quantity', ['int']);
                     $resolver->setAllowedTypes('options', ['null', 'string[]']);
-                    $resolver->setAllowedValues('quantity', fn($quantity) => $quantity > 0);
+                    $resolver->setAllowedValues('quantity', fn (int $quantity): bool => $quantity > 0);
 
                     $data = $resolver->resolve($data);
 
@@ -62,7 +62,7 @@ return [
                     $resolver = new OptionsResolver();
                     $resolver->setRequired(['quantity']);
                     $resolver->setAllowedTypes('quantity', ['int']);
-                    $resolver->setAllowedValues('quantity', fn($quantity) => $quantity > 0);
+                    $resolver->setAllowedValues('quantity', fn (int $quantity): bool => $quantity > 0);
 
                     $data = $resolver->resolve($data);
 
