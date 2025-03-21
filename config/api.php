@@ -2,6 +2,7 @@
 
 use Kirby\Cms\App;
 use Symfony\Component\Intl\Countries;
+use Symfony\Component\OptionsResolver\OptionsResolver;
 
 return [
     'routes' => function(App $kirby) {
@@ -30,13 +31,17 @@ return [
                     $data = $kirby->request()->body()->toArray();
                     $cart = cart();
 
-                    // TODO validate data
+                    $resolver = new OptionsResolver();
+                    $resolver->setDefaults(['options' => null]);
+                    $resolver->setRequired(['id', 'quantity']);
+                    $resolver->setAllowedTypes('id', ['string']);
+                    $resolver->setAllowedTypes('quantity', ['int']);
+                    $resolver->setAllowedTypes('options', ['null', 'string[]']);
+                    $resolver->setAllowedValues('quantity', fn($quantity) => $quantity > 0);
 
-                    $cart->addItem(
-                        $data['id'],
-                        $data['quantity'],
-                        $data['options'] ?? null
-                    );
+                    $data = $resolver->resolve($data);
+
+                    $cart->addItem($data['id'], $data['quantity'], $data['options']);
 
                     return [
                         'status' => 'ok',
@@ -54,7 +59,12 @@ return [
                     $data = $kirby->request()->body()->toArray();
                     $cart = cart();
 
-                    // TODO validate data
+                    $resolver = new OptionsResolver();
+                    $resolver->setRequired(['quantity']);
+                    $resolver->setAllowedTypes('quantity', ['int']);
+                    $resolver->setAllowedValues('quantity', fn($quantity) => $quantity > 0);
+
+                    $data = $resolver->resolve($data);
 
                     $cart->updateItem($key, $data['quantity']);
 
