@@ -1,5 +1,5 @@
 fields.product.price.label: Preço
-fields.product.cover.label: Imagem
+fields.product.thumbnail.label: Thumbnail
 fields.settings.shippingEnabled.label: Morada de envio
 fields.settings.shippingAllowedCountries.label: Países permitidos
 fields.settings.shippingOptions.label: Opções de envio

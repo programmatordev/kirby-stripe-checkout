@@ -863,7 +863,7 @@ extends: stripe-checkout.pages/checkout-settings
 You can create a product blueprint with any name.
 
 Just make sure that you have a `price` field (it is required).
-To add an image, add a `cover` field (it is optional).
+To add an image, add a `thumbnail` field (it is optional).
 
 The plugin already comes with both blueprints fields, in case you want to use them:
 
@@ -874,8 +874,7 @@ title: Product
 
 fields:
   price: stripe-checkout.fields/price
-  # optional
-  cover: stripe-checkout.fields/cover
+  thumbnail: stripe-checkout.fields/thumbnail # optional
 ```
 
 ### `hosted` versus `embedded` mode
