@@ -3,11 +3,12 @@
 	"description": "Stripe Checkout for Kirby CMS",
 	"type": "kirby-plugin",
     "license": "MIT",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "keywords": [
         "kirby",
+        "kirby-cms",
+        "kirby-plugin",
         "stripe",
-        "checkout",
         "stripe-checkout"
     ],
     "homepage": "https://github.com/programmatordev/kirby-stripe-checkout",
