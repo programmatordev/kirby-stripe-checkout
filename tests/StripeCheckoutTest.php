@@ -245,14 +245,14 @@ class StripeCheckoutTest extends AbstractTestCase
         ]);
 
         $stripeCheckout = new class($this->options['hosted']) extends StripeCheckout {
-            public function getLineItems(Cart $cart): array
+            public function addLineItemsParams(Cart $cart): array
             {
-                return parent::getLineItems($cart);
+                return parent::addLineItemsParams($cart);
             }
         };
 
         // act
-        $lineItems = $stripeCheckout->getLineItems($this->cart);
+        $lineItems = $stripeCheckout->addLineItemsParams($this->cart);
 
         // assert
         $this->assertEquals([
@@ -284,14 +284,14 @@ class StripeCheckoutTest extends AbstractTestCase
     {
         // arrange
         $stripeCheckout = new class($this->options['hosted']) extends StripeCheckout {
-            public function getPageUrl(string $pageId, ?string $languageCode = null, bool $addSessionParam = false): string
+            public function buildPageUrl(string $pageId, ?string $languageCode = null, bool $withCheckoutSessionParam = false): string
             {
-                return parent::getPageUrl($pageId, $languageCode, $addSessionParam);
+                return parent::buildPageUrl($pageId, $languageCode, $withCheckoutSessionParam);
             }
         };
 
         $this->expectException(CheckoutSessionException::class);
-        $stripeCheckout->getPageUrl('invalid-page');
+        $stripeCheckout->buildPageUrl('invalid-page');
     }
 
     public function testAddSessionIdToUrlQuery(): void

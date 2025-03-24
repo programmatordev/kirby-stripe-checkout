@@ -3,7 +3,7 @@
 use Kirby\Cms\App;
 use Kirby\Toolkit\Date;
 use Kirby\Toolkit\Str;
-use ProgrammatorDev\StripeCheckout\Exception\CheckoutEndpointException;
+use ProgrammatorDev\StripeCheckout\Exception\InvalidEndpointException;
 use ProgrammatorDev\StripeCheckout\Exception\CheckoutWebhookException;
 use ProgrammatorDev\StripeCheckout\MoneyFormatter;
 use Stripe\Checkout\Session;
@@ -18,16 +18,11 @@ return function(App $kirby) {
             'language' => '*',
             'method' => 'GET',
             'action' => function() use ($kirby) {
-                try {
-                    $stripeCheckout = stripeCheckout();
-                    $checkoutSession = $stripeCheckout->createSession();
-                }
-                catch (Exception $exception) {
-                    throw new CheckoutEndpointException($exception->getMessage());
-                }
+                $stripeCheckout = stripeCheckout();
+                $checkoutSession = $stripeCheckout->createSession();
 
-                if ($stripeCheckout->getUiMode() !== Session::UI_MODE_HOSTED) {
-                    throw new CheckoutEndpointException(
+                if ($stripeCheckout->uiMode() !== Session::UI_MODE_HOSTED) {
+                    throw new InvalidEndpointException(
                         'This endpoint is reserved for Stripe Checkout in "hosted" mode.'
                     );
                 }
@@ -43,16 +38,11 @@ return function(App $kirby) {
             'language' => '*',
             'method' => 'POST',
             'action' => function() use ($kirby) {
-                try {
-                    $stripeCheckout = stripeCheckout();
-                    $checkoutSession = $stripeCheckout->createSession();
-                }
-                catch (Exception $exception) {
-                    throw new CheckoutEndpointException($exception->getMessage());
-                }
+                $stripeCheckout = stripeCheckout();
+                $checkoutSession = $stripeCheckout->createSession();
 
-                if ($stripeCheckout->getUiMode() !== Session::UI_MODE_EMBEDDED) {
-                    throw new CheckoutEndpointException(
+                if ($stripeCheckout->uiMode() !== Session::UI_MODE_EMBEDDED) {
+                    throw new InvalidEndpointException(
                         'This endpoint is reserved for Stripe Checkout in "embedded" mode.'
                     );
                 }
@@ -76,7 +66,7 @@ return function(App $kirby) {
 
                 try {
                     // validate webhook event
-                    $event = $stripeCheckout->constructEvent($payload, $sigHeader);
+                    $event = $stripeCheckout->constructWebhookEvent($payload, $sigHeader);
                 }
                 // invalid payload
                 catch (UnexpectedValueException) {
