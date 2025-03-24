@@ -14,8 +14,6 @@ class StripeCheckoutTest extends AbstractTestCase
 {
     private array $options;
 
-    private Page $testPage;
-
     private Page $productPage;
 
     protected function setUp(): void
@@ -29,8 +27,8 @@ class StripeCheckoutTest extends AbstractTestCase
                 'stripeWebhookSecret' => 'whsec_abc123',
                 'currency' => 'EUR',
                 'uiMode' => 'hosted',
-                'successPage' => 'test',
-                'cancelPage' => 'test',
+                'successPage' => 'product',
+                'cancelPage' => 'product',
                 'returnPage' => null,
                 'ordersPage' => 'orders',
                 'settingsPage' => 'checkout-settings',
@@ -44,19 +42,12 @@ class StripeCheckoutTest extends AbstractTestCase
                 'uiMode' => 'embedded',
                 'successPage' => null,
                 'cancelPage' => null,
-                'returnPage' => 'test',
+                'returnPage' => 'product',
                 'ordersPage' => 'orders',
                 'settingsPage' => 'checkout-settings',
                 'cartSnippet' => null
             ]
         ];
-
-        // for success, return and cancel option pages
-        $this->testPage = site()->createChild([
-            'slug' => 'test',
-            'template' => 'default',
-            'isDraft' => false,
-        ])->changeStatus('listed');
 
         // to test a product
         $this->productPage = site()->createChild([
@@ -75,7 +66,6 @@ class StripeCheckoutTest extends AbstractTestCase
 
         // destroy data after each test
         cart()->destroy();
-        $this->testPage->delete(true);
         $this->productPage->delete(true);
     }
 
