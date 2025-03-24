@@ -116,7 +116,8 @@ class StripeCheckout
                 'order_id' => strtolower(Uuid::generate()),
                 // save language to know which one was used when ordering
                 // useful to set language programmatically on webhooks
-                // example: to use with hooks when sending emails (with the same language as ordered)
+                // example: to use with hooks when sending emails with the same language
+                // as when the user made the order
                 'language_code' => $languageCode
             ]
         ];
@@ -129,7 +130,7 @@ class StripeCheckout
             Session::UI_MODE_EMBEDDED => $this->addEmbeddedParams($params, $languageCode)
         };
 
-        // trigger event to allow session parameters change
+        // trigger event that allows modification of session parameters
         // https://docs.stripe.com/api/checkout/sessions/create?lang=php
         $params = kirby()->apply(
             'stripe-checkout.session.create:before',
@@ -186,7 +187,7 @@ class StripeCheckout
                 ));
             }
 
-            // convert to Stripe line_items data
+            // set Stripe line_items data
             // https://docs.stripe.com/api/checkout/sessions/create?lang=php#create_checkout_session-line_items
             $params['line_items'][] = [
                 'price_data' => [
@@ -215,6 +216,7 @@ class StripeCheckout
             return;
         }
 
+        // set Stripe shipping data
         // https://docs.stripe.com/payments/during-payment/charge-shipping?payment-ui=checkout&lang=php
         $params['shipping_address_collection']['allowed_countries'] = $settingsPage->shippingAllowedCountries()->split();
         $params['shipping_options'] = [];
