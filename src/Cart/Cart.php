@@ -236,7 +236,7 @@ class Cart
         $resolver = new OptionsResolver();
 
         $resolver->setDefaults([
-            'currency' => strtoupper(option('programmatordev.stripe-checkout.currency')),
+            'currency' => option('programmatordev.stripe-checkout.currency'),
             'cartSnippet' => option('programmatordev.stripe-checkout.cartSnippet')
         ]);
 

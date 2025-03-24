@@ -2,14 +2,11 @@
 
 namespace ProgrammatorDev\StripeCheckout;
 
-use Brick\Math\Exception\MathException;
-use Brick\Math\Exception\NumberFormatException;
-use Brick\Math\Exception\RoundingNecessaryException;
 use Brick\Money\Exception\UnknownCurrencyException;
-use Kirby\Cms\Page;
 use Kirby\Uuid\Uuid;
-use ProgrammatorDev\StripeCheckout\Cart\Cart;
-use ProgrammatorDev\StripeCheckout\Exception\CheckoutSessionException;
+use ProgrammatorDev\StripeCheckout\Cart\Item;
+use ProgrammatorDev\StripeCheckout\Exception\EmptyCartException;
+use ProgrammatorDev\StripeCheckout\Exception\NoSuchPageException;
 use Stripe\Checkout\Session;
 use Stripe\Event;
 use Stripe\Exception\ApiErrorException;
@@ -17,10 +14,9 @@ use Stripe\Exception\SignatureVerificationException;
 use Stripe\StripeClient;
 use Stripe\Webhook;
 use Symfony\Component\Intl\Currencies;
+use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
 use Symfony\Component\OptionsResolver\Options;
 use Symfony\Component\OptionsResolver\OptionsResolver;
-use Symfony\Component\Validator\Constraints\NotBlank;
-use Symfony\Component\Validator\Validation;
 
 class StripeCheckout
 {
@@ -28,17 +24,12 @@ class StripeCheckout
 
     private StripeClient $stripe;
 
-    private ?Page $settingsPage;
-
     private static ?self $instance = null;
 
-    public function __construct(array $options)
+    public function __construct(array $options = [])
     {
-        $defaultOptions = option('programmatordev.stripe-checkout');
-
-        $this->options = $this->resolveOptions(array_merge($defaultOptions, $options));
-        $this->stripe = new StripeClient($this->options['stripeSecretKey']);
-        $this->settingsPage = page($this->options['settingsPage']);
+        $this->options = $this->resolveOptions($options);
+        $this->stripe = new StripeClient($this->stripeSecretKey());
     }
 
     public static function instance(array $options = []): self
@@ -52,64 +43,102 @@ class StripeCheckout
         return self::$instance;
     }
 
+    public function stripePublicKey(): string
+    {
+        return $this->options['stripePublicKey'];
+    }
+
+    public function stripeSecretKey(): string
+    {
+        return $this->options['stripeSecretKey'];
+    }
+
+    public function stripeWebhookSecret(): string
+    {
+        return $this->options['stripeWebhookSecret'];
+    }
+
+    public function currency(): string
+    {
+        return $this->options['currency'];
+    }
+
+    public function uiMode(): string
+    {
+        return $this->options['uiMode'];
+    }
+
+    public function returnPage(): ?string
+    {
+        return $this->options['returnPage'];
+    }
+
+    public function successPage(): ?string
+    {
+        return $this->options['successPage'];
+    }
+
+    public function cancelPage(): ?string
+    {
+        return $this->options['cancelPage'];
+    }
+
+    public function ordersPage(): string
+    {
+        return $this->options['ordersPage'];
+    }
+
+    public function settingsPage(): ?string
+    {
+        return $this->options['settingsPage'];
+    }
+
     /**
      * @throws ApiErrorException
-     * @throws CheckoutSessionException
-     * @throws MathException
-     * @throws NumberFormatException
-     * @throws RoundingNecessaryException
      * @throws UnknownCurrencyException
      */
     public function createSession(): Session
     {
         $cart = cart();
 
-        if ($cart->getTotalQuantity() === 0) {
-            throw new CheckoutSessionException('Cart is empty.');
+        if ($cart->totalQuantity() === 0) {
+            throw new EmptyCartException('Cart must have at least one added item.');
         }
 
-        // get current user language
         $languageCode = kirby()->language()?->code();
 
-        // set base session params
-        $sessionParams = [
+        $params = [
             'mode' => Session::MODE_PAYMENT,
-            'ui_mode' => $this->options['uiMode'],
-            'line_items' => $this->getLineItems($cart),
+            'ui_mode' => $this->uiMode(),
             'metadata' => [
                 // generate a unique id for the order
                 // required in webhooks to sync the different event payment steps
-                'order_id' => Uuid::generate(),
+                'order_id' => strtolower(Uuid::generate()),
                 // save language to know which one was used when ordering
                 // useful to set language programmatically on webhooks
-                // example: to use with hooks when sending emails (with the same language as ordered)
+                // example: to use with hooks when sending emails with the same language
+                // as when the user made the order
                 'language_code' => $languageCode
             ]
         ];
 
-        // add session params according to uiMode
-        if ($this->options['uiMode'] === Session::UI_MODE_HOSTED) {
-            $sessionParams['success_url'] = $this->getPageUrl($this->options['successPage'], $languageCode, true);
-            $sessionParams['cancel_url'] = $this->getPageUrl($this->options['cancelPage'], $languageCode);
-        }
-        else if ($this->options['uiMode'] === Session::UI_MODE_EMBEDDED) {
-            $sessionParams['return_url'] = $this->getPageUrl($this->options['returnPage'], $languageCode, true);
-        }
+        $this->addLineItemsParams($params);
+        $this->addShippingParams($params);
 
-        // add shipping params if page exists and is enabled
-        // https://docs.stripe.com/payments/during-payment/charge-shipping?payment-ui=checkout&lang=php
-        if ($this->settingsPage?->shippingEnabled()->toBool() === true) {
-            $sessionParams['shipping_address_collection']['allowed_countries'] = $this->settingsPage->shippingAllowedCountries()->split();
-            $sessionParams['shipping_options'] = $this->getShippingOptions();
-        }
+        match ($this->uiMode()) {
+            Session::UI_MODE_HOSTED => $this->addHostedParams($params, $languageCode),
+            Session::UI_MODE_EMBEDDED => $this->addEmbeddedParams($params, $languageCode)
+        };
 
-        // trigger event to allow session parameters change
+        // trigger event that allows modification of session parameters
         // https://docs.stripe.com/api/checkout/sessions/create?lang=php
-        $sessionParams = kirby()->apply('stripe-checkout.session.create:before', [
-            'sessionParams' => $sessionParams,
-        ], 'sessionParams');
+        $params = kirby()->apply(
+            'stripe-checkout.session.create:before',
+            ['sessionParams' => $params],
+            'sessionParams'
+        );
 
-        return $this->stripe->checkout->sessions->create($sessionParams);
+        return $this->stripe->checkout->sessions->create($params);
     }
 
     /**
@@ -123,144 +152,85 @@ class StripeCheckout
     /**
      * @throws SignatureVerificationException
      */
-    public function constructEvent(string $payload, string $sigHeader): Event
+    public function constructWebhookEvent(string $payload, string $sigHeader): Event
     {
-        return Webhook::constructEvent($payload, $sigHeader, $this->options['stripeWebhookSecret']);
-    }
-
-    public function getOptions(): array
-    {
-        return $this->options;
-    }
-
-    public function getStripePublicKey(): string
-    {
-        return $this->options['stripePublicKey'];
-    }
-
-    public function getStripeSecretKey(): string
-    {
-        return $this->options['stripeSecretKey'];
-    }
-
-    public function getStripeWebhookSecret(): string
-    {
-        return $this->options['stripeWebhookSecret'];
-    }
-
-    public function getCurrency(): string
-    {
-        return $this->options['currency'];
-    }
-
-    public function getUiMode(): string
-    {
-        return $this->options['uiMode'];
-    }
-
-    public function getReturnPage(): ?string
-    {
-        return $this->options['returnPage'] ?? null;
-    }
-
-    public function getSuccessPage(): ?string
-    {
-        return $this->options['successPage'] ?? null;
-    }
-
-    public function getCancelPage(): ?string
-    {
-        return $this->options['cancelPage'] ?? null;
-    }
-
-    public function getOrdersPage(): string
-    {
-        return $this->options['ordersPage'];
-    }
-
-    public function getSettingsPage(): string
-    {
-        return $this->options['settingsPage'];
+        return Webhook::constructEvent($payload, $sigHeader, $this->stripeWebhookSecret());
     }
 
     /**
-     * @throws RoundingNecessaryException
-     * @throws MathException
      * @throws UnknownCurrencyException
-     * @throws NumberFormatException
      */
-    protected function getLineItems(Cart $cart): array
+    private function addLineItemsParams(array &$params): void
     {
-        $lineItems = [];
+        $cart = cart();
+        $params['line_items'] = [];
 
-        foreach ($cart->getItems() as $item) {
-            // initial product data
+        /** @var Item $item */
+        foreach ($cart->items() as $item) {
             $productData = [
-                'name' => $item['name']
+                'name' => $item->name()
             ];
 
-            // if product has an image, add to data
-            if ($item['image'] !== null) {
-                $productData['images'] = [$item['image']];
+            if ($item->thumbnail()) {
+                // Checkout Session allows multiple images
+                // for now add just the item thumbnail as the first image
+                $productData['images'] = [
+                    $item->thumbnail()->url()
+                ];
             }
 
-            if (!empty($item['options'])) {
-                $description = [];
-
-                foreach ($item['options'] as $name => $value) {
-                    $description[] = sprintf('%s: %s', $name, $value);
-                }
-
-                // only add description key if there are options
-                $productData['description'] = implode(', ', $description);
+            if (!empty($item->options())) {
+                $productData['description'] = implode(', ', array_map(
+                    fn ($option, $name) => sprintf('%s: %s', $name, $option),
+                    $item->options(),
+                    array_keys($item->options())
+                ));
             }
 
-            // convert to Stripe line_items data
+            // set Stripe line_items data
             // https://docs.stripe.com/api/checkout/sessions/create?lang=php#create_checkout_session-line_items
-            $lineItems[] = [
+            $params['line_items'][] = [
                 'price_data' => [
                     // present currency in lowercase
                     // https://docs.stripe.com/currencies#presentment-currencies
-                    'currency' => strtolower($this->options['currency']),
+                    'currency' => strtolower($this->currency()),
                     // Stripe expects amounts to be provided in the currency smallest unit
                     // https://docs.stripe.com/currencies#zero-decimal
-                    'unit_amount' => MoneyFormatter::toMinorUnit($item['price'], $this->options['currency']),
+                    'unit_amount' => MoneyFormatter::toMinorUnit($item->price(), $this->currency()),
                     'product_data' => $productData
                 ],
-                'quantity' => $item['quantity'],
+                'quantity' => $item->quantity(),
             ];
         }
-
-        return $lineItems;
     }
 
     /**
-     * @throws RoundingNecessaryException
-     * @throws MathException
      * @throws UnknownCurrencyException
-     * @throws NumberFormatException
      */
-    private function getShippingOptions(): array
+    private function addShippingParams(array &$params): void
     {
-        // if there is no settings page or shipping is disabled
-        if ($this->settingsPage?->shippingEnabled()->toBool() !== true) {
-            return [];
+        $settingsPage = $this->settingsPage() ? page($this->settingsPage()) : null;
+
+        // stop here in case there is no configured settings page or if shipping is disabled
+        if ($settingsPage?->shippingEnabled()->toBool() !== true) {
+            return;
         }
 
-        $shippingOptions = [];
+        // set Stripe shipping data
+        // https://docs.stripe.com/payments/during-payment/charge-shipping?payment-ui=checkout&lang=php
+        $params['shipping_address_collection']['allowed_countries'] = $settingsPage->shippingAllowedCountries()->split();
+        $params['shipping_options'] = [];
 
-        // get shipping rates and handle them if they exist
-        foreach ($this->settingsPage->shippingOptions()->toStructure() as $shippingOption) {
+        foreach ($settingsPage->shippingOptions()->toStructure() as $shippingOption) {
             $shippingRateData = [
                 'type' => 'fixed_amount',
                 'fixed_amount' => [
-                    'amount' => MoneyFormatter::toMinorUnit($shippingOption->amount()->value(), $this->options['currency']),
-                    'currency' => $this->options['currency'],
+                    'amount' => MoneyFormatter::toMinorUnit($shippingOption->amount()->value(), $this->currency()),
+                    'currency' => $this->currency(),
                 ],
                 'display_name' => $shippingOption->name()->value()
             ];
 
-            // add minimum delivery estimate if it exists
             if ($shippingOption->deliveryEstimateMinimum()->isNotEmpty()) {
                 $shippingRateData['delivery_estimate']['minimum'] = [
                     'unit' => $shippingOption->deliveryEstimateMinimumUnit()->value(),
@@ -268,7 +238,6 @@ class StripeCheckout
                 ];
             }
 
-            // add maximum delivery estimate if it exists
             if ($shippingOption->deliveryEstimateMaximum()->isNotEmpty()) {
                 $shippingRateData['delivery_estimate']['maximum'] = [
                     'unit' => $shippingOption->deliveryEstimateMaximumUnit()->value(),
@@ -276,40 +245,41 @@ class StripeCheckout
                 ];
             }
 
-            // add shipping rate to shipping options
-            $shippingOptions[] = ['shipping_rate_data' => $shippingRateData];
+            $params['shipping_options'][] = [
+                'shipping_rate_data' => $shippingRateData
+            ];
         }
-
-        return $shippingOptions;
     }
 
-    /**
-     * @throws CheckoutSessionException
-     */
-    protected function getPageUrl(string $pageId, ?string $languageCode = null, bool $addSessionParam = false): string
+    private function addHostedParams(array &$params, ?string $languageCode): void
+    {
+        $params['success_url'] = $this->buildPageUrl($this->successPage(), $languageCode, true);
+        $params['cancel_url'] = $this->buildPageUrl($this->cancelPage(), $languageCode);
+    }
+
+    private function addEmbeddedParams(array &$params, ?string $languageCode): void
+    {
+        $params['return_url'] = $this->buildPageUrl($this->returnPage(), $languageCode, true);
+    }
+
+    private function buildPageUrl(string $pageId, ?string $languageCode = null, bool $withCheckoutSessionParam = false): string
     {
         $page = page($pageId);
 
         if ($page === null) {
-            throw new CheckoutSessionException(
+            throw new NoSuchPageException(
                 sprintf('Page with id "%s" was not found.', $pageId)
             );
         }
 
+        // get language specific URL
         $url = $page->url($languageCode);
 
-        if ($addSessionParam === true) {
-            $url = $this->addSessionIdToUrlQuery($url);
+        if ($withCheckoutSessionParam === true) {
+            // include the {CHECKOUT_SESSION_ID} template variable in the URL
+            // https://docs.stripe.com/checkout/embedded/quickstart#return-url
+            $url = sprintf('%s?session_id={CHECKOUT_SESSION_ID}', $url);
         }
-
-        return $url;
-    }
-
-    protected function addSessionIdToUrlQuery(string $url): string
-    {
-        // always include the {CHECKOUT_SESSION_ID} template variable in the URL
-        // https://docs.stripe.com/checkout/embedded/quickstart#return-url
-        $url .= (parse_url($url, PHP_URL_QUERY) ? '&' : '?') . 'session_id={CHECKOUT_SESSION_ID}';
 
         return $url;
     }
@@ -317,66 +287,52 @@ class StripeCheckout
     private function resolveOptions(array $options): array
     {
         $resolver = new OptionsResolver();
-        $resolver->setIgnoreUndefined();
 
-        $resolver->define('stripePublicKey')
-            ->required()
-            ->allowedTypes('string')
-            ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setDefaults(option('programmatordev.stripe-checkout'));
 
-        $resolver->define('stripeSecretKey')
-            ->required()
-            ->allowedTypes('string')
-            ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setAllowedTypes('stripePublicKey', ['string']);
+        $resolver->setAllowedTypes('stripeSecretKey', ['string']);
+        $resolver->setAllowedTypes('stripeWebhookSecret', ['string']);
+        $resolver->setAllowedTypes('uiMode', ['string']);
+        $resolver->setAllowedTypes('currency', ['string']);
+        $resolver->setAllowedTypes('returnPage', ['null', 'string']);
+        $resolver->setAllowedTypes('successPage', ['null', 'string']);
+        $resolver->setAllowedTypes('cancelPage', ['null', 'string']);
+        $resolver->setAllowedTypes('ordersPage', ['string']);
+        $resolver->setAllowedTypes('settingsPage', ['null', 'string']);
 
-        $resolver->define('stripeWebhookSecret')
-            ->required()
-            ->allowedTypes('string')
-            ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setAllowedValues('uiMode', [Session::UI_MODE_HOSTED, Session::UI_MODE_EMBEDDED]);
+        $resolver->setAllowedValues('currency', Currencies::getCurrencyCodes());
 
-        $resolver->define('currency')
-            ->required()
-            ->allowedTypes('string')
-            ->allowedValues(...Currencies::getCurrencyCodes())
-            ->normalize(function (Options $options, string $currency): string {
-                return strtoupper($currency);
-            });
+        $resolver->setNormalizer('returnPage', function (Options $options, ?string $returnPage): ?string {
+            if ($options['uiMode'] === Session::UI_MODE_EMBEDDED && $returnPage === null) {
+                throw new InvalidOptionsException(
+                    sprintf('The option "returnPage" must be set when the option "uiMode" is "%s".', Session::UI_MODE_EMBEDDED)
+                );
+            }
 
-        $resolver->define('uiMode')
-            ->required()
-            ->allowedTypes('string')
-            ->allowedValues(Session::UI_MODE_HOSTED, Session::UI_MODE_EMBEDDED);
+            return $returnPage;
+        });
 
-        $resolver->define('ordersPage')
-            ->required()
-            ->allowedTypes('string')
-            ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
+        $resolver->setNormalizer('successPage', function (Options $options, ?string $successPage): ?string {
+            if ($options['uiMode'] === Session::UI_MODE_HOSTED && $successPage === null) {
+                throw new InvalidOptionsException(
+                    sprintf('The option "successPage" must be set when the option "uiMode" is "%s".', Session::UI_MODE_HOSTED)
+                );
+            }
 
-        $resolver->define('settingsPage')
-            ->required()
-            ->allowedTypes('string')
-            ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
+            return $successPage;
+        });
 
-        // conditional options based on ui mode
-        $uiMode = $options['uiMode'] ?? null;
+        $resolver->setNormalizer('cancelPage', function (Options $options, ?string $cancelPage): ?string {
+            if ($options['uiMode'] === Session::UI_MODE_HOSTED && $cancelPage === null) {
+                throw new InvalidOptionsException(
+                    sprintf('The option "cancelPage" must be set when the option "uiMode" is "%s".', Session::UI_MODE_HOSTED)
+                );
+            }
 
-        if ($uiMode === Session::UI_MODE_HOSTED) {
-            $resolver->define('successPage')
-                ->required()
-                ->allowedTypes('string')
-                ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
-
-            $resolver->define('cancelPage')
-                ->required()
-                ->allowedTypes('string')
-                ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
-        }
-        else if ($uiMode === Session::UI_MODE_EMBEDDED) {
-            $resolver->define('returnPage')
-                ->required()
-                ->allowedTypes('string')
-                ->allowedValues(Validation::createIsValidCallable(new NotBlank()));
-        }
+            return $cancelPage;
+        });
 
         return $resolver->resolve($options);
     }
