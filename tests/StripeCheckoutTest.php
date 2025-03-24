@@ -56,7 +56,7 @@ class StripeCheckoutTest extends AbstractTestCase
             'slug' => 'test',
             'template' => 'default',
             'isDraft' => false,
-        ]);
+        ])->changeStatus('listed');
 
         // to test a product
         $this->productPage = site()->createChild([
@@ -79,8 +79,8 @@ class StripeCheckoutTest extends AbstractTestCase
         $this->productPage->delete(true);
     }
 
-    #[DataProvider('provideInitializeWithInvalidOptionsData')]
-    public function testInitializeWithInvalidOptions(string $uiMode, string $optionName, mixed $invalidValue): void
+    #[DataProvider('provideInvalidOptionsData')]
+    public function testInvalidOptions(string $uiMode, string $optionName, mixed $invalidValue): void
     {
         $options = $this->options[$uiMode];
         $options[$optionName] = $invalidValue;
@@ -90,7 +90,7 @@ class StripeCheckoutTest extends AbstractTestCase
         new StripeCheckout($options);
     }
 
-    public static function provideInitializeWithInvalidOptionsData(): \Generator
+    public static function provideInvalidOptionsData(): \Generator
     {
         // hosted
         yield 'hosted invalid stripePublicKey' => ['hosted', 'stripePublicKey', null];
