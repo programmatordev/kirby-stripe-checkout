@@ -3,6 +3,7 @@
 namespace ProgrammatorDev\StripeCheckout\Test;
 
 use Kirby\Cms\Page;
+use Kirby\Cms\Site;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Exception\EmptyCartException;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
@@ -54,9 +55,11 @@ class StripeCheckoutTest extends AbstractTestCase
         // for success, return and cancel option pages
         $this->testPage = site()->createChild([
             'slug' => 'test',
-            'template' => 'default'
+            'template' => 'default',
+            'content' => [
+                'title' => 'Test'
+            ]
         ])->changeStatus('listed');
-
         // to test a product
         $this->productPage = site()->createChild([
             'slug' => 'product',
@@ -70,12 +73,12 @@ class StripeCheckoutTest extends AbstractTestCase
 
     protected function tearDown(): void
     {
+        parent::tearDown();
+
         // destroy data after each test
         cart()->destroy();
         $this->testPage->delete(true);
         $this->productPage->delete(true);
-
-        parent::tearDown();
     }
 
     #[DataProvider('provideInvalidOptionsData')]
