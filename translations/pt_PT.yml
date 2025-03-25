@@ -62,11 +62,9 @@ fields.order.events.createdAt.label: Criado em
 
 sections.orders.label: Encomendas
 sections.orders.empty: Nenhuma encomenda ainda
-sections.orders.title.label: ID
+sections.orders.title.label: Número
+sections.orders.createdAt.label: Data
 sections.orders.email.label: Email
-sections.orders.paymentMethod.label: Método de pagamento
-sections.orders.totalAmount.label: Valor total
-sections.orders.createdAt.label: Criada em
 sections.pendingPayments.label: Pagamentos pendentes
 sections.pendingPayments.empty: Nenhum pagamento pendente
 sections.failedPayments.label: Pagamentos falhados

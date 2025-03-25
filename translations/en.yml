@@ -62,11 +62,9 @@ fields.order.events.createdAt.label: Date
 
 sections.orders.label: Orders
 sections.orders.empty: No orders yet
-sections.orders.title.label: ID
+sections.orders.title.label: Number
+sections.orders.createdAt.label: Date
 sections.orders.email.label: Email
-sections.orders.paymentMethod.label: Payment method
-sections.orders.totalAmount.label: Total amount
-sections.orders.createdAt.label: Created at
 sections.pendingPayments.label: Pending payments
 sections.pendingPayments.empty: No pending payments
 sections.failedPayments.label: Failed payments
