@@ -44,6 +44,7 @@ fields.order.lineItems.quantity.label: Quantidade
 fields.order.lineItems.subtotal.label: Subtotal
 fields.order.lineItems.discount.label: Desconto
 fields.order.lineItems.total.label: Total
+fields.order.lineItems.pageId.label: ID do produto
 fields.order.subtotalAmount.label: Subtotal
 fields.order.discountAmount.label: Desconto
 fields.order.shippingAmount.label: Portes de envio

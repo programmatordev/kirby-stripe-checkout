@@ -44,6 +44,7 @@ fields.order.lineItems.quantity.label: Quantity
 fields.order.lineItems.subtotal.label: Subtotal
 fields.order.lineItems.discount.label: Discount
 fields.order.lineItems.total.label: Total
+fields.order.lineItems.pageId.label: Product ID
 fields.order.subtotalAmount.label: Subtotal
 fields.order.discountAmount.label: Discount
 fields.order.shippingAmount.label: Shipping
