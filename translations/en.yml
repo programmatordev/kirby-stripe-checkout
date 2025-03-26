@@ -14,7 +14,19 @@ fields.settings.shippingOptions.deliveryEstimateUnit.options.day: Days
 fields.settings.shippingOptions.deliveryEstimateUnit.options.businessDay: Business days
 fields.settings.shippingOptions.deliveryEstimateUnit.options.week: Weeks
 fields.settings.shippingOptions.deliveryEstimateUnit.options.month: Months
+fields.orders.ordersHeadline.label: Orders
+fields.orders.pendingPaymentsHeadline.label: Pending Payments
+fields.orders.failedPaymentsHeadline.label: Failed Payments
+fields.order.orderHeadline.label: Order
+fields.order.customerHeadline.label: Customer
+fields.order.lineItemsHeadline.label: Items
+fields.order.shippingHeadline.label: Shipping
+fields.order.billingHeadline.label: Billing
+fields.order.customFieldsHeadline.label: Custom Fields
+fields.order.metadataHeadline.label: Metadata
+fields.order.stripeHeadline.label: Stripe
 fields.order.createdAt.label: Created at
+fields.order.paidAt.label: Paid at
 fields.order.paymentMethod.label: Payment method
 fields.order.customFields.label: Custom fields
 fields.order.customFields.empty: No information
@@ -52,6 +64,8 @@ fields.order.taxId.label: Tax ID
 fields.order.taxId.empty: No information
 fields.order.taxId.type.label: Type
 fields.order.taxId.value.label: Value
+fields.order.currency.label: Currency
+fields.order.currencySymbol.label: Symbol
 fields.order.paymentIntentId.label: Payment ID
 fields.order.events.label: Event logs
 fields.order.events.id.label: ID
@@ -77,7 +91,7 @@ pages.order.status.draft: Failed
 pages.order.status.unlisted: Pending
 pages.order.status.listed: Completed
 pages.order.tabs.overview.label: Overview
-pages.order.tabs.stripe.label: Stripe
+pages.order.tabs.metadata.label: Metadata
 
 # Stripe payment methods
 # must match the following options

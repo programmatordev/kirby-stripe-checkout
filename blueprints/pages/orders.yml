@@ -14,13 +14,15 @@ options:
   update: false
 
 columns:
-  - width: 1/4
+  ordersHeadline:
+    width: 1/4
     sticky: true
     fields:
       ordersHeadline:
         type: headline
-        label: stripe-checkout.sections.orders.label
-  - width: 3/4
+        label: stripe-checkout.fields.orders.ordersHeadline.label
+  ordersSections:
+    width: 3/4
     sections:
       orders:
         extends: stripe-checkout.sections/orders
@@ -28,13 +30,20 @@ columns:
         status: listed
         empty: stripe-checkout.sections.orders.empty
 
-  - width: 1/4
+  pendingPaymentsLine:
+    width: 1/1
+    fields:
+      pendingPaymentsLine:
+        type: line
+  pendingPaymentsHeadline:
+    width: 1/4
     sticky: true
     fields:
       pendingPaymentsHeadline:
         type: headline
-        label: stripe-checkout.sections.pendingPayments.label
-  - width: 3/4
+        label: stripe-checkout.fields.orders.pendingPaymentsHeadline.label
+  pendingPaymentsSection:
+    width: 3/4
     sections:
       pendingPayments:
         extends: stripe-checkout.sections/orders
@@ -42,13 +51,20 @@ columns:
         status: unlisted
         empty: stripe-checkout.sections.pendingPayments.empty
 
-  - width: 1/4
+  failedPaymentsLine:
+    width: 1/1
+    fields:
+      failedPaymentsLine:
+        type: line
+  failedPaymentsHeadline:
+    width: 1/4
     sticky: true
     fields:
       failedPaymentsHeadline:
         type: headline
-        label: stripe-checkout.sections.failedPayments.label
-  - width: 3/4
+        label: stripe-checkout.fields.orders.failedPaymentsHeadline.label
+  failedPaymentsSection:
+    width: 3/4
     sections:
       failedPayments:
         extends: stripe-checkout.sections/orders

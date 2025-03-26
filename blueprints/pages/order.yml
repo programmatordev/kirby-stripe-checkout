@@ -20,31 +20,40 @@ options:
 
 tabs:
   overview:
+    icon: cart
     label: stripe-checkout.pages.order.tabs.overview.label
     columns:
-      left:
-        sticky: true
-        width: 1/3
+      orderHeadline:
+        width: 1/4
+        fields:
+          orderHidden:
+            type: hidden
+      orderSection:
+        width: 3/4
         fields:
           createdAt:
             label: stripe-checkout.fields.order.createdAt.label
             type: text
-          paymentMethod:
-            label: stripe-checkout.fields.order.paymentMethod.label
+            width: 1/2
+          paidAt:
+            label: stripe-checkout.fields.order.paidAt.label
             type: text
-          customFields:
-            label: stripe-checkout.fields.order.customFields.label
-            type: structure
-            empty: stripe-checkout.fields.order.customFields.empty
-            fields:
-              name:
-                label: stripe-checkout.fields.order.customFields.name.label
-                type: text
-              value:
-                label: stripe-checkout.fields.order.customFields.value.label
-                type: text
-      right:
-        width: 2/3
+            width: 1/2
+
+      customerLine:
+        width: 1/1
+        fields:
+          customerLine:
+            type: line
+      customerHeadline:
+        width: 1/4
+        sticky: true
+        fields:
+          customerHeadline:
+            type: headline
+            label: stripe-checkout.fields.order.customerHeadline.label
+      customerSection:
+        width: 3/4
         fields:
           customer:
             label: stripe-checkout.fields.order.customer.label
@@ -59,21 +68,35 @@ tabs:
               phone:
                 label: stripe-checkout.fields.order.customer.phone.label
                 type: text
+
+      lineItemsLine:
+        width: 1/1
+        fields:
+          lineItemsLine:
+            type: line
+      lineItemsHeadline:
+        width: 1/4
+        sticky: true
+        fields:
+          lineItemsHeadline:
+            type: headline
+            label: stripe-checkout.fields.order.lineItemsHeadline.label
+      lineItemsSection:
+        width: 3/4
+        fields:
           lineItems:
             label: stripe-checkout.fields.order.lineItems.label
             type: structure
             columns:
-              name: true
-              description: true
-              price:
-                align: right
+              name:
+                width: 2/5
+              description:
+                width: 1/5
               quantity:
-                align: right
-              subtotal:
-                align: right
-              discount:
+                width: 1/5
                 align: right
               total:
+                width: 1/5
                 align: right
             fields:
               name:
@@ -113,6 +136,22 @@ tabs:
             width: 1/4
             label: stripe-checkout.fields.order.totalAmount.label
             type: text
+
+      shippingLine:
+        width: 1/1
+        fields:
+          shippingLine:
+            type: line
+      shippingHeadline:
+        width: 1/4
+        sticky: true
+        fields:
+          shippingHeadline:
+            type: headline
+            label: stripe-checkout.fields.order.shippingHeadline.label
+      shippingSection:
+        width: 3/4
+        fields:
           shippingDetails:
             label: stripe-checkout.fields.order.shippingDetails.label
             type: object
@@ -141,6 +180,25 @@ tabs:
                 type: text
           shippingOption:
             label: stripe-checkout.fields.order.shippingOption.label
+            type: text
+
+      billingLine:
+        width: 1/1
+        fields:
+          billingLine:
+            type: line
+      billingHeadline:
+        width: 1/4
+        sticky: true
+        fields:
+          billingHeadline:
+            type: headline
+            label: stripe-checkout.fields.order.billingHeadline.label
+      billingSection:
+        width: 3/4
+        fields:
+          paymentMethod:
+            label: stripe-checkout.fields.order.paymentMethod.label
             type: text
           billingDetails:
             label: stripe-checkout.fields.order.billingDetails.label
@@ -179,18 +237,74 @@ tabs:
               value:
                 label: stripe-checkout.fields.order.taxId.value.label
                 type: text
-  stripe:
-    label: stripe-checkout.pages.order.tabs.stripe.label
+
+      customFieldsLine:
+        width: 1/1
+        fields:
+          customFieldsLine:
+            type: line
+      customFieldsHeadline:
+        width: 1/4
+        sticky: true
+        fields:
+          customFieldsHeadline:
+            type: headline
+            label: stripe-checkout.fields.order.customFieldsHeadline.label
+      customFieldsSection:
+        width: 3/4
+        fields:
+          customFields:
+            label: stripe-checkout.fields.order.customFields.label
+            type: structure
+            empty: stripe-checkout.fields.order.customFields.empty
+            fields:
+              name:
+                label: stripe-checkout.fields.order.customFields.name.label
+                type: text
+              value:
+                label: stripe-checkout.fields.order.customFields.value.label
+                type: text
+
+  metadata:
+    icon: layers
+    label: stripe-checkout.pages.order.tabs.metadata.label
     columns:
-      left:
-        width: 1/3
+      metadataHeadline:
+        width: 1/4
+        sticky: true
+        fields:
+          metadataHidden:
+            type: hidden
+      metadataSection:
+        width: 3/4
+        fields:
+          currency:
+            label: stripe-checkout.fields.order.currency.label
+            type: text
+            width: 1/2
+          currencySymbol:
+            label: stripe-checkout.fields.order.currencySymbol.label
+            type: text
+            width: 1/2
+
+      stripeLine:
+        width: 1/1
+        fields:
+          stripeLine:
+            type: line
+      stripeHeadline:
+        width: 1/4
+        sticky: true
+        fields:
+          stripeHeadline:
+            type: headline
+            label: stripe-checkout.fields.order.stripeHeadline.label
+      stripeSection:
+        width: 3/4
         fields:
           paymentIntentId:
             label: stripe-checkout.fields.order.paymentIntentId.label
             type: text
-      right:
-        width: 2/3
-        fields:
           events:
             label: stripe-checkout.fields.order.events.label
             type: structure
