@@ -36,7 +36,7 @@ fields.order.customer.label: Customer
 fields.order.customer.email.label: Email
 fields.order.customer.name.label: Name
 fields.order.customer.phone.label: Phone
-fields.order.lineItems.label: Line items
+fields.order.lineItems.label: Items
 fields.order.lineItems.name.label: Name
 fields.order.lineItems.description.label: Description
 fields.order.lineItems.price.label: Price
@@ -66,11 +66,11 @@ fields.order.taxId.type.label: Type
 fields.order.taxId.value.label: Value
 fields.order.currency.label: Currency
 fields.order.currencySymbol.label: Symbol
-fields.order.paymentIntentId.label: Payment ID
-fields.order.events.label: Event logs
+fields.order.paymentIntentId.label: Payment intent ID
+fields.order.events.label: Events
 fields.order.events.id.label: ID
 fields.order.events.type.label: Type
-fields.order.events.paymentStatus.label: Payment status
+fields.order.events.paymentStatus.label: Status
 fields.order.events.message.label: Message
 fields.order.events.createdAt.label: Date
 

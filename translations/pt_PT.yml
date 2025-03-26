@@ -66,17 +66,17 @@ fields.order.taxId.type.label: Tipo
 fields.order.taxId.value.label: Valor
 fields.order.currency.label: Moeda
 fields.order.currencySymbol.label: Símbolo
-fields.order.paymentIntentId.label: ID de pagamento
-fields.order.events.label: Registo de eventos
-fields.order.events.id.label: ID
-fields.order.events.type.label: Tipo
-fields.order.events.paymentStatus.label: Estado de pagamento
-fields.order.events.message.label: Mensagem
-fields.order.events.createdAt.label: Criado em
+fields.order.stripePaymentIntentId.label: ID de pagamento
+fields.order.stripeEvents.label: Eventos
+fields.order.stripeEvents.id.label: ID
+fields.order.stripeEvents.type.label: Tipo
+fields.order.stripeEvents.paymentStatus.label: Estado
+fields.order.stripeEvents.message.label: Mensagem
+fields.order.stripeEvents.createdAt.label: Data
 
 sections.orders.label: Encomendas
 sections.orders.empty: Nenhuma encomenda ainda
-sections.orders.title.label: Número
+sections.orders.title.label: ID
 sections.orders.createdAt.label: Data
 sections.orders.email.label: Email
 sections.pendingPayments.label: Pagamentos pendentes

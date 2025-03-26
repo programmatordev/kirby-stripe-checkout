@@ -121,19 +121,18 @@ tabs:
                 label: stripe-checkout.fields.order.lineItems.total.label
                 type: text
           subtotalAmount:
-            width: 1/4
+            width: 1/3
             label: stripe-checkout.fields.order.subtotalAmount.label
             type: text
           discountAmount:
-            width: 1/4
+            width: 1/3
             label: stripe-checkout.fields.order.discountAmount.label
             type: text
           shippingAmount:
-            width: 1/4
+            width: 1/3
             label: stripe-checkout.fields.order.shippingAmount.label
             type: text
           totalAmount:
-            width: 1/4
             label: stripe-checkout.fields.order.totalAmount.label
             type: text
 
@@ -302,11 +301,11 @@ tabs:
       stripeSection:
         width: 3/4
         fields:
-          paymentIntentId:
-            label: stripe-checkout.fields.order.paymentIntentId.label
+          stripePaymentIntentId:
+            label: stripe-checkout.fields.order.stripePaymentIntentId.label
             type: text
-          events:
-            label: stripe-checkout.fields.order.events.label
+          stripeEvents:
+            label: stripe-checkout.fields.order.stripeEvents.label
             type: structure
             sortable: false
             columns:
@@ -317,17 +316,17 @@ tabs:
                 align: right
             fields:
               id:
-                label: stripe-checkout.fields.order.events.id.label
+                label: stripe-checkout.fields.order.stripeEvents.id.label
                 type: text
               type:
-                label: stripe-checkout.fields.order.events.type.label
+                label: stripe-checkout.fields.order.stripeEvents.type.label
                 type: text
               paymentStatus:
-                label: stripe-checkout.fields.order.events.paymentStatus.label
+                label: stripe-checkout.fields.order.stripeEvents.paymentStatus.label
                 type: text
               message:
-                label: stripe-checkout.fields.order.events.message.label
+                label: stripe-checkout.fields.order.stripeEvents.message.label
                 type: writer
               createdAt:
-                label: stripe-checkout.fields.order.events.createdAt.label
+                label: stripe-checkout.fields.order.stripeEvents.createdAt.label
                 type: text
