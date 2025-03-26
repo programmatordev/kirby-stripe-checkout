@@ -113,7 +113,7 @@ class StripeCheckout
             'metadata' => [
                 // generate a unique id for the order
                 // required in webhooks to sync the different event payment steps
-                'order_id' => strtolower(Uuid::generate()),
+                'order_id' => Uuid::generate(),
                 // save language to know which one was used when ordering
                 // useful to set language programmatically on webhooks
                 // example: to use with hooks when sending emails with the same language
@@ -168,7 +168,12 @@ class StripeCheckout
         /** @var Item $item */
         foreach ($cart->items() as $item) {
             $productData = [
-                'name' => $item->name()
+                'name' => $item->name(),
+                'metadata' => [
+                    // save product page uuid
+                    // can be useful for relation with product page
+                    'page_id' => (string) $item->productPage()->uuid()
+                ]
             ];
 
             if ($item->thumbnail()) {

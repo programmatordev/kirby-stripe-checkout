@@ -97,7 +97,7 @@ pages.order.tabs.metadata.label: Metadados
 # Stripe payment methods
 # must match the following options
 # https://docs.stripe.com/api/checkout/sessions/object?lang=php#checkout_session_object-payment_method_options
-paymentMethods.card: Cartão de crédito
+paymentMethods.card: Cartão de Crédito
 paymentMethods.multibanco: Multibanco
 paymentMethods.paypal: Paypal
-paymentMethods.no_cost: Encomenda sem custos
+paymentMethods.no_cost: Encomenda sem Custos

@@ -322,8 +322,7 @@ tabs:
               id: true
               type: true
               paymentStatus: true
-              createdAt:
-                align: right
+              createdAt: true
             fields:
               id:
                 label: stripe-checkout.fields.order.stripeEvents.id.label
