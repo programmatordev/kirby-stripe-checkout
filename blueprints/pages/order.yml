@@ -260,6 +260,9 @@ tabs:
             label: stripe-checkout.fields.order.customFields.label
             type: structure
             empty: stripe-checkout.fields.order.customFields.empty
+            columns:
+              name: true
+              value: true
             fields:
               name:
                 label: stripe-checkout.fields.order.customFields.name.label
@@ -267,6 +270,9 @@ tabs:
               value:
                 label: stripe-checkout.fields.order.customFields.value.label
                 type: text
+              key:
+                type: text
+                disabled: true
 
   metadata:
     icon: layers
