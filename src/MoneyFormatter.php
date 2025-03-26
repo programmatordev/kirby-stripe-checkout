@@ -7,7 +7,6 @@ use Brick\Math\Exception\NumberFormatException;
 use Brick\Math\Exception\RoundingNecessaryException;
 use Brick\Money\Exception\UnknownCurrencyException;
 use Brick\Money\Money;
-use Symfony\Component\Intl\Currencies;
 
 class MoneyFormatter
 {
