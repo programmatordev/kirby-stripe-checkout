@@ -54,9 +54,11 @@ class StripeCheckoutTest extends AbstractTestCase
         // for success, return and cancel option pages
         $this->testPage = site()->createChild([
             'slug' => 'test',
-            'template' => 'default'
+            'template' => 'default',
+            'content' => [
+                'title' => 'Test'
+            ]
         ])->changeStatus('listed');
-
         // to test a product
         $this->productPage = site()->createChild([
             'slug' => 'product',
@@ -70,12 +72,12 @@ class StripeCheckoutTest extends AbstractTestCase
 
     protected function tearDown(): void
     {
+        parent::tearDown();
+
         // destroy data after each test
         cart()->destroy();
         $this->testPage->delete(true);
         $this->productPage->delete(true);
-
-        parent::tearDown();
     }
 
     #[DataProvider('provideInvalidOptionsData')]
@@ -157,9 +159,12 @@ class StripeCheckoutTest extends AbstractTestCase
         $this->assertSame($stripeCheckout->stripeSecretKey(), $options['stripeSecretKey']);
         $this->assertSame($stripeCheckout->stripeWebhookSecret(), $options['stripeWebhookSecret']);
         $this->assertSame($stripeCheckout->currency(), $options['currency']);
+        $this->assertSame($stripeCheckout->currencySymbol(), '€');
         $this->assertSame($stripeCheckout->uiMode(), $options['uiMode']);
         $this->assertSame($stripeCheckout->ordersPage(), $options['ordersPage']);
         $this->assertSame($stripeCheckout->settingsPage(), $options['settingsPage']);
+        $this->assertStringEndsWith('/stripe/checkout', $stripeCheckout->checkoutUrl());
+        $this->assertStringEndsWith('/stripe/checkout/embedded', $stripeCheckout->checkoutEmbeddedUrl());
 
         switch ($uiMode) {
             case 'hosted':

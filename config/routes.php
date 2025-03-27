@@ -4,11 +4,12 @@ use Kirby\Cms\App;
 use Kirby\Toolkit\Date;
 use Kirby\Toolkit\Str;
 use ProgrammatorDev\StripeCheckout\Exception\InvalidEndpointException;
-use ProgrammatorDev\StripeCheckout\Exception\CheckoutWebhookException;
+use ProgrammatorDev\StripeCheckout\Exception\InvalidWebhookException;
 use ProgrammatorDev\StripeCheckout\MoneyFormatter;
 use Stripe\Checkout\Session;
 use Stripe\Event;
 use Stripe\Exception\SignatureVerificationException;
+use Symfony\Component\Intl\Currencies;
 
 return function(App $kirby) {
     return [
@@ -70,11 +71,11 @@ return function(App $kirby) {
                 }
                 // invalid payload
                 catch (UnexpectedValueException) {
-                    throw new CheckoutWebhookException('Invalid payload.');
+                    throw new InvalidWebhookException('Invalid payload.');
                 }
                 // invalid signature
                 catch (SignatureVerificationException) {
-                    throw new CheckoutWebhookException('Invalid signature.');
+                    throw new InvalidWebhookException('Invalid signature.');
                 }
 
                 // get checkout session with required data
@@ -85,36 +86,41 @@ return function(App $kirby) {
                         'shipping_cost.shipping_rate'
                     ]
                 ]);
+
                 // get system timezone to be used on dates conversion
                 $timezone = new DateTimeZone(date_default_timezone_get());
+                // get order id
+                $orderId = $checkoutSession->metadata['order_id'];
+                // set "en" as the default language code if there is none
+                $languageCode = !empty($checkoutSession->metadata['language_code'])
+                    ? $checkoutSession->metadata['language_code']
+                    : 'en';
 
                 // impersonate kirby to have permissions to create pages
                 $kirby->impersonate('kirby');
                 // set the language that was used when the user made the order
-                $kirby->setCurrentLanguage($checkoutSession->metadata['language_code'] ?? null);
+                $kirby->setCurrentLanguage($languageCode);
 
                 switch ($event->type) {
                     // no need to handle duplicate events here
                     // because if an order is (tried to) be created with the same slug it will fail
                     case Event::CHECKOUT_SESSION_COMPLETED:
-                        // get order currency
-                        $currency = $stripeCheckout->getCurrency();
-                        // create line items structure
+                        $currency = strtoupper($checkoutSession->currency);
                         $lineItems = [];
 
                         foreach ($checkoutSession->line_items->data as $lineItem) {
                             $lineItems[] = [
                                 'name' => $lineItem->price->product->name,
                                 'description' => $lineItem->price->product->description,
-                                'price' => MoneyFormatter::formatFromMinorUnit($lineItem->price->unit_amount, $currency),
+                                'price' => MoneyFormatter::fromMinorUnit($lineItem->price->unit_amount, $currency, true),
                                 'quantity' => $lineItem->quantity,
-                                'subtotal' => MoneyFormatter::formatFromMinorUnit($lineItem->amount_subtotal, $currency),
-                                'discount' => MoneyFormatter::formatFromMinorUnit($lineItem->amount_discount, $currency),
-                                'total' => MoneyFormatter::formatFromMinorUnit($lineItem->amount_total, $currency)
+                                'subtotal' => MoneyFormatter::fromMinorUnit($lineItem->amount_subtotal, $currency, true),
+                                'discount' => MoneyFormatter::fromMinorUnit($lineItem->amount_discount, $currency, true),
+                                'total' => MoneyFormatter::fromMinorUnit($lineItem->amount_total, $currency, true),
+                                'pageId' => $lineItem->price->product->metadata['page_id']
                             ];
                         }
 
-                        // shipping details
                         $shippingDetails = $checkoutSession->shipping_details === null ? null : [
                             'name' => $checkoutSession->shipping_details->name ?? null,
                             'country' => $checkoutSession->shipping_details->address->country ?? null,
@@ -125,7 +131,6 @@ return function(App $kirby) {
                             'state' => $checkoutSession->shipping_details->address->state ?? null
                         ];
 
-                        // billing details
                         // customer_details is always be populated with billing info,
                         // even when there is no payment_intent (no-cost orders)
                         $billingDetails = $checkoutSession->customer_details->address?->country === null ? null : [
@@ -138,19 +143,17 @@ return function(App $kirby) {
                             'state' => $checkoutSession->customer_details->address->state ?? null
                         ];
 
-                        // tax id
                         $taxId = empty($checkoutSession->customer_details->tax_ids) ? null : [
                             'type' => $checkoutSession->customer_details->tax_ids[0]->type,
                             'value' => $checkoutSession->customer_details->tax_ids[0]->value
                         ];
 
-                        // custom fields
                         $customFields = [];
-
                         foreach ($checkoutSession->custom_fields as $customField) {
                             $customFields[] = [
                                 'name' => $customField->label->custom,
-                                'value' => $customField->{$customField->type}->value
+                                'value' => $customField->{$customField->type}->value,
+                                'key' => $customField->key
                             ];
                         }
 
@@ -166,9 +169,8 @@ return function(App $kirby) {
                             Str::ucwords(Str::replace($paymentType, '_', ' '))
                         );
 
-                        // set order content
                         $orderContent = [
-                            'paymentIntentId' => $checkoutSession->payment_intent?->id ?? null,
+                            'title' => $orderId,
                             'createdAt' => Date::now()->format('Y-m-d H:i:s'),
                             'customer' => [
                                 'email' => $checkoutSession->customer_details->email,
@@ -181,12 +183,15 @@ return function(App $kirby) {
                             'shippingOption' => $checkoutSession->shipping_cost?->shipping_rate->display_name ?? null,
                             'billingDetails' => $billingDetails,
                             'taxId' => $taxId,
-                            'subtotalAmount' => MoneyFormatter::formatFromMinorUnit($checkoutSession->amount_subtotal, $currency),
-                            'discountAmount' => MoneyFormatter::formatFromMinorUnit($checkoutSession->total_details->amount_discount, $currency),
-                            'shippingAmount' => MoneyFormatter::formatFromMinorUnit($checkoutSession->total_details->amount_shipping, $currency),
-                            'totalAmount' => MoneyFormatter::formatFromMinorUnit($checkoutSession->amount_total, $currency),
+                            'subtotalAmount' => MoneyFormatter::fromMinorUnit($checkoutSession->amount_subtotal, $currency, true),
+                            'discountAmount' => MoneyFormatter::fromMinorUnit($checkoutSession->total_details->amount_discount, $currency, true),
+                            'shippingAmount' => MoneyFormatter::fromMinorUnit($checkoutSession->total_details->amount_shipping, $currency, true),
+                            'totalAmount' => MoneyFormatter::fromMinorUnit($checkoutSession->amount_total, $currency, true),
                             'customFields' => $customFields,
-                            'events' => [
+                            'currency' => $currency,
+                            'currencySymbol' => Currencies::getSymbol($currency),
+                            'stripePaymentIntentId' => $checkoutSession->payment_intent?->id ?? null,
+                            'stripeEvents' => [
                                 [
                                     'id' => $event->id,
                                     'type' => $event->type,
@@ -202,13 +207,14 @@ return function(App $kirby) {
                         // trigger event to allow order content manipulation
                         $orderContent = $kirby->apply('stripe-checkout.order.create:before', [
                             'orderContent' => $orderContent,
-                            'checkoutSession' => $checkoutSession
+                            'checkoutSession' => $checkoutSession,
+                            'stripeEvent' => $event
                         ], 'orderContent');
 
                         // create order
-                        $orderPage = $kirby->page($stripeCheckout->getOrdersPage())
+                        $orderPage = $kirby->page($stripeCheckout->ordersPage())
                             ->createChild([
-                                'slug' => $checkoutSession->metadata['order_id'],
+                                'slug' => $orderId,
                                 'template' => 'order',
                                 'model' => 'order',
                                 'draft' => false,
@@ -218,11 +224,13 @@ return function(App $kirby) {
                         // set order status and trigger events according to payment status
                         // if payment status is not "unpaid", set order and trigger payment event as completed
                         if ($checkoutSession->payment_status !== Session::PAYMENT_STATUS_UNPAID) {
+                            $orderPage->update(['paidAt' => Date::now()->format('Y-m-d H:i:s')]);
                             $orderPage->changeStatus('listed');
 
                             $kirby->trigger('stripe-checkout.payment:succeeded', [
                                 'orderPage' => $orderPage,
-                                'checkoutSession' => $checkoutSession
+                                'checkoutSession' => $checkoutSession,
+                                'stripeEvent' => $event
                             ]);
                         }
                         // if payment is "unpaid", it means it will be (possibly) paid in the future
@@ -231,7 +239,8 @@ return function(App $kirby) {
                         else {
                             $kirby->trigger('stripe-checkout.payment:pending', [
                                 'orderPage' => $orderPage,
-                                'checkoutSession' => $checkoutSession
+                                'checkoutSession' => $checkoutSession,
+                                'stripeEvent' => $event
                             ]);
                         }
 
@@ -240,34 +249,28 @@ return function(App $kirby) {
                     case Event::CHECKOUT_SESSION_ASYNC_PAYMENT_FAILED:
                         // find existing order page
                         $orderPage = $kirby->page(
-                            sprintf(
-                                '%s/%s',
-                                $stripeCheckout->getOrdersPage(),
-                                $checkoutSession->metadata['order_id']
-                            )
+                            sprintf('%s/%s', $stripeCheckout->ordersPage(), $orderId)
                         );
 
                         // order does not exist
                         if ($orderPage === null) {
-                            throw new CheckoutWebhookException('Order does not exist.');
+                            throw new InvalidWebhookException('Order does not exist.');
                         }
 
                         // get existing events
-                        $orderEvents = $orderPage->events()
-                            ->toStructure()
-                            ->toArray();
+                        $orderStripeEvents = $orderPage->stripeEvents()->toStructure()->toArray();
 
                         // check if event id was already processed in the past
                         // immediately exit if it was
                         // https://docs.stripe.com/webhooks#handle-duplicate-events
-                        foreach ($orderEvents as $orderEvent) {
-                            if ($orderEvent['id'] === $event->id) {
-                                throw new CheckoutWebhookException('Duplicate event.');
+                        foreach ($orderStripeEvents as $orderStripeEvent) {
+                            if ($orderStripeEvent['id'] === $event->id) {
+                                throw new InvalidWebhookException('Duplicate event.');
                             }
                         }
 
                         // add new event
-                        $orderEvents[] = [
+                        $orderStripeEvents[] = [
                             'id' => $event->id,
                             'type' => $event->type,
                             'paymentStatus' => $checkoutSession->payment_status,
@@ -277,26 +280,30 @@ return function(App $kirby) {
                                 ->format('Y-m-d H:i:s')
                         ];
 
-                        // update page events
-                        $orderPage->update(['events' => $orderEvents]);
-
                         // set order status and trigger events according to event received
                         // if payment succeeded, set order and trigger payment event as completed
                         if ($event->type === Event::CHECKOUT_SESSION_ASYNC_PAYMENT_SUCCEEDED) {
+                            $orderPage->update([
+                                'paidAt' => Date::now()->format('Y-m-d H:i:s'),
+                                'stripeEvents' => $orderStripeEvents
+                            ]);
                             $orderPage->changeStatus('listed');
 
                             $kirby->trigger('stripe-checkout.payment:succeeded', [
                                 'orderPage' => $orderPage,
-                                'checkoutSession' => $checkoutSession
+                                'checkoutSession' => $checkoutSession,
+                                'stripeEvent' => $event
                             ]);
                         }
                         // if payment failed, set order and trigger payment event as failed
                         else if ($event->type === Event::CHECKOUT_SESSION_ASYNC_PAYMENT_FAILED) {
+                            $orderPage->update(['stripeEvents' => $orderStripeEvents]);
                             $orderPage->changeStatus('draft');
 
                             $kirby->trigger('stripe-checkout.payment:failed', [
                                 'orderPage' => $orderPage,
-                                'checkoutSession' => $checkoutSession
+                                'checkoutSession' => $checkoutSession,
+                                'stripeEvent' => $event
                             ]);
                         }
 

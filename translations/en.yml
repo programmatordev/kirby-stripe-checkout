@@ -14,7 +14,19 @@ fields.settings.shippingOptions.deliveryEstimateUnit.options.day: Days
 fields.settings.shippingOptions.deliveryEstimateUnit.options.businessDay: Business days
 fields.settings.shippingOptions.deliveryEstimateUnit.options.week: Weeks
 fields.settings.shippingOptions.deliveryEstimateUnit.options.month: Months
+fields.orders.ordersHeadline.label: Orders
+fields.orders.pendingPaymentsHeadline.label: Pending Payments
+fields.orders.failedPaymentsHeadline.label: Failed Payments
+fields.order.orderHeadline.label: Order
+fields.order.customerHeadline.label: Customer
+fields.order.lineItemsHeadline.label: Items
+fields.order.shippingHeadline.label: Shipping
+fields.order.billingHeadline.label: Billing
+fields.order.customFieldsHeadline.label: Custom Fields
+fields.order.metadataHeadline.label: Metadata
+fields.order.stripeHeadline.label: Stripe
 fields.order.createdAt.label: Created at
+fields.order.paidAt.label: Paid at
 fields.order.paymentMethod.label: Payment method
 fields.order.customFields.label: Custom fields
 fields.order.customFields.empty: No information
@@ -24,7 +36,7 @@ fields.order.customer.label: Customer
 fields.order.customer.email.label: Email
 fields.order.customer.name.label: Name
 fields.order.customer.phone.label: Phone
-fields.order.lineItems.label: Line items
+fields.order.lineItems.label: Items
 fields.order.lineItems.name.label: Name
 fields.order.lineItems.description.label: Description
 fields.order.lineItems.price.label: Price
@@ -32,6 +44,7 @@ fields.order.lineItems.quantity.label: Quantity
 fields.order.lineItems.subtotal.label: Subtotal
 fields.order.lineItems.discount.label: Discount
 fields.order.lineItems.total.label: Total
+fields.order.lineItems.pageId.label: Product ID
 fields.order.subtotalAmount.label: Subtotal
 fields.order.discountAmount.label: Discount
 fields.order.shippingAmount.label: Shipping
@@ -52,21 +65,21 @@ fields.order.taxId.label: Tax ID
 fields.order.taxId.empty: No information
 fields.order.taxId.type.label: Type
 fields.order.taxId.value.label: Value
-fields.order.paymentIntentId.label: Payment ID
-fields.order.events.label: Event logs
+fields.order.currency.label: Currency
+fields.order.currencySymbol.label: Symbol
+fields.order.paymentIntentId.label: Payment intent ID
+fields.order.events.label: Events
 fields.order.events.id.label: ID
 fields.order.events.type.label: Type
-fields.order.events.paymentStatus.label: Payment status
+fields.order.events.paymentStatus.label: Status
 fields.order.events.message.label: Message
 fields.order.events.createdAt.label: Date
 
 sections.orders.label: Orders
 sections.orders.empty: No orders yet
-sections.orders.title.label: ID
+sections.orders.title.label: Number
+sections.orders.createdAt.label: Date
 sections.orders.email.label: Email
-sections.orders.paymentMethod.label: Payment method
-sections.orders.totalAmount.label: Total amount
-sections.orders.createdAt.label: Created at
 sections.pendingPayments.label: Pending payments
 sections.pendingPayments.empty: No pending payments
 sections.failedPayments.label: Failed payments
@@ -79,12 +92,12 @@ pages.order.status.draft: Failed
 pages.order.status.unlisted: Pending
 pages.order.status.listed: Completed
 pages.order.tabs.overview.label: Overview
-pages.order.tabs.stripe.label: Stripe
+pages.order.tabs.metadata.label: Metadata
 
 # Stripe payment methods
 # must match the following options
 # https://docs.stripe.com/api/checkout/sessions/object?lang=php#checkout_session_object-payment_method_options
-paymentMethods.card: Credit card
+paymentMethods.card: Credit Card
 paymentMethods.multibanco: Multibanco
 paymentMethods.paypal: Paypal
-paymentMethods.no_cost: No-cost order
+paymentMethods.no_cost: No-cost Order

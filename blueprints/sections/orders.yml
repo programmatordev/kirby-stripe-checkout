@@ -1,20 +1,18 @@
 type: pages
 layout: table
+image: false
 columns:
   title:
     label: stripe-checkout.sections.orders.title.label
+    width: 1/4
   email:
     label: stripe-checkout.sections.orders.email.label
     value: "{{ page.customer.toObject().email }}"
-  paymentmethod:
-    label: stripe-checkout.sections.orders.paymentMethod.label
-  totalamount:
-    label: stripe-checkout.sections.orders.totalAmount.label
-    align: right
-  createdat:
+    width: 2/4
+  createdAt:
     label: stripe-checkout.sections.orders.createdAt.label
     value: "{{ page.createdAt.toDate('Y-m-d') }}"
-    align: right
+    width: 1/4
 sortBy: createdAt desc
 create: false
 search: true

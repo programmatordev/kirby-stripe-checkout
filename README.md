@@ -9,7 +9,7 @@
 > [!CAUTION]
 > This plugin is still in its early stages.
 > This means that it should not be considered stable, so use it at your own risk.
-> Expect breaking changes until version `1.0`.
+> Expect a lot of breaking changes until version `1.0`.
 
 ## Features
 
@@ -17,7 +17,7 @@
 - 💸 Handles sync and async payments (credit card, bank transfer, etc.);
 - 📦 Orders panel page;
 - ⚙️ Checkout Settings panel page;
-- 🪝 Hooks for all payments status (completed, pending and failed), orders, Checkout sessions, and more;
+- 🪝 Hooks for all payments status (completed, pending and failed), orders and checkout sessions;
 - 🛒 Cart management;
 - ...and more.
 
@@ -27,7 +27,6 @@
 - [Installation](#installation)
 - [Options](#options)
 - [Hooks](#hooks)
-- [Site methods](#site-methods)
 - [Cart](#cart)
 - [Translations](#translations)
 - [Setup](#setup)
@@ -37,7 +36,7 @@
 ## Requirements
 
 - PHP 8.2 or higher;
-- Kirby CMS `4.0` or higher;
+- Kirby CMS `4.7` or higher;
 - [Stripe account](https://dashboard.stripe.com/register).
 
 ## Installation
@@ -235,10 +234,11 @@ Useful to set additional Order data in case you add additional fields in the blu
 // config.php
 
 use Stripe\Checkout\Session;
+use Stripe\Event;
 
 return [
     'hooks' => [
-        'stripe-checkout.order.create:before' => function (array $orderContent, Session $checkoutSession): array
+        'stripe-checkout.order.create:before' => function (array $orderContent, Session $checkoutSession, Event $stripeEvent): array
         {
             // change order content
             // ...
@@ -269,10 +269,11 @@ Triggered when a payment is completed successfully.
 
 use Kirby\Cms\Page;
 use Stripe\Checkout\Session;
+use Stripe\Event;
 
 return [
     'hooks' => [
-        'stripe-checkout.payment:succeeded' => function (Page $orderPage, Session $checkoutSession): void
+        'stripe-checkout.payment:succeeded' => function (Page $orderPage, Session $checkoutSession, Event $stripeEvent): void
         {
             // email the customer when the payment succeeds
             kirby()->email([
@@ -298,10 +299,11 @@ where the Checkout form is submitted successfully, but the payment is yet to be 
 
 use Kirby\Cms\Page;
 use Stripe\Checkout\Session;
+use Stripe\Event;
 
 return [
     'hooks' => [
-        'stripe-checkout.payment:pending' => function (Page $orderPage, Session $checkoutSession): void
+        'stripe-checkout.payment:pending' => function (Page $orderPage, Session $checkoutSession, Event $stripeEvent): void
         {
             // email the customer when the payment is pending
             kirby()->email([
@@ -328,10 +330,11 @@ where the Checkout form is submitted successfully, but the payment has failed
 
 use Kirby\Cms\Page;
 use Stripe\Checkout\Session;
+use Stripe\Event;
 
 return [
     'hooks' => [
-        'stripe-checkout.payment:failed' => function (Page $orderPage, Session $checkoutSession): void
+        'stripe-checkout.payment:failed' => function (Page $orderPage, Session $checkoutSession, Event $stripeEvent): void
         {
             // email the customer when the payment has failed
             kirby()->email([
@@ -343,73 +346,6 @@ return [
         }
     ]
 ];
-```
-
-## Site methods
-
-List of all available site helper methods, used with the `site()` function or in blueprints with `{{ site }}`:
-
-- [stripeCheckoutUrl](#stripecheckouturl)
-- [stripeCheckoutEmbeddedUrl](#stripecheckoutembeddedurl)
-- [stripeCurrencySymbol](#stripecurrencysymbol)
-- [stripeCountriesUrl](#stripecountriesurl)
-
-### `stripeCheckoutUrl`
-
-```php
-stripeCheckoutUrl(): string
-```
-
-URL that handles the Checkout Session and redirects the customer when `uiMode` is `hosted`.
-
-Check the [Setup](#setup) section for more information.
-
-```php
-site()->stripeCheckoutUrl();
-```
-
-### `stripeCheckoutEmbeddedUrl`
-
-```php
-stripeCheckoutEmbeddedUrl(): string
-```
-
-URL that handles the Checkout Session and fetches the client secret when `uiMode` is `embedded`.
-
-Check the [Setup](#setup) section for more information.
-
-```php
-site()->stripeCheckoutEmbeddedUrl();
-```
-
-### `stripeCurrencySymbol`
-
-```php
-stripeCurrencySymbol(): string
-```
-
-Get the configured currency symbol.
-The symbol is obtained based on the [`currency`](#currency) option.
-
-```php
-// if currency is "EUR", it will return "€"
-site()->stripeCurrencySymbol();
-```
-
-### `stripeCountriesUrl`
-
-```php
-stripeCountriesUrl(?string $locale = null): string
-```
-
-URL to get all Stripe supported countries in JSON format.
-
-```php
-// will return the URL to get all supported countries
-site()->stripeCountriesUrl();
-
-// you can also set the locale to generate the URL for a specific locale
-site()->stripeCountriesUrl('pt_PT');
 ```
 
 ## Cart
@@ -888,7 +824,7 @@ For more information about the difference between both modes, check the [`uiMode
 ### Step 6: `hosted` mode.
 
 When in `hosted` mode, you just need to add a link to the website
-with the URL generated by the site method [`stripeCheckoutUrl()`](#stripecheckouturl).
+with the URL generated by the following method `stripeCheckout()->checkoutUrl()`.
 
 This link usually exists in the cart component or when reviewing the order before proceeding to the checkout.
 
@@ -900,7 +836,7 @@ Something like:
   <!-- ... -->
 
   <a href="/shop">Continue shopping</a>
-  <a href="<?= $site->stripeCheckoutUrl() ?>">Proceed to checkout</a>
+  <a href="<?= stripeCheckout()->checkoutUrl() ?>">Proceed to checkout</a>
 </div>
 ```
 
@@ -911,7 +847,7 @@ It is also required to set the [`successPage`](#successpage) and the [`cancelPag
 ### Step 6: `embedded` mode.
 
 When in `embedded` mode, you need to use the [Stripe.js](https://docs.stripe.com/js) library
-as well as the site method [`stripeCheckoutEmbeddedUrl()`](#stripecheckoutembeddedurl).
+as well as the following method `stripeCheckout()->checkoutEmbeddedUrl()`.
 
 You have to create your own checkout page.
 
@@ -928,14 +864,15 @@ Something like:
     <script src="https://js.stripe.com/v3/"></script>
 
     <script defer>
-      // initialize Stripe using the stripePublicKey option
-      const stripe = Stripe('<?= option('programmatordev.stripe-checkout.stripePublicKey') ?>');
+      // initialize Stripe using the stripeCheckout()->stripePublicKey() method
+      // you can also use option('programmatordev.stripe-checkout.stripePublicKey')
+      const stripe = Stripe('<?= stripeCheckout()->stripePublicKey() ?>');
 
       async function initialize() {
         const fetchClientSecret = async () => {
-          // use the stripeCheckoutEmbeddedUrl() method to fetch the client secret
+          // use the stripeCheckout()->checkoutEmbeddedUrl() method to fetch the client secret
           // make sure it is a POST request
-          const response = await fetch('<?= $site->stripeCheckoutEmbeddedUrl() ?>', { method: 'POST' });
+          const response = await fetch('<?= stripeCheckout()->checkoutEmbeddedUrl() ?>', { method: 'POST' });
           const { clientSecret } = await response.json();
 
           return clientSecret;

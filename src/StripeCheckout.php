@@ -22,6 +22,12 @@ class StripeCheckout
 {
     private array $options;
 
+    private string $currencySymbol;
+
+    private string $checkoutUrl;
+
+    private string $checkoutEmbeddedUrl;
+
     private StripeClient $stripe;
 
     private static ?self $instance = null;
@@ -29,6 +35,11 @@ class StripeCheckout
     public function __construct(array $options = [])
     {
         $this->options = $this->resolveOptions($options);
+
+        $this->currencySymbol = Currencies::getSymbol($this->currency());
+        $this->checkoutUrl = sprintf('%s/%s', site()->url(), 'stripe/checkout');
+        $this->checkoutEmbeddedUrl = sprintf('%s/%s', site()->url(), 'stripe/checkout/embedded');
+
         $this->stripe = new StripeClient($this->stripeSecretKey());
     }
 
@@ -63,6 +74,11 @@ class StripeCheckout
         return $this->options['currency'];
     }
 
+    public function currencySymbol(): string
+    {
+        return $this->currencySymbol;
+    }
+
     public function uiMode(): string
     {
         return $this->options['uiMode'];
@@ -93,6 +109,16 @@ class StripeCheckout
         return $this->options['settingsPage'];
     }
 
+    public function checkoutUrl(): string
+    {
+        return $this->checkoutUrl;
+    }
+
+    public function checkoutEmbeddedUrl(): string
+    {
+        return $this->checkoutEmbeddedUrl;
+    }
+
     /**
      * @throws ApiErrorException
      * @throws UnknownCurrencyException
@@ -113,7 +139,7 @@ class StripeCheckout
             'metadata' => [
                 // generate a unique id for the order
                 // required in webhooks to sync the different event payment steps
-                'order_id' => strtolower(Uuid::generate()),
+                'order_id' => Uuid::generate(),
                 // save language to know which one was used when ordering
                 // useful to set language programmatically on webhooks
                 // example: to use with hooks when sending emails with the same language
@@ -168,7 +194,12 @@ class StripeCheckout
         /** @var Item $item */
         foreach ($cart->items() as $item) {
             $productData = [
-                'name' => $item->name()
+                'name' => $item->name(),
+                'metadata' => [
+                    // save product page uuid
+                    // can be useful for relation with product page
+                    'page_id' => (string) $item->productPage()->uuid()
+                ]
             ];
 
             if ($item->thumbnail()) {

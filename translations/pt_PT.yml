@@ -14,7 +14,19 @@ fields.settings.shippingOptions.deliveryEstimateUnit.options.day: Dias
 fields.settings.shippingOptions.deliveryEstimateUnit.options.businessDay: Dias úteis
 fields.settings.shippingOptions.deliveryEstimateUnit.options.week: Semanas
 fields.settings.shippingOptions.deliveryEstimateUnit.options.month: Meses
-fields.order.createdAt.label: Criada em
+fields.orders.ordersHeadline.label: Encomendas
+fields.orders.pendingPaymentsHeadline.label: Pagamentos Pendentes
+fields.orders.failedPaymentsHeadline.label: Pagamentos Falhados
+fields.order.orderHeadline.label: Encomenda
+fields.order.customerHeadline.label: Cliente
+fields.order.lineItemsHeadline.label: Itens
+fields.order.shippingHeadline.label: Envio
+fields.order.billingHeadline.label: Faturação
+fields.order.customFieldsHeadline.label: Campos Personalizados
+fields.order.metadataHeadline.label: Metadados
+fields.order.stripeHeadline.label: Stripe
+fields.order.createdAt.label: Data de criação
+fields.order.paidAt.label: Data de pagamento
 fields.order.paymentMethod.label: Método de pagamento
 fields.order.customFields.label: Campos personalizados
 fields.order.customFields.empty: Sem informação
@@ -24,7 +36,7 @@ fields.order.customer.label: Cliente
 fields.order.customer.email.label: Email
 fields.order.customer.name.label: Nome
 fields.order.customer.phone.label: Telefone
-fields.order.lineItems.label: Items
+fields.order.lineItems.label: Itens
 fields.order.lineItems.name.label: Nome
 fields.order.lineItems.description.label: Descrição
 fields.order.lineItems.price.label: Preço
@@ -32,6 +44,7 @@ fields.order.lineItems.quantity.label: Quantidade
 fields.order.lineItems.subtotal.label: Subtotal
 fields.order.lineItems.discount.label: Desconto
 fields.order.lineItems.total.label: Total
+fields.order.lineItems.pageId.label: ID do produto
 fields.order.subtotalAmount.label: Subtotal
 fields.order.discountAmount.label: Desconto
 fields.order.shippingAmount.label: Portes de envio
@@ -52,21 +65,21 @@ fields.order.taxId.label: Identificação fiscal
 fields.order.taxId.empty: Sem informação
 fields.order.taxId.type.label: Tipo
 fields.order.taxId.value.label: Valor
-fields.order.paymentIntentId.label: ID de pagamento
-fields.order.events.label: Registo de eventos
-fields.order.events.id.label: ID
-fields.order.events.type.label: Tipo
-fields.order.events.paymentStatus.label: Estado de pagamento
-fields.order.events.message.label: Mensagem
-fields.order.events.createdAt.label: Criado em
+fields.order.currency.label: Moeda
+fields.order.currencySymbol.label: Símbolo
+fields.order.stripePaymentIntentId.label: ID de pagamento
+fields.order.stripeEvents.label: Eventos
+fields.order.stripeEvents.id.label: ID
+fields.order.stripeEvents.type.label: Tipo
+fields.order.stripeEvents.paymentStatus.label: Estado
+fields.order.stripeEvents.message.label: Mensagem
+fields.order.stripeEvents.createdAt.label: Data
 
 sections.orders.label: Encomendas
 sections.orders.empty: Nenhuma encomenda ainda
 sections.orders.title.label: ID
+sections.orders.createdAt.label: Data
 sections.orders.email.label: Email
-sections.orders.paymentMethod.label: Método de pagamento
-sections.orders.totalAmount.label: Valor total
-sections.orders.createdAt.label: Criada em
 sections.pendingPayments.label: Pagamentos pendentes
 sections.pendingPayments.empty: Nenhum pagamento pendente
 sections.failedPayments.label: Pagamentos falhados
@@ -79,12 +92,12 @@ pages.order.status.draft: Falhada
 pages.order.status.unlisted: Pendente
 pages.order.status.listed: Finalizada
 pages.order.tabs.overview.label: Encomenda
-pages.order.tabs.stripe.label: Stripe
+pages.order.tabs.metadata.label: Metadados
 
 # Stripe payment methods
 # must match the following options
 # https://docs.stripe.com/api/checkout/sessions/object?lang=php#checkout_session_object-payment_method_options
-paymentMethods.card: Cartão de crédito
+paymentMethods.card: Cartão de Crédito
 paymentMethods.multibanco: Multibanco
 paymentMethods.paypal: Paypal
-paymentMethods.no_cost: Encomenda sem custos
+paymentMethods.no_cost: Encomenda sem Custos
