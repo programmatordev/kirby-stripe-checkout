@@ -21,7 +21,7 @@ columns:
       ordersHeadline:
         type: headline
         label: stripe-checkout.fields.orders.ordersHeadline.label
-  ordersSections:
+  ordersSection:
     width: 3/4
     sections:
       orders:

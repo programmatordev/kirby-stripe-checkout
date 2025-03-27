@@ -105,7 +105,7 @@ return function(App $kirby) {
                     // no need to handle duplicate events here
                     // because if an order is (tried to) be created with the same slug it will fail
                     case Event::CHECKOUT_SESSION_COMPLETED:
-                        $currency = $stripeCheckout->currency();
+                        $currency = strtoupper($checkoutSession->currency);
                         $lineItems = [];
 
                         foreach ($checkoutSession->line_items->data as $lineItem) {
