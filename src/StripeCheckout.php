@@ -22,6 +22,12 @@ class StripeCheckout
 {
     private array $options;
 
+    private string $currencySymbol;
+
+    private string $checkoutUrl;
+
+    private string $checkoutEmbeddedUrl;
+
     private StripeClient $stripe;
 
     private static ?self $instance = null;
@@ -29,6 +35,11 @@ class StripeCheckout
     public function __construct(array $options = [])
     {
         $this->options = $this->resolveOptions($options);
+
+        $this->currencySymbol = Currencies::getSymbol($this->currency());
+        $this->checkoutUrl = sprintf('%s/%s', site()->url(), 'stripe/checkout');
+        $this->checkoutEmbeddedUrl = sprintf('%s/%s', site()->url(), 'stripe/checkout/embedded');
+
         $this->stripe = new StripeClient($this->stripeSecretKey());
     }
 
@@ -63,6 +74,11 @@ class StripeCheckout
         return $this->options['currency'];
     }
 
+    public function currencySymbol(): string
+    {
+        return $this->currencySymbol;
+    }
+
     public function uiMode(): string
     {
         return $this->options['uiMode'];
@@ -91,6 +107,16 @@ class StripeCheckout
     public function settingsPage(): ?string
     {
         return $this->options['settingsPage'];
+    }
+
+    public function checkoutUrl(): string
+    {
+        return $this->checkoutUrl;
+    }
+
+    public function checkoutEmbeddedUrl(): string
+    {
+        return $this->checkoutEmbeddedUrl;
     }
 
     /**

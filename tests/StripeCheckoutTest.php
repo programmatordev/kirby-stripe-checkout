@@ -3,7 +3,6 @@
 namespace ProgrammatorDev\StripeCheckout\Test;
 
 use Kirby\Cms\Page;
-use Kirby\Cms\Site;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Exception\EmptyCartException;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
@@ -160,9 +159,12 @@ class StripeCheckoutTest extends AbstractTestCase
         $this->assertSame($stripeCheckout->stripeSecretKey(), $options['stripeSecretKey']);
         $this->assertSame($stripeCheckout->stripeWebhookSecret(), $options['stripeWebhookSecret']);
         $this->assertSame($stripeCheckout->currency(), $options['currency']);
+        $this->assertSame($stripeCheckout->currencySymbol(), '€');
         $this->assertSame($stripeCheckout->uiMode(), $options['uiMode']);
         $this->assertSame($stripeCheckout->ordersPage(), $options['ordersPage']);
         $this->assertSame($stripeCheckout->settingsPage(), $options['settingsPage']);
+        $this->assertStringEndsWith('/stripe/checkout', $stripeCheckout->checkoutUrl());
+        $this->assertStringEndsWith('/stripe/checkout/embedded', $stripeCheckout->checkoutEmbeddedUrl());
 
         switch ($uiMode) {
             case 'hosted':
