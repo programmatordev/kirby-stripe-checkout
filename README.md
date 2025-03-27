@@ -9,7 +9,7 @@
 > [!CAUTION]
 > This plugin is still in its early stages.
 > This means that it should not be considered stable, so use it at your own risk.
-> Expect breaking changes until version `1.0`.
+> Expect a lot of breaking changes until version `1.0`.
 
 ## Features
 
@@ -17,7 +17,7 @@
 - 💸 Handles sync and async payments (credit card, bank transfer, etc.);
 - 📦 Orders panel page;
 - ⚙️ Checkout Settings panel page;
-- 🪝 Hooks for all payments status (completed, pending and failed), orders, Checkout sessions, and more;
+- 🪝 Hooks for all payments status (completed, pending and failed), orders and checkout sessions;
 - 🛒 Cart management;
 - ...and more.
 
@@ -37,7 +37,7 @@
 ## Requirements
 
 - PHP 8.2 or higher;
-- Kirby CMS `4.0` or higher;
+- Kirby CMS `4.7` or higher;
 - [Stripe account](https://dashboard.stripe.com/register).
 
 ## Installation
@@ -235,10 +235,11 @@ Useful to set additional Order data in case you add additional fields in the blu
 // config.php
 
 use Stripe\Checkout\Session;
+use Stripe\Event;
 
 return [
     'hooks' => [
-        'stripe-checkout.order.create:before' => function (array $orderContent, Session $checkoutSession): array
+        'stripe-checkout.order.create:before' => function (array $orderContent, Session $checkoutSession, Event $stripeEvent): array
         {
             // change order content
             // ...
@@ -269,10 +270,11 @@ Triggered when a payment is completed successfully.
 
 use Kirby\Cms\Page;
 use Stripe\Checkout\Session;
+use Stripe\Event;
 
 return [
     'hooks' => [
-        'stripe-checkout.payment:succeeded' => function (Page $orderPage, Session $checkoutSession): void
+        'stripe-checkout.payment:succeeded' => function (Page $orderPage, Session $checkoutSession, Event $stripeEvent): void
         {
             // email the customer when the payment succeeds
             kirby()->email([
@@ -298,10 +300,11 @@ where the Checkout form is submitted successfully, but the payment is yet to be 
 
 use Kirby\Cms\Page;
 use Stripe\Checkout\Session;
+use Stripe\Event;
 
 return [
     'hooks' => [
-        'stripe-checkout.payment:pending' => function (Page $orderPage, Session $checkoutSession): void
+        'stripe-checkout.payment:pending' => function (Page $orderPage, Session $checkoutSession, Event $stripeEvent): void
         {
             // email the customer when the payment is pending
             kirby()->email([
@@ -328,10 +331,11 @@ where the Checkout form is submitted successfully, but the payment has failed
 
 use Kirby\Cms\Page;
 use Stripe\Checkout\Session;
+use Stripe\Event;
 
 return [
     'hooks' => [
-        'stripe-checkout.payment:failed' => function (Page $orderPage, Session $checkoutSession): void
+        'stripe-checkout.payment:failed' => function (Page $orderPage, Session $checkoutSession, Event $stripeEvent): void
         {
             // email the customer when the payment has failed
             kirby()->email([
