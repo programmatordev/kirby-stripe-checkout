@@ -24,13 +24,10 @@ class CartTest extends AbstractTestCase
         parent::setUp();
 
         // init cart
-        $this->cart = new Cart([
-            'currency' => 'EUR',
-            'cartSnippet' => null
-        ]);
+        $this->cart = new Cart();
 
         // create product page for testing
-        $this->productPage = page('test-product') ?? site()->createChild([
+        $this->productPage = site()->createChild([
             'slug' => 'test-product',
             'template' => 'product',
             'content' => [

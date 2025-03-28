@@ -52,10 +52,10 @@ class StripeCheckoutTest extends AbstractTestCase
             ]
         ];
 
-        $this->cart = new Cart(['currency' => 'EUR']);
+        $this->cart = new Cart();
 
         // for success, return and cancel option pages
-        $this->testPage = page('test-page') ?? site()->createChild([
+        $this->testPage = site()->createChild([
             'slug' => 'test-page',
             'template' => 'default',
             'content' => [
@@ -64,7 +64,7 @@ class StripeCheckoutTest extends AbstractTestCase
         ])->changeStatus('listed');
 
         // to test a product
-        $this->productPage = page('test-product') ?? site()->createChild([
+        $this->productPage = site()->createChild([
             'slug' => 'test-product',
             'template' => 'product',
             'content' => [
