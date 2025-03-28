@@ -1,22 +1,27 @@
 fields.product.price.label: Preço
 fields.product.thumbnail.label: Thumbnail
-fields.settings.shippingEnabled.label: Morada de envio
+
+fields.settings.shippingHeadline.label: Envio
+fields.settings.shippingEnabled.label: Configurações de envio
 fields.settings.shippingAllowedCountries.label: Países permitidos
 fields.settings.shippingOptions.label: Opções de envio
 fields.settings.shippingOptions.name.label: Nome
-fields.settings.shippingOptions.amount.label: Valor
-fields.settings.shippingOptions.deliveryEstimateMinimum.label: Estimativa de entrega mínima
-fields.settings.shippingOptions.deliveryEstimateMinimum.help: Deixar vazio caso não haja estimativa de entrega mínima
-fields.settings.shippingOptions.deliveryEstimateMaximum.label: Estimativa de entrega máxima
-fields.settings.shippingOptions.deliveryEstimateMaximum.help: Deixar vazio caso não haja estimativa de entrega máxima
+fields.settings.shippingOptions.amount.label: Portes
+fields.settings.shippingOptions.deliveryEstimateMin.label: Estimativa de entrega mínima
+fields.settings.shippingOptions.deliveryEstimateMin.help: Deixar vazio caso não haja estimativa de entrega mínima
+fields.settings.shippingOptions.deliveryEstimateMax.label: Estimativa de entrega máxima
+fields.settings.shippingOptions.deliveryEstimateMax.help: Deixar vazio caso não haja estimativa de entrega máxima
+fields.settings.shippingOptions.deliveryEstimateUnit.label: Unidade
 fields.settings.shippingOptions.deliveryEstimateUnit.options.hour: Horas
 fields.settings.shippingOptions.deliveryEstimateUnit.options.day: Dias
 fields.settings.shippingOptions.deliveryEstimateUnit.options.businessDay: Dias úteis
 fields.settings.shippingOptions.deliveryEstimateUnit.options.week: Semanas
 fields.settings.shippingOptions.deliveryEstimateUnit.options.month: Meses
+
 fields.orders.ordersHeadline.label: Encomendas
 fields.orders.pendingPaymentsHeadline.label: Pagamentos Pendentes
 fields.orders.failedPaymentsHeadline.label: Pagamentos Falhados
+
 fields.order.orderHeadline.label: Encomenda
 fields.order.customerHeadline.label: Cliente
 fields.order.lineItemsHeadline.label: Itens

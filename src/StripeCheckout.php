@@ -262,17 +262,17 @@ class StripeCheckout
                 'display_name' => $shippingOption->name()->value()
             ];
 
-            if ($shippingOption->deliveryEstimateMinimum()->isNotEmpty()) {
+            if ($shippingOption->deliveryEstimateMin()->isNotEmpty()) {
                 $shippingRateData['delivery_estimate']['minimum'] = [
-                    'unit' => $shippingOption->deliveryEstimateMinimumUnit()->value(),
-                    'value' => $shippingOption->deliveryEstimateMinimum()->value(),
+                    'unit' => $shippingOption->deliveryEstimateMinUnit()->value(),
+                    'value' => $shippingOption->deliveryEstimateMin()->value(),
                 ];
             }
 
-            if ($shippingOption->deliveryEstimateMaximum()->isNotEmpty()) {
+            if ($shippingOption->deliveryEstimateMax()->isNotEmpty()) {
                 $shippingRateData['delivery_estimate']['maximum'] = [
-                    'unit' => $shippingOption->deliveryEstimateMaximumUnit()->value(),
-                    'value' => $shippingOption->deliveryEstimateMaximum()->value(),
+                    'unit' => $shippingOption->deliveryEstimateMaxUnit()->value(),
+                    'value' => $shippingOption->deliveryEstimateMax()->value(),
                 ];
             }
 
