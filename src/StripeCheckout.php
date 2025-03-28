@@ -4,6 +4,7 @@ namespace ProgrammatorDev\StripeCheckout;
 
 use Brick\Money\Exception\UnknownCurrencyException;
 use Kirby\Uuid\Uuid;
+use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Cart\Item;
 use ProgrammatorDev\StripeCheckout\Exception\EmptyCartException;
 use ProgrammatorDev\StripeCheckout\Exception\NoSuchPageException;
@@ -123,9 +124,10 @@ class StripeCheckout
      * @throws ApiErrorException
      * @throws UnknownCurrencyException
      */
-    public function createSession(): Session
+    public function createSession(?Cart $cart = null): Session
     {
-        $cart = cart();
+        // if no cart is provided, use singleton
+        $cart = $cart ?? cart();
 
         if ($cart->totalQuantity() === 0) {
             throw new EmptyCartException('Cart must have at least one added item.');
@@ -148,7 +150,7 @@ class StripeCheckout
             ]
         ];
 
-        $this->addLineItemsParams($params);
+        $this->addLineItemsParams($params, $cart);
         $this->addShippingParams($params);
 
         match ($this->uiMode()) {
@@ -186,9 +188,8 @@ class StripeCheckout
     /**
      * @throws UnknownCurrencyException
      */
-    private function addLineItemsParams(array &$params): void
+    private function addLineItemsParams(array &$params, Cart $cart): void
     {
-        $cart = cart();
         $params['line_items'] = [];
 
         /** @var Item $item */

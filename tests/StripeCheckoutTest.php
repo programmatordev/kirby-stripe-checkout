@@ -4,6 +4,7 @@ namespace ProgrammatorDev\StripeCheckout\Test;
 
 use Kirby\Cms\Page;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Exception\EmptyCartException;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 use Stripe\ApiRequestor;
@@ -13,6 +14,8 @@ use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
 class StripeCheckoutTest extends AbstractTestCase
 {
     private array $options;
+
+    private Cart $cart;
 
     private Page $testPage;
 
@@ -51,6 +54,8 @@ class StripeCheckoutTest extends AbstractTestCase
             ]
         ];
 
+        $this->cart = new Cart(['currency' => 'EUR']);
+
         // for success, return and cancel option pages
         $this->testPage = page('test-page') ?? site()->createChild([
             'slug' => 'test-page',
@@ -76,7 +81,7 @@ class StripeCheckoutTest extends AbstractTestCase
         parent::tearDown();
 
         // destroy data after each test
-        cart()->destroy();
+        $this->cart->destroy();
         $this->testPage->delete(true);
         $this->productPage->delete(true);
     }
@@ -123,10 +128,10 @@ class StripeCheckoutTest extends AbstractTestCase
         );
 
         // arrange
-        cart()->addItem('test-product', 1);
+        $this->cart->addItem('test-product', 1);
 
         $stripeCheckout = new StripeCheckout($this->options[$uiMode]);
-        $this->assertInstanceOf(Session::class, $stripeCheckout->createSession());
+        $this->assertInstanceOf(Session::class, $stripeCheckout->createSession($this->cart));
     }
 
     #[DataProvider('provideUiModeData')]
