@@ -29,8 +29,8 @@ class StripeCheckoutTest extends AbstractTestCase
                 'stripeWebhookSecret' => 'whsec_abc123',
                 'currency' => 'EUR',
                 'uiMode' => 'hosted',
-                'successPage' => 'test',
-                'cancelPage' => 'test',
+                'successPage' => 'test-page',
+                'cancelPage' => 'test-page',
                 'returnPage' => null,
                 'ordersPage' => 'orders',
                 'settingsPage' => 'checkout-settings',
@@ -44,7 +44,7 @@ class StripeCheckoutTest extends AbstractTestCase
                 'uiMode' => 'embedded',
                 'successPage' => null,
                 'cancelPage' => null,
-                'returnPage' => 'test',
+                'returnPage' => 'test-page',
                 'ordersPage' => 'orders',
                 'settingsPage' => 'checkout-settings',
                 'cartSnippet' => null
@@ -52,16 +52,17 @@ class StripeCheckoutTest extends AbstractTestCase
         ];
 
         // for success, return and cancel option pages
-        $this->testPage = site()->createChild([
-            'slug' => 'test',
+        $this->testPage = page('test-page') ?? site()->createChild([
+            'slug' => 'test-page',
             'template' => 'default',
             'content' => [
                 'title' => 'Test'
             ]
         ])->changeStatus('listed');
+
         // to test a product
-        $this->productPage = site()->createChild([
-            'slug' => 'product',
+        $this->productPage = page('test-product') ?? site()->createChild([
+            'slug' => 'test-product',
             'template' => 'product',
             'content' => [
                 'title' => 'Product',
@@ -122,7 +123,7 @@ class StripeCheckoutTest extends AbstractTestCase
         );
 
         // arrange
-        cart()->addItem('product', 1);
+        cart()->addItem('test-product', 1);
 
         $stripeCheckout = new StripeCheckout($this->options[$uiMode]);
         $this->assertInstanceOf(Session::class, $stripeCheckout->createSession());
