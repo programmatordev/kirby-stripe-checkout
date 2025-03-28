@@ -4,6 +4,7 @@ namespace ProgrammatorDev\StripeCheckout\Test;
 
 use Kirby\Cms\Page;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Exception\EmptyCartException;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 use Stripe\ApiRequestor;
@@ -13,6 +14,8 @@ use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
 class StripeCheckoutTest extends AbstractTestCase
 {
     private array $options;
+
+    private Cart $cart;
 
     private Page $testPage;
 
@@ -29,12 +32,11 @@ class StripeCheckoutTest extends AbstractTestCase
                 'stripeWebhookSecret' => 'whsec_abc123',
                 'currency' => 'EUR',
                 'uiMode' => 'hosted',
-                'successPage' => 'test',
-                'cancelPage' => 'test',
+                'successPage' => 'test-page',
+                'cancelPage' => 'test-page',
                 'returnPage' => null,
                 'ordersPage' => 'orders',
-                'settingsPage' => 'checkout-settings',
-                'cartSnippet' => null
+                'settingsPage' => 'checkout-settings'
             ],
             'embedded' => [
                 'stripePublicKey' => 'pk_test_abc123',
@@ -44,24 +46,26 @@ class StripeCheckoutTest extends AbstractTestCase
                 'uiMode' => 'embedded',
                 'successPage' => null,
                 'cancelPage' => null,
-                'returnPage' => 'test',
+                'returnPage' => 'test-page',
                 'ordersPage' => 'orders',
-                'settingsPage' => 'checkout-settings',
-                'cartSnippet' => null
+                'settingsPage' => 'checkout-settings'
             ]
         ];
 
+        $this->cart = new Cart();
+
         // for success, return and cancel option pages
         $this->testPage = site()->createChild([
-            'slug' => 'test',
+            'slug' => 'test-page',
             'template' => 'default',
             'content' => [
                 'title' => 'Test'
             ]
         ])->changeStatus('listed');
+
         // to test a product
         $this->productPage = site()->createChild([
-            'slug' => 'product',
+            'slug' => 'test-product',
             'template' => 'product',
             'content' => [
                 'title' => 'Product',
@@ -75,7 +79,7 @@ class StripeCheckoutTest extends AbstractTestCase
         parent::tearDown();
 
         // destroy data after each test
-        cart()->destroy();
+        $this->cart->destroy();
         $this->testPage->delete(true);
         $this->productPage->delete(true);
     }
@@ -122,10 +126,10 @@ class StripeCheckoutTest extends AbstractTestCase
         );
 
         // arrange
-        cart()->addItem('product', 1);
+        $this->cart->addItem('test-product', 1);
 
         $stripeCheckout = new StripeCheckout($this->options[$uiMode]);
-        $this->assertInstanceOf(Session::class, $stripeCheckout->createSession());
+        $this->assertInstanceOf(Session::class, $stripeCheckout->createSession($this->cart));
     }
 
     #[DataProvider('provideUiModeData')]
@@ -134,7 +138,7 @@ class StripeCheckoutTest extends AbstractTestCase
         $this->expectException(EmptyCartException::class);
 
         $stripeCheckout = new StripeCheckout($this->options[$uiMode]);
-        $stripeCheckout->createSession();
+        $stripeCheckout->createSession($this->cart);
     }
 
     #[DataProvider('provideUiModeData')]

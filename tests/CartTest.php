@@ -24,14 +24,11 @@ class CartTest extends AbstractTestCase
         parent::setUp();
 
         // init cart
-        $this->cart = new Cart([
-            'currency' => 'EUR',
-            'cartSnippet' => null
-        ]);
+        $this->cart = new Cart();
 
         // create product page for testing
         $this->productPage = site()->createChild([
-            'slug' => 'product',
+            'slug' => 'test-product',
             'template' => 'product',
             'content' => [
                 'title' => 'Product',
@@ -81,14 +78,14 @@ class CartTest extends AbstractTestCase
         $this->assertEquals($this->defaults, $this->cart->toArray());
 
         // act
-        $key = $this->cart->addItem('product', 1);
+        $key = $this->cart->addItem('test-product', 1);
 
         // assert
         $this->assertEquals([
             'items' => [
                 [
                     'key' => $key,
-                    'id' => 'product',
+                    'id' => 'test-product',
                     'name' => 'Product',
                     'price' => 10,
                     'quantity' => 1,
@@ -110,15 +107,15 @@ class CartTest extends AbstractTestCase
         $this->assertEquals($this->defaults, $this->cart->toArray());
 
         // act
-        $key = $this->cart->addItem('product', 1);
-        $this->cart->addItem('product', 1);
+        $key = $this->cart->addItem('test-product', 1);
+        $this->cart->addItem('test-product', 1);
 
         // assert
         $this->assertEquals([
             'items' => [
                 [
                     'key' => $key,
-                    'id' => 'product',
+                    'id' => 'test-product',
                     'name' => 'Product',
                     'price' => 10,
                     'quantity' => 2,
@@ -140,15 +137,15 @@ class CartTest extends AbstractTestCase
         $this->assertEquals($this->defaults, $this->cart->toArray());
 
         // act
-        $key1 = $this->cart->addItem('product', 1, ['size' => 'small']);
-        $key2 = $this->cart->addItem('product', 1, ['size' => 'medium']);
+        $key1 = $this->cart->addItem('test-product', 1, ['size' => 'small']);
+        $key2 = $this->cart->addItem('test-product', 1, ['size' => 'medium']);
 
         // assert
         $this->assertEquals([
             'items' => [
                 [
                     'key' => $key1,
-                    'id' => 'product',
+                    'id' => 'test-product',
                     'name' => 'Product',
                     'price' => 10,
                     'quantity' => 1,
@@ -158,7 +155,7 @@ class CartTest extends AbstractTestCase
                 ],
                 [
                     'key' => $key2,
-                    'id' => 'product',
+                    'id' => 'test-product',
                     'name' => 'Product',
                     'price' => 10,
                     'quantity' => 1,
@@ -177,7 +174,7 @@ class CartTest extends AbstractTestCase
     public function testAddItemWithInvalidQuantity(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->cart->addItem('product', 0);
+        $this->cart->addItem('test-product', 0);
     }
 
     public function testAddItemWhenProductDoesNotExist(): void
@@ -192,10 +189,10 @@ class CartTest extends AbstractTestCase
     public function testAddItemWhenProductIsNotListed(string $status): void
     {
         $this->expectException(InvalidCartItemException::class);
-        $this->expectExceptionMessage('Product "product" does not exist.');
+        $this->expectExceptionMessage('Product "test-product" does not exist.');
 
         $this->productPage->changeStatus($status);
-        $this->cart->addItem('product', 1);
+        $this->cart->addItem('test-product', 1);
     }
 
     public static function provideAddItemWhenProductIsNotListedData(): \Generator
@@ -208,14 +205,14 @@ class CartTest extends AbstractTestCase
     public function testUpdateItem(): void
     {
         // arrange
-        $key = $this->cart->addItem('product', 2);
+        $key = $this->cart->addItem('test-product', 2);
 
         // pre-assertions
         $this->assertEquals([
             'items' => [
                 [
                     'key' => $key,
-                    'id' => 'product',
+                    'id' => 'test-product',
                     'name' => 'Product',
                     'price' => 10,
                     'quantity' => 2,
@@ -238,7 +235,7 @@ class CartTest extends AbstractTestCase
             'items' => [
                 [
                     'key' => $key,
-                    'id' => 'product',
+                    'id' => 'test-product',
                     'name' => 'Product',
                     'price' => 10,
                     'quantity' => 1,
@@ -264,7 +261,7 @@ class CartTest extends AbstractTestCase
 
     public function testUpdateItemWithInvalidQuantity(): void
     {
-        $key = $this->cart->addItem('product', 2);
+        $key = $this->cart->addItem('test-product', 2);
 
         $this->expectException(InvalidArgumentException::class);
 
@@ -273,7 +270,7 @@ class CartTest extends AbstractTestCase
 
     public function testRemoveItem(): void
     {
-        $key = $this->cart->addItem('product', 1);
+        $key = $this->cart->addItem('test-product', 1);
 
         $this->cart->removeItem($key);
 
@@ -290,8 +287,8 @@ class CartTest extends AbstractTestCase
 
     public function testDestroy(): void
     {
-        $this->cart->addItem('product', 1);
-        $this->cart->addItem('product', 1, ['size' => 'small']);
+        $this->cart->addItem('test-product', 1);
+        $this->cart->addItem('test-product', 1, ['size' => 'small']);
 
         $this->cart->destroy();
 

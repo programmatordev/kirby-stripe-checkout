@@ -236,8 +236,8 @@ class Cart
         $resolver = new OptionsResolver();
 
         $resolver->setDefaults([
-            'currency' => option('programmatordev.stripe-checkout.currency'),
-            'cartSnippet' => option('programmatordev.stripe-checkout.cartSnippet')
+            'currency' => 'EUR',
+            'cartSnippet' => null
         ]);
 
         $resolver->setAllowedTypes('currency', ['string']);
