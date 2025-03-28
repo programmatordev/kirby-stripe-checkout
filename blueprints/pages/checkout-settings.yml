@@ -15,6 +15,7 @@ options:
 columns:
   shippingHeadline:
     width: 1/4
+    sticky: true
     fields:
       shippingHeadline:
         type: headline
