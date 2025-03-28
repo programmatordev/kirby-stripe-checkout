@@ -138,7 +138,7 @@ class StripeCheckoutTest extends AbstractTestCase
         $this->expectException(EmptyCartException::class);
 
         $stripeCheckout = new StripeCheckout($this->options[$uiMode]);
-        $stripeCheckout->createSession();
+        $stripeCheckout->createSession($this->cart);
     }
 
     #[DataProvider('provideUiModeData')]
