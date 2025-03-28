@@ -320,7 +320,18 @@ class StripeCheckout
     {
         $resolver = new OptionsResolver();
 
-        $resolver->setDefaults(option('programmatordev.stripe-checkout'));
+        $resolver->setDefaults([
+            'stripePublicKey' => null,
+            'stripeSecretKey' => null,
+            'stripeWebhookSecret' => null,
+            'uiMode' => 'hosted',
+            'currency' => 'EUR',
+            'returnPage' => null,
+            'successPage' => null,
+            'cancelPage' => null,
+            'ordersPage' => 'orders',
+            'settingsPage' => 'checkout-settings'
+        ]);
 
         $resolver->setAllowedTypes('stripePublicKey', ['string']);
         $resolver->setAllowedTypes('stripeSecretKey', ['string']);

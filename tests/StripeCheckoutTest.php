@@ -36,8 +36,7 @@ class StripeCheckoutTest extends AbstractTestCase
                 'cancelPage' => 'test-page',
                 'returnPage' => null,
                 'ordersPage' => 'orders',
-                'settingsPage' => 'checkout-settings',
-                'cartSnippet' => null
+                'settingsPage' => 'checkout-settings'
             ],
             'embedded' => [
                 'stripePublicKey' => 'pk_test_abc123',
@@ -49,8 +48,7 @@ class StripeCheckoutTest extends AbstractTestCase
                 'cancelPage' => null,
                 'returnPage' => 'test-page',
                 'ordersPage' => 'orders',
-                'settingsPage' => 'checkout-settings',
-                'cartSnippet' => null
+                'settingsPage' => 'checkout-settings'
             ]
         ];
 
