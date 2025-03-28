@@ -2,7 +2,7 @@
 
 namespace ProgrammatorDev\StripeCheckout\Exception;
 
-class CheckoutWebhookException extends \Exception
+class InvalidEndpointException extends \Exception
 {
     protected $code = 400;
 }

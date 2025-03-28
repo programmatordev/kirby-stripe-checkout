@@ -13,19 +13,61 @@ options:
   preview: false
   update: false
 
-sections:
-  orders:
-    extends: stripe-checkout.sections/orders
-    label: stripe-checkout.sections.orders.label
-    status: listed
-    empty: stripe-checkout.sections.orders.empty
-  pendingPayments:
-    extends: stripe-checkout.sections/orders
-    label: stripe-checkout.sections.pendingPayments.label
-    status: unlisted
-    empty: stripe-checkout.sections.pendingPayments.empty
-  failedPayments:
-    extends: stripe-checkout.sections/orders
-    label: stripe-checkout.sections.failedPayments.label
-    status: draft
-    empty: stripe-checkout.sections.failedPayments.empty
+columns:
+  ordersHeadline:
+    width: 1/4
+    sticky: true
+    fields:
+      ordersHeadline:
+        type: headline
+        label: stripe-checkout.fields.orders.ordersHeadline.label
+  ordersSection:
+    width: 3/4
+    sections:
+      orders:
+        extends: stripe-checkout.sections/orders
+        label: stripe-checkout.sections.orders.label
+        status: listed
+        empty: stripe-checkout.sections.orders.empty
+
+  pendingPaymentsLine:
+    width: 1/1
+    fields:
+      pendingPaymentsLine:
+        type: line
+  pendingPaymentsHeadline:
+    width: 1/4
+    sticky: true
+    fields:
+      pendingPaymentsHeadline:
+        type: headline
+        label: stripe-checkout.fields.orders.pendingPaymentsHeadline.label
+  pendingPaymentsSection:
+    width: 3/4
+    sections:
+      pendingPayments:
+        extends: stripe-checkout.sections/orders
+        label: stripe-checkout.sections.pendingPayments.label
+        status: unlisted
+        empty: stripe-checkout.sections.pendingPayments.empty
+
+  failedPaymentsLine:
+    width: 1/1
+    fields:
+      failedPaymentsLine:
+        type: line
+  failedPaymentsHeadline:
+    width: 1/4
+    sticky: true
+    fields:
+      failedPaymentsHeadline:
+        type: headline
+        label: stripe-checkout.fields.orders.failedPaymentsHeadline.label
+  failedPaymentsSection:
+    width: 3/4
+    sections:
+      failedPayments:
+        extends: stripe-checkout.sections/orders
+        label: stripe-checkout.sections.failedPayments.label
+        status: draft
+        empty: stripe-checkout.sections.failedPayments.empty
