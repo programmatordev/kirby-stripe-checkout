@@ -44,8 +44,8 @@ class Cart
                 'items' => [],
                 'totalAmount' => 0,
                 'totalQuantity' => 0,
-                'currency' => $this->options['currency'],
-                'currencySymbol' => Currencies::getSymbol($this->options['currency']),
+                'currency' => $this->currency(),
+                'currencySymbol' => Currencies::getSymbol($this->currency()),
             ]);
         }
 
