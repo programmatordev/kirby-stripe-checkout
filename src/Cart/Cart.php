@@ -104,7 +104,7 @@ class Cart
 
     public function cartSnippet(bool $render = false): ?string
     {
-        // if render is false, return cartSnippet option as is...
+        // if render is false, return the cartSnippet option as is...
         if ($render === false) {
             return $this->options['cartSnippet'];
         }
@@ -121,12 +121,12 @@ class Cart
             throw new InvalidArgumentException('Quantity must be greater than 0.');
         }
 
-        // create unique key based on page id and given options
+        // create a unique key based on page id and given options
         // this means that it is possible to add the same product with different options
         // and be treated as separate items (the same shoes with different sizes are different items in the cart)
         $key = $options === null ? md5($id) : md5($id . serialize($options));
 
-        // if the same exact item is already in the cart
+        // if the same exact item is already in the cart,
         // sum the new quantity with the quantity of the existing item
         if ($item = $this->items()->get($key)) {
             $quantity += $item->quantity();
@@ -233,7 +233,10 @@ class Cart
 
     private function resolveOptions(array $options): array
     {
+        $options = array_merge(option('programmatordev.stripe-checkout'), $options);
+
         $resolver = new OptionsResolver();
+        $resolver->setIgnoreUndefined();
 
         $resolver->setDefaults([
             'currency' => 'EUR',

@@ -158,7 +158,7 @@ class StripeCheckout
             Session::UI_MODE_EMBEDDED => $this->addEmbeddedParams($params, $languageCode)
         };
 
-        // trigger event that allows modification of session parameters
+        // trigger an event that allows modification of session parameters
         // https://docs.stripe.com/api/checkout/sessions/create?lang=php
         $params = kirby()->apply(
             'stripe-checkout.session.create:before',
@@ -198,7 +198,7 @@ class StripeCheckout
                 'name' => $item->name(),
                 'metadata' => [
                     // save product page uuid
-                    // can be useful for relation with product page
+                    // can be useful for relation with the product page
                     'page_id' => (string) $item->productPage()->uuid()
                 ]
             ];
@@ -304,7 +304,7 @@ class StripeCheckout
             );
         }
 
-        // get language specific URL
+        // get language-specific URL
         $url = $page->url($languageCode);
 
         if ($withCheckoutSessionParam === true) {
@@ -318,7 +318,10 @@ class StripeCheckout
 
     private function resolveOptions(array $options): array
     {
+        $options = array_merge(option('programmatordev.stripe-checkout'), $options);
+
         $resolver = new OptionsResolver();
+        $resolver->setIgnoreUndefined();
 
         $resolver->setDefaults([
             'stripePublicKey' => null,
