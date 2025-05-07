@@ -318,7 +318,7 @@ class StripeCheckout
 
     private function resolveOptions(array $options): array
     {
-        $options = array_merge(option('programmatordev.stripe-checkout'), $options);
+        $options = array_merge(option('programmatordev.stripe-checkout', []), $options);
 
         $resolver = new OptionsResolver();
         $resolver->setIgnoreUndefined();
