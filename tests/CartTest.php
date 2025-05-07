@@ -26,7 +26,7 @@ class CartTest extends AbstractTestCase
         // init cart
         $this->cart = new Cart();
 
-        // create product page for testing
+        // create a product page for testing
         $this->productPage = site()->createChild([
             'slug' => 'test-product',
             'template' => 'product',
@@ -40,9 +40,7 @@ class CartTest extends AbstractTestCase
         $this->defaults = [
             'items' => [],
             'totalAmount' => 0,
-            'totalQuantity' => 0,
-            'currency' => 'EUR',
-            'currencySymbol' => '€',
+            'totalQuantity' => 0
         ];
     }
 
@@ -75,7 +73,7 @@ class CartTest extends AbstractTestCase
     public function testAddItem(): void
     {
         // pre-assertions
-        $this->assertEquals($this->defaults, $this->cart->toArray());
+        $this->assertEquals($this->defaults, $this->cart->toArray(false));
 
         // act
         $key = $this->cart->addItem('test-product', 1);
@@ -95,16 +93,14 @@ class CartTest extends AbstractTestCase
                 ]
             ],
             'totalAmount' => 10,
-            'totalQuantity' => 1,
-            'currency' => 'EUR',
-            'currencySymbol' => '€'
-        ], $this->cart->toArray());
+            'totalQuantity' => 1
+        ], $this->cart->toArray(false));
     }
 
     public function testAddItemWithSameItemInCart(): void
     {
         // pre-assertions
-        $this->assertEquals($this->defaults, $this->cart->toArray());
+        $this->assertEquals($this->defaults, $this->cart->toArray(false));
 
         // act
         $key = $this->cart->addItem('test-product', 1);
@@ -125,16 +121,14 @@ class CartTest extends AbstractTestCase
                 ]
             ],
             'totalAmount' => 20,
-            'totalQuantity' => 2,
-            'currency' => 'EUR',
-            'currencySymbol' => '€'
-        ], $this->cart->toArray());
+            'totalQuantity' => 2
+        ], $this->cart->toArray(false));
     }
 
     public function testAddItemWithDifferentOptions()
     {
         // pre-assertions
-        $this->assertEquals($this->defaults, $this->cart->toArray());
+        $this->assertEquals($this->defaults, $this->cart->toArray(false));
 
         // act
         $key1 = $this->cart->addItem('test-product', 1, ['size' => 'small']);
@@ -165,10 +159,8 @@ class CartTest extends AbstractTestCase
                 ]
             ],
             'totalAmount' => 20,
-            'totalQuantity' => 2,
-            'currency' => 'EUR',
-            'currencySymbol' => '€'
-        ], $this->cart->toArray());
+            'totalQuantity' => 2
+        ], $this->cart->toArray(false));
     }
 
     public function testAddItemWithInvalidQuantity(): void
@@ -222,15 +214,77 @@ class CartTest extends AbstractTestCase
                 ]
             ],
             'totalAmount' => 20,
-            'totalQuantity' => 2,
-            'currency' => 'EUR',
-            'currencySymbol' => '€'
-        ], $this->cart->toArray());
+            'totalQuantity' => 2
+        ], $this->cart->toArray(false));
 
         // act
         $this->cart->updateItem($key, 1);
 
         // assert
+        $this->assertEquals([
+            'items' => [
+                [
+                    'key' => $key,
+                    'id' => 'test-product',
+                    'name' => 'Product',
+                    'price' => 10,
+                    'quantity' => 1,
+                    'totalAmount' => 10,
+                    'options' => null,
+                    'thumbnail' => null
+                ]
+            ],
+            'totalAmount' => 10,
+            'totalQuantity' => 1
+        ], $this->cart->toArray(false));
+    }
+
+    public function testUpdateItemThatDoesNotExist(): void
+    {
+        $this->expectException(NoSuchCartItemException::class);
+        $this->expectExceptionMessage('Cart item with key "does-not-exist" does not exist.');
+
+        $this->cart->updateItem('does-not-exist', 1);
+    }
+
+    public function testUpdateItemWithInvalidQuantity(): void
+    {
+        $key = $this->cart->addItem('test-product', 2);
+        $this->expectException(InvalidArgumentException::class);
+
+        $this->cart->updateItem($key, 0);
+    }
+
+    public function testRemoveItem(): void
+    {
+        $key = $this->cart->addItem('test-product', 1);
+        $this->cart->removeItem($key);
+
+        $this->assertEquals($this->defaults, $this->cart->toArray(false));
+    }
+
+    public function testRemoveItemThatDoesNotExist(): void
+    {
+        $this->expectException(NoSuchCartItemException::class);
+        $this->expectExceptionMessage('Cart item with key "does-not-exist" does not exist.');
+
+        $this->cart->removeItem('does-not-exist');
+    }
+
+    public function testDestroy(): void
+    {
+        $this->cart->addItem('test-product', 1);
+        $this->cart->addItem('test-product', 1, ['size' => 'small']);
+
+        $this->cart->destroy();
+
+        $this->assertEquals($this->defaults, $this->cart->toArray(false));
+    }
+
+    public function testToArray(): void
+    {
+        $key = $this->cart->addItem('test-product', 1);
+
         $this->assertEquals([
             'items' => [
                 [
@@ -251,73 +305,13 @@ class CartTest extends AbstractTestCase
         ], $this->cart->toArray());
     }
 
-    public function testUpdateItemThatDoesNotExist(): void
+    public function testGetters(): void
     {
-        $this->expectException(NoSuchCartItemException::class);
-        $this->expectExceptionMessage('Cart item with key "does-not-exist" does not exist.');
-
-        $this->cart->updateItem('does-not-exist', 1);
-    }
-
-    public function testUpdateItemWithInvalidQuantity(): void
-    {
-        $key = $this->cart->addItem('test-product', 2);
-
-        $this->expectException(InvalidArgumentException::class);
-
-        $this->cart->updateItem($key, 0);
-    }
-
-    public function testRemoveItem(): void
-    {
-        $key = $this->cart->addItem('test-product', 1);
-
-        $this->cart->removeItem($key);
-
-        $this->assertEquals($this->defaults, $this->cart->toArray());
-    }
-
-    public function testRemoveItemThatDoesNotExist(): void
-    {
-        $this->expectException(NoSuchCartItemException::class);
-        $this->expectExceptionMessage('Cart item with key "does-not-exist" does not exist.');
-
-        $this->cart->removeItem('does-not-exist');
-    }
-
-    public function testDestroy(): void
-    {
-        $this->cart->addItem('test-product', 1);
-        $this->cart->addItem('test-product', 1, ['size' => 'small']);
-
-        $this->cart->destroy();
-
-        $this->assertEquals($this->defaults, $this->cart->toArray());
-    }
-
-    #[DataProvider('provideTestGetterValue')]
-    public function testGetterValue(mixed $value, string $method): void
-    {
-        $this->assertSame($value, $this->cart->$method());
-    }
-
-    public static function provideTestGetterValue(): \Generator
-    {
-        yield 'total amount' => [0, 'totalAmount'];
-        yield 'total quantity' => [0, 'totalQuantity'];
-        yield 'currency' => ['EUR', 'currency'];
-        yield 'currency symbol' => ['€', 'currencySymbol'];
-        yield 'cart snippet' => [null, 'cartSnippet'];
-    }
-
-    #[DataProvider('provideTestGetterInstance')]
-    public function testGetterInstance(string $instanceClass, string $method): void
-    {
-        $this->assertInstanceOf($instanceClass, $this->cart->$method());
-    }
-
-    public static function provideTestGetterInstance(): \Generator
-    {
-        yield 'items' => [Collection::class, 'items'];
+        $this->assertSame(0, $this->cart->totalAmount());
+        $this->assertSame(0, $this->cart->totalQuantity());
+        $this->assertSame('EUR', $this->cart->currency());
+        $this->assertSame('€', $this->cart->currencySymbol());
+        $this->assertNull($this->cart->cartSnippet());
+        $this->assertInstanceOf(Collection::class, $this->cart->items());;
     }
 }

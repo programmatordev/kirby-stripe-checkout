@@ -31,6 +31,8 @@ class Cart
     public function __construct(array $options = [])
     {
         $this->options = $this->resolveOptions($options);
+        $this->currencySymbol = Currencies::getSymbol($this->currency());
+
         $this->session = kirby()->session(['long' => true]);
 
         $this->initialize();
@@ -43,22 +45,19 @@ class Cart
             $this->session->data()->set(self::SESSION_NAME, [
                 'items' => [],
                 'totalAmount' => 0,
-                'totalQuantity' => 0,
-                'currency' => $this->currency(),
-                'currencySymbol' => Currencies::getSymbol($this->currency()),
+                'totalQuantity' => 0
             ]);
         }
 
-        $sessionData = $this->session->data()->get(self::SESSION_NAME);
+        $data = $this->session->data()->get(self::SESSION_NAME);
 
         // sync cart data with session data...
         $this->items = new Collection();
-        $this->totalAmount = $sessionData['totalAmount'];
-        $this->totalQuantity = $sessionData['totalQuantity'];
-        $this->currencySymbol = $sessionData['currencySymbol'];
+        $this->totalAmount = $data['totalAmount'];
+        $this->totalQuantity = $data['totalQuantity'];
 
         // ...including items
-        foreach ($sessionData['items'] as $item) {
+        foreach ($data['items'] as $item) {
             $this->items->set(
                 $item['key'],
                 new Item($item['id'], $item['quantity'], $item['options'])
@@ -184,15 +183,20 @@ class Cart
         $this->initialize();
     }
 
-    public function toArray(): array
+    public function toArray(bool $includeCurrency = true): array
     {
         $data = [
             'items' => [],
             'totalAmount' => $this->totalAmount(),
-            'totalQuantity' => $this->totalQuantity(),
-            'currency' => $this->currency(),
-            'currencySymbol' => $this->currencySymbol(),
+            'totalQuantity' => $this->totalQuantity()
         ];
+
+        if ($includeCurrency === true) {
+            $data = array_merge($data, [
+                'currency' => $this->currency(),
+                'currencySymbol' => $this->currencySymbol(),
+            ]);
+        }
 
         /** @var Item $item */
         foreach ($this->items as $key => $item) {
@@ -228,7 +232,7 @@ class Cart
 
     private function saveSession(): void
     {
-        $this->session->data()->set(self::SESSION_NAME, $this->toArray());
+        $this->session->data()->set(self::SESSION_NAME, $this->toArray(false));
     }
 
     private function resolveOptions(array $options): array
