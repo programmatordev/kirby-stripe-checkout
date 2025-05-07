@@ -17,7 +17,8 @@ App::plugin('programmatordev/stripe-checkout', [
         'cancelPage' => null,
         'ordersPage' => 'orders',
         'settingsPage' => 'checkout-settings',
-        'cartSnippet' => null
+        'cartSnippet' => null,
+        'translations' => []
     ],
     'blueprints' => require __DIR__ . '/config/blueprints.php',
     'translations' => require __DIR__ . '/config/translations.php',
