@@ -2,19 +2,19 @@ fields.product.price.label: Preço
 fields.product.thumbnail.label: Thumbnail
 
 fields.settings.shippingHeadline.label: Envio
-fields.settings.shippingEnabled.label: Configurações de envio
-fields.settings.shippingAllowedCountries.label: Países permitidos
-fields.settings.shippingOptions.label: Opções de envio
+fields.settings.shippingEnabled.label: Configurações de Envio
+fields.settings.shippingAllowedCountries.label: Países Permitidos
+fields.settings.shippingOptions.label: Opções de Envio
 fields.settings.shippingOptions.name.label: Nome
 fields.settings.shippingOptions.amount.label: Portes
-fields.settings.shippingOptions.deliveryEstimateMin.label: Estimativa de entrega mínima
+fields.settings.shippingOptions.deliveryEstimateMin.label: Estimativa de Entrega Mínima
 fields.settings.shippingOptions.deliveryEstimateMin.help: Deixar vazio caso não haja estimativa de entrega mínima
-fields.settings.shippingOptions.deliveryEstimateMax.label: Estimativa de entrega máxima
+fields.settings.shippingOptions.deliveryEstimateMax.label: Estimativa de Entrega Máxima
 fields.settings.shippingOptions.deliveryEstimateMax.help: Deixar vazio caso não haja estimativa de entrega máxima
 fields.settings.shippingOptions.deliveryEstimateUnit.label: Unidade
 fields.settings.shippingOptions.deliveryEstimateUnit.options.hour: Horas
 fields.settings.shippingOptions.deliveryEstimateUnit.options.day: Dias
-fields.settings.shippingOptions.deliveryEstimateUnit.options.businessDay: Dias úteis
+fields.settings.shippingOptions.deliveryEstimateUnit.options.businessDay: Dias Úteis
 fields.settings.shippingOptions.deliveryEstimateUnit.options.week: Semanas
 fields.settings.shippingOptions.deliveryEstimateUnit.options.month: Meses
 
@@ -30,10 +30,10 @@ fields.order.billingHeadline.label: Faturação
 fields.order.customFieldsHeadline.label: Campos Personalizados
 fields.order.metadataHeadline.label: Metadados
 fields.order.stripeHeadline.label: Stripe
-fields.order.createdAt.label: Data de criação
-fields.order.paidAt.label: Data de pagamento
-fields.order.paymentMethod.label: Método de pagamento
-fields.order.customFields.label: Campos personalizados
+fields.order.createdAt.label: Data de Criação
+fields.order.paidAt.label: Data de Pagamento
+fields.order.paymentMethod.label: Método de Pagamento
+fields.order.customFields.label: Campos Personalizados
 fields.order.customFields.empty: Sem informação
 fields.order.customFields.name.label: Nome
 fields.order.customFields.value.label: Valor
@@ -49,30 +49,30 @@ fields.order.lineItems.quantity.label: Quantidade
 fields.order.lineItems.subtotal.label: Subtotal
 fields.order.lineItems.discount.label: Desconto
 fields.order.lineItems.total.label: Total
-fields.order.lineItems.pageId.label: ID do produto
+fields.order.lineItems.pageId.label: ID do Produto
 fields.order.subtotalAmount.label: Subtotal
 fields.order.discountAmount.label: Desconto
-fields.order.shippingAmount.label: Portes de envio
+fields.order.shippingAmount.label: Portes de Envio
 fields.order.totalAmount.label: Total
 fields.order.address.name.label: Nome
 fields.order.address.country.label: País
-fields.order.address.line1.label: Morada, linha 1
-fields.order.address.line2.label: Morada, linha 2
-fields.order.address.postalCode.label: Código postal
+fields.order.address.line1.label: Morada, Linha 1
+fields.order.address.line2.label: Morada, Linha 2
+fields.order.address.postalCode.label: Código Postal
 fields.order.address.city.label: Cidade
 fields.order.address.state.label: Estado
-fields.order.shippingDetails.label: Detalhes de envio
+fields.order.shippingDetails.label: Detalhes de Envio
 fields.order.shippingDetails.empty: Sem informação
-fields.order.shippingOption.label: Opção de envio
-fields.order.billingDetails.label: Detalhes de faturação
+fields.order.shippingOption.label: Opção de Envio
+fields.order.billingDetails.label: Detalhes de Faturação
 fields.order.billingDetails.empty: Sem informação
-fields.order.taxId.label: Identificação fiscal
+fields.order.taxId.label: Identificação Fiscal
 fields.order.taxId.empty: Sem informação
 fields.order.taxId.type.label: Tipo
 fields.order.taxId.value.label: Valor
 fields.order.currency.label: Moeda
 fields.order.currencySymbol.label: Símbolo
-fields.order.stripePaymentIntentId.label: ID de pagamento
+fields.order.stripePaymentIntentId.label: ID de Pagamento
 fields.order.stripeEvents.label: Eventos
 fields.order.stripeEvents.id.label: ID
 fields.order.stripeEvents.type.label: Tipo
@@ -85,9 +85,9 @@ sections.orders.empty: Nenhuma encomenda ainda
 sections.orders.title.label: ID
 sections.orders.createdAt.label: Data
 sections.orders.email.label: Email
-sections.pendingPayments.label: Pagamentos pendentes
+sections.pendingPayments.label: Pagamentos Pendentes
 sections.pendingPayments.empty: Nenhum pagamento pendente
-sections.failedPayments.label: Pagamentos falhados
+sections.failedPayments.label: Pagamentos Falhados
 sections.failedPayments.empty: Nenhum pagamento falhado
 
 pages.settings.title: Configurações de Checkout

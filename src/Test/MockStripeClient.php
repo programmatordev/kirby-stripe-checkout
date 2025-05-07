@@ -4,15 +4,15 @@ namespace ProgrammatorDev\StripeCheckout\Test;
 
 use Stripe\HttpClient\ClientInterface;
 
-class MockStripeClient implements ClientInterface
+readonly class MockStripeClient implements ClientInterface
 {
     public function __construct(
-        private readonly string $body = '{}',
-        private readonly int $statusCode = 200,
-        private readonly array $headers = []
+        private string $body = '{}',
+        private int $statusCode = 200,
+        private array $headers = []
     ) {}
 
-    public function request($method, $absUrl, $headers, $params, $hasFile, $apiMode = 'v1'): array
+    public function request($method, $absUrl, $headers, $params, $hasFile, $apiMode = 'v1', $maxNetworkRetries = null): array
     {
         return [$this->body, $this->statusCode, $this->headers];
     }

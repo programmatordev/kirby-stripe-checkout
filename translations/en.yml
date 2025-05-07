@@ -2,19 +2,19 @@ fields.product.price.label: Price
 fields.product.thumbnail.label: Thumbnail
 
 fields.settings.shippingHeadline.label: Shipping
-fields.settings.shippingEnabled.label: Shipping settings
-fields.settings.shippingAllowedCountries.label: Allowed countries
-fields.settings.shippingOptions.label: Delivery options
+fields.settings.shippingEnabled.label: Shipping Settings
+fields.settings.shippingAllowedCountries.label: Allowed Countries
+fields.settings.shippingOptions.label: Delivery Options
 fields.settings.shippingOptions.name.label: Name
 fields.settings.shippingOptions.amount.label: Amount
-fields.settings.shippingOptions.deliveryEstimateMin.label: Minimum delivery estimate
+fields.settings.shippingOptions.deliveryEstimateMin.label: Minimum Delivery Estimate
 fields.settings.shippingOptions.deliveryEstimateMin.help: Leave empty if there is no minimum delivery estimate
-fields.settings.shippingOptions.deliveryEstimateMax.label: Maximum delivery estimate
+fields.settings.shippingOptions.deliveryEstimateMax.label: Maximum Delivery Estimate
 fields.settings.shippingOptions.deliveryEstimateMax.help: Leave empty if there is no maximum delivery estimate
 fields.settings.shippingOptions.deliveryEstimateUnit.label: Unit
 fields.settings.shippingOptions.deliveryEstimateUnit.options.hour: Hours
 fields.settings.shippingOptions.deliveryEstimateUnit.options.day: Days
-fields.settings.shippingOptions.deliveryEstimateUnit.options.businessDay: Business days
+fields.settings.shippingOptions.deliveryEstimateUnit.options.businessDay: Business Days
 fields.settings.shippingOptions.deliveryEstimateUnit.options.week: Weeks
 fields.settings.shippingOptions.deliveryEstimateUnit.options.month: Months
 
@@ -30,10 +30,10 @@ fields.order.billingHeadline.label: Billing
 fields.order.customFieldsHeadline.label: Custom Fields
 fields.order.metadataHeadline.label: Metadata
 fields.order.stripeHeadline.label: Stripe
-fields.order.createdAt.label: Created at
-fields.order.paidAt.label: Paid at
-fields.order.paymentMethod.label: Payment method
-fields.order.customFields.label: Custom fields
+fields.order.createdAt.label: Created At
+fields.order.paidAt.label: Paid At
+fields.order.paymentMethod.label: Payment Method
+fields.order.customFields.label: Custom Fields
 fields.order.customFields.empty: No information
 fields.order.customFields.name.label: Name
 fields.order.customFields.value.label: Value
@@ -56,15 +56,15 @@ fields.order.shippingAmount.label: Shipping
 fields.order.totalAmount.label: Total
 fields.order.address.name.label: Name
 fields.order.address.country.label: Country
-fields.order.address.line1.label: Address, line 1
-fields.order.address.line2.label: Address, line 2
-fields.order.address.postalCode.label: Postal code
+fields.order.address.line1.label: Address, Line 1
+fields.order.address.line2.label: Address, Line 2
+fields.order.address.postalCode.label: Postal Code
 fields.order.address.city.label: City
 fields.order.address.state.label: State
-fields.order.shippingDetails.label: Shipping details
+fields.order.shippingDetails.label: Shipping Details
 fields.order.shippingDetails.empty: No information
-fields.order.shippingOption.label: Shipping option
-fields.order.billingDetails.label: Billing details
+fields.order.shippingOption.label: Shipping Option
+fields.order.billingDetails.label: Billing Details
 fields.order.billingDetails.empty: No information
 fields.order.taxId.label: Tax ID
 fields.order.taxId.empty: No information
@@ -72,22 +72,22 @@ fields.order.taxId.type.label: Type
 fields.order.taxId.value.label: Value
 fields.order.currency.label: Currency
 fields.order.currencySymbol.label: Symbol
-fields.order.paymentIntentId.label: Payment intent ID
-fields.order.events.label: Events
-fields.order.events.id.label: ID
-fields.order.events.type.label: Type
-fields.order.events.paymentStatus.label: Status
-fields.order.events.message.label: Message
-fields.order.events.createdAt.label: Date
+fields.order.stripePaymentIntentId.label: Payment Intent ID
+fields.order.stripeEvents.label: Events
+fields.order.stripeEvents.id.label: ID
+fields.order.stripeEvents.type.label: Type
+fields.order.stripeEvents.paymentStatus.label: Status
+fields.order.stripeEvents.message.label: Message
+fields.order.stripeEvents.createdAt.label: Date
 
 sections.orders.label: Orders
 sections.orders.empty: No orders yet
 sections.orders.title.label: Number
 sections.orders.createdAt.label: Date
 sections.orders.email.label: Email
-sections.pendingPayments.label: Pending payments
+sections.pendingPayments.label: Pending Payments
 sections.pendingPayments.empty: No pending payments
-sections.failedPayments.label: Failed payments
+sections.failedPayments.label: Failed Payments
 sections.failedPayments.empty: No failed payments
 
 pages.settings.title: Checkout Settings
