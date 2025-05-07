@@ -17,7 +17,7 @@
 - 💸 Handles sync and async payments (credit card, bank transfer, etc.);
 - 📦 Orders panel page;
 - ⚙️ Checkout Settings panel page;
-- 🪝 Hooks for all payments status (completed, pending and failed), orders and checkout sessions;
+- 🪝 Hooks for all payment status (completed, pending and failed), orders and checkout sessions;
 - 🛒 Cart management;
 - ...and more.
 
@@ -28,7 +28,7 @@
 - [Options](#options)
 - [Hooks](#hooks)
 - [Cart](#cart)
-- [Translations](#translations)
+- [Translations](#translations-1)
 - [Setup](#setup)
 - [Development](#development)
 - [Production](#production)
@@ -66,7 +66,8 @@ return [
         'returnPage' => null,
         'ordersPage' => 'orders',
         'settingsPage' => 'checkout-settings',
-        'cartSnippet' => null
+        'cartSnippet' => null,
+        'translations' => []
     ]
 ];
 ```
@@ -89,6 +90,7 @@ List of all available options:
 - [ordersPage](#orderspage)
 - [settingsPage](#settingspage)
 - [cartSnippet](#cartsnippet)
+- [translations](#translations)
 
 ### `stripePublicKey`
 
@@ -188,6 +190,52 @@ When set, it will look for the snippet with the same name and return the HTML co
 Useful when adding, updating or removing cart contents, and you want to update the HTML on every request.
 
 If snippet does not exist or is empty, it will return `null`.
+
+### `translations`
+
+type: `array` default: `[]`
+
+Use this option to overwrite existing translations or to add a new one that is not bundled with the plugin.
+Check the [`translations`](translations) folder for all available translations.
+
+An example when overwriting an existing translation:
+
+```php
+// site/config/config.php
+
+return [
+    'programmatordev.stripe-checkout' => [
+        'translations' => [
+            'en' => [
+                // overwrites "Orders" to "Tickets"
+                'stripe-checkout.fields.orders.ordersHeadline.label' => 'Tickets'
+            ]
+        ]
+    ]
+];
+```
+
+If a translation does not exist, you can provide yours:
+
+```php
+// site/config/config.php
+
+return [
+    'programmatordev.stripe-checkout.translations' => [
+        'translations' => [
+            // The German translation is not currently bundled with the plugin, so you can provide your own
+            'de' => [
+                'stripe-checkout.fields.product.price.label' => 'Preis',
+                'stripe-checkout.fields.product.thumbnail.label' => 'Vorschaubild',
+                'stripe-checkout.fields.settings.shippingHeadline.label' => 'Versand',
+                'stripe-checkout.fields.settings.shippingEnabled.label' => 'Versandeinstellungen',
+                'stripe-checkout.fields.settings.shippingAllowedCountries.label' => 'Erlaubte Länder',
+                // ...
+            ]
+        ]
+    ]
+];
+```
 
 ## Hooks
 
@@ -352,7 +400,7 @@ return [
 
 A cart management system already exists and is required to be able to create a Checkout Session.
 The reason for this is that the checkout line items are generated based on the current cart contents.
-This means that the cart must have at least one added item, otherwise it will throw an error.
+This means that the cart must have at least one added item; otherwise it will throw an error.
 
 ### PHP
 
@@ -408,7 +456,7 @@ Information related to the `price`, `name` and `thumbnail` are added to the item
 If the item that is being added already exists in the cart, the sum of its quantities will be made into a single item.
 
 If the same item is added but with different options, it will be considered different items in the cart.
-For example, a t-shirt with color blue, and the same t-shirt with color red will be different items.
+For example, a t-shirt with the color blue and the same t-shirt with the color red will be different items.
 
 A `key` is returned that uniquely identifies the item in the cart.
 
@@ -495,7 +543,7 @@ foreach ($items as $key => $item) {
 totalQuantity(): int
 ```
 
-Get total quantity of items in the cart.
+Get the total quantity of items in the cart.
 
 ```php
 $cart = cart();
@@ -508,7 +556,7 @@ echo $cart->totalQuantity(); // 3
 totalAmount(): int|float
 ```
 
-Get total amount in the cart.
+Get the total amount in the cart.
 
 ```php
 $cart = cart();
@@ -563,7 +611,7 @@ echo $cart->cartSnippet(render: true); // rendered snippet HTML
 destroy(): void
 ```
 
-Destroy all contents and reset cart to initial state.
+Destroy all contents and reset the cart to the initial state.
 
 ```php
 $cart = cart();
@@ -717,7 +765,9 @@ Response:
 
 Currently, this plugin is only available in English and Portuguese (Portugal).
 
-If you want to add a new language, go to the `translations` directory and create a new YAML file named with the locale that you wish to translate.
+If you want to add a new translation, check the [`translations`](#translations) option in the [`Options`](#options) section.
+
+If you want to contribute with a translation (to be bundled with the plugin), go to the `translations` directory and create a new YAML file named with the locale that you wish to translate.
 For example, if you want to add the German translation, create a `de.yml` file.
 
 It will be very appreciated if you can contribute by making a pull request with the translation you wish to add.
@@ -747,7 +797,7 @@ and add them to the [`stripePublicKey`](#stripepublickey) and [`stripeSecretKey`
 Create a webhook to listen to Stripe Checkout events.
 
 When creating a webhook in the Stripe Dashboard (should be in the Developers page),
-make sure to select the following Checkout events, otherwise it will not work correctly:
+make sure to select the following Checkout events; otherwise it will not work correctly:
 - `checkout.session.completed`
 - `checkout.session.async_payment_succeeded`
 - `checkout.session.async_payment_failed`
@@ -798,7 +848,7 @@ extends: stripe-checkout.pages/checkout-settings
 
 You can create a product blueprint with any name.
 
-Just make sure that you have a `price` field (it is required).
+Make sure that you have a `price` field (it is required).
 To add an image, add a `thumbnail` field (it is optional).
 
 The plugin already comes with both blueprints fields, in case you want to use them:
@@ -815,7 +865,7 @@ fields:
 
 ### `hosted` versus `embedded` mode
 
-Depending on the mode you are using, jump to the respective step bellow:
+Depending on the mode you are using, jump to the respective step below:
 - [Step 6: `hosted` mode](#step-6-hosted-mode)
 - [Step 6: `embedded` mode](#step-6-embedded-mode)
 
@@ -823,7 +873,7 @@ For more information about the difference between both modes, check the [`uiMode
 
 ### Step 6: `hosted` mode.
 
-When in `hosted` mode, you just need to add a link to the website
+When in `hosted` mode, you need to add a link to the website
 with the URL generated by the following method `stripeCheckout()->checkoutUrl()`.
 
 This link usually exists in the cart component or when reviewing the order before proceeding to the checkout.
@@ -840,7 +890,7 @@ Something like:
 </div>
 ```
 
-Just make sure to have at least one item added to the cart (check the [`Cart`](#cart) section) or it will throw an error.
+Make sure to have at least one item added to the cart (check the [`Cart`](#cart) section) or it will throw an error.
 
 It is also required to set the [`successPage`](#successpage) and the [`cancelPage`](#cancelpage) options.
 
@@ -864,7 +914,7 @@ Something like:
     <script src="https://js.stripe.com/v3/"></script>
 
     <script defer>
-      // initialize Stripe using the stripeCheckout()->stripePublicKey() method
+      // to initialize Stripe using the stripeCheckout()->stripePublicKey() method
       // you can also use option('programmatordev.stripe-checkout.stripePublicKey')
       const stripe = Stripe('<?= stripeCheckout()->stripePublicKey() ?>');
 
@@ -893,7 +943,7 @@ Something like:
 </html>
 ```
 
-Just make sure to have at least one item added to the cart (check the [`Cart`](#cart) section) or it will throw an error.
+Make sure to have at least one item added to the cart (check the [`Cart`](#cart) section) or it will throw an error.
 
 It is also required to set the [`returnPage`](#returnpage) option.
 
@@ -937,7 +987,7 @@ stripe trigger checkout.session.async_payment_succeeded --add checkout_session:m
 ```
 
 This command will trigger the `checkout.session.async_payment_succeeded` event (you can trigger any event).
-Just make sure to always include the `--add checkout_session:metadata.order_id=xxxxxx`.
+Make sure to always include the `--add checkout_session:metadata.order_id=xxxxxx`.
 
 This is required because the plugin needs to share the Kirby order id across all events (to be in sync).
 You can set any `order_id` value, as long as it is alphanumeric.
