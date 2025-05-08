@@ -621,10 +621,11 @@ $cart->destroy();
 #### `toArray`
 
 ```php
-toArray(): array
+toArray(bool $includeCurrency = true): array
 ```
 
-Converts all cart contents to array
+Converts all cart contents into an array.
+
 
 ```php
 $cart = cart();
