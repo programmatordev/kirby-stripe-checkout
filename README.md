@@ -621,10 +621,11 @@ $cart->destroy();
 #### `toArray`
 
 ```php
-toArray(): array
+toArray(bool $includeCurrency = true): array
 ```
 
-Converts all cart contents to array
+Converts all cart contents into an array.
+
 
 ```php
 $cart = cart();
@@ -828,6 +829,10 @@ extends: stripe-checkout.pages/orders
 
 extends: stripe-checkout.pages/order
 ```
+
+> [!NOTE]
+> Remember to create a `orders` directory at `/content` with a `orders.txt` file.
+> Otherwise, the page will not be found.
 
 ### Step 4 (optional).
 
