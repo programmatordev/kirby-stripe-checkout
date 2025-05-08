@@ -31,6 +31,8 @@ class Cart
     public function __construct(array $options = [])
     {
         $this->options = $this->resolveOptions($options);
+        $this->currencySymbol = Currencies::getSymbol($this->currency());
+
         $this->session = kirby()->session(['long' => true]);
 
         $this->initialize();
@@ -43,22 +45,19 @@ class Cart
             $this->session->data()->set(self::SESSION_NAME, [
                 'items' => [],
                 'totalAmount' => 0,
-                'totalQuantity' => 0,
-                'currency' => $this->currency(),
-                'currencySymbol' => Currencies::getSymbol($this->currency()),
+                'totalQuantity' => 0
             ]);
         }
 
-        $sessionData = $this->session->data()->get(self::SESSION_NAME);
+        $data = $this->session->data()->get(self::SESSION_NAME);
 
         // sync cart data with session data...
         $this->items = new Collection();
-        $this->totalAmount = $sessionData['totalAmount'];
-        $this->totalQuantity = $sessionData['totalQuantity'];
-        $this->currencySymbol = $sessionData['currencySymbol'];
+        $this->totalAmount = $data['totalAmount'];
+        $this->totalQuantity = $data['totalQuantity'];
 
         // ...including items
-        foreach ($sessionData['items'] as $item) {
+        foreach ($data['items'] as $item) {
             $this->items->set(
                 $item['key'],
                 new Item($item['id'], $item['quantity'], $item['options'])
@@ -104,7 +103,7 @@ class Cart
 
     public function cartSnippet(bool $render = false): ?string
     {
-        // if render is false, return cartSnippet option as is...
+        // if render is false, return the cartSnippet option as is...
         if ($render === false) {
             return $this->options['cartSnippet'];
         }
@@ -121,12 +120,12 @@ class Cart
             throw new InvalidArgumentException('Quantity must be greater than 0.');
         }
 
-        // create unique key based on page id and given options
+        // create a unique key based on page id and given options
         // this means that it is possible to add the same product with different options
         // and be treated as separate items (the same shoes with different sizes are different items in the cart)
         $key = $options === null ? md5($id) : md5($id . serialize($options));
 
-        // if the same exact item is already in the cart
+        // if the same exact item is already in the cart,
         // sum the new quantity with the quantity of the existing item
         if ($item = $this->items()->get($key)) {
             $quantity += $item->quantity();
@@ -184,15 +183,20 @@ class Cart
         $this->initialize();
     }
 
-    public function toArray(): array
+    public function toArray(bool $includeCurrency = true): array
     {
         $data = [
             'items' => [],
             'totalAmount' => $this->totalAmount(),
-            'totalQuantity' => $this->totalQuantity(),
-            'currency' => $this->currency(),
-            'currencySymbol' => $this->currencySymbol(),
+            'totalQuantity' => $this->totalQuantity()
         ];
+
+        if ($includeCurrency === true) {
+            $data = array_merge($data, [
+                'currency' => $this->currency(),
+                'currencySymbol' => $this->currencySymbol(),
+            ]);
+        }
 
         /** @var Item $item */
         foreach ($this->items as $key => $item) {
@@ -228,12 +232,15 @@ class Cart
 
     private function saveSession(): void
     {
-        $this->session->data()->set(self::SESSION_NAME, $this->toArray());
+        $this->session->data()->set(self::SESSION_NAME, $this->toArray(false));
     }
 
     private function resolveOptions(array $options): array
     {
+        $options = array_merge(option('programmatordev.stripe-checkout', []), $options);
+
         $resolver = new OptionsResolver();
+        $resolver->setIgnoreUndefined();
 
         $resolver->setDefaults([
             'currency' => 'EUR',
