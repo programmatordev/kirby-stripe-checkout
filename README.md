@@ -829,6 +829,10 @@ extends: stripe-checkout.pages/orders
 extends: stripe-checkout.pages/order
 ```
 
+> [!NOTE]
+> Remember to create a `orders` directory at `/content` with a `orders.txt` file.
+> Otherwise, the page will not be found.
+
 ### Step 4 (optional).
 
 Similar to the previous step, create a `checkout-settings` blueprint.
