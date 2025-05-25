@@ -72,7 +72,8 @@ fields.order.taxId.type.label: Tipo
 fields.order.taxId.value.label: Valor
 fields.order.currency.label: Moeda
 fields.order.currencySymbol.label: Símbolo
-fields.order.stripePaymentIntentId.label: ID de Pagamento
+fields.order.stripePaymentIntentId.label: Payment Intent ID
+fields.order.stripeCheckoutSessionId.label: Checkout Session ID
 fields.order.stripeEvents.label: Eventos
 fields.order.stripeEvents.id.label: ID
 fields.order.stripeEvents.type.label: Tipo

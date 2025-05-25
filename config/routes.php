@@ -191,6 +191,7 @@ return function(App $kirby) {
                             'currency' => $currency,
                             'currencySymbol' => Currencies::getSymbol($currency),
                             'stripePaymentIntentId' => $checkoutSession->payment_intent?->id ?? null,
+                            'stripeCheckoutSessionId' => $checkoutSession->id,
                             'stripeEvents' => [
                                 [
                                     'id' => $event->id,
