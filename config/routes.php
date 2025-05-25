@@ -137,7 +137,7 @@ return function(App $kirby) {
                             'name' => $checkoutSession->customer_details->name ?? null,
                             'country' => $checkoutSession->customer_details->address->country ?? null,
                             'line1' => $checkoutSession->customer_details->address->line1 ?? null,
-                            'line2' => $checkoutSession->customer_details->payment_method->billing_details->address->line2 ?? null,
+                            'line2' => $checkoutSession->customer_details->address->line2 ?? null,
                             'postalCode' => $checkoutSession->customer_details->address->postal_code ?? null,
                             'city' => $checkoutSession->customer_details->address->city ?? null,
                             'state' => $checkoutSession->customer_details->address->state ?? null
@@ -191,6 +191,7 @@ return function(App $kirby) {
                             'currency' => $currency,
                             'currencySymbol' => Currencies::getSymbol($currency),
                             'stripePaymentIntentId' => $checkoutSession->payment_intent?->id ?? null,
+                            'stripeCheckoutSessionId' => $checkoutSession->id,
                             'stripeEvents' => [
                                 [
                                     'id' => $event->id,

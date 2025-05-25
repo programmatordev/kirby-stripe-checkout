@@ -3,7 +3,7 @@
 	"description": "Stripe Checkout for Kirby CMS",
 	"type": "kirby-plugin",
     "license": "MIT",
-    "version": "0.4.0",
+    "version": "0.5.0",
     "keywords": [
         "kirby",
         "kirby-cms",

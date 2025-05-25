@@ -326,10 +326,16 @@ tabs:
           stripePaymentIntentId:
             label: stripe-checkout.fields.order.stripePaymentIntentId.label
             type: text
+            disabled: true
+          stripeCheckoutSessionId:
+            label: stripe-checkout.fields.order.stripeCheckoutSessionId.label
+            type: text
+            disabled: true
           stripeEvents:
             label: stripe-checkout.fields.order.stripeEvents.label
             type: structure
             sortable: false
+            duplicate: false
             columns:
               id: true
               type: true
@@ -339,6 +345,7 @@ tabs:
               id:
                 label: stripe-checkout.fields.order.stripeEvents.id.label
                 type: text
+                disabled: true
               type:
                 label: stripe-checkout.fields.order.stripeEvents.type.label
                 type: text

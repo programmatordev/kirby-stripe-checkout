@@ -73,6 +73,7 @@ fields.order.taxId.value.label: Value
 fields.order.currency.label: Currency
 fields.order.currencySymbol.label: Symbol
 fields.order.stripePaymentIntentId.label: Payment Intent ID
+fields.order.stripeCheckoutSessionId.label: Checkout Session ID
 fields.order.stripeEvents.label: Events
 fields.order.stripeEvents.id.label: ID
 fields.order.stripeEvents.type.label: Type
