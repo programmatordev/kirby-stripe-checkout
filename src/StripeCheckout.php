@@ -124,7 +124,7 @@ class StripeCheckout
      * @throws ApiErrorException
      * @throws UnknownCurrencyException
      */
-    public function createSession(?Cart $cart = null): Session
+    public function createSession(?Cart $cart = null, array $params = []): Session
     {
         // if no cart is provided, use singleton
         $cart = $cart ?? cart();
@@ -135,7 +135,7 @@ class StripeCheckout
 
         $languageCode = kirby()->language()?->code();
 
-        $params = [
+        $params = array_replace_recursive($params, [
             'mode' => Session::MODE_PAYMENT,
             'ui_mode' => $this->uiMode(),
             'metadata' => [
@@ -148,7 +148,7 @@ class StripeCheckout
                 // as when the user made the order
                 'language_code' => $languageCode
             ]
-        ];
+        ]);
 
         $this->addLineItemsParams($params, $cart);
         $this->addShippingParams($params);
