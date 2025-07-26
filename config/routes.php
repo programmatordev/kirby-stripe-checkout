@@ -28,7 +28,7 @@ return function(App $kirby) {
                     );
                 }
 
-                // redirect to hosted payment form
+                // redirect to the hosted payment form
                 // https://docs.stripe.com/checkout/quickstart#redirect
                 go($checkoutSession->url);
             }
@@ -78,7 +78,7 @@ return function(App $kirby) {
                     throw new InvalidWebhookException('Invalid signature.');
                 }
 
-                // get checkout session with required data
+                // get the checkout session with required data
                 $checkoutSession = $stripeCheckout->retrieveSession($event->data->object->id, [
                     'expand' => [
                         'line_items.data.price.product',
@@ -103,7 +103,7 @@ return function(App $kirby) {
 
                 switch ($event->type) {
                     // no need to handle duplicate events here
-                    // because if an order is (tried to) be created with the same slug it will fail
+                    // because if an order is (tried to) be created with the same slug, it will fail
                     case Event::CHECKOUT_SESSION_COMPLETED:
                         $currency = strtoupper($checkoutSession->currency);
                         $lineItems = [];
@@ -131,8 +131,8 @@ return function(App $kirby) {
                             'state' => $checkoutSession->shipping_details->address->state ?? null
                         ];
 
-                        // customer_details is always be populated with billing info,
-                        // even when there is no payment_intent (no-cost orders)
+                        // customer_details will always be populated with billing info,
+                        // even when there is no payment_intent (no-cost order)
                         $billingDetails = $checkoutSession->customer_details->address?->country === null ? null : [
                             'name' => $checkoutSession->customer_details->name ?? null,
                             'country' => $checkoutSession->customer_details->address->country ?? null,
@@ -158,12 +158,12 @@ return function(App $kirby) {
                         }
 
                         // if there was no payment intent,
-                        // it means that there was no payment involved
+                        // it means that there was no payment involved,
                         // which means that it was a no-cost order
                         $paymentType = $checkoutSession->payment_intent?->payment_method->type ?? 'no_cost';
                         // find payment method translation
                         // if translation does not exist, try to generate a user-friendly name
-                        // (for example: "apple_pay" to "Apple Pay")
+                        // (for example, "apple_pay" to "Apple Pay")
                         $paymentMethod = t(
                             sprintf('stripe-checkout.paymentMethods.%s', $paymentType),
                             Str::ucwords(Str::replace($paymentType, '_', ' '))
@@ -296,7 +296,7 @@ return function(App $kirby) {
                                 'stripeEvent' => $event
                             ]);
                         }
-                        // if payment failed, set order and trigger payment event as failed
+                        // if payment failed, set order and trigger the payment event as failed
                         else if ($event->type === Event::CHECKOUT_SESSION_ASYNC_PAYMENT_FAILED) {
                             $orderPage->update(['stripeEvents' => $orderStripeEvents]);
                             $orderPage->changeStatus('draft');
