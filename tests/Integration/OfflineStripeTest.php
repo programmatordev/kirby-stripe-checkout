@@ -24,7 +24,7 @@ final class OfflineStripeTest extends KirbyTestCase
             'https://api.stripe.com/v1/checkout/sessions/test',
             [],
             [],
-            false
+            false,
         );
     }
 }

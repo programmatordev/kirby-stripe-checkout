@@ -49,6 +49,14 @@ jobs:
       - name: Install locked dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
+      - name: Run static analysis
+        if: matrix.php == '8.2'
+        run: composer analyse
+
+      - name: Check PHP code style
+        if: matrix.php == '8.2'
+        run: composer format:check
+
       - name: Execute tests
         run: vendor/bin/phpunit
 
@@ -91,7 +99,7 @@ jobs:
             }
           done
 
-          forbidden='^(\.ddev|\.github|content|plans|site|tests|src/Test)(/|$)|^(\.editorconfig|\.env\.example|\.gitattributes|\.gitignore|\.htaccess|\.phpunit\.result\.cache|CONTRIBUTING\.md|composer\.lock|index\.site\.php|phpunit\.xml\.dist)$'
+          forbidden='^(\.ddev|\.github|content|plans|site|tests|src/Test)(/|$)|^(\.editorconfig|\.env\.example|\.gitattributes|\.gitignore|\.htaccess|\.php-cs-fixer\.cache|\.php-cs-fixer\.dist\.php|\.phpunit\.result\.cache|CONTRIBUTING\.md|composer\.lock|index\.site\.php|phpstan-baseline\.neon|phpstan\.neon\.dist|phpunit\.xml\.dist)$'
 
           if grep -Eq "$forbidden" "$list"; then
             echo "Development-only path found in Composer package artifact:" >&2

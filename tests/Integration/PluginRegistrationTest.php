@@ -17,7 +17,7 @@ final class PluginRegistrationTest extends KirbyTestCase
         $plugin = App::plugin('programmatordev/stripe-checkout');
 
         $this->assertInstanceOf(Plugin::class, $plugin);
-        $this->assertSame(KIRBY_STRIPE_CHECKOUT_ROOT, $plugin->root());
+        $this->assertSame(dirname(__DIR__, 2), $plugin->root());
 
         $declaredVersion = new ReflectionProperty($plugin, 'version');
 

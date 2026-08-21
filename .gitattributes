@@ -19,7 +19,11 @@
 /.gitignore export-ignore
 /.htaccess export-ignore
 /.phpunit.result.cache export-ignore
+/.php-cs-fixer.cache export-ignore
+/.php-cs-fixer.dist.php export-ignore
 /CONTRIBUTING.md export-ignore
 /composer.lock export-ignore
 /index.site.php export-ignore
+/phpstan-baseline.neon export-ignore
+/phpstan.neon.dist export-ignore
 /phpunit.xml.dist export-ignore

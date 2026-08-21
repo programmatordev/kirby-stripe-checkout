@@ -16,8 +16,10 @@ final class KirbyIsolationTest extends KirbyTestCase
         }
 
         $this->assertCount(0, $this->kirby->site()->children());
-        $this->assertNotSame(KIRBY_STRIPE_CHECKOUT_ROOT . '/content', $this->kirby->root('content'));
-        $this->assertNotSame(KIRBY_STRIPE_CHECKOUT_ROOT . '/site', $this->kirby->root('site'));
+        $pluginRoot = dirname(__DIR__, 2);
+
+        $this->assertNotSame($pluginRoot . '/content', $this->kirby->root('content'));
+        $this->assertNotSame($pluginRoot . '/site', $this->kirby->root('site'));
     }
 
     public function testFreshEnvironmentCannotSeePreviousPageOrSessionState(): void
@@ -31,10 +33,10 @@ final class KirbyIsolationTest extends KirbyTestCase
                 'title' => 'Transient product',
             ],
         ])->changeStatus('listed');
-        $this->kirby->session()->set('transient', 'value');
+        $this->kirby->session()->data()->set('transient', 'value');
 
         $this->assertNotNull($this->kirby->site()->find('transient-product'));
-        $this->assertSame('value', $this->kirby->session()->get('transient'));
+        $this->assertSame('value', $this->kirby->session()->data()->get('transient'));
 
         $this->environment->close();
         $this->assertDirectoryDoesNotExist($firstRoot);
@@ -44,6 +46,6 @@ final class KirbyIsolationTest extends KirbyTestCase
 
         $this->assertNotSame($firstRoot, $this->environment->workspace()->root());
         $this->assertNull($this->kirby->site()->find('transient-product'));
-        $this->assertNull($this->kirby->session()->get('transient'));
+        $this->assertNull($this->kirby->session()->data()->get('transient'));
     }
 }

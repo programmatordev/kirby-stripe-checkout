@@ -46,8 +46,12 @@ Run the standard checks through DDEV:
 ```bash
 ddev composer validate --strict
 ddev composer audit --locked
+ddev composer analyse
+ddev composer format:check
 ddev php vendor/bin/phpunit
 ```
+
+Run every code-quality check with `ddev composer check`. Use `ddev composer format` to apply the configured PHP style before rerunning the checks.
 
 The default PHPUnit command runs both test suites. Run one layer while developing with:
 
@@ -59,6 +63,10 @@ ddev php vendor/bin/phpunit --testsuite "Plugin Integration"
 Tests cover plugin behavior and public contracts. `tests/Support` contains only the minimum infrastructure needed to exercise those contracts; support utilities are not treated as product behavior and are not tested independently. Unit tests do not boot Kirby. Plugin integration tests construct a fresh application with unique disposable content, site, account, cache, media, and session roots for every test. Test support must not be added to runtime `src/` or the Composer package artifact.
 
 The default suite is deterministic and offline. Its Stripe HTTP client rejects unexpected requests instead of contacting Stripe. Use explicit fakes and sanitized fixtures for Stripe behavior; Stripe CLI checks remain separate and opt-in.
+
+PHPStan analyzes at its maximum rule level. `phpstan-baseline.neon` contains only findings from the pre-rework production implementation and rejects stale entries. Do not add new or test-code findings to it. Remove the matching baseline entries whenever legacy code is replaced or deliberately retained.
+
+PHP-CS-Fixer checks tests and new files under `src/` and `config/`. Its configuration temporarily excludes the specific pre-rework source paths listed in `.php-cs-fixer.dist.php`; remove each exclusion when that code is replaced or deliberately retained. Add the root bootstrap or helper file to the finder when either is reworked.
 
 To expose order dependencies while changing shared test infrastructure, run:
 

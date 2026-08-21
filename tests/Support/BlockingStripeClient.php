@@ -9,6 +9,10 @@ use Stripe\HttpClient\ClientInterface;
 
 final class BlockingStripeClient implements ClientInterface
 {
+    /**
+     * @param list<string>         $headers
+     * @param array<string, mixed> $params
+     */
     public function request(
         $method,
         $absUrl,
@@ -16,12 +20,12 @@ final class BlockingStripeClient implements ClientInterface
         $params,
         $hasFile,
         $apiMode = 'v1',
-        $maxNetworkRetries = null
-    ): array {
+        $maxNetworkRetries = null,
+    ): never {
         throw new LogicException(sprintf(
             'Unexpected Stripe HTTP request: %s %s',
-            strtoupper((string)$method),
-            (string)$absUrl
+            strtoupper((string) $method),
+            (string) $absUrl,
         ));
     }
 }

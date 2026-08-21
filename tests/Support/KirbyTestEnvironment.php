@@ -20,7 +20,7 @@ final class KirbyTestEnvironment
         private readonly TestWorkspace $workspace,
         private readonly App $app,
         private readonly ClientInterface $previousStripeClient,
-        private readonly string $sessionCookie
+        private readonly string $sessionCookie,
     ) {}
 
     public function __destruct()
@@ -57,7 +57,7 @@ final class KirbyTestEnvironment
             // The reference translation loader calls option() during plugin
             // registration, so it needs an isolated Kirby context first.
             new App($appProperties);
-            require KIRBY_STRIPE_CHECKOUT_ROOT . '/index.php';
+            require dirname(__DIR__, 2) . '/index.php';
 
             $app = new App($appProperties);
 

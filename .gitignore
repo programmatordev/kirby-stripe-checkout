@@ -13,6 +13,7 @@ package-lock.json
 # Test files
 # ------------
 .phpunit.result.cache
+.php-cs-fixer.cache
 
 # System files
 # ------------
