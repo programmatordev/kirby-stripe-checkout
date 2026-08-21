@@ -23,5 +23,3 @@
 /composer.lock export-ignore
 /index.site.php export-ignore
 /phpunit.xml.dist export-ignore
-/src/Test export-ignore
-/src/Test/** export-ignore

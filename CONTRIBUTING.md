@@ -49,7 +49,22 @@ ddev composer audit --locked
 ddev php vendor/bin/phpunit
 ```
 
-The existing behavioral tests cover the pre-rework reference implementation. Phase 2 will replace them with the new test architecture and initial foundation tests in the same approved batch, so the repository never intentionally has an empty test suite.
+The default PHPUnit command runs both test suites. Run one layer while developing with:
+
+```bash
+ddev php vendor/bin/phpunit --testsuite "Plugin Unit"
+ddev php vendor/bin/phpunit --testsuite "Plugin Integration"
+```
+
+Tests cover plugin behavior and public contracts. `tests/Support` contains only the minimum infrastructure needed to exercise those contracts; support utilities are not treated as product behavior and are not tested independently. Unit tests do not boot Kirby. Plugin integration tests construct a fresh application with unique disposable content, site, account, cache, media, and session roots for every test. Test support must not be added to runtime `src/` or the Composer package artifact.
+
+The default suite is deterministic and offline. Its Stripe HTTP client rejects unexpected requests instead of contacting Stripe. Use explicit fakes and sanitized fixtures for Stripe behavior; Stripe CLI checks remain separate and opt-in.
+
+To expose order dependencies while changing shared test infrastructure, run:
+
+```bash
+ddev php vendor/bin/phpunit --order-by=random
+```
 
 ## Development data
 
