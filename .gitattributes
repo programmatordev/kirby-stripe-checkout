@@ -1,8 +1,16 @@
+# Exclude both directory entries and descendants to avoid empty development
+# directories in the Composer package artifact.
+/.ddev export-ignore
 /.ddev/** export-ignore
+/.github export-ignore
 /.github/** export-ignore
+/content export-ignore
 /content/** export-ignore
+/plans export-ignore
 /plans/** export-ignore
+/site export-ignore
 /site/** export-ignore
+/tests export-ignore
 /tests/** export-ignore
 
 /.editorconfig export-ignore
@@ -11,7 +19,9 @@
 /.gitignore export-ignore
 /.htaccess export-ignore
 /.phpunit.result.cache export-ignore
+/CONTRIBUTING.md export-ignore
 /composer.lock export-ignore
 /index.site.php export-ignore
 /phpunit.xml.dist export-ignore
+/src/Test export-ignore
 /src/Test/** export-ignore

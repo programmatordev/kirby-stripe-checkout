@@ -32,6 +32,7 @@ Icon
 /media
 /plans
 /.env
+/.ddev/.env
 
 # Kirby development runtime
 # ------------

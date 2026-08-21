@@ -1,13 +1,15 @@
 name: CI
 
-on: 
+on:
   push:
     branches:
       - main
+      - rework
       - "*.x"
   pull_request:
     branches:
       - main
+      - rework
       - "*.x"
 
 jobs:
@@ -29,8 +31,54 @@ jobs:
           tools: composer:v2
           coverage: none
 
-      - name: Install dependencies
-        run: composer update --prefer-dist --no-interaction --no-progress
+      - name: Install locked dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
 
       - name: Execute tests
         run: vendor/bin/phpunit
+
+  package:
+    name: Validate Composer package artifact
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build package artifact
+        # Internal package QA only; the plugin is installed through Composer.
+        run: git archive --worktree-attributes --format=tar.gz --output=/tmp/kirby-stripe-checkout.tar.gz HEAD
+
+      - name: Inspect package boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          archive=/tmp/kirby-stripe-checkout.tar.gz
+          list=/tmp/kirby-stripe-checkout-files.txt
+          tar -tzf "$archive" > "$list"
+
+          required=(
+            LICENSE
+            README.md
+            composer.json
+            index.php
+            src/StripeCheckout.php
+            translations/en.yml
+            blueprints/pages/order.yml
+          )
+
+          for required_file in "${required[@]}"; do
+            grep -Fxq "$required_file" "$list" || {
+              echo "Missing required package path: $required_file" >&2
+              exit 1
+            }
+          done
+
+          forbidden='^(\.ddev|\.github|content|plans|site|tests|src/Test)(/|$)|^(\.editorconfig|\.env\.example|\.gitattributes|\.gitignore|\.htaccess|\.phpunit\.result\.cache|CONTRIBUTING\.md|composer\.lock|index\.site\.php|phpunit\.xml\.dist)$'
+
+          if grep -Eq "$forbidden" "$list"; then
+            echo "Development-only path found in Composer package artifact:" >&2
+            grep -E "$forbidden" "$list" >&2
+            exit 1
+          fi
