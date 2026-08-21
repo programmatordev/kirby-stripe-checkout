@@ -75,6 +75,42 @@ jobs:
         if: matrix.php != '8.2'
         run: vendor/bin/phpunit
 
+  # The locked matrix proves reproducibility; these jobs prove the declared
+  # dependency constraints resolve at both ends of the current PHP matrix.
+  dependencies:
+    name: PHP ${{ matrix.php }} / ${{ matrix.dependencies }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php: "8.2"
+            dependencies: Lowest dependencies
+            composer_arguments: --prefer-lowest --prefer-stable
+          - php: "8.5"
+            dependencies: Latest dependencies
+            composer_arguments: --prefer-stable
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: composer:v2
+          coverage: none
+
+      - name: Resolve dependency range
+        # Keep Composer's security-advisory blocking enabled, including for
+        # the lowest resolution.
+        run: composer update --prefer-dist --no-interaction --no-progress ${{ matrix.composer_arguments }}
+
+      - name: Execute tests
+        run: composer test
+
   package:
     name: Validate Composer package artifact
     runs-on: ubuntu-latest
@@ -83,6 +119,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          tools: composer:v2
+          coverage: none
 
       - name: Build package artifact
         # Internal package QA only; the plugin is installed through Composer.
@@ -121,3 +164,25 @@ jobs:
             grep -E "$forbidden" "$list" >&2
             exit 1
           fi
+
+      - name: Install package in clean Kirby project
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          smoke_root="$(mktemp -d)"
+          trap 'rm -rf "$smoke_root"' EXIT
+
+          mkdir -p "$smoke_root/package" "$smoke_root/consumer"
+          tar -xzf /tmp/kirby-stripe-checkout.tar.gz -C "$smoke_root/package"
+          # This fixture forces a mirrored path install and supplies the
+          # archive's test-only version without changing the package manifest.
+          cp tests/Package/composer.json "$smoke_root/consumer/composer.json"
+
+          composer install \
+            --working-dir="$smoke_root/consumer" \
+            --prefer-dist \
+            --no-interaction \
+            --no-progress
+
+          php tests/Package/consumer-smoke.php "$smoke_root/consumer"

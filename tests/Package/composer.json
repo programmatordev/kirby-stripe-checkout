@@ -1,0 +1,30 @@
+{
+    "name": "programmatordev/kirby-stripe-checkout-consumer-smoke",
+    "description": "Disposable Composer consumer for package smoke testing",
+    "license": "proprietary",
+    "type": "project",
+    "require": {
+        "programmatordev/kirby-stripe-checkout": "dev-package-smoke"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../package",
+            "options": {
+                "symlink": false,
+                "versions": {
+                    "programmatordev/kirby-stripe-checkout": "dev-package-smoke"
+                }
+            }
+        }
+    ],
+    "config": {
+        "allow-plugins": {
+            "getkirby/composer-installer": true
+        },
+        "optimize-autoloader": true
+    },
+    "extra": {
+        "kirby-cms-path": "kirby"
+    }
+}
