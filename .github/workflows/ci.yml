@@ -36,7 +36,8 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           tools: composer:v2
-          coverage: none
+          ini-values: pcov.directory=${{ github.workspace }}
+          coverage: ${{ matrix.php == '8.2' && 'pcov' || 'none' }}
 
       - name: Validate Composer configuration
         if: matrix.php == '8.2'
@@ -57,7 +58,21 @@ jobs:
         if: matrix.php == '8.2'
         run: composer format:check
 
+      - name: Execute tests with coverage
+        if: matrix.php == '8.2'
+        run: composer coverage
+
+      - name: Upload coverage report
+        if: matrix.php == '8.2'
+        uses: actions/upload-artifact@v7
+        with:
+          name: php-coverage
+          path: coverage.xml
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Execute tests
+        if: matrix.php != '8.2'
         run: vendor/bin/phpunit
 
   package:
@@ -99,7 +114,7 @@ jobs:
             }
           done
 
-          forbidden='^(\.ddev|\.github|content|plans|site|tests|src/Test)(/|$)|^(\.editorconfig|\.env\.example|\.gitattributes|\.gitignore|\.htaccess|\.php-cs-fixer\.cache|\.php-cs-fixer\.dist\.php|\.phpunit\.result\.cache|CONTRIBUTING\.md|composer\.lock|index\.site\.php|phpstan-baseline\.neon|phpstan\.neon\.dist|phpunit\.xml\.dist)$'
+          forbidden='^(\.ddev|\.github|content|plans|site|tests|src/Test)(/|$)|^(\.editorconfig|\.env\.example|\.gitattributes|\.gitignore|\.htaccess|\.php-cs-fixer\.cache|\.php-cs-fixer\.dist\.php|\.phpunit\.result\.cache|CONTRIBUTING\.md|composer\.lock|coverage\.xml|index\.site\.php|phpstan-baseline\.neon|phpstan\.neon\.dist|phpunit\.xml\.dist)$'
 
           if grep -Eq "$forbidden" "$list"; then
             echo "Development-only path found in Composer package artifact:" >&2

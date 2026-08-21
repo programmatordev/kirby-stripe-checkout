@@ -16,6 +16,15 @@
     <ini name="xdebug.show_exception_trace" value="0" />
   </php>
 
+  <source>
+    <include>
+      <directory suffix=".php">config</directory>
+      <directory suffix=".php">src</directory>
+      <file>helpers.php</file>
+      <file>index.php</file>
+    </include>
+  </source>
+
   <testsuites>
     <testsuite name="Plugin Unit">
       <directory>tests/Unit</directory>

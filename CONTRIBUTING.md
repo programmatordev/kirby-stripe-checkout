@@ -53,6 +53,16 @@ ddev php vendor/bin/phpunit
 
 Run every code-quality check with `ddev composer check`. Use `ddev composer format` to apply the configured PHP style before rerunning the checks.
 
+Generate a local coverage report only when reviewing test completeness:
+
+```bash
+ddev xdebug on
+ddev composer coverage
+ddev xdebug off
+```
+
+The command prints a summary and writes the ignored `coverage.xml` Clover report. Coverage is intentionally separate from `composer check` so normal development remains fast. Turn Xdebug off afterwards even if the coverage command fails.
+
 The default PHPUnit command runs both test suites. Run one layer while developing with:
 
 ```bash
@@ -67,6 +77,8 @@ The default suite is deterministic and offline. Its Stripe HTTP client rejects u
 PHPStan analyzes at its maximum rule level. `phpstan-baseline.neon` contains only findings from the pre-rework production implementation and rejects stale entries. Do not add new or test-code findings to it. Remove the matching baseline entries whenever legacy code is replaced or deliberately retained.
 
 PHP-CS-Fixer checks tests and new files under `src/` and `config/`. Its configuration temporarily excludes the specific pre-rework source paths listed in `.php-cs-fixer.dist.php`; remove each exclusion when that code is replaced or deliberately retained. Add the root bootstrap or helper file to the finder when either is reworked.
+
+Coverage measures production PHP under `src/`, `config/`, `index.php`, and `helpers.php`; test support and the development site are excluded. The project does not target 100% coverage. New Phase 6 components will introduce justified thresholds that can only stay level or increase, while correctness-critical payment scenarios remain mandatory regardless of the percentage.
 
 To expose order dependencies while changing shared test infrastructure, run:
 
