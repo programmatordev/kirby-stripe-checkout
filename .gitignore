@@ -32,6 +32,7 @@ Icon
 /content
 /kirby
 /media
+/plans
 /site
 index.site.php
 .htaccess
