@@ -1,0 +1,17 @@
+/.ddev/** export-ignore
+/.github/** export-ignore
+/content/** export-ignore
+/plans/** export-ignore
+/site/** export-ignore
+/tests/** export-ignore
+
+/.editorconfig export-ignore
+/.env.example export-ignore
+/.gitattributes export-ignore
+/.gitignore export-ignore
+/.htaccess export-ignore
+/.phpunit.result.cache export-ignore
+/composer.lock export-ignore
+/index.site.php export-ignore
+/phpunit.xml.dist export-ignore
+/src/Test/** export-ignore

@@ -1,0 +1,25 @@
+Title: Digital product
+
+----
+
+Summary: A paid product that does not require shipping.
+
+----
+
+Price: 12.5
+
+----
+
+Developmentfixture: true
+
+----
+
+Requiresshipping: false
+
+----
+
+Productoptions:
+
+----
+
+Uuid: devDigital0000001

@@ -69,6 +69,7 @@ class StripeCheckoutTest extends AbstractTestCase
             'template' => 'product',
             'content' => [
                 'title' => 'Product',
+                'summary' => 'Product fixture for checkout tests.',
                 'price' => 10
             ]
         ])->changeStatus('listed');

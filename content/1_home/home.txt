@@ -1,0 +1,13 @@
+Title: Home
+
+----
+
+Headline: A real Kirby context for the plugin rework
+
+----
+
+Intro: This committed site is intentionally small. It provides stable content for development, Panel review, and automated integration tests without containing credentials, accounts, customer data, or live Stripe records.
+
+----
+
+Uuid: devHome000000001

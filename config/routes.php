@@ -6,7 +6,7 @@ use Kirby\Toolkit\Str;
 use ProgrammatorDev\StripeCheckout\Exception\InvalidEndpointException;
 use ProgrammatorDev\StripeCheckout\Exception\InvalidWebhookException;
 use ProgrammatorDev\StripeCheckout\MoneyFormatter;
-use Stripe\Checkout\Session;
+use ProgrammatorDev\StripeCheckout\StripeCheckout;
 use Stripe\Event;
 use Stripe\Exception\SignatureVerificationException;
 use Symfony\Component\Intl\Currencies;
@@ -22,7 +22,7 @@ return function(App $kirby) {
                 $stripeCheckout = stripeCheckout();
                 $checkoutSession = $stripeCheckout->createSession();
 
-                if ($stripeCheckout->uiMode() !== Session::UI_MODE_HOSTED) {
+                if ($stripeCheckout->uiMode() !== StripeCheckout::UI_MODE_HOSTED) {
                     throw new InvalidEndpointException(
                         'This endpoint is reserved for Stripe Checkout in "hosted" mode.'
                     );
@@ -42,7 +42,7 @@ return function(App $kirby) {
                 $stripeCheckout = stripeCheckout();
                 $checkoutSession = $stripeCheckout->createSession();
 
-                if ($stripeCheckout->uiMode() !== Session::UI_MODE_EMBEDDED) {
+                if ($stripeCheckout->uiMode() !== StripeCheckout::UI_MODE_EMBEDDED) {
                     throw new InvalidEndpointException(
                         'This endpoint is reserved for Stripe Checkout in "embedded" mode.'
                     );

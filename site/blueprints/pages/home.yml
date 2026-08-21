@@ -1,0 +1,13 @@
+title: Home
+
+options:
+  changeTemplate: false
+  delete: false
+
+fields:
+  headline:
+    type: text
+    required: true
+  intro:
+    type: textarea
+    required: true

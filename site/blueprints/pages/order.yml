@@ -1,0 +1,14 @@
+extends: stripe-checkout.pages/order
+
+tabs:
+  project:
+    label: Project fields
+    icon: code
+    fields:
+      internalNote:
+        label: Internal note
+        type: textarea
+        help: This project-owned field demonstrates that an order blueprint can be extended without editing the plugin.
+      fulfillmentReference:
+        label: Fulfillment reference
+        type: text

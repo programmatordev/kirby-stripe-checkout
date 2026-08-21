@@ -21,6 +21,10 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 
 class StripeCheckout
 {
+    public const UI_MODE_EMBEDDED = 'embedded';
+
+    public const UI_MODE_HOSTED = 'hosted';
+
     private array $options;
 
     private string $currencySymbol;
@@ -137,7 +141,10 @@ class StripeCheckout
 
         $params = array_replace_recursive($params, [
             'mode' => Session::MODE_PAYMENT,
-            'ui_mode' => $this->uiMode(),
+            'ui_mode' => match ($this->uiMode()) {
+                self::UI_MODE_HOSTED => Session::UI_MODE_HOSTED_PAGE,
+                self::UI_MODE_EMBEDDED => Session::UI_MODE_EMBEDDED_PAGE
+            },
             'metadata' => [
                 // generate a unique id for the order
                 // required in webhooks to sync the different event payment steps
@@ -154,8 +161,8 @@ class StripeCheckout
         $this->addShippingParams($params);
 
         match ($this->uiMode()) {
-            Session::UI_MODE_HOSTED => $this->addHostedParams($params, $languageCode),
-            Session::UI_MODE_EMBEDDED => $this->addEmbeddedParams($params, $languageCode)
+            self::UI_MODE_HOSTED => $this->addHostedParams($params, $languageCode),
+            self::UI_MODE_EMBEDDED => $this->addEmbeddedParams($params, $languageCode)
         };
 
         // trigger an event that allows modification of session parameters
@@ -347,13 +354,13 @@ class StripeCheckout
         $resolver->setAllowedTypes('ordersPage', ['string']);
         $resolver->setAllowedTypes('settingsPage', ['null', 'string']);
 
-        $resolver->setAllowedValues('uiMode', [Session::UI_MODE_HOSTED, Session::UI_MODE_EMBEDDED]);
+        $resolver->setAllowedValues('uiMode', [self::UI_MODE_HOSTED, self::UI_MODE_EMBEDDED]);
         $resolver->setAllowedValues('currency', Currencies::getCurrencyCodes());
 
         $resolver->setNormalizer('returnPage', function (Options $options, ?string $returnPage): ?string {
-            if ($options['uiMode'] === Session::UI_MODE_EMBEDDED && $returnPage === null) {
+            if ($options['uiMode'] === self::UI_MODE_EMBEDDED && $returnPage === null) {
                 throw new InvalidOptionsException(
-                    sprintf('The option "returnPage" must be set when the option "uiMode" is "%s".', Session::UI_MODE_EMBEDDED)
+                    sprintf('The option "returnPage" must be set when the option "uiMode" is "%s".', self::UI_MODE_EMBEDDED)
                 );
             }
 
@@ -361,9 +368,9 @@ class StripeCheckout
         });
 
         $resolver->setNormalizer('successPage', function (Options $options, ?string $successPage): ?string {
-            if ($options['uiMode'] === Session::UI_MODE_HOSTED && $successPage === null) {
+            if ($options['uiMode'] === self::UI_MODE_HOSTED && $successPage === null) {
                 throw new InvalidOptionsException(
-                    sprintf('The option "successPage" must be set when the option "uiMode" is "%s".', Session::UI_MODE_HOSTED)
+                    sprintf('The option "successPage" must be set when the option "uiMode" is "%s".', self::UI_MODE_HOSTED)
                 );
             }
 
@@ -371,9 +378,9 @@ class StripeCheckout
         });
 
         $resolver->setNormalizer('cancelPage', function (Options $options, ?string $cancelPage): ?string {
-            if ($options['uiMode'] === Session::UI_MODE_HOSTED && $cancelPage === null) {
+            if ($options['uiMode'] === self::UI_MODE_HOSTED && $cancelPage === null) {
                 throw new InvalidOptionsException(
-                    sprintf('The option "cancelPage" must be set when the option "uiMode" is "%s".', Session::UI_MODE_HOSTED)
+                    sprintf('The option "cancelPage" must be set when the option "uiMode" is "%s".', self::UI_MODE_HOSTED)
                 );
             }
 

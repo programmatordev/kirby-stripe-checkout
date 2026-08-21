@@ -1,0 +1,25 @@
+Title: Physical product
+
+----
+
+Summary: A paid product that requires an order-level shipping address and shipping option.
+
+----
+
+Price: 29
+
+----
+
+Developmentfixture: true
+
+----
+
+Requiresshipping: true
+
+----
+
+Productoptions:
+
+----
+
+Uuid: devPhysical00001

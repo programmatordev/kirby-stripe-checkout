@@ -1,0 +1,25 @@
+Title: Free product
+
+----
+
+Summary: A zero-amount fixture for the no-payment-required order path.
+
+----
+
+Price: 0
+
+----
+
+Developmentfixture: true
+
+----
+
+Requiresshipping: false
+
+----
+
+Productoptions:
+
+----
+
+Uuid: devFree000000001

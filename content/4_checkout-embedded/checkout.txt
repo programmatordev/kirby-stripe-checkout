@@ -1,0 +1,13 @@
+Title: Embedded Checkout
+
+----
+
+Mode: embedded
+
+----
+
+Text: Embedded mode mounts Stripe Checkout inside a Kirby page. This fixture stays network-free until test credentials are deliberately configured.
+
+----
+
+Uuid: devEmbedded00001

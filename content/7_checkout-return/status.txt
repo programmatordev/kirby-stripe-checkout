@@ -1,0 +1,9 @@
+Title: Embedded Checkout return
+
+----
+
+Text: The browser returned from an embedded Checkout interaction. This navigation is not authoritative payment evidence.
+
+----
+
+Uuid: devReturn00000001

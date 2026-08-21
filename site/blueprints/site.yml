@@ -1,0 +1,19 @@
+title: Development store
+
+sections:
+  storefront:
+    label: Storefront fixtures
+    type: pages
+    status: listed
+    templates:
+      - home
+      - products
+      - checkout
+      - status
+  store:
+    label: Store data
+    type: pages
+    status: unlisted
+    templates:
+      - checkout-settings
+      - orders

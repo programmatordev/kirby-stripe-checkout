@@ -1,0 +1,9 @@
+Title: Checkout cancelled
+
+----
+
+Text: The customer returned without completing Checkout. The related attempt remains governed by its local and Stripe states.
+
+----
+
+Uuid: devCancel00000001

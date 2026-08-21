@@ -1,0 +1,9 @@
+Title: Checkout success
+
+----
+
+Text: The browser returned from a successful hosted Checkout interaction. Payment state may still be pending until a verified webhook is processed.
+
+----
+
+Uuid: devSuccess0000001

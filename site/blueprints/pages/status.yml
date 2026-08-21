@@ -1,0 +1,10 @@
+title: Checkout navigation fixture
+
+options:
+  changeTemplate: false
+  delete: false
+
+fields:
+  text:
+    type: textarea
+    required: true

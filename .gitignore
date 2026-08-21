@@ -3,11 +3,11 @@
 
 /node_modules
 /vendor
+/kirby
 
 # Package managers
 # ------------
 
-composer.lock
 package-lock.json
 
 # Test files
@@ -29,10 +29,21 @@ Icon
 
 # Development files
 # ------------
-/content
-/kirby
 /media
 /plans
-/site
-index.site.php
-.htaccess
+/.env
+
+# Kirby development runtime
+# ------------
+/content/checkout/
+/content/checkout-settings/
+/content/orders/
+/content/stripe-orders/*
+!/content/stripe-orders/orders.txt
+
+/site/accounts/
+/site/cache/
+/site/config/config.local.php
+/site/config/config.*.local.php
+/site/logs/
+/site/sessions/

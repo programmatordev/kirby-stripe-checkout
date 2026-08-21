@@ -1,0 +1,16 @@
+title: Checkout mode fixture
+
+options:
+  changeTemplate: false
+  delete: false
+
+fields:
+  mode:
+    type: select
+    required: true
+    options:
+      hosted: Hosted
+      embedded: Embedded
+  text:
+    type: textarea
+    required: true

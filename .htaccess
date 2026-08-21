@@ -1,0 +1,26 @@
+# Kirby development application
+
+DirectoryIndex index.site.php
+
+<IfModule mod_rewrite.c>
+  RewriteEngine on
+
+  # Block hidden files except .well-known.
+  RewriteRule (^|/)\.(?!well-known/) index.site.php [L]
+
+  # Keep Kirby's source and content trees behind the application router.
+  RewriteRule ^content/(.*) index.site.php [L]
+  RewriteRule ^site/(.*) index.site.php [L]
+  RewriteRule ^kirby/(.*) index.site.php [L]
+
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^(.*) index.site.php [L]
+</IfModule>
+
+SetEnvIf Authorization "(.+)" HTTP_AUTHORIZATION=$1
+
+<IfModule mod_headers.c>
+  Header set Content-Type "text/plain" "expr=-z %{CONTENT_TYPE}"
+  Header set X-Content-Type-Options "nosniff"
+</IfModule>

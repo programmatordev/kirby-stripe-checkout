@@ -32,6 +32,7 @@ class CartTest extends AbstractTestCase
             'template' => 'product',
             'content' => [
                 'title' => 'Product',
+                'summary' => 'Product fixture for cart tests.',
                 'price' => 10
             ]
         ])->changeStatus('listed');

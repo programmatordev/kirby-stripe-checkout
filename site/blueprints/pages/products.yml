@@ -1,0 +1,12 @@
+title: Products
+
+options:
+  changeTemplate: false
+  delete: false
+
+sections:
+  products:
+    type: pages
+    status: listed
+    templates:
+      - product

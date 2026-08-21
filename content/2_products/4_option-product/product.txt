@@ -1,0 +1,34 @@
+Title: Option-bearing product
+
+----
+
+Summary: A product with explicit selectable values for resolver and cart validation tests.
+
+----
+
+Price: 18
+
+----
+
+Developmentfixture: true
+
+----
+
+Requiresshipping: false
+
+----
+
+Productoptions:
+
+-
+  code: format
+  label: Format
+  values: Digital, Printed
+-
+  code: language
+  label: Language
+  values: English, Portuguese
+
+----
+
+Uuid: devOptions0000001
