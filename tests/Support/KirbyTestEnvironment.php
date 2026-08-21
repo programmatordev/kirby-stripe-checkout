@@ -9,6 +9,9 @@ use Stripe\ApiRequestor;
 use Stripe\HttpClient\ClientInterface;
 use Throwable;
 
+/**
+ * Runs the plugin in an isolated Kirby application and restores shared state.
+ */
 final class KirbyTestEnvironment
 {
     private bool $closed = false;
@@ -90,6 +93,8 @@ final class KirbyTestEnvironment
         }
 
         try {
+            // Destroy the session before removing its root because Kirby can
+            // still write session state while the session object is closing.
             $this->app->session()->destroy();
         } finally {
             ApiRequestor::setHttpClient($this->previousStripeClient);
