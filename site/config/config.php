@@ -16,7 +16,7 @@ return [
         'stripePublicKey' => $environment('KIRBY_STRIPE_CHECKOUT_PUBLIC_KEY', 'pk_test_replace_me'),
         'stripeSecretKey' => $environment('KIRBY_STRIPE_CHECKOUT_SECRET_KEY', 'sk_test_replace_me'),
         'stripeWebhookSecret' => $environment('KIRBY_STRIPE_CHECKOUT_WEBHOOK_SECRET', 'whsec_replace_me'),
-        'uiMode' => $environment('KIRBY_STRIPE_CHECKOUT_UI_MODE', 'hosted'),
+        'uiMode' => 'hosted',
         'currency' => 'EUR',
         'successPage' => 'checkout-success',
         'cancelPage' => 'checkout-cancel',

@@ -18,7 +18,7 @@ $endpoint = $fixtureMode === 'embedded' ? '/stripe/checkout/embedded' : '/stripe
         <p><strong>Effective local mode:</strong> <code><?= esc($configuredMode) ?></code></p>
         <p><strong>Current endpoint:</strong> <code><?= esc($endpoint) ?></code></p>
         <?php if ($fixtureMode !== $configuredMode): ?>
-            <p>Set <code>KIRBY_STRIPE_CHECKOUT_UI_MODE=<?= esc($fixtureMode) ?></code> in <code>.ddev/.env</code> and restart DDEV to exercise this mode.</p>
+            <p>Set <code>uiMode</code> to <code><?= esc($fixtureMode) ?></code> in <code>site/config/config.php</code> to exercise this mode.</p>
         <?php endif ?>
     </div>
 
