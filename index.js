@@ -18,35 +18,6 @@ panel.plugin("programmatordev/stripe-checkout", {
         </k-panel-inside>
       `,
     },
-    "k-stripe-checkout-setup-view": {
-      props: {
-        action: String,
-        canSetup: Boolean,
-        description: String,
-        dialog: String,
-        tabs: Array,
-        title: String,
-      },
-      methods: {
-        setup() {
-          this.$panel.dialog.open(this.dialog);
-        },
-      },
-      template: `
-        <k-panel-inside>
-          <k-header>{{ title }}</k-header>
-          <k-tabs :tabs="tabs" tab="settings" />
-          <k-empty icon="settings" :text="description">
-            <k-button
-              v-if="canSetup"
-              icon="add"
-              variant="filled"
-              @click="setup"
-            >{{ action }}</k-button>
-          </k-empty>
-        </k-panel-inside>
-      `,
-    },
     "k-stripe-checkout-diagnostics-view": {
       props: {
         checks: Array,

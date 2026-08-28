@@ -82,14 +82,15 @@ final class SiteApiTest extends KirbyTestCase
         $this->assertSame(PriceSource::Kirby, $secondSettings->priceSource());
     }
 
-    public function testReadingSettingsDoesNotCreateContent(): void
+    public function testReadingSettingsDoesNotCreateAdditionalContent(): void
     {
         $contentRoot = $this->kirby->root('content');
+        $before = glob($contentRoot . '/*') ?: [];
 
         $this->assertCount(0, $this->kirby->site()->children());
         $this->stripeCheckout()->settings();
         $this->assertCount(0, $this->kirby->site()->children());
-        $this->assertSame([], glob($contentRoot . '/*') ?: []);
+        $this->assertSame($before, glob($contentRoot . '/*') ?: []);
     }
 
     /** @param array<string, mixed> $options */

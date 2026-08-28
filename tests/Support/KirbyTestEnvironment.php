@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Test\Support;
 
+use Closure;
 use Kirby\Cms\App;
 use Kirby\Data\Yaml;
 use Kirby\Filesystem\Dir;
@@ -38,6 +39,7 @@ final class KirbyTestEnvironment
      * @param list<array<string, mixed>>|null $roles
      * @param list<array<string, mixed>>|null $users
      * @param array<string, mixed>|null        $request
+     * @param Closure(TestWorkspace): void|null $beforeApp
      */
     public static function start(
         array $options = [],
@@ -47,6 +49,7 @@ final class KirbyTestEnvironment
         ?array $users = null,
         ?string $impersonate = 'kirby',
         ?array $request = null,
+        ?Closure $beforeApp = null,
     ): self {
         $workspace = TestWorkspace::create();
         $previousStripeClient = ApiRequestor::httpClient();
@@ -71,6 +74,8 @@ final class KirbyTestEnvironment
                     F::write($rolesRoot . '/' . $name . '.yml', Yaml::encode($role));
                 }
             }
+
+            $beforeApp?->__invoke($workspace);
 
             $baseOptions = [
                 'cache' => false,

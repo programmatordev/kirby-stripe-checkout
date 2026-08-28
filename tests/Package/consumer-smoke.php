@@ -180,14 +180,15 @@ try {
         throw new RuntimeException('The installed package did not resolve its default Settings.');
     }
 
-    $settingsPage = (new SettingsPageStore($app))->initialize();
+    $settingsPage = (new SettingsPageStore($app))->page();
 
     if (
-        $settingsPage->id() !== SettingsPage::ID
+        $settingsPage === null
+        || $settingsPage->id() !== SettingsPage::ID
         || $settingsPage->isDraft() === false
         || $settingsPage->intendedTemplate()->name() !== SettingsPage::TEMPLATE
     ) {
-        throw new RuntimeException('The installed package could not initialize its Settings Page.');
+        throw new RuntimeException('The installed package did not initialize its Settings Page automatically.');
     }
 
     fwrite(STDOUT, "Composer consumer smoke test passed.\n");

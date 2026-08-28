@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
-use Kirby\Cms\Page;
 use Kirby\Cms\Permissions;
 use Kirby\Content\Field;
-use Kirby\Exception\Exception as KirbyException;
 use Kirby\Exception\PermissionException;
 use Kirby\Panel\Panel;
 use Kirby\Panel\View;
@@ -17,6 +15,7 @@ use ProgrammatorDev\StripeCheckout\Kirby\SettingsPageStore;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
+use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
 
 final class PanelAreaTest extends KirbyTestCase
 {
@@ -111,7 +110,7 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertStringNotContainsString('area.label', $response->body());
     }
 
-    public function testCustomRoleCanReadSettingsWithoutSetupOrDiagnosticsAccess(): void
+    public function testCustomRoleCanReadSettingsWithoutUpdateOrDiagnosticsAccess(): void
     {
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start(
@@ -138,13 +137,12 @@ final class PanelAreaTest extends KirbyTestCase
         );
         $this->kirby = $this->environment->app();
         $area = $this->area();
-        /** @var array{component: string, props: array{canSetup: bool}} $settingsView */
+        /** @var array{component: string} $settingsView */
         $settingsView = $area['views'][1]['action']();
         /** @var array{options: array{access: bool, list: bool, read: bool, update: bool}} $blueprint */
         $blueprint = SettingsBlueprint::load($this->kirby);
 
-        $this->assertSame('k-stripe-checkout-setup-view', $settingsView['component']);
-        $this->assertFalse($settingsView['props']['canSetup']);
+        $this->assertSame('k-page-view', $settingsView['component']);
         $this->assertTrue($blueprint['options']['access']);
         $this->assertFalse($blueprint['options']['list']);
         $this->assertTrue($blueprint['options']['read']);
@@ -154,27 +152,20 @@ final class PanelAreaTest extends KirbyTestCase
         $area['views'][2]['action']();
     }
 
-    public function testSettingsViewDoesNotCreateContentAndSetupIsExplicit(): void
+    public function testSettingsViewUsesTheAutomaticallyInitializedPage(): void
     {
         $area = $this->area();
         $settingsAction = $area['views'][1]['action'];
-        $setupAction = $area['dialogs']['setup']['submit'];
+        $page = (new SettingsPageStore($this->kirby))->page();
 
         /** @var array{component: string} $view */
         $view = $settingsAction();
 
-        $this->assertSame('k-stripe-checkout-setup-view', $view['component']);
-        $this->assertNull((new SettingsPageStore($this->kirby))->page());
-
-        /** @var array{redirect: string} $result */
-        $result = $setupAction();
-
-        $this->assertStringEndsWith('/panel/stripe-checkout/settings', $result['redirect']);
-        $this->assertNotNull((new SettingsPageStore($this->kirby))->page());
-        $this->assertSame('k-page-view', $settingsAction()['component']);
+        $this->assertNotNull($page);
+        $this->assertSame('k-page-view', $view['component']);
     }
 
-    public function testSetupAndViewsRepeatPermissionChecksServerSide(): void
+    public function testViewsRepeatPermissionChecksServerSide(): void
     {
         $area = $this->area();
         $this->kirby->impersonate('nobody');
@@ -183,8 +174,6 @@ final class PanelAreaTest extends KirbyTestCase
             $area['views'][0]['action'],
             $area['views'][1]['action'],
             $area['views'][2]['action'],
-            $area['dialogs']['setup']['load'],
-            $area['dialogs']['setup']['submit'],
         ] as $action) {
             try {
                 $action();
@@ -194,35 +183,33 @@ final class PanelAreaTest extends KirbyTestCase
             }
         }
 
-        $this->assertNull((new SettingsPageStore($this->kirby))->page());
+        $this->assertNotNull((new SettingsPageStore($this->kirby))->page());
     }
 
-    public function testSetupReportsAnExistingPageCollisionWithoutChangingIt(): void
+    public function testSettingsViewReportsAnExistingPageCollisionWithoutChangingIt(): void
     {
-        /** @var Page $page */
-        $page = $this->kirby->impersonate(
-            'kirby',
-            fn(): Page => Page::create([
-                'content' => [
-                    'marker' => 'preserved',
-                    'title' => 'Existing page',
-                ],
-                'isDraft' => true,
-                'parent' => null,
-                'site' => $this->kirby->site(),
-                'slug' => 'stripe-checkout-settings',
-                'template' => 'default',
-            ]),
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(
+            beforeApp: static function (TestWorkspace $workspace): void {
+                $workspace->writeDraftPage(
+                    'stripe-checkout-settings',
+                    'default',
+                    [
+                        'marker' => 'preserved',
+                        'title' => 'Existing page',
+                    ],
+                );
+            },
         );
+        $this->kirby = $this->environment->app();
+        $page = $this->kirby->site()->findPageOrDraft('stripe-checkout-settings');
+        $this->assertNotNull($page);
         $area = $this->area();
+        /** @var array{component: string, props: array{error: string}} $view */
+        $view = $area['views'][1]['action']();
 
-        try {
-            $area['dialogs']['setup']['submit']();
-            $this->fail('The setup action accepted an unrelated Page collision.');
-        } catch (KirbyException $error) {
-            $this->assertStringContainsString('unexpected model or location', $error->getMessage());
-        }
-
+        $this->assertSame('k-error-view', $view['component']);
+        $this->assertStringContainsString('unexpected model or location', $view['props']['error']);
         $marker = $page->content()->get('marker');
         $this->assertInstanceOf(Field::class, $marker);
         $this->assertSame('preserved', $marker->value());
@@ -237,7 +224,6 @@ final class PanelAreaTest extends KirbyTestCase
             ],
         ]);
         $this->kirby = $this->environment->app();
-        (new SettingsPageStore($this->kirby))->initialize();
         $area = $this->area();
         /** @var array{component: string, props: array{versions: array{latest: \stdClass}}} $view */
         $view = $area['views'][1]['action']();
@@ -258,10 +244,72 @@ final class PanelAreaTest extends KirbyTestCase
         );
     }
 
+    public function testPhpLockFollowsAProjectReorganizedSettingsField(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(
+            options: [
+                'programmatordev.stripe-checkout' => [
+                    'settings' => ['priceSource' => 'stripe'],
+                ],
+            ],
+            beforeApp: static function (TestWorkspace $workspace): void {
+                $workspace->writePageBlueprint('stripe-checkout-settings', [
+                    'title' => 'Custom store settings',
+                    'tabs' => [
+                        'catalogue' => [
+                            'columns' => [
+                                'main' => [
+                                    'sections' => [
+                                        'commerce' => [
+                                            'type' => 'fields',
+                                            'fields' => [
+                                                'priceSource' => [
+                                                    'type' => 'select',
+                                                    'options' => [
+                                                        'kirby' => 'Kirby',
+                                                        'stripe' => 'Stripe',
+                                                    ],
+                                                ],
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ]);
+            },
+        );
+        $this->kirby = $this->environment->app();
+        $blueprint = SettingsBlueprint::load($this->kirby);
+        $tabs = $blueprint['tabs'] ?? null;
+        $this->assertIsArray($tabs);
+        $catalogue = $tabs['catalogue'] ?? null;
+        $this->assertIsArray($catalogue);
+        $columns = $catalogue['columns'] ?? null;
+        $this->assertIsArray($columns);
+        $main = $columns['main'] ?? null;
+        $this->assertIsArray($main);
+        $sections = $main['sections'] ?? null;
+        $this->assertIsArray($sections);
+        $commerce = $sections['commerce'] ?? null;
+        $this->assertIsArray($commerce);
+        $fields = $commerce['fields'] ?? null;
+        $this->assertIsArray($fields);
+        /** @var array{disabled: bool, help: string} $field */
+        $field = $fields['priceSource'];
+
+        $this->assertTrue($field['disabled']);
+        $this->assertStringContainsString(
+            'programmatordev.stripe-checkout.settings.priceSource',
+            $field['help'],
+        );
+    }
+
     /**
      * @return array{
      *   menu: callable(array<mixed>, array<mixed>): bool,
-     *   dialogs: array{setup: array{load: callable(): array<string, mixed>, submit: callable(): array<string, mixed>}},
      *   views: array{
      *     0: array{pattern: string, action: callable(): array<string, mixed>},
      *     1: array{pattern: string, action: callable(): array<string, mixed>},
@@ -273,7 +321,6 @@ final class PanelAreaTest extends KirbyTestCase
     {
         /** @var array{
          *   menu: callable(array<mixed>, array<mixed>): bool,
-         *   dialogs: array{setup: array{load: callable(): array<string, mixed>, submit: callable(): array<string, mixed>}},
          *   views: array{
          *     0: array{pattern: string, action: callable(): array<string, mixed>},
          *     1: array{pattern: string, action: callable(): array<string, mixed>},

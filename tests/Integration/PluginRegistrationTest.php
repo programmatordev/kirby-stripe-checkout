@@ -78,9 +78,9 @@ final class PluginRegistrationTest extends KirbyTestCase
 
         $this->assertIsString($javascript);
         $this->assertStringContainsString('<k-panel-inside>', $javascript);
-        $this->assertStringContainsString('<k-button', $javascript);
-        $this->assertStringContainsString('<k-empty', $javascript);
-        $this->assertStringContainsString('$panel.dialog.open', $javascript);
+        $this->assertStringContainsString('<k-box', $javascript);
+        $this->assertStringContainsString('<k-items', $javascript);
+        $this->assertStringNotContainsString('$panel.dialog.open', $javascript);
         $this->assertStringNotContainsString('<button', $javascript);
         $this->assertFileDoesNotExist($root . '/index.css');
     }

@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Test\Support;
 
+use Kirby\Data\Txt;
+use Kirby\Data\Yaml;
 use Kirby\Filesystem\Dir;
+use Kirby\Filesystem\F;
 use RuntimeException;
 
 final class TestWorkspace
@@ -42,6 +45,26 @@ final class TestWorkspace
     public function root(): string
     {
         return $this->root;
+    }
+
+    /** @param array<string, mixed> $content */
+    public function writeDraftPage(string $slug, string $template, array $content): void
+    {
+        $root = $this->roots()['content'] . '/_drafts/' . $slug;
+
+        if (Dir::make($root) !== true || F::write($root . '/' . $template . '.txt', Txt::encode($content)) === false) {
+            throw new RuntimeException('Unable to prepare draft Page fixture: ' . $slug);
+        }
+    }
+
+    /** @param array<string, mixed> $blueprint */
+    public function writePageBlueprint(string $name, array $blueprint): void
+    {
+        $root = $this->roots()['site'] . '/blueprints/pages';
+
+        if (Dir::make($root) !== true || F::write($root . '/' . $name . '.yml', Yaml::encode($blueprint)) === false) {
+            throw new RuntimeException('Unable to prepare Page blueprint fixture: ' . $name);
+        }
     }
 
     /**

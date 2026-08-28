@@ -61,9 +61,11 @@ return [
 
 The general Settings API and diagnostics never return credential values or fragments.
 
-### Panel setup
+### Panel settings
 
-Composer installation automatically adds a **Stripe Checkout** area to Kirby's default Panel menu. Open **Settings** and select **Set up store**. After confirmation, the plugin creates its protected `stripe-checkout-settings` draft Page and opens Kirby's native Page editor. Installation, site boot, diagnostics, and settings reads never create this Page.
+Composer installation automatically adds a **Stripe Checkout** area to Kirby's default Panel menu. On the first Kirby boot after installation, the plugin creates its protected `stripe-checkout-settings` draft Page. Open **Settings** to use Kirby's native Page editor immediately; no separate setup action is required. Composer itself cannot create the Page because it runs without an initialized Kirby site.
+
+If the fixed identifier already belongs to unrelated content or Kirby cannot create the Page, the plugin leaves existing content unchanged. The Settings and Diagnostics views report the problem without preventing unrelated site requests.
 
 Admins receive all plugin permissions. Custom roles opt in explicitly:
 
@@ -122,7 +124,7 @@ $priceSource?->source();
 $priceSource?->isLocked();
 ```
 
-Only safe, store-facing settings are available through this API. Credentials and structural configuration are absent rather than redacted. The fixed `stripe-checkout-settings` record is a native draft Kirby Page: Kirby's Panel can edit it, while its protected model prevents frontend rendering and structural changes. Reading settings or booting Kirby never creates the Page. When it exists, Page values override internal defaults; explicit PHP values remain authoritative and lock only their corresponding Page fields.
+Only safe, store-facing settings are available through this API. Credentials and structural configuration are absent rather than redacted. The fixed `stripe-checkout-settings` record is a native draft Kirby Page: Kirby's Panel can edit it, while its protected model prevents frontend rendering and structural changes. The plugin initializes it automatically on the first Kirby boot. Page values override internal defaults; explicit PHP values remain authoritative and lock only their corresponding Page fields.
 
 ## Diagnostics
 

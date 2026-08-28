@@ -18,6 +18,7 @@ use ProgrammatorDev\StripeCheckout\Kirby\SettingsPage;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsPageStore;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
+use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
 
 final class SettingsPageStoreTest extends KirbyTestCase
 {
@@ -47,14 +48,14 @@ final class SettingsPageStoreTest extends KirbyTestCase
         ], Yaml::decode($this->fieldValue($page, 'stripeCheckout')));
     }
 
-    public function testReadingSettingsNeverInitializesThePage(): void
+    public function testApplicationBootInitializesThePageBeforeSettingsAreRead(): void
     {
         $store = new SettingsPageStore($this->kirby);
 
-        $this->assertNull($store->page());
+        $this->assertNotNull($store->page());
         $this->assertNull($store->settings()->priceSource());
-        $this->assertNull($store->page());
-        $this->assertCount(0, $this->kirby->site()->childrenAndDrafts());
+        $this->assertNotNull($store->page());
+        $this->assertCount(1, $this->kirby->site()->childrenAndDrafts());
     }
 
     public function testPageValuesRefreshThroughTheSiteApiAndPreserveProjectFields(): void
@@ -85,16 +86,26 @@ final class SettingsPageStoreTest extends KirbyTestCase
     public function testPhpLockWinsAndPreventsChangingTheStoredShadow(): void
     {
         $this->environment->close();
-        $this->environment = KirbyTestEnvironment::start([
-            self::PREFIX => [
+        $this->environment = KirbyTestEnvironment::start(
+            options: [self::PREFIX => [
                 'settings' => ['priceSource' => PriceSource::Stripe->value],
-            ],
-        ]);
+            ]],
+            beforeApp: static function (TestWorkspace $workspace): void {
+                $workspace->writeDraftPage(
+                    SettingsPage::ID,
+                    SettingsPage::TEMPLATE,
+                    [
+                        'priceSource' => PriceSource::Kirby->value,
+                        'stripeCheckout' => Yaml::encode(self::metadata()),
+                        'title' => 'Stripe Checkout Settings',
+                    ],
+                );
+            },
+        );
         $this->kirby = $this->environment->app();
 
-        $page = $this->createSettingsPage([
-            'priceSource' => PriceSource::Kirby->value,
-        ]);
+        $page = (new SettingsPageStore($this->kirby))->page();
+        $this->assertNotNull($page);
         $setting = $this->settings()->setting('priceSource');
 
         $this->assertNotNull($setting);
@@ -262,10 +273,12 @@ final class SettingsPageStoreTest extends KirbyTestCase
         array $metadata,
         string $errorCode,
     ): void {
-        $page = $this->createRawPage($template, [
+        $this->restartWithDraftPage($template, [
             'marker' => 'preserved',
             'stripeCheckout' => Yaml::encode($metadata),
         ]);
+        $page = $this->kirby->site()->findPageOrDraft(SettingsPage::ID);
+        $this->assertNotNull($page);
         $store = new SettingsPageStore($this->kirby);
 
         try {
@@ -284,7 +297,10 @@ final class SettingsPageStoreTest extends KirbyTestCase
 
     public function testMalformedPageValueProducesAStableSafeFailure(): void
     {
-        $this->createSettingsPage(['priceSource' => 'remote']);
+        $this->restartWithDraftPage(SettingsPage::TEMPLATE, [
+            'priceSource' => 'remote',
+            'stripeCheckout' => Yaml::encode(self::metadata()),
+        ]);
 
         try {
             $this->settings();
@@ -303,39 +319,19 @@ final class SettingsPageStoreTest extends KirbyTestCase
     }
 
     /** @param array<string, mixed> $content */
-    private function createSettingsPage(array $content = []): SettingsPage
+    private function restartWithDraftPage(string $template, array $content): void
     {
-        $page = $this->createRawPage(SettingsPage::TEMPLATE, [
-            ...$content,
-            'stripeCheckout' => Yaml::encode(self::metadata()),
-        ]);
-
-        $this->assertInstanceOf(SettingsPage::class, $page);
-
-        return $page;
-    }
-
-    /** @param array<string, mixed> $content */
-    private function createRawPage(string $template, array $content): Page
-    {
-        $page = $this->kirby->impersonate(
-            'kirby',
-            fn(): Page => Page::create([
-                'content' => [
-                    ...$content,
-                    'title' => 'Collision marker',
-                ],
-                'isDraft' => true,
-                'parent' => null,
-                'site' => $this->kirby->site(),
-                'slug' => SettingsPage::ID,
-                'template' => $template,
-            ]),
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(
+            beforeApp: static function (TestWorkspace $workspace) use ($content, $template): void {
+                $workspace->writeDraftPage(
+                    SettingsPage::ID,
+                    $template,
+                    [...$content, 'title' => 'Collision marker'],
+                );
+            },
         );
-
-        $this->assertInstanceOf(Page::class, $page);
-
-        return $page;
+        $this->kirby = $this->environment->app();
     }
 
     /** @return array{owner: string, schemaVersion: int} */

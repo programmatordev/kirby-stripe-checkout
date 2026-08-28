@@ -4,15 +4,14 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
-use Kirby\Cms\Page;
 use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
-use ProgrammatorDev\StripeCheckout\Kirby\SettingsPageStore;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
+use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
 
 final class LocalDiagnosticsTest extends KirbyTestCase
 {
-    public function testReportsDependenciesIncompleteCredentialsAndMissingSettingsLocally(): void
+    public function testReportsDependenciesIncompleteCredentialsAndInitializedSettingsLocally(): void
     {
         $report = (new LocalDiagnostics($this->kirby))->report();
         $checks = array_column($report['checks'], null, 'id');
@@ -25,7 +24,7 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->assertSame(LocalDiagnostics::WARNING, $checks['secretKey']['status']);
         $this->assertSame(LocalDiagnostics::WARNING, $checks['publishableKey']['status']);
         $this->assertSame(LocalDiagnostics::WARNING, $checks['webhookSecret']['status']);
-        $this->assertSame(LocalDiagnostics::WARNING, $checks['settingsPage']['status']);
+        $this->assertSame(LocalDiagnostics::PASS, $checks['settingsPage']['status']);
     }
 
     public function testReportsCredentialPresenceAndModeWithoutTheirValues(): void
@@ -44,7 +43,6 @@ final class LocalDiagnosticsTest extends KirbyTestCase
             ],
         ]);
         $this->kirby = $this->environment->app();
-        (new SettingsPageStore($this->kirby))->initialize();
 
         $encoded = json_encode((new LocalDiagnostics($this->kirby))->report(), JSON_THROW_ON_ERROR);
 
@@ -79,17 +77,17 @@ final class LocalDiagnosticsTest extends KirbyTestCase
 
     public function testReportsSettingsOwnershipProblemsWithoutThrowing(): void
     {
-        $this->kirby->impersonate(
-            'kirby',
-            fn(): Page => Page::create([
-                'content' => ['title' => 'Unrelated page'],
-                'isDraft' => true,
-                'parent' => null,
-                'site' => $this->kirby->site(),
-                'slug' => 'stripe-checkout-settings',
-                'template' => 'default',
-            ]),
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(
+            beforeApp: static function (TestWorkspace $workspace): void {
+                $workspace->writeDraftPage(
+                    'stripe-checkout-settings',
+                    'default',
+                    ['title' => 'Unrelated page'],
+                );
+            },
         );
+        $this->kirby = $this->environment->app();
 
         $report = (new LocalDiagnostics($this->kirby))->report();
         $checks = array_column($report['checks'], null, 'id');

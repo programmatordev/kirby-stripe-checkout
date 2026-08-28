@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 use Kirby\Cms\App;
+use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsPage;
+use ProgrammatorDev\StripeCheckout\Kirby\SettingsPageStore;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 use ProgrammatorDev\StripeCheckout\Translation\Registration;
@@ -35,6 +37,16 @@ App::plugin(
                 // Kirby binds plugin hooks to the active App instance.
                 // @phpstan-ignore variable.undefined, argument.type
                 Registration::applyProjectOverrides($this);
+
+                try {
+                    // Composer cannot create site content while installing the
+                    // package, so initialize it on the first Kirby boot instead.
+                    // @phpstan-ignore variable.undefined, argument.type
+                    (new SettingsPageStore($this))->initialize();
+                } catch (ConfigurationException) {
+                    // Storage problems must remain recoverable through the
+                    // Panel Settings error view and local diagnostics.
+                }
             },
         ],
         'siteMethods' => require __DIR__ . '/config/site-methods.php',

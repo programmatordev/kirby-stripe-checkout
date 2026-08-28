@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Panel;
 
 use Kirby\Cms\App;
-use Kirby\Exception\Exception;
 use Kirby\Panel\Panel;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
@@ -46,17 +45,6 @@ final class StripeCheckoutArea
                 return ($plugin['settings.read'] ?? false) === true
                     || ($plugin['diagnostics.read'] ?? false) === true;
             },
-            'dialogs' => [
-                'setup' => [
-                    'pattern' => 'stripe-checkout/setup',
-                    'load' => function () use ($kirby): array {
-                        return StripeCheckoutArea::setupDialog($kirby);
-                    },
-                    'submit' => function () use ($kirby): array {
-                        return StripeCheckoutArea::submitSetup($kirby);
-                    },
-                ],
-            ],
             'views' => [
                 [
                     'pattern' => 'stripe-checkout',
@@ -82,43 +70,6 @@ final class StripeCheckoutArea
 
     // Kirby rebinds route closures to its Route object. These public handlers
     // keep the actual work in this internal class without depending on closure scope.
-    /** @return array<string, mixed> */
-    public static function setupDialog(App $kirby): array
-    {
-        PluginPermissions::require($kirby, 'settings.update');
-
-        return [
-            'component' => 'k-form-dialog',
-            'props' => [
-                'fields' => [
-                    'confirmation' => [
-                        'type' => 'info',
-                        'theme' => 'info',
-                        'text' => self::translate('setup.confirm'),
-                    ],
-                ],
-                'submitButton' => self::translate('setup.action'),
-            ],
-        ];
-    }
-
-    /** @return array<string, string> */
-    public static function submitSetup(App $kirby): array
-    {
-        PluginPermissions::require($kirby, 'settings.update');
-
-        try {
-            (new SettingsPageStore($kirby))->initialize();
-        } catch (ConfigurationException $error) {
-            throw new Exception(message: self::failureMessage($error));
-        }
-
-        return [
-            'redirect' => Panel::url('stripe-checkout/settings'),
-            'message' => self::translate('setup.success'),
-        ];
-    }
-
     /** @return array<string, mixed> */
     public static function overview(App $kirby): array
     {
@@ -161,24 +112,9 @@ final class StripeCheckoutArea
         PluginPermissions::require($kirby, 'settings.read');
 
         try {
-            $page = (new SettingsPageStore($kirby))->page();
+            $page = (new SettingsPageStore($kirby))->initialize();
         } catch (ConfigurationException $error) {
             return self::errorView($error);
-        }
-
-        if ($page === null) {
-            return [
-                'component' => 'k-stripe-checkout-setup-view',
-                'title' => self::translate('setup.title'),
-                'props' => [
-                    'action' => self::translate('setup.action'),
-                    'canSetup' => PluginPermissions::allows($kirby, 'settings.update'),
-                    'description' => self::translate('setup.description'),
-                    'dialog' => 'stripe-checkout/setup',
-                    'tabs' => self::tabs($kirby),
-                    'title' => self::translate('setup.title'),
-                ],
-            ];
         }
 
         return self::settingsPageView($kirby, $page);
@@ -202,19 +138,18 @@ final class StripeCheckoutArea
             return $view;
         }
 
-        $setting = $report->configurationOrFail()->settings()->setting('priceSource');
-
-        if ($setting?->isLocked() !== true) {
-            return $view;
-        }
-
-        $effectiveValue = $setting->value();
         /** @var array<string, \stdClass> $versions */
         $versions = $props['versions'];
 
-        foreach (['latest', 'changes'] as $version) {
-            if (isset($versions[$version])) {
-                $versions[$version]->pricesource = $effectiveValue;
+        foreach ($report->configurationOrFail()->settings()->all() as $name => $setting) {
+            if ($setting->isLocked() === false) {
+                continue;
+            }
+
+            foreach (['latest', 'changes'] as $version) {
+                if (isset($versions[$version])) {
+                    $versions[$version]->{strtolower($name)} = $setting->value();
+                }
             }
         }
 

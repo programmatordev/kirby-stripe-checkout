@@ -42,36 +42,42 @@ final class SettingsBlueprint
         $report = (new ConfigurationResolver())->resolve($options);
 
         if ($report->isValid() === true) {
-            $setting = $report->configurationOrFail()->settings()->setting('priceSource');
-
-            if ($setting?->isLocked() === true) {
-                self::applyPriceSourceLock($blueprint);
+            foreach ($report->configurationOrFail()->settings()->all() as $name => $setting) {
+                if ($setting->isLocked() === true) {
+                    /** @var array<string, mixed> $blueprint */
+                    $blueprint = self::applyLock($blueprint, $name);
+                }
             }
         }
 
         return $blueprint;
     }
 
-    /** @param array<string, mixed> $blueprint */
-    private static function applyPriceSourceLock(array &$blueprint): void
+    /**
+     * @param array<mixed, mixed> $blueprint
+     * @return array<mixed, mixed>
+     */
+    private static function applyLock(array $blueprint, string $fieldName): array
     {
-        $sections = $blueprint['sections'] ?? null;
-        $settings = is_array($sections) ? ($sections['settings'] ?? null) : null;
-        $fields = is_array($settings) ? ($settings['fields'] ?? null) : null;
-        $field = is_array($fields) ? ($fields['priceSource'] ?? null) : null;
+        foreach ($blueprint as $key => $value) {
+            if (is_array($value) === false) {
+                continue;
+            }
 
-        if (is_array($sections) === false || is_array($settings) === false || is_array($fields) === false || is_array($field) === false) {
-            return;
+            if ($key === 'fields' && is_array($value[$fieldName] ?? null)) {
+                $value[$fieldName]['disabled'] = true;
+                $value[$fieldName]['help'] = I18n::template(
+                    'programmatordev.stripe-checkout.settings.locked',
+                    ['path' => 'programmatordev.stripe-checkout.settings.' . $fieldName],
+                );
+                $blueprint[$key] = $value;
+
+                continue;
+            }
+
+            $blueprint[$key] = self::applyLock($value, $fieldName);
         }
 
-        $field['disabled'] = true;
-        $field['help'] = I18n::template(
-            'programmatordev.stripe-checkout.settings.locked',
-            ['path' => 'programmatordev.stripe-checkout.settings.priceSource'],
-        );
-        $fields['priceSource'] = $field;
-        $settings['fields'] = $fields;
-        $sections['settings'] = $settings;
-        $blueprint['sections'] = $sections;
+        return $blueprint;
     }
 }
