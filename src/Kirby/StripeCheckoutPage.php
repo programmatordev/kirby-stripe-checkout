@@ -47,6 +47,8 @@ final class StripeCheckoutPage extends Page
 
     public function blueprint(): PageBlueprint
     {
+        // Kirby caches a Page blueprint on the model, but the same model can be
+        // reused after impersonation or a locale change during one request.
         $context = implode(':', [
             $this->kirby()->user()?->id() ?? 'guest',
             I18n::locale(),
@@ -92,6 +94,8 @@ final class StripeCheckoutPage extends Page
             && $targetLanguageCode !== null
             && $targetLanguageCode !== $defaultLanguageCode
         ) {
+            // Non-translatable settings belong to Kirby's default language even
+            // when the Panel submits them while another language is active.
             $priceSource = $input['pricesource'];
             unset($input['pricesource']);
 

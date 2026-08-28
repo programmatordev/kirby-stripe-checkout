@@ -72,6 +72,8 @@ final class StripeCheckoutArea
     /** @return array<string, mixed> */
     private static function pageView(App $kirby, StripeCheckoutPage $page): array
     {
+        // Reuse Kirby's complete native Page view, changing only the navigation
+        // that would otherwise point outside the Stripe Checkout area.
         /** @var array<string, mixed> $view */
         $view = $page->panel()->view();
         $view['title'] = self::translate('area.label');
@@ -106,6 +108,8 @@ final class StripeCheckoutArea
         /** @var array<string, \stdClass> $versions */
         $versions = $props['versions'];
 
+        // Locked fields display their effective PHP value in the native editor;
+        // the Page model still rejects attempts to persist a different value.
         foreach ($report->configurationOrFail()->settings()->all() as $name => $setting) {
             if ($setting->isLocked() === false) {
                 continue;
