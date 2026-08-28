@@ -63,7 +63,9 @@ The general Settings API and diagnostics never return credential values or fragm
 
 ### Panel settings
 
-Composer installation automatically adds a **Stripe Checkout** area to Kirby's default Panel menu. On the first Kirby boot after installation, the plugin creates its protected `stripe-checkout-settings` draft Page. Open **Settings** to use Kirby's native Page editor immediately; no separate setup action is required. Composer itself cannot create the Page because it runs without an initialized Kirby site.
+Composer installation automatically adds a **Stripe Checkout** area to Kirby's default Panel menu. On the first Kirby boot after installation, the plugin creates its protected `stripe-checkout-settings` draft Page. Open **Settings** to edit it without leaving the area's Overview, Settings, and Diagnostics tabs; no separate setup action is required. The view extends Kirby's native Page editor behavior and uses its fields, validation, versions, permissions, and save flow. Composer itself cannot create the Page because it runs without an initialized Kirby site.
+
+The Settings schema and layout are owned by the plugin so new capabilities can be added with predictable validation, locks, translations, and documentation. Projects cannot replace the `stripe-checkout-settings` blueprint. Keep unrelated project settings in the Site blueprint or another project-owned Page.
 
 If the fixed identifier already belongs to unrelated content or Kirby cannot create the Page, the plugin leaves existing content unchanged. The Settings and Diagnostics views report the problem without preventing unrelated site requests.
 
@@ -124,7 +126,7 @@ $priceSource?->source();
 $priceSource?->isLocked();
 ```
 
-Only safe, store-facing settings are available through this API. Credentials and structural configuration are absent rather than redacted. The fixed `stripe-checkout-settings` record is a native draft Kirby Page: Kirby's Panel can edit it, while its protected model prevents frontend rendering and structural changes. The plugin initializes it automatically on the first Kirby boot. Page values override internal defaults; explicit PHP values remain authoritative and lock only their corresponding Page fields.
+Only safe, store-facing settings are available through this API. Credentials and structural configuration are absent rather than redacted. The fixed `stripe-checkout-settings` record is a native draft Kirby Page with a plugin-owned schema: the custom area edits it through Kirby's Page behavior, while its protected model prevents frontend rendering and structural changes. The plugin initializes it automatically on the first Kirby boot. Page values override internal defaults; explicit PHP values remain authoritative and lock only their corresponding Page fields.
 
 ## Diagnostics
 

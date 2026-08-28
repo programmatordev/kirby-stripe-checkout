@@ -58,13 +58,14 @@ final class SettingsPageStoreTest extends KirbyTestCase
         $this->assertCount(1, $this->kirby->site()->childrenAndDrafts());
     }
 
-    public function testPageValuesRefreshThroughTheSiteApiAndPreserveProjectFields(): void
+    public function testPageValuesRefreshThroughTheSiteApiAndPreserveUnknownExistingFields(): void
     {
-        $page = (new SettingsPageStore($this->kirby))->initialize();
-        $page = $page->update([
-            'priceSource' => PriceSource::Stripe->value,
+        $this->restartWithDraftPage(SettingsPage::TEMPLATE, [
             'projectNote' => 'Keep me',
+            'stripeCheckout' => Yaml::encode(self::metadata()),
         ]);
+        $page = (new SettingsPageStore($this->kirby))->initialize();
+        $page = $page->update(['priceSource' => PriceSource::Stripe->value]);
 
         $settings = $this->settings();
         $setting = $settings->setting('priceSource');
@@ -145,19 +146,13 @@ final class SettingsPageStoreTest extends KirbyTestCase
 
         $page = (new SettingsPageStore($this->kirby))->initialize();
         $this->kirby->setCurrentLanguage('pt');
-        $page = $page->update([
-            'priceSource' => PriceSource::Stripe->value,
-            'projectNote' => 'Nota local',
-        ]);
+        $page = $page->update(['priceSource' => PriceSource::Stripe->value]);
 
         $this->assertSame(
             PriceSource::Stripe->value,
             $this->fieldValue($page, 'priceSource'),
         );
-        $this->assertSame(
-            'Nota local',
-            $this->languageFieldValue($page, 'projectNote', 'pt'),
-        );
+        $this->assertFalse($page->translation('pt')->exists());
         $this->assertSame(PriceSource::Stripe, $this->settings()->priceSource());
     }
 
@@ -182,12 +177,19 @@ final class SettingsPageStoreTest extends KirbyTestCase
         $this->assertSame(PriceSource::Stripe, $this->settings()->priceSource());
     }
 
-    public function testModelKeepsProjectFieldsEditableAndRejectsSecrets(): void
+    public function testModelRejectsUnknownFields(): void
     {
         $page = (new SettingsPageStore($this->kirby))->initialize();
-        $page = $page->update(['projectReference' => 'store-a']);
 
-        $this->assertSame('store-a', $this->fieldValue($page, 'projectReference'));
+        $this->expectException(PermissionException::class);
+        $this->expectExceptionMessage('Only plugin-owned');
+
+        $page->update(['projectReference' => 'store-a']);
+    }
+
+    public function testModelRejectsSecrets(): void
+    {
+        $page = (new SettingsPageStore($this->kirby))->initialize();
 
         $this->expectException(PermissionException::class);
         $this->expectExceptionMessage('PHP-only');

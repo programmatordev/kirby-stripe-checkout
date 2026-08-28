@@ -18,8 +18,8 @@ use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
  * Stores editable plugin settings in Kirby's native content model.
  *
  * Kirby uses the same Page class for content edited in the Panel and content
- * rendered on the frontend. This model retains the native Panel editor while
- * preventing the settings record from behaving like a public website page.
+ * rendered on the frontend. This model retains Kirby's native content and
+ * editing behavior while preventing the record from becoming a public page.
  *
  * @internal
  */
@@ -63,6 +63,7 @@ final class SettingsPage extends Page
         $input = array_change_key_case($input ?? [], CASE_LOWER);
 
         $this->assertProtectedFieldsRemainUnchanged($input);
+        $this->assertOnlySettingsFieldsAreUpdated($input);
 
         $hasPriceSource = array_key_exists('pricesource', $input);
 
@@ -179,6 +180,26 @@ final class SettingsPage extends Page
                 && $input[$field] !== $this->fieldValue($field)
             ) {
                 throw $this->structuralChangeDenied();
+            }
+        }
+    }
+
+    /** @param array<string, mixed> $input */
+    private function assertOnlySettingsFieldsAreUpdated(array $input): void
+    {
+        $allowed = array_fill_keys(
+            array_map('strtolower', array_keys($this->blueprint()->fields())),
+            true,
+        );
+
+        foreach (array_keys($input) as $field) {
+            if (
+                isset($allowed[$field]) === false
+                && in_array($field, self::STRUCTURAL_FIELDS, true) === false
+            ) {
+                throw new PermissionException(
+                    message: 'Only plugin-owned Stripe Checkout settings can be updated.',
+                );
             }
         }
     }

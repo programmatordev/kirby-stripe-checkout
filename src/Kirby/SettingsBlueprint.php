@@ -6,12 +6,11 @@ namespace ProgrammatorDev\StripeCheckout\Kirby;
 
 use Kirby\Cms\App;
 use Kirby\Data\Data;
-use Kirby\Filesystem\F;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 
 /**
- * Adapts the native Settings blueprint to the current user's permissions and PHP locks.
+ * Adapts the plugin-owned Settings blueprint to permissions and PHP locks.
  *
  * @internal
  */
@@ -20,14 +19,10 @@ final class SettingsBlueprint
     /** @return array<string, mixed> */
     public static function load(App $kirby): array
     {
-        $projectRoot = $kirby->root('blueprints');
-        $projectFile = $projectRoot . '/pages/stripe-checkout-settings.yml';
-        $blueprintFile = F::exists($projectFile, $projectRoot) === true
-            ? $projectFile
-            : dirname(__DIR__, 2) . '/blueprints/pages/stripe-checkout-settings.yml';
-
         /** @var array<string, mixed> $blueprint */
-        $blueprint = Data::read($blueprintFile);
+        $blueprint = Data::read(
+            dirname(__DIR__, 2) . '/blueprints/pages/stripe-checkout-settings.yml',
+        );
 
         $blueprintOptions = $blueprint['options'] ?? [];
         $blueprintOptions = is_array($blueprintOptions) ? $blueprintOptions : [];

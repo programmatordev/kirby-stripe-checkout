@@ -125,8 +125,13 @@ final class StripeCheckoutArea
     {
         /** @var array<string, mixed> $view */
         $view = $page->panel()->view();
+        $view['component'] = 'k-stripe-checkout-settings-view';
+        $view['title'] = self::translate('tabs.settings');
+        unset($view['breadcrumb']);
         /** @var array<string, mixed> $props */
         $props = $view['props'];
+        $props['areaTabs'] = self::tabs($kirby);
+        $props['title'] = self::translate('tabs.settings');
         /** @var array<string, bool> $permissions */
         $permissions = $props['permissions'];
         $permissions['update'] = PluginPermissions::allows($kirby, 'settings.update');

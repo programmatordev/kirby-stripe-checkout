@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 use Kirby\Cms\Permissions;
 use Kirby\Content\Field;
 use Kirby\Exception\PermissionException;
+use Kirby\Form\Fields;
 use Kirby\Panel\Panel;
 use Kirby\Panel\View;
 use ProgrammatorDev\StripeCheckout\Kirby\PluginPermissions;
@@ -142,7 +143,7 @@ final class PanelAreaTest extends KirbyTestCase
         /** @var array{options: array{access: bool, list: bool, read: bool, update: bool}} $blueprint */
         $blueprint = SettingsBlueprint::load($this->kirby);
 
-        $this->assertSame('k-page-view', $settingsView['component']);
+        $this->assertSame('k-stripe-checkout-settings-view', $settingsView['component']);
         $this->assertTrue($blueprint['options']['access']);
         $this->assertFalse($blueprint['options']['list']);
         $this->assertTrue($blueprint['options']['read']);
@@ -158,11 +159,15 @@ final class PanelAreaTest extends KirbyTestCase
         $settingsAction = $area['views'][1]['action'];
         $page = (new SettingsPageStore($this->kirby))->page();
 
-        /** @var array{component: string} $view */
+        /** @var array{component: string, props: array{areaTabs: list<array{name: string}>}} $view */
         $view = $settingsAction();
 
         $this->assertNotNull($page);
-        $this->assertSame('k-page-view', $view['component']);
+        $this->assertSame('k-stripe-checkout-settings-view', $view['component']);
+        $this->assertSame(
+            ['overview', 'settings', 'diagnostics'],
+            array_column($view['props']['areaTabs'], 'name'),
+        );
     }
 
     public function testViewsRepeatPermissionChecksServerSide(): void
@@ -215,7 +220,7 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertSame('preserved', $marker->value());
     }
 
-    public function testPhpLockIsVisibleInTheNativeSettingsView(): void
+    public function testPhpLockIsVisibleInTheSettingsView(): void
     {
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start(options: [
@@ -231,7 +236,7 @@ final class PanelAreaTest extends KirbyTestCase
             ->findPageOrDraft('stripe-checkout-settings')
             ?->blueprint();
 
-        $this->assertSame('k-page-view', $view['component']);
+        $this->assertSame('k-stripe-checkout-settings-view', $view['component']);
         $this->assertSame('stripe', $view['props']['versions']['latest']->pricesource);
         $this->assertNotNull($blueprint);
         $field = $blueprint->field('priceSource');
@@ -244,37 +249,18 @@ final class PanelAreaTest extends KirbyTestCase
         );
     }
 
-    public function testPhpLockFollowsAProjectReorganizedSettingsField(): void
+    public function testSettingsBlueprintCannotBeReplacedByTheProject(): void
     {
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start(
-            options: [
-                'programmatordev.stripe-checkout' => [
-                    'settings' => ['priceSource' => 'stripe'],
-                ],
-            ],
             beforeApp: static function (TestWorkspace $workspace): void {
                 $workspace->writePageBlueprint('stripe-checkout-settings', [
                     'title' => 'Custom store settings',
-                    'tabs' => [
-                        'catalogue' => [
-                            'columns' => [
-                                'main' => [
-                                    'sections' => [
-                                        'commerce' => [
-                                            'type' => 'fields',
-                                            'fields' => [
-                                                'priceSource' => [
-                                                    'type' => 'select',
-                                                    'options' => [
-                                                        'kirby' => 'Kirby',
-                                                        'stripe' => 'Stripe',
-                                                    ],
-                                                ],
-                                            ],
-                                        ],
-                                    ],
-                                ],
+                    'sections' => [
+                        'custom' => [
+                            'type' => 'fields',
+                            'fields' => [
+                                'projectField' => ['type' => 'text'],
                             ],
                         ],
                     ],
@@ -283,27 +269,43 @@ final class PanelAreaTest extends KirbyTestCase
         );
         $this->kirby = $this->environment->app();
         $blueprint = SettingsBlueprint::load($this->kirby);
-        $tabs = $blueprint['tabs'] ?? null;
-        $this->assertIsArray($tabs);
-        $catalogue = $tabs['catalogue'] ?? null;
-        $this->assertIsArray($catalogue);
-        $columns = $catalogue['columns'] ?? null;
-        $this->assertIsArray($columns);
-        $main = $columns['main'] ?? null;
-        $this->assertIsArray($main);
-        $sections = $main['sections'] ?? null;
+        $sections = $blueprint['sections'] ?? null;
         $this->assertIsArray($sections);
-        $commerce = $sections['commerce'] ?? null;
-        $this->assertIsArray($commerce);
-        $fields = $commerce['fields'] ?? null;
+        $settings = $sections['settings'] ?? null;
+        $this->assertIsArray($settings);
+        $fields = $settings['fields'] ?? null;
         $this->assertIsArray($fields);
-        /** @var array{disabled: bool, help: string} $field */
-        $field = $fields['priceSource'];
+        $this->assertArrayHasKey('priceSource', $fields);
+        $this->assertArrayNotHasKey('projectField', $fields);
+        $this->assertSame(
+            'programmatordev.stripe-checkout.area.label',
+            $blueprint['title'],
+        );
+    }
 
-        $this->assertTrue($field['disabled']);
-        $this->assertStringContainsString(
+    public function testPriceSourceOptionsAreTranslated(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(
+            users: [[
+                'id' => 'panel-admin',
+                'email' => 'panel-admin@example.com',
+                'language' => 'pt_PT',
+                'role' => 'admin',
+            ]],
+            impersonate: 'panel-admin',
+        );
+        $this->kirby = $this->environment->app();
+        $page = (new SettingsPageStore($this->kirby))->initialize();
+        $field = Fields::for($page)->field('priceSource')->toArray();
+        /** @var list<array{text: string, value: string}> $options */
+        $options = $field['options'];
+
+        $this->assertSame(['Kirby', 'Stripe'], array_column($options, 'text'));
+        $this->assertSame(['kirby', 'stripe'], array_column($options, 'value'));
+        $this->assertStringNotContainsString(
             'programmatordev.stripe-checkout.settings.priceSource',
-            $field['help'],
+            implode(' ', array_column($options, 'text')),
         );
     }
 
