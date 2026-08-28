@@ -53,20 +53,16 @@ final class PanelAreaTest extends KirbyTestCase
             'settings.read' => false,
             'diagnostics.read' => true,
         ]]));
-        $this->assertSame([
-            'stripe-checkout',
-            'stripe-checkout/settings',
-            'stripe-checkout/diagnostics',
-        ], array_column($area['views'], 'pattern'));
+        $this->assertSame(['stripe-checkout'], array_column($area['views'], 'pattern'));
     }
 
-    public function testAreaCanBeNormalizedAsAnActivePanelView(): void
+    public function testAreaNormalizesTheNativePageView(): void
     {
         $definition = $this->area();
-        $overview = $definition['views'][0]['action'];
+        $action = $definition['views'][0]['action'];
         $area = Panel::area('stripe-checkout', $definition);
         $data = View::data(
-            $overview(),
+            $action(),
             [
                 'area' => $area,
                 'areas' => ['stripe-checkout' => $area],
@@ -75,12 +71,15 @@ final class PanelAreaTest extends KirbyTestCase
         /** @var callable(): array<string, mixed> $normalize */
         $normalize = $data['$view'];
         $view = $normalize();
+        /** @var array{buttons: list<mixed>} $props */
+        $props = $view['props'];
 
         $this->assertTrue($view['menu']);
-        $this->assertSame('k-stripe-checkout-overview-view', $view['component']);
+        $this->assertSame('k-page-view', $view['component']);
+        $this->assertSame([], $props['buttons']);
     }
 
-    public function testRegisteredAreaRendersThroughKirbysPanelRouter(): void
+    public function testRegisteredAreaRendersNativeTranslatedTabsThroughKirbysRouter(): void
     {
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start(
@@ -102,96 +101,115 @@ final class PanelAreaTest extends KirbyTestCase
 
         $this->assertNotNull($response);
         $this->assertSame(200, $response->code());
-        /** @var array{'$view': array{component: string, title: string, props: array{tabs: list<array{label: string}>}}} $body */
+        /** @var array{'$view': array{component: string, title: string, props: array{tabs: list<array{label: string, link: string}>}}} $body */
         $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
 
-        $this->assertSame('k-stripe-checkout-overview-view', $body['$view']['component']);
+        $this->assertSame('k-page-view', $body['$view']['component']);
         $this->assertSame('Stripe Checkout', $body['$view']['title']);
-        $this->assertSame('Visão geral', $body['$view']['props']['tabs'][0]['label']);
+        $this->assertSame(
+            ['Visão geral', 'Definições', 'Diagnóstico'],
+            array_column($body['$view']['props']['tabs'], 'label'),
+        );
+        $this->assertSame(
+            [
+                Panel::url('stripe-checkout'),
+                Panel::url('stripe-checkout') . '?tab=settings',
+                Panel::url('stripe-checkout') . '?tab=diagnostics',
+            ],
+            array_column($body['$view']['props']['tabs'], 'link'),
+        );
         $this->assertStringNotContainsString('area.label', $response->body());
     }
 
-    public function testCustomRoleCanReadSettingsWithoutUpdateOrDiagnosticsAccess(): void
+    public function testSettingsReaderGetsOnlyOverviewAndSettingsTabs(): void
+    {
+        $this->restartWithPermissions([
+            'settings.read' => true,
+            'settings.update' => false,
+            'diagnostics.read' => false,
+        ]);
+        $blueprint = SettingsBlueprint::load($this->kirby);
+        $view = $this->view();
+        /** @var array{tabs: list<array{name: string}>} $props */
+        $props = $view['props'];
+        /** @var array{access: bool, list: bool, read: bool, update: bool} $options */
+        $options = $blueprint['options'];
+
+        $this->assertSame('k-page-view', $view['component']);
+        $this->assertSame(['overview', 'settings'], array_column($props['tabs'], 'name'));
+        $this->assertTrue($options['access']);
+        $this->assertFalse($options['list']);
+        $this->assertTrue($options['read']);
+        $this->assertFalse($options['update']);
+        $this->assertFalse($blueprint['buttons']);
+    }
+
+    public function testDiagnosticsReaderGetsNativeDiagnosticSectionsWithoutUpdateAccess(): void
+    {
+        $this->restartWithPermissions([
+            'settings.read' => false,
+            'settings.update' => false,
+            'diagnostics.read' => true,
+        ]);
+        $blueprint = SettingsBlueprint::load($this->kirby);
+        $view = $this->view();
+        /** @var array{tabs: list<array{name: string}>, permissions: array{update: bool}} $props */
+        $props = $view['props'];
+        /** @var array{access: bool, read: bool, update: bool} $options */
+        $options = $blueprint['options'];
+        /** @var array<string, array<string, mixed>> $tabs */
+        $tabs = $blueprint['tabs'];
+        /** @var array<string, array<string, mixed>> $sections */
+        $sections = $tabs['diagnostics']['sections'];
+
+        $this->assertSame(['overview', 'diagnostics'], array_column($props['tabs'], 'name'));
+        $this->assertFalse($props['permissions']['update']);
+        $this->assertTrue($options['access']);
+        $this->assertTrue($options['read']);
+        $this->assertFalse($options['update']);
+        $this->assertArrayHasKey('diagnostics-summary', $sections);
+        $this->assertArrayHasKey('diagnostics-php', $sections);
+        $this->assertSame('info', $sections['diagnostics-php']['type']);
+    }
+
+    public function testRequestedNativeTabRemainsInsideTheArea(): void
     {
         $this->environment->close();
-        $this->environment = KirbyTestEnvironment::start(
-            roles: [[
-                'name' => 'store-manager',
-                'permissions' => [
-                    'access' => [
-                        'panel' => true,
-                        'stripe-checkout' => true,
-                    ],
-                    PluginPermissions::CATEGORY => [
-                        'settings.read' => true,
-                        'settings.update' => false,
-                        'diagnostics.read' => false,
-                    ],
-                ],
-            ]],
-            users: [[
-                'id' => 'store-manager',
-                'email' => 'manager@example.com',
-                'role' => 'store-manager',
-            ]],
-            impersonate: 'store-manager',
-        );
+        $this->environment = KirbyTestEnvironment::start(request: [
+            'method' => 'GET',
+            'query' => ['tab' => 'settings'],
+            'url' => 'https://kirby-stripe-checkout.test/panel/stripe-checkout?tab=settings',
+        ]);
         $this->kirby = $this->environment->app();
-        $area = $this->area();
-        /** @var array{component: string} $settingsView */
-        $settingsView = $area['views'][1]['action']();
-        /** @var array{options: array{access: bool, list: bool, read: bool, update: bool}} $blueprint */
-        $blueprint = SettingsBlueprint::load($this->kirby);
+        $view = $this->view();
+        /** @var array{tab: array{name: string, link: string}, prev: mixed, next: mixed} $props */
+        $props = $view['props'];
 
-        $this->assertSame('k-stripe-checkout-settings-view', $settingsView['component']);
-        $this->assertTrue($blueprint['options']['access']);
-        $this->assertFalse($blueprint['options']['list']);
-        $this->assertTrue($blueprint['options']['read']);
-        $this->assertFalse($blueprint['options']['update']);
-
-        $this->expectException(PermissionException::class);
-        $area['views'][2]['action']();
-    }
-
-    public function testSettingsViewUsesTheAutomaticallyInitializedPage(): void
-    {
-        $area = $this->area();
-        $settingsAction = $area['views'][1]['action'];
-        $page = (new SettingsPageStore($this->kirby))->page();
-
-        /** @var array{component: string, props: array{areaTabs: list<array{name: string}>}} $view */
-        $view = $settingsAction();
-
-        $this->assertNotNull($page);
-        $this->assertSame('k-stripe-checkout-settings-view', $view['component']);
+        $this->assertSame('settings', $props['tab']['name']);
         $this->assertSame(
-            ['overview', 'settings', 'diagnostics'],
-            array_column($view['props']['areaTabs'], 'name'),
+            Panel::url('stripe-checkout') . '?tab=settings',
+            $props['tab']['link'],
         );
+        $this->assertNull($props['prev']);
+        $this->assertNull($props['next']);
     }
 
-    public function testViewsRepeatPermissionChecksServerSide(): void
+    public function testViewRepeatsPermissionCheckServerSide(): void
     {
         $area = $this->area();
         $this->kirby->impersonate('nobody');
 
-        foreach ([
-            $area['views'][0]['action'],
-            $area['views'][1]['action'],
-            $area['views'][2]['action'],
-        ] as $action) {
-            try {
-                $action();
-                $this->fail('The Panel action did not enforce its permission.');
-            } catch (PermissionException) {
-                $this->addToAssertionCount(1);
-            }
+        try {
+            $area['views'][0]['action']();
+            $this->fail('The Panel action did not enforce its permission.');
+        } catch (PermissionException) {
+            $this->addToAssertionCount(1);
         }
 
         $this->assertNotNull((new SettingsPageStore($this->kirby))->page());
     }
 
-    public function testSettingsViewReportsAnExistingPageCollisionWithoutChangingIt(): void
+    public function testViewReportsAnExistingPageCollisionWithoutChangingIt(): void
     {
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start(
@@ -209,18 +227,18 @@ final class PanelAreaTest extends KirbyTestCase
         $this->kirby = $this->environment->app();
         $page = $this->kirby->site()->findPageOrDraft('stripe-checkout-settings');
         $this->assertNotNull($page);
-        $area = $this->area();
-        /** @var array{component: string, props: array{error: string}} $view */
-        $view = $area['views'][1]['action']();
+        $view = $this->view();
+        /** @var array{error: string} $props */
+        $props = $view['props'];
 
         $this->assertSame('k-error-view', $view['component']);
-        $this->assertStringContainsString('unexpected model or location', $view['props']['error']);
+        $this->assertStringContainsString('unexpected model or location', $props['error']);
         $marker = $page->content()->get('marker');
         $this->assertInstanceOf(Field::class, $marker);
         $this->assertSame('preserved', $marker->value());
     }
 
-    public function testPhpLockIsVisibleInTheSettingsView(): void
+    public function testPhpLockIsVisibleInTheNativeAreaView(): void
     {
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start(options: [
@@ -229,15 +247,15 @@ final class PanelAreaTest extends KirbyTestCase
             ],
         ]);
         $this->kirby = $this->environment->app();
-        $area = $this->area();
-        /** @var array{component: string, props: array{versions: array{latest: \stdClass}}} $view */
-        $view = $area['views'][1]['action']();
+        $view = $this->view();
         $blueprint = $this->kirby->site()
             ->findPageOrDraft('stripe-checkout-settings')
             ?->blueprint();
+        /** @var array{versions: array{latest: \stdClass}} $props */
+        $props = $view['props'];
 
-        $this->assertSame('k-stripe-checkout-settings-view', $view['component']);
-        $this->assertSame('stripe', $view['props']['versions']['latest']->pricesource);
+        $this->assertSame('k-page-view', $view['component']);
+        $this->assertSame('stripe', $props['versions']['latest']->pricesource);
         $this->assertNotNull($blueprint);
         $field = $blueprint->field('priceSource');
         $this->assertIsArray($field);
@@ -269,12 +287,15 @@ final class PanelAreaTest extends KirbyTestCase
         );
         $this->kirby = $this->environment->app();
         $blueprint = SettingsBlueprint::load($this->kirby);
-        $sections = $blueprint['sections'] ?? null;
-        $this->assertIsArray($sections);
-        $settings = $sections['settings'] ?? null;
-        $this->assertIsArray($settings);
-        $fields = $settings['fields'] ?? null;
-        $this->assertIsArray($fields);
+        /** @var array<string, array<string, mixed>> $tabs */
+        $tabs = $blueprint['tabs'];
+        /** @var array<string, array<string, mixed>> $sections */
+        $sections = $tabs['settings']['sections'];
+        /** @var array<string, mixed> $settings */
+        $settings = $sections['settings'];
+        /** @var array<string, mixed> $fields */
+        $fields = $settings['fields'];
+
         $this->assertArrayHasKey('priceSource', $fields);
         $this->assertArrayNotHasKey('projectField', $fields);
         $this->assertSame(
@@ -309,25 +330,48 @@ final class PanelAreaTest extends KirbyTestCase
         );
     }
 
+    /** @param array<string, bool> $permissions */
+    private function restartWithPermissions(array $permissions): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(
+            roles: [[
+                'name' => 'store-manager',
+                'permissions' => [
+                    'access' => [
+                        'panel' => true,
+                        'stripe-checkout' => true,
+                    ],
+                    PluginPermissions::CATEGORY => $permissions,
+                ],
+            ]],
+            users: [[
+                'id' => 'store-manager',
+                'email' => 'manager@example.com',
+                'role' => 'store-manager',
+            ]],
+            impersonate: 'store-manager',
+        );
+        $this->kirby = $this->environment->app();
+    }
+
+    /** @return array<string, mixed> */
+    private function view(): array
+    {
+        return $this->area()['views'][0]['action']();
+    }
+
     /**
      * @return array{
      *   menu: callable(array<mixed>, array<mixed>): bool,
-     *   views: array{
-     *     0: array{pattern: string, action: callable(): array<string, mixed>},
-     *     1: array{pattern: string, action: callable(): array<string, mixed>},
-     *     2: array{pattern: string, action: callable(): array<string, mixed>}
-     *   }
+     *   views: array{0: array{pattern: string, action: callable(): array<string, mixed>}}
      * }
      */
     private function area(): array
     {
         /** @var array{
          *   menu: callable(array<mixed>, array<mixed>): bool,
-         *   views: array{
-         *     0: array{pattern: string, action: callable(): array<string, mixed>},
-         *     1: array{pattern: string, action: callable(): array<string, mixed>},
-         *     2: array{pattern: string, action: callable(): array<string, mixed>}
-         *   }
+         *   views: array{0: array{pattern: string, action: callable(): array<string, mixed>}}
          * } $area
          */
         $area = StripeCheckoutArea::definition($this->kirby);

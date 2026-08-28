@@ -4,12 +4,7 @@ declare(strict_types=1);
 
 return [
     'programmatordev.stripe-checkout.area.label' => 'Stripe Checkout',
-    'programmatordev.stripe-checkout.overview.title' => 'Stripe Checkout',
     'programmatordev.stripe-checkout.overview.description' => 'Configure a loja e confirme se a integração local está pronta.',
-    'programmatordev.stripe-checkout.overview.settings' => 'Definições',
-    'programmatordev.stripe-checkout.overview.settings.info' => 'Faça a gestão das predefinições da loja no Kirby.',
-    'programmatordev.stripe-checkout.overview.diagnostics' => 'Diagnóstico',
-    'programmatordev.stripe-checkout.overview.diagnostics.info' => 'Verifique a configuração local sem contactar o Stripe.',
     'programmatordev.stripe-checkout.tabs.overview' => 'Visão geral',
     'programmatordev.stripe-checkout.tabs.settings' => 'Definições',
     'programmatordev.stripe-checkout.tabs.diagnostics' => 'Diagnóstico',
@@ -18,7 +13,6 @@ return [
     'programmatordev.stripe-checkout.settings.priceSource.kirby' => 'Kirby',
     'programmatordev.stripe-checkout.settings.priceSource.stripe' => 'Stripe',
     'programmatordev.stripe-checkout.settings.locked' => 'Configurado em PHP em <code>{path}</code>. O valor guardado na página é preservado, mas ignorado enquanto este bloqueio estiver ativo.',
-    'programmatordev.stripe-checkout.diagnostics.title' => 'Diagnóstico',
     'programmatordev.stripe-checkout.diagnostics.description' => 'Apenas verificações locais. As credenciais nunca são apresentadas e o Stripe não é contactado.',
     'programmatordev.stripe-checkout.diagnostics.php' => 'PHP',
     'programmatordev.stripe-checkout.diagnostics.kirby' => 'Kirby',

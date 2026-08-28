@@ -8,6 +8,7 @@ use Kirby\Cms\App;
 use Kirby\Data\Data;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
+use ProgrammatorDev\StripeCheckout\Panel\DiagnosticsSections;
 
 /**
  * Adapts the plugin-owned Settings blueprint to permissions and PHP locks.
@@ -24,13 +25,32 @@ final class SettingsBlueprint
             dirname(__DIR__, 2) . '/blueprints/pages/stripe-checkout-settings.yml',
         );
 
+        $canReadSettings = PluginPermissions::allows($kirby, 'settings.read');
+        $canReadDiagnostics = PluginPermissions::allows($kirby, 'diagnostics.read');
+        $canReadArea = $canReadSettings || $canReadDiagnostics;
         $blueprintOptions = $blueprint['options'] ?? [];
         $blueprintOptions = is_array($blueprintOptions) ? $blueprintOptions : [];
-        $blueprintOptions['access'] = PluginPermissions::allows($kirby, 'settings.read');
+        $blueprintOptions['access'] = $canReadArea;
         $blueprintOptions['list'] = false;
-        $blueprintOptions['read'] = PluginPermissions::allows($kirby, 'settings.read');
-        $blueprintOptions['update'] = PluginPermissions::allows($kirby, 'settings.update');
+        $blueprintOptions['read'] = $canReadArea;
+        $blueprintOptions['update'] = $canReadSettings
+            && PluginPermissions::allows($kirby, 'settings.update');
         $blueprint['options'] = $blueprintOptions;
+
+        /** @var array<string, array<string, mixed>> $tabs */
+        $tabs = $blueprint['tabs'];
+
+        if ($canReadSettings === false) {
+            unset($tabs['settings']);
+        }
+
+        if ($canReadDiagnostics === true) {
+            $tabs['diagnostics']['sections'] = DiagnosticsSections::build($kirby);
+        } else {
+            unset($tabs['diagnostics']);
+        }
+
+        $blueprint['tabs'] = $tabs;
 
         /** @var array<string, mixed> $options */
         $options = $kirby->options();

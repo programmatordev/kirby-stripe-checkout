@@ -1,5 +1,6 @@
 title: programmatordev.stripe-checkout.area.label
 icon: settings
+buttons: false
 
 options:
   changeSlug: false
@@ -11,18 +12,33 @@ options:
   move: false
   preview: false
 
-sections:
+tabs:
+  overview:
+    label: programmatordev.stripe-checkout.tabs.overview
+    icon: dashboard
+    sections:
+      overview:
+        type: info
+        text: programmatordev.stripe-checkout.overview.description
+        theme: info
   settings:
-    type: fields
-    fields:
-      priceSource:
-        label: programmatordev.stripe-checkout.settings.priceSource.label
-        help: programmatordev.stripe-checkout.settings.priceSource.help
-        type: select
-        required: false
-        translate: false
-        options:
-          kirby:
-            "*": programmatordev.stripe-checkout.settings.priceSource.kirby
-          stripe:
-            "*": programmatordev.stripe-checkout.settings.priceSource.stripe
+    label: programmatordev.stripe-checkout.tabs.settings
+    icon: settings
+    sections:
+      settings:
+        type: fields
+        fields:
+          priceSource:
+            label: programmatordev.stripe-checkout.settings.priceSource.label
+            help: programmatordev.stripe-checkout.settings.priceSource.help
+            type: select
+            required: false
+            translate: false
+            options:
+              kirby:
+                "*": programmatordev.stripe-checkout.settings.priceSource.kirby
+              stripe:
+                "*": programmatordev.stripe-checkout.settings.priceSource.stripe
+  diagnostics:
+    label: programmatordev.stripe-checkout.tabs.diagnostics
+    icon: info

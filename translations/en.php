@@ -4,12 +4,7 @@ declare(strict_types=1);
 
 return [
     'programmatordev.stripe-checkout.area.label' => 'Stripe Checkout',
-    'programmatordev.stripe-checkout.overview.title' => 'Stripe Checkout',
     'programmatordev.stripe-checkout.overview.description' => 'Configure the store and check whether the local integration is ready.',
-    'programmatordev.stripe-checkout.overview.settings' => 'Settings',
-    'programmatordev.stripe-checkout.overview.settings.info' => 'Manage store defaults in Kirby.',
-    'programmatordev.stripe-checkout.overview.diagnostics' => 'Diagnostics',
-    'programmatordev.stripe-checkout.overview.diagnostics.info' => 'Review local setup without contacting Stripe.',
     'programmatordev.stripe-checkout.tabs.overview' => 'Overview',
     'programmatordev.stripe-checkout.tabs.settings' => 'Settings',
     'programmatordev.stripe-checkout.tabs.diagnostics' => 'Diagnostics',
@@ -18,7 +13,6 @@ return [
     'programmatordev.stripe-checkout.settings.priceSource.kirby' => 'Kirby',
     'programmatordev.stripe-checkout.settings.priceSource.stripe' => 'Stripe',
     'programmatordev.stripe-checkout.settings.locked' => 'Configured in PHP at <code>{path}</code>. The stored Page value is preserved but ignored while this lock is active.',
-    'programmatordev.stripe-checkout.diagnostics.title' => 'Diagnostics',
     'programmatordev.stripe-checkout.diagnostics.description' => 'Local checks only. Credentials are never displayed and Stripe is not contacted.',
     'programmatordev.stripe-checkout.diagnostics.php' => 'PHP',
     'programmatordev.stripe-checkout.diagnostics.kirby' => 'Kirby',

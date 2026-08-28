@@ -10,6 +10,7 @@ use Kirby\Cms\Site;
 use Kirby\Content\Field;
 use Kirby\Exception\NotFoundException;
 use Kirby\Exception\PermissionException;
+use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Configuration\PageSettings;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
@@ -42,12 +43,23 @@ final class SettingsPage extends Page
         'uuid',
     ];
 
+    private ?string $blueprintContext = null;
+
     public function blueprint(): PageBlueprint
     {
-        if ($this->blueprint === null) {
+        $context = implode(':', [
+            $this->kirby()->user()?->id() ?? 'guest',
+            I18n::locale(),
+            PluginPermissions::allows($this->kirby(), 'settings.read') ? '1' : '0',
+            PluginPermissions::allows($this->kirby(), 'settings.update') ? '1' : '0',
+            PluginPermissions::allows($this->kirby(), 'diagnostics.read') ? '1' : '0',
+        ]);
+
+        if ($this->blueprint === null || $this->blueprintContext !== $context) {
             $props = SettingsBlueprint::load($this->kirby());
             $props['model'] = $this;
             $this->blueprint = new PageBlueprint($props);
+            $this->blueprintContext = $context;
         }
 
         return $this->blueprint;

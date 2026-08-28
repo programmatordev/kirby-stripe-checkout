@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Panel;
 
 use Kirby\Cms\App;
+use Kirby\Exception\PermissionException;
 use Kirby\Panel\Panel;
 use Kirby\Toolkit\I18n;
-use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\PluginPermissions;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsPage;
@@ -16,7 +16,7 @@ use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 
 /**
- * Defines the minimal permission-aware Panel area from Kirby-native primitives.
+ * Exposes the protected Settings Page through a permission-aware Panel area.
  *
  * @internal
  */
@@ -32,8 +32,7 @@ final class StripeCheckoutArea
                 // Kirby calls menu callbacks with context while building the menu,
                 // then without arguments while normalizing the active area view.
                 if ($permissions === []) {
-                    return PluginPermissions::allows($kirby, 'settings.read')
-                        || PluginPermissions::allows($kirby, 'diagnostics.read');
+                    return self::canRead($kirby);
                 }
 
                 $plugin = $permissions[PluginPermissions::CATEGORY] ?? [];
@@ -45,71 +44,21 @@ final class StripeCheckoutArea
                 return ($plugin['settings.read'] ?? false) === true
                     || ($plugin['diagnostics.read'] ?? false) === true;
             },
-            'views' => [
-                [
-                    'pattern' => 'stripe-checkout',
-                    'action' => function () use ($kirby): array {
-                        return StripeCheckoutArea::overview($kirby);
-                    },
-                ],
-                [
-                    'pattern' => 'stripe-checkout/settings',
-                    'action' => function () use ($kirby): array {
-                        return StripeCheckoutArea::settings($kirby);
-                    },
-                ],
-                [
-                    'pattern' => 'stripe-checkout/diagnostics',
-                    'action' => function () use ($kirby): array {
-                        return StripeCheckoutArea::diagnostics($kirby);
-                    },
-                ],
-            ],
+            'views' => [[
+                'pattern' => 'stripe-checkout',
+                'action' => function () use ($kirby): array {
+                    return StripeCheckoutArea::view($kirby);
+                },
+            ]],
         ];
     }
 
-    // Kirby rebinds route closures to its Route object. These public handlers
-    // keep the actual work in this internal class without depending on closure scope.
+    // Kirby rebinds route closures to its Route object. This public handler
+    // keeps the actual work independent from that closure scope.
     /** @return array<string, mixed> */
-    public static function overview(App $kirby): array
+    public static function view(App $kirby): array
     {
-        self::requireAreaRead($kirby);
-        $items = [];
-
-        if (PluginPermissions::allows($kirby, 'settings.read')) {
-            $items[] = [
-                'text' => self::translate('overview.settings'),
-                'info' => self::translate('overview.settings.info'),
-                'icon' => 'settings',
-                'link' => Panel::url('stripe-checkout/settings'),
-            ];
-        }
-
-        if (PluginPermissions::allows($kirby, 'diagnostics.read')) {
-            $items[] = [
-                'text' => self::translate('overview.diagnostics'),
-                'info' => self::translate('overview.diagnostics.info'),
-                'icon' => 'info',
-                'link' => Panel::url('stripe-checkout/diagnostics'),
-            ];
-        }
-
-        return [
-            'component' => 'k-stripe-checkout-overview-view',
-            'title' => self::translate('overview.title'),
-            'props' => [
-                'description' => self::translate('overview.description'),
-                'items' => $items,
-                'tabs' => self::tabs($kirby),
-                'title' => self::translate('overview.title'),
-            ],
-        ];
-    }
-
-    /** @return array<string, mixed> */
-    public static function settings(App $kirby): array
-    {
-        PluginPermissions::require($kirby, 'settings.read');
+        self::requireRead($kirby);
 
         try {
             $page = (new SettingsPageStore($kirby))->initialize();
@@ -117,24 +66,35 @@ final class StripeCheckoutArea
             return self::errorView($error);
         }
 
-        return self::settingsPageView($kirby, $page);
+        return self::pageView($kirby, $page);
     }
 
     /** @return array<string, mixed> */
-    private static function settingsPageView(App $kirby, SettingsPage $page): array
+    private static function pageView(App $kirby, SettingsPage $page): array
     {
         /** @var array<string, mixed> $view */
         $view = $page->panel()->view();
-        $view['component'] = 'k-stripe-checkout-settings-view';
-        $view['title'] = self::translate('tabs.settings');
+        $view['title'] = self::translate('area.label');
         unset($view['breadcrumb']);
         /** @var array<string, mixed> $props */
         $props = $view['props'];
-        $props['areaTabs'] = self::tabs($kirby);
-        $props['title'] = self::translate('tabs.settings');
+        $props['title'] = self::translate('area.label');
+        $props['prev'] = null;
+        $props['next'] = null;
+        /** @var list<array<string, mixed>> $tabs */
+        $tabs = $props['tabs'];
+        $props['tabs'] = self::areaTabLinks($tabs);
+
+        if (isset($props['tab']) && is_array($props['tab'])) {
+            /** @var array<string, mixed> $activeTab */
+            $activeTab = $props['tab'];
+            $props['tab'] = self::areaTabLink($activeTab);
+        }
+
         /** @var array<string, bool> $permissions */
         $permissions = $props['permissions'];
-        $permissions['update'] = PluginPermissions::allows($kirby, 'settings.update');
+        $permissions['update'] = PluginPermissions::allows($kirby, 'settings.read')
+            && PluginPermissions::allows($kirby, 'settings.update');
         $props['permissions'] = $permissions;
         $view['props'] = $props;
         $report = (new RuntimeFactory($kirby))->configurationReport();
@@ -165,46 +125,6 @@ final class StripeCheckoutArea
     }
 
     /** @return array<string, mixed> */
-    public static function diagnostics(App $kirby): array
-    {
-        PluginPermissions::require($kirby, 'diagnostics.read');
-        $report = (new LocalDiagnostics($kirby))->report();
-        $checks = [];
-
-        foreach ($report['checks'] as $check) {
-            $values = $check['values'];
-
-            if (isset($values['mode'])) {
-                $values['mode'] = self::translate('credentialMode.' . $values['mode']);
-            }
-
-            if (isset($values['code'])) {
-                $values['code'] = self::translate('error.' . $values['code']);
-            }
-
-            $checks[] = [
-                'text' => self::translate('diagnostics.' . $check['id']),
-                'info' => self::template('diagnostics.' . $check['message'], $values),
-                'icon' => self::statusIcon($check['status']),
-                'theme' => self::statusTheme($check['status']),
-            ];
-        }
-
-        return [
-            'component' => 'k-stripe-checkout-diagnostics-view',
-            'title' => self::translate('diagnostics.title'),
-            'props' => [
-                'checks' => $checks,
-                'description' => self::translate('diagnostics.description'),
-                'status' => self::translate('diagnostics.status.' . $report['status']),
-                'statusTheme' => self::statusTheme($report['status']),
-                'tabs' => self::tabs($kirby),
-                'title' => self::translate('diagnostics.title'),
-            ],
-        ];
-    }
-
-    /** @return array<string, mixed> */
     private static function errorView(ConfigurationException $error): array
     {
         return [
@@ -217,42 +137,45 @@ final class StripeCheckoutArea
         ];
     }
 
-    private static function requireAreaRead(App $kirby): void
+    private static function canRead(App $kirby): bool
     {
-        if (
-            PluginPermissions::allows($kirby, 'settings.read') === false
-            && PluginPermissions::allows($kirby, 'diagnostics.read') === false
-        ) {
-            throw new \Kirby\Exception\PermissionException('No access');
+        return PluginPermissions::allows($kirby, 'settings.read')
+            || PluginPermissions::allows($kirby, 'diagnostics.read');
+    }
+
+    private static function requireRead(App $kirby): void
+    {
+        if (self::canRead($kirby) === false) {
+            throw new PermissionException('No access');
         }
     }
 
-    /** @return list<array{name: string, label: string, link: string}> */
-    private static function tabs(App $kirby): array
+    /**
+     * @param list<array<string, mixed>> $tabs
+     * @return list<array<string, mixed>>
+     */
+    private static function areaTabLinks(array $tabs): array
     {
-        $tabs = [[
-            'name' => 'overview',
-            'label' => self::translate('tabs.overview'),
-            'link' => Panel::url('stripe-checkout'),
-        ]];
+        $linked = [];
 
-        if (PluginPermissions::allows($kirby, 'settings.read')) {
-            $tabs[] = [
-                'name' => 'settings',
-                'label' => self::translate('tabs.settings'),
-                'link' => Panel::url('stripe-checkout/settings'),
-            ];
+        foreach ($tabs as $tab) {
+            $linked[] = self::areaTabLink($tab);
         }
 
-        if (PluginPermissions::allows($kirby, 'diagnostics.read')) {
-            $tabs[] = [
-                'name' => 'diagnostics',
-                'label' => self::translate('tabs.diagnostics'),
-                'link' => Panel::url('stripe-checkout/diagnostics'),
-            ];
-        }
+        return $linked;
+    }
 
-        return $tabs;
+    /**
+     * @param array<string, mixed> $tab
+     * @return array<string, mixed>
+     */
+    private static function areaTabLink(array $tab): array
+    {
+        $name = is_string($tab['name'] ?? null) ? $tab['name'] : 'overview';
+        $tab['link'] = Panel::url('stripe-checkout')
+            . ($name === 'overview' ? '' : '?tab=' . rawurlencode($name));
+
+        return $tab;
     }
 
     private static function failureMessage(ConfigurationException $error): string
@@ -262,36 +185,10 @@ final class StripeCheckoutArea
         return $error->path() === null ? $message : $message . ' (' . $error->path() . ')';
     }
 
-    /** @param array<string, string> $values */
-    private static function template(string $suffix, array $values): string
-    {
-        return I18n::template(Catalogue::PREFIX . $suffix, $values);
-    }
-
     private static function translate(string $suffix): string
     {
         $translation = I18n::translate(Catalogue::PREFIX . $suffix);
 
         return is_string($translation) ? $translation : $suffix;
-    }
-
-    private static function statusIcon(string $status): string
-    {
-        return match ($status) {
-            LocalDiagnostics::PASS => 'check',
-            LocalDiagnostics::FAIL => 'alert',
-            LocalDiagnostics::WARNING => 'alert',
-            default => 'question',
-        };
-    }
-
-    private static function statusTheme(string $status): string
-    {
-        return match ($status) {
-            LocalDiagnostics::PASS => 'positive',
-            LocalDiagnostics::FAIL => 'negative',
-            LocalDiagnostics::WARNING => 'warning',
-            default => 'info',
-        };
     }
 }

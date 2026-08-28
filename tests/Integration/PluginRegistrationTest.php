@@ -71,17 +71,11 @@ final class PluginRegistrationTest extends KirbyTestCase
         $this->assertFalse(function_exists('stripeCheckout'));
     }
 
-    public function testPanelAssetComposesKirbyComponentsWithoutACustomTheme(): void
+    public function testPanelAreaNeedsNoCustomFrontendAssets(): void
     {
         $root = dirname(__DIR__, 2);
-        $javascript = file_get_contents($root . '/index.js');
 
-        $this->assertIsString($javascript);
-        $this->assertStringContainsString('<k-panel-inside>', $javascript);
-        $this->assertStringContainsString('<k-box', $javascript);
-        $this->assertStringContainsString('<k-items', $javascript);
-        $this->assertStringNotContainsString('$panel.dialog.open', $javascript);
-        $this->assertStringNotContainsString('<button', $javascript);
+        $this->assertFileDoesNotExist($root . '/index.js');
         $this->assertFileDoesNotExist($root . '/index.css');
     }
 

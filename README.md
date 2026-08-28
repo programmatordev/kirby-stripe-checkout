@@ -63,11 +63,11 @@ The general Settings API and diagnostics never return credential values or fragm
 
 ### Panel settings
 
-Composer installation automatically adds a **Stripe Checkout** area to Kirby's default Panel menu. On the first Kirby boot after installation, the plugin creates its protected `stripe-checkout-settings` draft Page. Open **Settings** to edit it without leaving the area's Overview, Settings, and Diagnostics tabs; no separate setup action is required. The view extends Kirby's native Page editor behavior and uses its fields, validation, versions, permissions, and save flow. Composer itself cannot create the Page because it runs without an initialized Kirby site.
+Composer installation automatically adds a **Stripe Checkout** area to Kirby's default Panel menu. On the first Kirby boot after installation, the plugin creates its protected `stripe-checkout-settings` draft Page. The area is Kirby's native Page view, with plugin-owned Overview, Settings, and Diagnostics blueprint tabs; no separate setup action is required. Kirby therefore provides the fields, validation, versions, permissions, locks, and save flow without a duplicated editor component. Composer itself cannot create the Page because it runs without an initialized Kirby site.
 
 The Settings schema and layout are owned by the plugin so new capabilities can be added with predictable validation, locks, translations, and documentation. Projects cannot replace the `stripe-checkout-settings` blueprint. Keep unrelated project settings in the Site blueprint or another project-owned Page.
 
-If the fixed identifier already belongs to unrelated content or Kirby cannot create the Page, the plugin leaves existing content unchanged. The Settings and Diagnostics views report the problem without preventing unrelated site requests.
+If the fixed identifier already belongs to unrelated content or Kirby cannot create the Page, the plugin leaves existing content unchanged. The Panel area reports the problem without preventing unrelated site requests.
 
 Admins receive all plugin permissions. Custom roles opt in explicitly:
 
@@ -88,13 +88,13 @@ The area stays registered even when it is omitted from a custom `panel.menu`. Us
     'site',
     'stripe-checkout' => [
         'label' => 'Store',
-        'link' => 'stripe-checkout/settings',
+        'link' => 'stripe-checkout?tab=settings',
     ],
     'users',
 ],
 ```
 
-The available paths are `stripe-checkout`, `stripe-checkout/settings`, and `stripe-checkout/diagnostics`. Menu visibility does not replace the area and plugin permission checks.
+The area path is `stripe-checkout`. Its native blueprint tabs use `overview`, `settings`, and `diagnostics` query values, for example `stripe-checkout?tab=diagnostics`. Menu visibility does not replace the area and plugin permission checks.
 
 ### Store settings
 
@@ -126,7 +126,7 @@ $priceSource?->source();
 $priceSource?->isLocked();
 ```
 
-Only safe, store-facing settings are available through this API. Credentials and structural configuration are absent rather than redacted. The fixed `stripe-checkout-settings` record is a native draft Kirby Page with a plugin-owned schema: the custom area edits it through Kirby's Page behavior, while its protected model prevents frontend rendering and structural changes. The plugin initializes it automatically on the first Kirby boot. Page values override internal defaults; explicit PHP values remain authoritative and lock only their corresponding Page fields.
+Only safe, store-facing settings are available through this API. Credentials and structural configuration are absent rather than redacted. The fixed `stripe-checkout-settings` record is a native draft Kirby Page with a plugin-owned schema: the custom area returns Kirby's Page view directly, while its protected model prevents frontend rendering and structural changes. The plugin initializes it automatically on the first Kirby boot. Page values override internal defaults; explicit PHP values remain authoritative and lock only their corresponding Page fields.
 
 ## Diagnostics
 
