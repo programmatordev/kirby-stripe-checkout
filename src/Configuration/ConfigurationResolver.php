@@ -26,12 +26,15 @@ final class ConfigurationResolver
     /**
      * @param array<string, mixed> $options
      */
-    public function resolve(#[SensitiveParameter] array $options): ConfigurationReport
-    {
+    public function resolve(
+        #[SensitiveParameter]
+        array $options,
+        ?PageSettings $pageSettings = null,
+    ): ConfigurationReport {
         try {
             $root = $this->resolveRoot($this->extractor->extract($options));
             $stripe = $this->resolveStripe($root['stripe']);
-            $settings = $this->resolveSettings($root['settings']);
+            $settings = $this->resolveSettings($root['settings'], $pageSettings);
             $translations = $this->resolveTranslations($root['translations']);
 
             $this->validateCredentialCombination($stripe);
@@ -121,8 +124,10 @@ final class ConfigurationResolver
     /**
      * @param array<string, mixed> $settings
      */
-    private function resolveSettings(array $settings): Settings
-    {
+    private function resolveSettings(
+        array $settings,
+        ?PageSettings $pageSettings,
+    ): Settings {
         $this->assertKnownKeys($settings, self::SETTINGS_KEYS, 'settings');
 
         if (
@@ -153,13 +158,28 @@ final class ConfigurationResolver
         $resolved = $resolver->resolve($settings);
 
         // Null is deliberately "unset" and therefore cannot create a PHP lock.
-        $hasPhpValue = $resolved['priceSource'] !== null;
+        $phpValue = $resolved['priceSource'];
+        $pageValue = $pageSettings?->priceSource();
+
+        $setting = match (true) {
+            $phpValue !== null => new Setting(
+                settingValue: $phpValue,
+                settingSource: SettingSource::Php,
+                shadowed: $pageValue !== null,
+                pageShadow: $pageValue,
+            ),
+            $pageValue !== null => new Setting(
+                settingValue: $pageValue,
+                settingSource: SettingSource::Page,
+            ),
+            default => new Setting(
+                settingValue: PriceSource::Kirby->value,
+                settingSource: SettingSource::InternalDefault,
+            ),
+        };
 
         return new Settings([
-            'priceSource' => new Setting(
-                settingValue: $resolved['priceSource'] ?? PriceSource::Kirby->value,
-                settingSource: $hasPhpValue ? SettingSource::Php : SettingSource::InternalDefault,
-            ),
+            'priceSource' => $setting,
         ]);
     }
 

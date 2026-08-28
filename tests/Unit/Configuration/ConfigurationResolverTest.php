@@ -10,6 +10,7 @@ use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationReport;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
+use ProgrammatorDev\StripeCheckout\Configuration\PageSettings;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Configuration\SettingSource;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
@@ -107,6 +108,49 @@ final class ConfigurationResolverTest extends TestCase
         $this->assertNotNull($setting);
         $this->assertSame(SettingSource::InternalDefault, $setting->source());
         $this->assertFalse($setting->isLocked());
+    }
+
+    public function testPageSettingOverridesTheInternalDefault(): void
+    {
+        $settings = (new ConfigurationResolver())->resolve(
+            [],
+            new PageSettings(PriceSource::Stripe->value),
+        )->configurationOrFail()->settings();
+        $setting = $settings->setting('priceSource');
+
+        $this->assertSame(PriceSource::Stripe, $settings->priceSource());
+        $this->assertNotNull($setting);
+        $this->assertSame(SettingSource::Page, $setting->source());
+        $this->assertFalse($setting->isLocked());
+        $this->assertFalse($setting->hasShadowedValue());
+    }
+
+    public function testPhpSettingOverridesAndReportsThePageShadow(): void
+    {
+        $settings = (new ConfigurationResolver())->resolve(
+            [
+                self::PREFIX => [
+                    'settings' => ['priceSource' => PriceSource::Stripe->value],
+                ],
+            ],
+            new PageSettings(PriceSource::Kirby->value),
+        )->configurationOrFail()->settings();
+        $setting = $settings->setting('priceSource');
+
+        $this->assertSame(PriceSource::Stripe, $settings->priceSource());
+        $this->assertNotNull($setting);
+        $this->assertSame(SettingSource::Php, $setting->source());
+        $this->assertTrue($setting->isLocked());
+        $this->assertTrue($setting->hasShadowedValue());
+        $this->assertSame(PriceSource::Kirby->value, $setting->shadowedValue());
+    }
+
+    public function testInvalidPageSettingUsesTheSafePersistenceFailure(): void
+    {
+        $this->expectException(ConfigurationException::class);
+        $this->expectExceptionMessage('persistence.content_invalid');
+
+        new PageSettings('remote');
     }
 
     /**

@@ -7,7 +7,7 @@
 Stripe Checkout integration for [Kirby CMS](https://getkirby.com).
 
 > [!CAUTION]
-> The plugin is under active development and is not ready for production use. The current package provides the strict configuration foundation only; Checkout, products, carts, orders, webhooks, and Panel tools are not implemented yet.
+> The plugin is under active development and is not ready for production use. The current package provides the strict configuration and native Settings Page foundations only; Checkout, products, carts, orders, webhooks, and the custom Panel area are not implemented yet.
 
 ## Requirements
 
@@ -70,7 +70,9 @@ $priceSource?->source();
 $priceSource?->isLocked();
 ```
 
-Only safe, store-facing settings are available through this API. Credentials and structural configuration are absent rather than redacted. The Settings Page and its Page-level values are introduced in a later implementation batch; reads currently resolve internal defaults and explicit PHP configuration without creating content.
+Only safe, store-facing settings are available through this API. Credentials and structural configuration are absent rather than redacted. The fixed `stripe-checkout-settings` record is a native draft Kirby Page: Kirby's Panel can edit it, while its protected model prevents frontend rendering and structural changes. Reading settings or booting Kirby never creates the Page. When it exists, Page values override internal defaults; explicit PHP values remain authoritative and lock only their corresponding Page fields.
+
+The setup action and custom Panel area that initialize and open this Page are not implemented yet. Projects should not create or manipulate the internal record directly during this intermediate development stage.
 
 ## Development
 

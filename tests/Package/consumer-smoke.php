@@ -7,6 +7,8 @@ use Kirby\Cms\App;
 use Kirby\Filesystem\Dir;
 use Kirby\Plugin\Plugin;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
+use ProgrammatorDev\StripeCheckout\Kirby\SettingsPage;
+use ProgrammatorDev\StripeCheckout\Kirby\SettingsPageStore;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 
 // Exercises only the exported package's Composer installation boundary. It is
@@ -106,10 +108,30 @@ try {
     }
 
     $extensions = $plugin->extends();
+    $blueprints = $extensions['blueprints'] ?? null;
+    $pageModels = $extensions['pageModels'] ?? null;
     $siteMethods = $extensions['siteMethods'] ?? null;
+    $settingsBlueprint = is_array($blueprints)
+        ? ($blueprints['pages/stripe-checkout-settings'] ?? null)
+        : null;
 
     if (($extensions['options'] ?? null) !== []) {
         throw new RuntimeException('The package registered an unexpected runtime extension.');
+    }
+
+    if (
+        is_string($settingsBlueprint) === false
+        || realpath($settingsBlueprint)
+            !== $installedPluginRoot . '/blueprints/pages/stripe-checkout-settings.yml'
+    ) {
+        throw new RuntimeException('The package did not register its Settings Page blueprint.');
+    }
+
+    if (
+        is_array($pageModels) === false
+        || ($pageModels['stripe-checkout-settings'] ?? null) !== SettingsPage::class
+    ) {
+        throw new RuntimeException('The package did not register its Settings Page model.');
     }
 
     if (
@@ -129,6 +151,16 @@ try {
 
     if ($stripeCheckout->settings()->priceSource() !== PriceSource::Kirby) {
         throw new RuntimeException('The installed package did not resolve its default Settings.');
+    }
+
+    $settingsPage = (new SettingsPageStore($app))->initialize();
+
+    if (
+        $settingsPage->id() !== SettingsPage::ID
+        || $settingsPage->isDraft() === false
+        || $settingsPage->intendedTemplate()->name() !== SettingsPage::TEMPLATE
+    ) {
+        throw new RuntimeException('The installed package could not initialize its Settings Page.');
     }
 
     fwrite(STDOUT, "Composer consumer smoke test passed.\n");

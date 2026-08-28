@@ -28,9 +28,16 @@ final class KirbyTestEnvironment
         $this->close();
     }
 
-    /** @param array<string, mixed> $options */
-    public static function start(array $options = []): self
-    {
+    /**
+     * @param array<string, mixed>             $options
+     * @param list<array<string, mixed>>|null $languages
+     * @param array<string, callable>          $hooks
+     */
+    public static function start(
+        array $options = [],
+        ?array $languages = null,
+        array $hooks = [],
+    ): self {
         $workspace = TestWorkspace::create();
         $previousStripeClient = ApiRequestor::httpClient();
         $sessionCookie = 'kirby_test_' . bin2hex(random_bytes(8));
@@ -50,6 +57,8 @@ final class KirbyTestEnvironment
             ];
 
             $appProperties = [
+                'hooks' => $hooks,
+                'languages' => $languages,
                 'roots' => $workspace->roots(),
                 'options' => array_replace_recursive($baseOptions, $options),
                 'urls' => [

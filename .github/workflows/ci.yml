@@ -143,10 +143,14 @@ jobs:
           required=(
             LICENSE
             README.md
+            blueprints/pages/stripe-checkout-settings.yml
             composer.json
             config/site-methods.php
             index.php
+            src/Configuration/PageSettings.php
             src/Configuration/Settings.php
+            src/Kirby/SettingsPage.php
+            src/Kirby/SettingsPageStore.php
             src/Plugin/RuntimeFactory.php
             src/StripeCheckout.php
           )

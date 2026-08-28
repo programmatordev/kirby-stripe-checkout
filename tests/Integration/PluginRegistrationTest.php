@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Kirby\Cms\App;
 use Kirby\Plugin\Plugin;
+use ProgrammatorDev\StripeCheckout\Kirby\SettingsPage;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ReflectionProperty;
@@ -24,15 +25,24 @@ final class PluginRegistrationTest extends KirbyTestCase
         $this->assertSame('0.7.0', $declaredVersion->getValue($plugin));
     }
 
-    public function testRegistersTheOptionRootAndSiteEntryPoint(): void
+    public function testRegistersTheFoundationExtensions(): void
     {
         $plugin = App::plugin('programmatordev/stripe-checkout');
 
         $this->assertInstanceOf(Plugin::class, $plugin);
         $extensions = $plugin->extends();
+        $blueprints = $extensions['blueprints'] ?? null;
+        $pageModels = $extensions['pageModels'] ?? null;
         $siteMethods = $extensions['siteMethods'] ?? null;
 
         $this->assertSame([], $extensions['options']);
+        $this->assertIsArray($blueprints);
+        $this->assertSame(
+            dirname(__DIR__, 2) . '/blueprints/pages/stripe-checkout-settings.yml',
+            $blueprints['pages/stripe-checkout-settings'],
+        );
+        $this->assertIsArray($pageModels);
+        $this->assertSame(SettingsPage::class, $pageModels['stripe-checkout-settings']);
         $this->assertIsArray($siteMethods);
         $this->assertSame(['stripeCheckout'], array_keys($siteMethods));
         $this->assertIsCallable($siteMethods['stripeCheckout']);
