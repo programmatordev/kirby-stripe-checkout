@@ -8,8 +8,8 @@ use Kirby\Filesystem\Dir;
 use Kirby\Plugin\Plugin;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
-use ProgrammatorDev\StripeCheckout\Kirby\SettingsPage;
-use ProgrammatorDev\StripeCheckout\Kirby\SettingsPageStore;
+use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
+use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 
@@ -115,23 +115,23 @@ try {
     $siteMethods = $extensions['siteMethods'] ?? null;
     $areas = $extensions['areas'] ?? null;
     $translations = $extensions['translations'] ?? null;
-    $settingsBlueprint = is_array($blueprints)
-        ? ($blueprints['pages/stripe-checkout-settings'] ?? null)
+    $hubBlueprint = is_array($blueprints)
+        ? ($blueprints['pages/stripe-checkout'] ?? null)
         : null;
 
     if (($extensions['options'] ?? null) !== []) {
         throw new RuntimeException('The package registered an unexpected runtime extension.');
     }
 
-    if ($settingsBlueprint !== [SettingsBlueprint::class, 'load']) {
-        throw new RuntimeException('The package did not register its Settings Page blueprint.');
+    if ($hubBlueprint !== [SettingsBlueprint::class, 'load']) {
+        throw new RuntimeException('The package did not register its Stripe Checkout Page blueprint.');
     }
 
     if (
         is_array($pageModels) === false
-        || ($pageModels['stripe-checkout-settings'] ?? null) !== SettingsPage::class
+        || ($pageModels['stripe-checkout'] ?? null) !== StripeCheckoutPage::class
     ) {
-        throw new RuntimeException('The package did not register its Settings Page model.');
+        throw new RuntimeException('The package did not register its Stripe Checkout Page model.');
     }
 
     if (
@@ -187,15 +187,15 @@ try {
         throw new RuntimeException('The installed package did not resolve its default Settings.');
     }
 
-    $settingsPage = (new SettingsPageStore($app))->page();
+    $hubPage = (new StripeCheckoutPageStore($app))->page();
 
     if (
-        $settingsPage === null
-        || $settingsPage->id() !== SettingsPage::ID
-        || $settingsPage->isDraft() === false
-        || $settingsPage->intendedTemplate()->name() !== SettingsPage::TEMPLATE
+        $hubPage === null
+        || $hubPage->id() !== StripeCheckoutPage::ID
+        || $hubPage->isDraft() === false
+        || $hubPage->intendedTemplate()->name() !== StripeCheckoutPage::TEMPLATE
     ) {
-        throw new RuntimeException('The installed package did not initialize its Settings Page automatically.');
+        throw new RuntimeException('The installed package did not initialize its Stripe Checkout Page automatically.');
     }
 
     fwrite(STDOUT, "Composer consumer smoke test passed.\n");

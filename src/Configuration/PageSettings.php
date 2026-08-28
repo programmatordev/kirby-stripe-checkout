@@ -7,7 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Configuration;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 
 /**
- * Carries validated non-secret values read from the Settings Page.
+ * Carries validated non-secret values read from the protected hub Page.
  *
  * @internal
  */

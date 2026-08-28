@@ -14,27 +14,27 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Configuration\SettingSource;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
-use ProgrammatorDev\StripeCheckout\Kirby\SettingsPage;
-use ProgrammatorDev\StripeCheckout\Kirby\SettingsPageStore;
+use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
+use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
 
-final class SettingsPageStoreTest extends KirbyTestCase
+final class StripeCheckoutPageStoreTest extends KirbyTestCase
 {
     private const PREFIX = 'programmatordev.stripe-checkout';
 
     public function testInitializationCreatesAndValidatesTheFixedDraftPage(): void
     {
-        $store = new SettingsPageStore($this->kirby);
+        $store = new StripeCheckoutPageStore($this->kirby);
         $page = $store->initialize();
         $initializedAgain = $store->initialize();
 
-        $this->assertSame(SettingsPage::ID, $page->id());
-        $this->assertSame(SettingsPage::TEMPLATE, $page->intendedTemplate()->name());
+        $this->assertSame(StripeCheckoutPage::ID, $page->id());
+        $this->assertSame(StripeCheckoutPage::TEMPLATE, $page->intendedTemplate()->name());
         $this->assertTrue($page->isDraft());
         $this->assertSame($page->id(), $initializedAgain->id());
-        $this->assertSame('Stripe Checkout Settings', $page->title()->value());
+        $this->assertSame('Stripe Checkout', $page->title()->value());
         // Kirby creates an empty Field object for blueprint fields. The empty
         // value proves initialization did not persist the effective default.
         $this->assertTrue(in_array(
@@ -43,14 +43,14 @@ final class SettingsPageStoreTest extends KirbyTestCase
             true,
         ));
         $this->assertSame([
-            'owner' => SettingsPage::OWNER,
-            'schemaVersion' => SettingsPage::SCHEMA_VERSION,
+            'owner' => StripeCheckoutPage::OWNER,
+            'schemaVersion' => StripeCheckoutPage::SCHEMA_VERSION,
         ], Yaml::decode($this->fieldValue($page, 'stripeCheckout')));
     }
 
     public function testApplicationBootInitializesThePageBeforeSettingsAreRead(): void
     {
-        $store = new SettingsPageStore($this->kirby);
+        $store = new StripeCheckoutPageStore($this->kirby);
 
         $this->assertNotNull($store->page());
         $this->assertNull($store->settings()->priceSource());
@@ -60,11 +60,11 @@ final class SettingsPageStoreTest extends KirbyTestCase
 
     public function testPageValuesRefreshThroughTheSiteApiAndPreserveUnknownExistingFields(): void
     {
-        $this->restartWithDraftPage(SettingsPage::TEMPLATE, [
+        $this->restartWithDraftPage(StripeCheckoutPage::TEMPLATE, [
             'projectNote' => 'Keep me',
             'stripeCheckout' => Yaml::encode(self::metadata()),
         ]);
-        $page = (new SettingsPageStore($this->kirby))->initialize();
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
         $page = $page->update(['priceSource' => PriceSource::Stripe->value]);
 
         $settings = $this->settings();
@@ -93,19 +93,19 @@ final class SettingsPageStoreTest extends KirbyTestCase
             ]],
             beforeApp: static function (TestWorkspace $workspace): void {
                 $workspace->writeDraftPage(
-                    SettingsPage::ID,
-                    SettingsPage::TEMPLATE,
+                    StripeCheckoutPage::ID,
+                    StripeCheckoutPage::TEMPLATE,
                     [
                         'priceSource' => PriceSource::Kirby->value,
                         'stripeCheckout' => Yaml::encode(self::metadata()),
-                        'title' => 'Stripe Checkout Settings',
+                        'title' => 'Stripe Checkout',
                     ],
                 );
             },
         );
         $this->kirby = $this->environment->app();
 
-        $page = (new SettingsPageStore($this->kirby))->page();
+        $page = (new StripeCheckoutPageStore($this->kirby))->page();
         $this->assertNotNull($page);
         $setting = $this->settings()->setting('priceSource');
 
@@ -144,7 +144,7 @@ final class SettingsPageStoreTest extends KirbyTestCase
         );
         $this->kirby = $this->environment->app();
 
-        $page = (new SettingsPageStore($this->kirby))->initialize();
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
         $this->kirby->setCurrentLanguage('pt');
         $page = $page->update(['priceSource' => PriceSource::Stripe->value]);
 
@@ -170,7 +170,7 @@ final class SettingsPageStoreTest extends KirbyTestCase
         );
         $this->kirby = $this->environment->app();
 
-        $page = (new SettingsPageStore($this->kirby))->initialize();
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
         $page->update(['priceSource' => PriceSource::Stripe->value]);
 
         $this->assertSame(1, $updateCount);
@@ -179,7 +179,7 @@ final class SettingsPageStoreTest extends KirbyTestCase
 
     public function testModelRejectsUnknownFields(): void
     {
-        $page = (new SettingsPageStore($this->kirby))->initialize();
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
 
         $this->expectException(PermissionException::class);
         $this->expectExceptionMessage('Only plugin-owned');
@@ -189,7 +189,7 @@ final class SettingsPageStoreTest extends KirbyTestCase
 
     public function testModelRejectsSecrets(): void
     {
-        $page = (new SettingsPageStore($this->kirby))->initialize();
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
 
         $this->expectException(PermissionException::class);
         $this->expectExceptionMessage('PHP-only');
@@ -199,7 +199,7 @@ final class SettingsPageStoreTest extends KirbyTestCase
 
     public function testModelRejectsStructuralChanges(): void
     {
-        $page = (new SettingsPageStore($this->kirby))->initialize();
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
 
         $this->expectException(PermissionException::class);
         $this->expectExceptionMessage('structure is protected');
@@ -207,22 +207,22 @@ final class SettingsPageStoreTest extends KirbyTestCase
         $page->changeTitle('Changed');
     }
 
-    /** @return iterable<string, array{Closure(SettingsPage): mixed}> */
+    /** @return iterable<string, array{Closure(StripeCheckoutPage): mixed}> */
     public static function structuralMutationProvider(): iterable
     {
-        yield 'slug' => [static fn(SettingsPage $page): SettingsPage => $page->changeSlug('changed')];
-        yield 'status' => [static fn(SettingsPage $page): SettingsPage => $page->changeStatus('listed')];
-        yield 'template' => [static fn(SettingsPage $page): SettingsPage => $page->changeTemplate('default')];
-        yield 'delete' => [static fn(SettingsPage $page): bool => $page->delete()];
-        yield 'duplicate' => [static fn(SettingsPage $page): SettingsPage => $page->duplicate()];
+        yield 'slug' => [static fn(StripeCheckoutPage $page): StripeCheckoutPage => $page->changeSlug('changed')];
+        yield 'status' => [static fn(StripeCheckoutPage $page): StripeCheckoutPage => $page->changeStatus('listed')];
+        yield 'template' => [static fn(StripeCheckoutPage $page): StripeCheckoutPage => $page->changeTemplate('default')];
+        yield 'delete' => [static fn(StripeCheckoutPage $page): bool => $page->delete()];
+        yield 'duplicate' => [static fn(StripeCheckoutPage $page): StripeCheckoutPage => $page->duplicate()];
     }
 
-    /** @param Closure(SettingsPage): mixed $mutation */
+    /** @param Closure(StripeCheckoutPage): mixed $mutation */
     #[DataProvider('structuralMutationProvider')]
     public function testModelRejectsEveryProtectedStructuralMutation(
         Closure $mutation,
     ): void {
-        $page = (new SettingsPageStore($this->kirby))->initialize();
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
 
         $this->expectException(PermissionException::class);
         $this->expectExceptionMessage('structure is protected');
@@ -232,7 +232,7 @@ final class SettingsPageStoreTest extends KirbyTestCase
 
     public function testModelRejectsFrontendRendering(): void
     {
-        $page = (new SettingsPageStore($this->kirby))->initialize();
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
 
         $this->expectException(NotFoundException::class);
         $page->render();
@@ -247,22 +247,22 @@ final class SettingsPageStoreTest extends KirbyTestCase
             'persistence.model_mismatch',
         ];
         yield 'missing owner' => [
-            SettingsPage::TEMPLATE,
-            ['schemaVersion' => SettingsPage::SCHEMA_VERSION],
+            StripeCheckoutPage::TEMPLATE,
+            ['schemaVersion' => StripeCheckoutPage::SCHEMA_VERSION],
             'persistence.owner_mismatch',
         ];
         yield 'wrong owner' => [
-            SettingsPage::TEMPLATE,
-            ['owner' => 'project/plugin', 'schemaVersion' => SettingsPage::SCHEMA_VERSION],
+            StripeCheckoutPage::TEMPLATE,
+            ['owner' => 'project/plugin', 'schemaVersion' => StripeCheckoutPage::SCHEMA_VERSION],
             'persistence.owner_mismatch',
         ];
         yield 'unsupported schema' => [
-            SettingsPage::TEMPLATE,
-            ['owner' => SettingsPage::OWNER, 'schemaVersion' => 2],
+            StripeCheckoutPage::TEMPLATE,
+            ['owner' => StripeCheckoutPage::OWNER, 'schemaVersion' => 2],
             'persistence.schema_unsupported',
         ];
         yield 'unknown metadata' => [
-            SettingsPage::TEMPLATE,
+            StripeCheckoutPage::TEMPLATE,
             [...self::metadata(), 'kind' => 'settings'],
             'persistence.content_invalid',
         ];
@@ -279,18 +279,18 @@ final class SettingsPageStoreTest extends KirbyTestCase
             'marker' => 'preserved',
             'stripeCheckout' => Yaml::encode($metadata),
         ]);
-        $page = $this->kirby->site()->findPageOrDraft(SettingsPage::ID);
+        $page = $this->kirby->site()->findPageOrDraft(StripeCheckoutPage::ID);
         $this->assertNotNull($page);
-        $store = new SettingsPageStore($this->kirby);
+        $store = new StripeCheckoutPageStore($this->kirby);
 
         try {
             $store->initialize();
-            $this->fail('Expected the Settings Page collision to be rejected.');
+            $this->fail('Expected the Stripe Checkout Page collision to be rejected.');
         } catch (ConfigurationException $exception) {
             $this->assertSame($errorCode, $exception->errorCode());
         }
 
-        $unchanged = $this->kirby->site()->findPageOrDraft(SettingsPage::ID);
+        $unchanged = $this->kirby->site()->findPageOrDraft(StripeCheckoutPage::ID);
 
         $this->assertNotNull($unchanged);
         $this->assertSame($page->intendedTemplate()->name(), $unchanged->intendedTemplate()->name());
@@ -299,14 +299,14 @@ final class SettingsPageStoreTest extends KirbyTestCase
 
     public function testMalformedPageValueProducesAStableSafeFailure(): void
     {
-        $this->restartWithDraftPage(SettingsPage::TEMPLATE, [
+        $this->restartWithDraftPage(StripeCheckoutPage::TEMPLATE, [
             'priceSource' => 'remote',
             'stripeCheckout' => Yaml::encode(self::metadata()),
         ]);
 
         try {
             $this->settings();
-            $this->fail('Expected malformed Settings Page content to fail.');
+            $this->fail('Expected malformed Stripe Checkout Page content to fail.');
         } catch (ConfigurationException $exception) {
             $this->assertSame('persistence.content_invalid', $exception->errorCode());
             $this->assertSame('settings.priceSource', $exception->path());
@@ -327,7 +327,7 @@ final class SettingsPageStoreTest extends KirbyTestCase
         $this->environment = KirbyTestEnvironment::start(
             beforeApp: static function (TestWorkspace $workspace) use ($content, $template): void {
                 $workspace->writeDraftPage(
-                    SettingsPage::ID,
+                    StripeCheckoutPage::ID,
                     $template,
                     [...$content, 'title' => 'Collision marker'],
                 );
@@ -340,8 +340,8 @@ final class SettingsPageStoreTest extends KirbyTestCase
     private static function metadata(): array
     {
         return [
-            'owner' => SettingsPage::OWNER,
-            'schemaVersion' => SettingsPage::SCHEMA_VERSION,
+            'owner' => StripeCheckoutPage::OWNER,
+            'schemaVersion' => StripeCheckoutPage::SCHEMA_VERSION,
         ];
     }
 

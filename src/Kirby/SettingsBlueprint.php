@@ -22,7 +22,7 @@ final class SettingsBlueprint
     {
         /** @var array<string, mixed> $blueprint */
         $blueprint = Data::read(
-            dirname(__DIR__, 2) . '/blueprints/pages/stripe-checkout-settings.yml',
+            dirname(__DIR__, 2) . '/blueprints/pages/stripe-checkout.yml',
         );
 
         $canReadSettings = PluginPermissions::allows($kirby, 'settings.read');

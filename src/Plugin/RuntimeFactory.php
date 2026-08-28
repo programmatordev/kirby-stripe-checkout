@@ -9,7 +9,7 @@ use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationReport;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
-use ProgrammatorDev\StripeCheckout\Kirby\SettingsPageStore;
+use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 
 /**
  * Builds and owns the service graph for one public plugin operation.
@@ -48,7 +48,7 @@ final class RuntimeFactory
         }
 
         try {
-            $pageSettings = (new SettingsPageStore($this->kirby))->settings();
+            $pageSettings = (new StripeCheckoutPageStore($this->kirby))->settings();
         } catch (ConfigurationException $error) {
             return $this->configurationReport = ConfigurationReport::invalid($error);
         }

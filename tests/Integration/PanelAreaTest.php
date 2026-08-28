@@ -12,7 +12,7 @@ use Kirby\Panel\Panel;
 use Kirby\Panel\View;
 use ProgrammatorDev\StripeCheckout\Kirby\PluginPermissions;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
-use ProgrammatorDev\StripeCheckout\Kirby\SettingsPageStore;
+use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
@@ -206,7 +206,52 @@ final class PanelAreaTest extends KirbyTestCase
             $this->addToAssertionCount(1);
         }
 
-        $this->assertNotNull((new SettingsPageStore($this->kirby))->page());
+        $this->assertNotNull((new StripeCheckoutPageStore($this->kirby))->page());
+    }
+
+    public function testSettingsEditorCanSaveThroughKirbysApiRoute(): void
+    {
+        $this->restartWithPermissions([
+            'settings.read' => true,
+            'settings.update' => true,
+            'diagnostics.read' => false,
+        ], ['api.allowImpersonation' => true]);
+
+        $this->kirby->api()->call(
+            'pages/stripe-checkout',
+            'PATCH',
+            ['body' => ['priceSource' => 'stripe']],
+        );
+
+        $page = (new StripeCheckoutPageStore($this->kirby))->page();
+
+        $this->assertNotNull($page);
+        $priceSource = $page->content()->get('priceSource');
+        $this->assertInstanceOf(Field::class, $priceSource);
+        $this->assertSame('stripe', $priceSource->value());
+    }
+
+    public function testPhpLockedSettingCannotBeChangedThroughKirbysApiRoute(): void
+    {
+        $this->restartWithPermissions([
+            'settings.read' => true,
+            'settings.update' => true,
+            'diagnostics.read' => false,
+        ], [
+            'api.allowImpersonation' => true,
+            'programmatordev.stripe-checkout' => [
+                'settings' => ['priceSource' => 'stripe'],
+            ],
+        ]);
+
+        $this->expectException(PermissionException::class);
+        $this->expectExceptionMessage('locked by PHP configuration');
+
+        $this->kirby->api()->call(
+            'pages/stripe-checkout',
+            'PATCH',
+            ['body' => ['priceSource' => 'kirby']],
+        );
     }
 
     public function testViewReportsAnExistingPageCollisionWithoutChangingIt(): void
@@ -215,7 +260,7 @@ final class PanelAreaTest extends KirbyTestCase
         $this->environment = KirbyTestEnvironment::start(
             beforeApp: static function (TestWorkspace $workspace): void {
                 $workspace->writeDraftPage(
-                    'stripe-checkout-settings',
+                    'stripe-checkout',
                     'default',
                     [
                         'marker' => 'preserved',
@@ -225,7 +270,7 @@ final class PanelAreaTest extends KirbyTestCase
             },
         );
         $this->kirby = $this->environment->app();
-        $page = $this->kirby->site()->findPageOrDraft('stripe-checkout-settings');
+        $page = $this->kirby->site()->findPageOrDraft('stripe-checkout');
         $this->assertNotNull($page);
         $view = $this->view();
         /** @var array{error: string} $props */
@@ -249,7 +294,7 @@ final class PanelAreaTest extends KirbyTestCase
         $this->kirby = $this->environment->app();
         $view = $this->view();
         $blueprint = $this->kirby->site()
-            ->findPageOrDraft('stripe-checkout-settings')
+            ->findPageOrDraft('stripe-checkout')
             ?->blueprint();
         /** @var array{versions: array{latest: \stdClass}} $props */
         $props = $view['props'];
@@ -272,7 +317,7 @@ final class PanelAreaTest extends KirbyTestCase
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start(
             beforeApp: static function (TestWorkspace $workspace): void {
-                $workspace->writePageBlueprint('stripe-checkout-settings', [
+                $workspace->writePageBlueprint('stripe-checkout', [
                     'title' => 'Custom store settings',
                     'sections' => [
                         'custom' => [
@@ -317,7 +362,7 @@ final class PanelAreaTest extends KirbyTestCase
             impersonate: 'panel-admin',
         );
         $this->kirby = $this->environment->app();
-        $page = (new SettingsPageStore($this->kirby))->initialize();
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
         $field = Fields::for($page)->field('priceSource')->toArray();
         /** @var list<array{text: string, value: string}> $options */
         $options = $field['options'];
@@ -330,11 +375,15 @@ final class PanelAreaTest extends KirbyTestCase
         );
     }
 
-    /** @param array<string, bool> $permissions */
-    private function restartWithPermissions(array $permissions): void
+    /**
+     * @param array<string, bool>  $permissions
+     * @param array<string, mixed> $options
+     */
+    private function restartWithPermissions(array $permissions, array $options = []): void
     {
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start(
+            options: $options,
             roles: [[
                 'name' => 'store-manager',
                 'permissions' => [

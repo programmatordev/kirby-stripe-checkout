@@ -16,7 +16,7 @@ use ProgrammatorDev\StripeCheckout\Configuration\PageSettings;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 
 /**
- * Stores editable plugin settings in Kirby's native content model.
+ * Provides the plugin-owned hub Page and stores editable settings natively.
  *
  * Kirby uses the same Page class for content edited in the Panel and content
  * rendered on the frontend. This model retains Kirby's native content and
@@ -24,12 +24,12 @@ use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
  *
  * @internal
  */
-final class SettingsPage extends Page
+final class StripeCheckoutPage extends Page
 {
-    public const ID = 'stripe-checkout-settings';
+    public const ID = 'stripe-checkout';
     public const OWNER = 'programmatordev/stripe-checkout';
     public const SCHEMA_VERSION = 1;
-    public const TEMPLATE = 'stripe-checkout-settings';
+    public const TEMPLATE = 'stripe-checkout';
 
     private const PHP_ONLY_FIELDS = [
         'publishablekey',
@@ -252,7 +252,7 @@ final class SettingsPage extends Page
     private function structuralChangeDenied(): PermissionException
     {
         return new PermissionException(
-            message: 'The Stripe Checkout Settings Page structure is protected.',
+            message: 'The Stripe Checkout Page structure is protected.',
         );
     }
 

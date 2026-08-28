@@ -20,13 +20,13 @@ use Throwable;
  *
  * @internal
  */
-final class SettingsPageStore
+final class StripeCheckoutPageStore
 {
     public function __construct(
         private readonly App $kirby,
     ) {}
 
-    public function initialize(): SettingsPage
+    public function initialize(): StripeCheckoutPage
     {
         $existing = $this->find();
 
@@ -40,19 +40,19 @@ final class SettingsPageStore
                 fn(): Page => Page::create([
                     'content' => [
                         'stripeCheckout' => Yaml::encode([
-                            'owner' => SettingsPage::OWNER,
-                            'schemaVersion' => SettingsPage::SCHEMA_VERSION,
+                            'owner' => StripeCheckoutPage::OWNER,
+                            'schemaVersion' => StripeCheckoutPage::SCHEMA_VERSION,
                         ]),
-                        'title' => 'Stripe Checkout Settings',
+                        'title' => 'Stripe Checkout',
                     ],
                     'isDraft' => true,
                     'parent' => null,
                     'site' => $this->kirby->site(),
-                    'slug' => SettingsPage::ID,
-                    'template' => SettingsPage::TEMPLATE,
+                    'slug' => StripeCheckoutPage::ID,
+                    'template' => StripeCheckoutPage::TEMPLATE,
                 ]),
             );
-        } catch (Throwable) {
+        } catch (Throwable $error) {
             // A concurrent initializer may have completed between lookup and
             // create. Re-read through Kirby before classifying the failure.
             if (($created = $this->find()) !== null) {
@@ -61,7 +61,8 @@ final class SettingsPageStore
 
             throw new ConfigurationException(
                 'persistence.write_failed',
-                SettingsPage::ID,
+                StripeCheckoutPage::ID,
+                previous: $error,
             );
         }
 
@@ -70,7 +71,7 @@ final class SettingsPageStore
         if ($created === null) {
             throw new ConfigurationException(
                 'persistence.verify_failed',
-                SettingsPage::ID,
+                StripeCheckoutPage::ID,
             );
         }
 
@@ -102,7 +103,7 @@ final class SettingsPageStore
         return new PageSettings($priceSource);
     }
 
-    public function page(): ?SettingsPage
+    public function page(): ?StripeCheckoutPage
     {
         $page = $this->find();
 
@@ -111,20 +112,24 @@ final class SettingsPageStore
 
     private function find(): ?Page
     {
-        return $this->kirby->site()->findPageOrDraft(SettingsPage::ID);
+        $page = $this->kirby->site()->findPageOrDraft(StripeCheckoutPage::ID);
+
+        // A failed Page::create() can leave Kirby's temporary model in memory.
+        // Only persisted Pages can satisfy initialization or diagnostics.
+        return $page?->exists() === true ? $page : null;
     }
 
-    private function validate(Page $page): SettingsPage
+    private function validate(Page $page): StripeCheckoutPage
     {
         if (
-            $page->id() !== SettingsPage::ID
+            $page->id() !== StripeCheckoutPage::ID
             || $page->isDraft() === false
-            || $page->intendedTemplate()->name() !== SettingsPage::TEMPLATE
-            || $page instanceof SettingsPage === false
+            || $page->intendedTemplate()->name() !== StripeCheckoutPage::TEMPLATE
+            || $page instanceof StripeCheckoutPage === false
         ) {
             throw new ConfigurationException(
                 'persistence.model_mismatch',
-                SettingsPage::ID,
+                StripeCheckoutPage::ID,
             );
         }
 
@@ -139,17 +144,17 @@ final class SettingsPageStore
             );
         }
 
-        if (($metadata['owner'] ?? null) !== SettingsPage::OWNER) {
+        if (($metadata['owner'] ?? null) !== StripeCheckoutPage::OWNER) {
             throw new ConfigurationException(
                 'persistence.owner_mismatch',
-                SettingsPage::ID,
+                StripeCheckoutPage::ID,
             );
         }
 
-        if (($metadata['schemaVersion'] ?? null) !== SettingsPage::SCHEMA_VERSION) {
+        if (($metadata['schemaVersion'] ?? null) !== StripeCheckoutPage::SCHEMA_VERSION) {
             throw new ConfigurationException(
                 'persistence.schema_unsupported',
-                SettingsPage::ID,
+                StripeCheckoutPage::ID,
             );
         }
 

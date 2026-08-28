@@ -320,13 +320,13 @@ final class ConfigurationResolverTest extends TestCase
                         'tabs.settings' => 'Definições',
                         'area.label' => 'Stripe Checkout',
                     ],
-                    'en' => ['diagnostics.title' => 'Checks'],
+                    'en' => ['diagnostics.description' => 'Checks'],
                 ],
             ],
         ])->configurationOrFail()->translations();
 
         $this->assertSame([
-            'en' => ['diagnostics.title' => 'Checks'],
+            'en' => ['diagnostics.description' => 'Checks'],
             'pt' => [
                 'area.label' => 'Stripe Checkout',
                 'tabs.settings' => 'Definições',
@@ -391,6 +391,19 @@ final class ConfigurationResolverTest extends TestCase
             'private-trace-value',
             print_r($error->getTrace(), true),
         );
+    }
+
+    public function testConfigurationErrorsCanRetainASafeUnderlyingCause(): void
+    {
+        $cause = new LogicException('Internal storage context');
+        $error = new ConfigurationException(
+            'persistence.write_failed',
+            'stripe-checkout',
+            previous: $cause,
+        );
+
+        $this->assertSame($cause, $error->getPrevious());
+        $this->assertStringNotContainsString($cause->getMessage(), $error->getMessage());
     }
 
     /** @param array<string, mixed> $options */

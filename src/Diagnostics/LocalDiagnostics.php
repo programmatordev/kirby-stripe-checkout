@@ -7,7 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Diagnostics;
 use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
-use ProgrammatorDev\StripeCheckout\Kirby\SettingsPageStore;
+use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use Stripe\Stripe;
 
@@ -59,12 +59,12 @@ final class LocalDiagnostics
         }
 
         try {
-            $settingsPage = (new SettingsPageStore($this->kirby))->page();
-            $checks[] = $settingsPage === null
-                ? $this->check('settingsPage', self::WARNING, 'settings.missing')
-                : $this->check('settingsPage', self::PASS, 'settings.ready');
+            $hubPage = (new StripeCheckoutPageStore($this->kirby))->page();
+            $checks[] = $hubPage === null
+                ? $this->check('hubPage', self::WARNING, 'hubPage.missing')
+                : $this->check('hubPage', self::PASS, 'hubPage.ready');
         } catch (ConfigurationException $error) {
-            $checks[] = $this->failure('settingsPage', $error, 'settings.invalid');
+            $checks[] = $this->failure('hubPage', $error, 'hubPage.invalid');
         }
 
         return [

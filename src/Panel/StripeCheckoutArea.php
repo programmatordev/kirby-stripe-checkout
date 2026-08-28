@@ -10,13 +10,13 @@ use Kirby\Panel\Panel;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\PluginPermissions;
-use ProgrammatorDev\StripeCheckout\Kirby\SettingsPage;
-use ProgrammatorDev\StripeCheckout\Kirby\SettingsPageStore;
+use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
+use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 
 /**
- * Exposes the protected Settings Page through a permission-aware Panel area.
+ * Exposes the protected Stripe Checkout Page through a permission-aware Panel area.
  *
  * @internal
  */
@@ -61,7 +61,7 @@ final class StripeCheckoutArea
         self::requireRead($kirby);
 
         try {
-            $page = (new SettingsPageStore($kirby))->initialize();
+            $page = (new StripeCheckoutPageStore($kirby))->initialize();
         } catch (ConfigurationException $error) {
             return self::errorView($error);
         }
@@ -70,7 +70,7 @@ final class StripeCheckoutArea
     }
 
     /** @return array<string, mixed> */
-    private static function pageView(App $kirby, SettingsPage $page): array
+    private static function pageView(App $kirby, StripeCheckoutPage $page): array
     {
         /** @var array<string, mixed> $view */
         $view = $page->panel()->view();

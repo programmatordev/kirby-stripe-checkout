@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Exception;
 
 use RuntimeException;
+use Throwable;
 
 /**
  * Reports one stable, value-safe configuration failure to plugin consumers.
@@ -15,6 +16,7 @@ final class ConfigurationException extends RuntimeException
     public function __construct(
         private readonly string $configurationErrorCode,
         private readonly ?string $configurationPath = null,
+        ?Throwable $previous = null,
     ) {
         $message = sprintf(
             'Invalid Stripe Checkout configuration (%s)',
@@ -25,7 +27,7 @@ final class ConfigurationException extends RuntimeException
             $message .= sprintf(' at "%s"', $this->configurationPath);
         }
 
-        parent::__construct($message . '.');
+        parent::__construct($message . '.', previous: $previous);
     }
 
     public function errorCode(): string

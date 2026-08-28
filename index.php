@@ -5,8 +5,8 @@ declare(strict_types=1);
 use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
-use ProgrammatorDev\StripeCheckout\Kirby\SettingsPage;
-use ProgrammatorDev\StripeCheckout\Kirby\SettingsPageStore;
+use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
+use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 use ProgrammatorDev\StripeCheckout\Translation\Registration;
@@ -18,10 +18,10 @@ App::plugin(
         // remain distinguishable from plugin defaults.
         'options' => [],
         'blueprints' => [
-            'pages/stripe-checkout-settings' => [SettingsBlueprint::class, 'load'],
+            'pages/stripe-checkout' => [SettingsBlueprint::class, 'load'],
         ],
         'pageModels' => [
-            'stripe-checkout-settings' => SettingsPage::class,
+            'stripe-checkout' => StripeCheckoutPage::class,
         ],
         'translations' => Catalogue::bundled(),
         'permissions' => [
@@ -42,7 +42,7 @@ App::plugin(
                     // Composer cannot create site content while installing the
                     // package, so initialize it on the first Kirby boot instead.
                     // @phpstan-ignore variable.undefined, argument.type
-                    (new SettingsPageStore($this))->initialize();
+                    (new StripeCheckoutPageStore($this))->initialize();
                 } catch (ConfigurationException) {
                     // Storage problems must remain recoverable through the
                     // Panel Settings error view and local diagnostics.

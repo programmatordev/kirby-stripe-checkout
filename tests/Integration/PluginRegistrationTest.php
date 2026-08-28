@@ -7,7 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 use Kirby\Cms\App;
 use Kirby\Plugin\Plugin;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
-use ProgrammatorDev\StripeCheckout\Kirby\SettingsPage;
+use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
@@ -43,10 +43,10 @@ final class PluginRegistrationTest extends KirbyTestCase
         $this->assertIsArray($blueprints);
         $this->assertSame(
             [SettingsBlueprint::class, 'load'],
-            $blueprints['pages/stripe-checkout-settings'],
+            $blueprints['pages/stripe-checkout'],
         );
         $this->assertIsArray($pageModels);
-        $this->assertSame(SettingsPage::class, $pageModels['stripe-checkout-settings']);
+        $this->assertSame(StripeCheckoutPage::class, $pageModels['stripe-checkout']);
         $this->assertIsArray($siteMethods);
         $this->assertSame(['stripeCheckout'], array_keys($siteMethods));
         $this->assertIsCallable($siteMethods['stripeCheckout']);

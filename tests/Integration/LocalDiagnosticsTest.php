@@ -24,7 +24,7 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->assertSame(LocalDiagnostics::WARNING, $checks['secretKey']['status']);
         $this->assertSame(LocalDiagnostics::WARNING, $checks['publishableKey']['status']);
         $this->assertSame(LocalDiagnostics::WARNING, $checks['webhookSecret']['status']);
-        $this->assertSame(LocalDiagnostics::PASS, $checks['settingsPage']['status']);
+        $this->assertSame(LocalDiagnostics::PASS, $checks['hubPage']['status']);
     }
 
     public function testReportsCredentialPresenceAndModeWithoutTheirValues(): void
@@ -81,7 +81,7 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->environment = KirbyTestEnvironment::start(
             beforeApp: static function (TestWorkspace $workspace): void {
                 $workspace->writeDraftPage(
-                    'stripe-checkout-settings',
+                    'stripe-checkout',
                     'default',
                     ['title' => 'Unrelated page'],
                 );
@@ -93,8 +93,8 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $checks = array_column($report['checks'], null, 'id');
 
         $this->assertSame(LocalDiagnostics::FAIL, $report['status']);
-        $this->assertSame(LocalDiagnostics::FAIL, $checks['settingsPage']['status']);
-        $this->assertSame('persistence.model_mismatch', $checks['settingsPage']['values']['code']);
-        $this->assertSame('stripe-checkout-settings', $checks['settingsPage']['values']['path']);
+        $this->assertSame(LocalDiagnostics::FAIL, $checks['hubPage']['status']);
+        $this->assertSame('persistence.model_mismatch', $checks['hubPage']['values']['code']);
+        $this->assertSame('stripe-checkout', $checks['hubPage']['values']['path']);
     }
 }
