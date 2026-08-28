@@ -271,6 +271,11 @@ final class ConfigurationResolverTest extends TestCase
             'configuration.translation_invalid',
             'translations',
         ];
+        yield 'translation locale must be a safe locale identifier' => [
+            [self::PREFIX => ['translations' => ['../pt' => ['area.label' => 'Loja']]]],
+            'configuration.translation_invalid',
+            'translations',
+        ];
         yield 'translation locale value must be a map' => [
             [self::PREFIX => ['translations' => ['en' => 'Label']]],
             'configuration.translation_invalid',
@@ -311,15 +316,21 @@ final class ConfigurationResolverTest extends TestCase
         $translations = $this->resolve([
             self::PREFIX => [
                 'translations' => [
-                    'pt' => ['z' => 'Z', 'a' => 'A'],
-                    'en' => ['b' => 'B'],
+                    'pt' => [
+                        'tabs.settings' => 'Definições',
+                        'area.label' => 'Stripe Checkout',
+                    ],
+                    'en' => ['diagnostics.title' => 'Checks'],
                 ],
             ],
         ])->configurationOrFail()->translations();
 
         $this->assertSame([
-            'en' => ['b' => 'B'],
-            'pt' => ['a' => 'A', 'z' => 'Z'],
+            'en' => ['diagnostics.title' => 'Checks'],
+            'pt' => [
+                'area.label' => 'Stripe Checkout',
+                'tabs.settings' => 'Definições',
+            ],
         ], $translations);
     }
 

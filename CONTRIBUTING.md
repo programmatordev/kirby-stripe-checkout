@@ -89,4 +89,4 @@ git archive --worktree-attributes --format=tar.gz --output=/tmp/kirby-stripe-che
 tar -tzf /tmp/kirby-stripe-checkout.tar.gz
 ```
 
-The package artifact must contain the canonical plugin bootstrap, runtime configuration and source, implemented blueprints, Composer manifest, consumer documentation, and license. Translations and assets join the artifact only when implemented. It must not contain DDEV configuration, development guidance, fixture content/site files, tests, plans, local environment files, or the lockfile.
+The package artifact must contain the canonical plugin bootstrap, Panel JavaScript, runtime configuration and source, implemented blueprints and translations, Composer manifest, consumer documentation, and license. It must not contain DDEV configuration, development guidance, fixture content/site files, tests, plans, local environment files, or the lockfile.

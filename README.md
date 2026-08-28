@@ -7,7 +7,7 @@
 Stripe Checkout integration for [Kirby CMS](https://getkirby.com).
 
 > [!CAUTION]
-> The plugin is under active development and is not ready for production use. The current package provides the strict configuration and native Settings Page foundations only; Checkout, products, carts, orders, webhooks, and the custom Panel area are not implemented yet.
+> The plugin is under active development and is not ready for production use. The current package provides configuration, the native Settings Page, and local Panel diagnostics only; Checkout, products, carts, orders, and webhooks are not implemented yet.
 
 ## Requirements
 
@@ -27,7 +27,7 @@ Kirby discovers the Composer-installed plugin automatically. No manual plugin re
 
 ## Configuration
 
-Add plugin options to the project's `site/config/config.php`. The nested form is the recommended format:
+For the future hosted Checkout flow, the minimum credential configuration is the server key and webhook secret. Add them to the project's `site/config/config.php` using the nested form:
 
 ```php
 <?php
@@ -36,19 +36,71 @@ return [
     'programmatordev.stripe-checkout' => [
         'stripe' => [
             'secretKey' => getenv('KIRBY_STRIPE_CHECKOUT_SECRET_KEY') ?: null,
-            'publishableKey' => getenv('KIRBY_STRIPE_CHECKOUT_PUBLISHABLE_KEY') ?: null,
             'webhookSecret' => getenv('KIRBY_STRIPE_CHECKOUT_WEBHOOK_SECRET') ?: null,
-        ],
-        'settings' => [
-            'priceSource' => 'kirby',
         ],
     ],
 ];
 ```
 
-Stripe credentials are optional until a later operation needs them. Keep secret and webhook keys in environment or deployment configuration and never commit them. `publishableKey` is intended for the later embedded Checkout integration; the general Settings API does not expose any credential.
+Stripe credentials are optional until a later operation needs them. Embedded Checkout will additionally require the publishable key:
+
+```php
+'publishableKey' => getenv('KIRBY_STRIPE_CHECKOUT_PUBLISHABLE_KEY') ?: null,
+```
+
+Keep secret and webhook keys in environment or deployment configuration and never commit them. Kirby 5 automatically loads `site/config/env.php` after the regular and host-specific config files, so an uncommitted deployment file can override only the credentials:
+
+```php
+<?php
+
+return [
+    'programmatordev.stripe-checkout.stripe.secretKey' => getenv('KIRBY_STRIPE_CHECKOUT_SECRET_KEY') ?: null,
+    'programmatordev.stripe-checkout.stripe.webhookSecret' => getenv('KIRBY_STRIPE_CHECKOUT_WEBHOOK_SECRET') ?: null,
+];
+```
+
+The general Settings API and diagnostics never return credential values or fragments.
+
+### Panel setup
+
+Composer installation automatically adds a **Stripe Checkout** area to Kirby's default Panel menu. Open **Settings** and select **Set up store**. After confirmation, the plugin creates its protected `stripe-checkout-settings` draft Page and opens Kirby's native Page editor. Installation, site boot, diagnostics, and settings reads never create this Page.
+
+Admins receive all plugin permissions. Custom roles opt in explicitly:
+
+```yaml
+permissions:
+  access:
+    stripe-checkout: true
+  programmatordev.stripe-checkout:
+    settings.read: true
+    settings.update: true
+    diagnostics.read: true
+```
+
+The area stays registered even when it is omitted from a custom `panel.menu`. Use Kirby's normal menu option to reorder, rename, hide, or link directly to one of its stable views:
+
+```php
+'panel.menu' => [
+    'site',
+    'stripe-checkout' => [
+        'label' => 'Store',
+        'link' => 'stripe-checkout/settings',
+    ],
+    'users',
+],
+```
+
+The available paths are `stripe-checkout`, `stripe-checkout/settings`, and `stripe-checkout/diagnostics`. Menu visibility does not replace the area and plugin permission checks.
+
+### Store settings
 
 `settings.priceSource` accepts `kirby` (the default) or `stripe`. An explicit PHP value is treated as locked deployment configuration. Fully dotted Kirby option keys are also accepted, but defining the same logical option in nested and dotted forms is an error.
+
+```php
+'programmatordev.stripe-checkout.settings.priceSource' => 'stripe',
+```
+
+When PHP locks a setting, the Panel keeps the field visible, shows the effective value, and explains its configuration path. Any previously stored Page value is preserved and becomes active again if the PHP value is removed. The same lock is enforced on the server.
 
 Unknown options, wrong types, unsupported values, duplicate definitions, blank credentials, and recognizable test/live key mismatches are rejected when plugin configuration is used. Invalid plugin configuration does not prevent unrelated Kirby pages from booting.
 
@@ -72,7 +124,33 @@ $priceSource?->isLocked();
 
 Only safe, store-facing settings are available through this API. Credentials and structural configuration are absent rather than redacted. The fixed `stripe-checkout-settings` record is a native draft Kirby Page: Kirby's Panel can edit it, while its protected model prevents frontend rendering and structural changes. Reading settings or booting Kirby never creates the Page. When it exists, Page values override internal defaults; explicit PHP values remain authoritative and lock only their corresponding Page fields.
 
-The setup action and custom Panel area that initialize and open this Page are not implemented yet. Projects should not create or manipulate the internal record directly during this intermediate development stage.
+## Diagnostics
+
+The Panel diagnostics view checks the PHP, Kirby, and Stripe SDK versions; configuration validity; credential presence and detectable test/live mode; and Settings Page ownership. These checks are local and never make a Stripe API request.
+
+Configuration errors expose a stable code and safe option path. The initial codes are:
+
+- `configuration.root_invalid`, `configuration.option_duplicate`, `configuration.option_unknown`, `configuration.type_invalid`, `configuration.value_invalid`, and `configuration.combination_invalid` for malformed options;
+- `configuration.required_missing`, `configuration.setting_locked`, `configuration.credential_missing`, `configuration.credential_mode_mismatch`, and `configuration.translation_invalid` for operation or setup failures;
+- `persistence.model_mismatch`, `persistence.owner_mismatch`, `persistence.schema_unsupported`, `persistence.content_invalid`, `persistence.write_failed`, and `persistence.verify_failed` for the protected Settings Page.
+
+Fix the reported path in PHP configuration or, for Page ownership errors, move the unrelated Page away from the fixed `stripe-checkout-settings` ID before running setup again. Diagnostics never include the rejected value for a sensitive path.
+
+## Translations
+
+The plugin ships complete English and Portuguese Panel catalogues. English is the deterministic fallback. Override a known key or add a partial locale with suffix-only keys:
+
+```php
+'programmatordev.stripe-checkout' => [
+    'translations' => [
+        'pt_PT' => [
+            'settings.locked' => 'Configurado em PHP.',
+        ],
+    ],
+],
+```
+
+Unknown suffixes and blank values are rejected so translation typos appear in diagnostics. These translations cover plugin-owned Kirby UI; Stripe Checkout localizes its own hosted or embedded payment interface separately.
 
 ## Development
 

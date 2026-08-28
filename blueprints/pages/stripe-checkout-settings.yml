@@ -1,4 +1,4 @@
-title: Stripe Checkout Settings
+title: programmatordev.stripe-checkout.area.label
 icon: settings
 
 options:
@@ -16,10 +16,11 @@ sections:
     type: fields
     fields:
       priceSource:
-        label: Price source
+        label: programmatordev.stripe-checkout.settings.priceSource.label
+        help: programmatordev.stripe-checkout.settings.priceSource.help
         type: select
         required: false
         translate: false
         options:
-          kirby: Kirby
-          stripe: Stripe
+          kirby: programmatordev.stripe-checkout.settings.priceSource.kirby
+          stripe: programmatordev.stripe-checkout.settings.priceSource.stripe

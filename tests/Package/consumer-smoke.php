@@ -7,8 +7,10 @@ use Kirby\Cms\App;
 use Kirby\Filesystem\Dir;
 use Kirby\Plugin\Plugin;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
+use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsPage;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsPageStore;
+use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 
 // Exercises only the exported package's Composer installation boundary. It is
@@ -111,6 +113,8 @@ try {
     $blueprints = $extensions['blueprints'] ?? null;
     $pageModels = $extensions['pageModels'] ?? null;
     $siteMethods = $extensions['siteMethods'] ?? null;
+    $areas = $extensions['areas'] ?? null;
+    $translations = $extensions['translations'] ?? null;
     $settingsBlueprint = is_array($blueprints)
         ? ($blueprints['pages/stripe-checkout-settings'] ?? null)
         : null;
@@ -119,11 +123,7 @@ try {
         throw new RuntimeException('The package registered an unexpected runtime extension.');
     }
 
-    if (
-        is_string($settingsBlueprint) === false
-        || realpath($settingsBlueprint)
-            !== $installedPluginRoot . '/blueprints/pages/stripe-checkout-settings.yml'
-    ) {
+    if ($settingsBlueprint !== [SettingsBlueprint::class, 'load']) {
         throw new RuntimeException('The package did not register its Settings Page blueprint.');
     }
 
@@ -140,6 +140,33 @@ try {
         || is_callable($siteMethods['stripeCheckout']) === false
     ) {
         throw new RuntimeException('The package did not register its Site entry point.');
+    }
+
+    if (
+        is_array($areas) === false
+        || ($areas['stripe-checkout'] ?? null) !== [StripeCheckoutArea::class, 'definition']
+    ) {
+        throw new RuntimeException('The package did not register its Panel area.');
+    }
+
+    if (
+        ($extensions['permissions'] ?? null) !== [
+            'settings.read' => false,
+            'settings.update' => false,
+            'diagnostics.read' => false,
+        ]
+    ) {
+        throw new RuntimeException('The package did not register its Panel permissions.');
+    }
+
+    if (is_array($translations) === false || array_keys($translations) !== ['en', 'pt_PT']) {
+        throw new RuntimeException('The package did not register its bundled translations.');
+    }
+
+    foreach (['index.js', 'translations/en.php', 'translations/pt_PT.php'] as $packageFile) {
+        if (is_file($installedPluginRoot . '/' . $packageFile) === false) {
+            throw new RuntimeException('The installed package is missing ' . $packageFile . '.');
+        }
     }
 
     /** @phpstan-ignore-next-line method.notFound */

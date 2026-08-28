@@ -48,5 +48,6 @@ Icon
 /site/cache/
 /site/config/config.local.php
 /site/config/config.*.local.php
+/site/config/env.php
 /site/logs/
 /site/sessions/

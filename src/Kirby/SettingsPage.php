@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Kirby;
 
 use Kirby\Cms\Page;
+use Kirby\Cms\PageBlueprint;
 use Kirby\Cms\Site;
 use Kirby\Content\Field;
 use Kirby\Exception\NotFoundException;
@@ -40,6 +41,17 @@ final class SettingsPage extends Page
         'title',
         'uuid',
     ];
+
+    public function blueprint(): PageBlueprint
+    {
+        if ($this->blueprint === null) {
+            $props = SettingsBlueprint::load($this->kirby());
+            $props['model'] = $this;
+            $this->blueprint = new PageBlueprint($props);
+        }
+
+        return $this->blueprint;
+    }
 
     /** @param array<string, mixed>|null $input */
     public function update(

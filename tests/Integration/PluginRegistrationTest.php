@@ -6,7 +6,9 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Kirby\Cms\App;
 use Kirby\Plugin\Plugin;
+use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsPage;
+use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ReflectionProperty;
@@ -34,11 +36,13 @@ final class PluginRegistrationTest extends KirbyTestCase
         $blueprints = $extensions['blueprints'] ?? null;
         $pageModels = $extensions['pageModels'] ?? null;
         $siteMethods = $extensions['siteMethods'] ?? null;
+        $areas = $extensions['areas'] ?? null;
+        $translations = $extensions['translations'] ?? null;
 
         $this->assertSame([], $extensions['options']);
         $this->assertIsArray($blueprints);
         $this->assertSame(
-            dirname(__DIR__, 2) . '/blueprints/pages/stripe-checkout-settings.yml',
+            [SettingsBlueprint::class, 'load'],
             $blueprints['pages/stripe-checkout-settings'],
         );
         $this->assertIsArray($pageModels);
@@ -46,6 +50,18 @@ final class PluginRegistrationTest extends KirbyTestCase
         $this->assertIsArray($siteMethods);
         $this->assertSame(['stripeCheckout'], array_keys($siteMethods));
         $this->assertIsCallable($siteMethods['stripeCheckout']);
+        $this->assertIsArray($areas);
+        $this->assertSame(
+            [StripeCheckoutArea::class, 'definition'],
+            $areas['stripe-checkout'],
+        );
+        $this->assertSame([
+            'settings.read' => false,
+            'settings.update' => false,
+            'diagnostics.read' => false,
+        ], $extensions['permissions']);
+        $this->assertIsArray($translations);
+        $this->assertSame(['en', 'pt_PT'], array_keys($translations));
         $this->assertSame([], $this->kirby->option('programmatordev.stripe-checkout'));
     }
 
@@ -53,6 +69,20 @@ final class PluginRegistrationTest extends KirbyTestCase
     {
         $this->assertFalse(function_exists('cart'));
         $this->assertFalse(function_exists('stripeCheckout'));
+    }
+
+    public function testPanelAssetComposesKirbyComponentsWithoutACustomTheme(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $javascript = file_get_contents($root . '/index.js');
+
+        $this->assertIsString($javascript);
+        $this->assertStringContainsString('<k-panel-inside>', $javascript);
+        $this->assertStringContainsString('<k-button', $javascript);
+        $this->assertStringContainsString('<k-empty', $javascript);
+        $this->assertStringContainsString('$panel.dialog.open', $javascript);
+        $this->assertStringNotContainsString('<button', $javascript);
+        $this->assertFileDoesNotExist($root . '/index.css');
     }
 
     public function testPluginRemainsRegisteredAcrossFreshApplications(): void

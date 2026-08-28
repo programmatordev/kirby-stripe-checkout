@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Configuration;
 
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
+use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 use SensitiveParameter;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
@@ -184,18 +185,19 @@ final class ConfigurationResolver
     }
 
     /**
-     * Known translation-suffix validation is added with the bundled catalogues
-     * in Batch 6.1d; this batch validates only the transport shape and text.
-     *
      * @param array<mixed> $translations
      * @return array<string, array<string, string>>
      */
     private function resolveTranslations(array $translations): array
     {
         $resolved = [];
+        $knownSuffixes = array_fill_keys(Catalogue::suffixes(), true);
 
         foreach ($translations as $locale => $overrides) {
-            if (is_string($locale) === false || trim($locale) === '') {
+            if (
+                is_string($locale) === false
+                || preg_match('/^[A-Za-z][A-Za-z0-9_-]*$/', $locale) !== 1
+            ) {
                 throw new ConfigurationException('configuration.translation_invalid', 'translations');
             }
 
@@ -211,6 +213,10 @@ final class ConfigurationResolver
                 }
 
                 $path .= '.' . $key;
+
+                if (isset($knownSuffixes[$key]) === false) {
+                    throw new ConfigurationException('configuration.translation_invalid', $path);
+                }
 
                 if (is_string($value) === false || trim($value) === '') {
                     throw new ConfigurationException('configuration.translation_invalid', $path);

@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Test\Support;
 
 use Kirby\Cms\App;
+use Kirby\Data\Yaml;
+use Kirby\Filesystem\Dir;
+use Kirby\Filesystem\F;
 use Stripe\ApiRequestor;
 use Stripe\HttpClient\ClientInterface;
 use Throwable;
@@ -32,11 +35,18 @@ final class KirbyTestEnvironment
      * @param array<string, mixed>             $options
      * @param list<array<string, mixed>>|null $languages
      * @param array<string, callable>          $hooks
+     * @param list<array<string, mixed>>|null $roles
+     * @param list<array<string, mixed>>|null $users
+     * @param array<string, mixed>|null        $request
      */
     public static function start(
         array $options = [],
         ?array $languages = null,
         array $hooks = [],
+        ?array $roles = null,
+        ?array $users = null,
+        ?string $impersonate = 'kirby',
+        ?array $request = null,
     ): self {
         $workspace = TestWorkspace::create();
         $previousStripeClient = ApiRequestor::httpClient();
@@ -45,6 +55,22 @@ final class KirbyTestEnvironment
         try {
             App::destroy();
             App::$enableWhoops = false;
+
+            if ($roles !== null) {
+                $rolesRoot = $workspace->roots()['site'] . '/blueprints/users';
+                Dir::make($rolesRoot);
+
+                foreach ($roles as $role) {
+                    $name = $role['name'] ?? null;
+
+                    if (is_string($name) === false) {
+                        throw new \InvalidArgumentException('Test roles require a string name.');
+                    }
+
+                    unset($role['name']);
+                    F::write($rolesRoot . '/' . $name . '.yml', Yaml::encode($role));
+                }
+            }
 
             $baseOptions = [
                 'cache' => false,
@@ -59,18 +85,20 @@ final class KirbyTestEnvironment
             $appProperties = [
                 'hooks' => $hooks,
                 'languages' => $languages,
+                'request' => $request,
                 'roots' => $workspace->roots(),
                 'options' => array_replace_recursive($baseOptions, $options),
                 'urls' => [
                     'index' => 'https://kirby-stripe-checkout.test',
                 ],
+                'users' => $users,
             ];
 
             require dirname(__DIR__, 2) . '/index.php';
 
             $app = new App($appProperties);
 
-            $app->impersonate('kirby');
+            $app->impersonate($impersonate);
             ApiRequestor::setHttpClient(new BlockingStripeClient());
             ApiRequestor::resetTelemetry();
 
