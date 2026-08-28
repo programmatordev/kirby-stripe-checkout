@@ -24,6 +24,21 @@ final class PluginRegistrationTest extends KirbyTestCase
         $this->assertSame('0.7.0', $declaredVersion->getValue($plugin));
     }
 
+    public function testRegistersOnlyTheEmptyOptionRoot(): void
+    {
+        $plugin = App::plugin('programmatordev/stripe-checkout');
+
+        $this->assertInstanceOf(Plugin::class, $plugin);
+        $this->assertSame(['options' => []], $plugin->extends());
+        $this->assertSame([], $this->kirby->option('programmatordev.stripe-checkout'));
+    }
+
+    public function testDoesNotExposeTheLegacyGlobalHelpers(): void
+    {
+        $this->assertFalse(function_exists('cart'));
+        $this->assertFalse(function_exists('stripeCheckout'));
+    }
+
     public function testPluginRemainsRegisteredAcrossFreshApplications(): void
     {
         $firstPlugin = App::plugin('programmatordev/stripe-checkout');

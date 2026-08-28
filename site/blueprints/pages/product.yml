@@ -20,7 +20,7 @@ columns:
       productOptions:
         label: Product options
         type: structure
-        help: Development-only shape; the final resolver contract is decided later.
+        help: Development-only shape; this is not a registered plugin field.
         fields:
           code:
             type: slug

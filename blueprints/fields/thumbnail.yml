@@ -1,8 +1,0 @@
-# TODO restrict uploads to images only
-
-label: stripe-checkout.fields.product.thumbnail.label
-type: files
-required: true
-multiple: false
-query: page.images
-translate: false

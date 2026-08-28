@@ -93,7 +93,7 @@ $languageCode = $kirby->language()?->code() ?? 'en';
         <?= $slots->content() ?>
     </main>
     <footer>
-        Development fixture for Kirby Stripe Checkout. Placeholder credentials never contact Stripe unless a flow is deliberately started.
+        Development fixture for Kirby Stripe Checkout. No Checkout or Stripe request behavior is currently registered.
     </footer>
 </body>
 </html>

@@ -6,7 +6,7 @@ Mode: hosted
 
 ----
 
-Text: Hosted mode redirects the customer to Stripe Checkout. This fixture documents the effective local mode without starting a network request.
+Text: Hosted mode redirects the customer to Stripe Checkout. This fixture remains illustrative until the redesigned Checkout pipeline is implemented.
 
 ----
 

@@ -1,32 +1,15 @@
 <?php
 
-use Kirby\Cms\App;
+declare(strict_types=1);
 
-@include_once __DIR__ . '/vendor/autoload.php';
-@include_once __DIR__ . '/helpers.php';
+use Kirby\Cms\App;
 
 App::plugin(
     name: 'programmatordev/stripe-checkout',
     extends: [
-        'options' => [
-            'stripePublicKey' => null,
-            'stripeSecretKey' => null,
-            'stripeWebhookSecret' => null,
-            'uiMode' => 'hosted',
-            'currency' => 'EUR',
-            'returnPage' => null,
-            'successPage' => null,
-            'cancelPage' => null,
-            'ordersPage' => 'orders',
-            'settingsPage' => 'checkout-settings',
-            'cartSnippet' => null,
-            'translations' => []
-        ],
-        'blueprints' => require __DIR__ . '/config/blueprints.php',
-        'translations' => require __DIR__ . '/config/translations.php',
-        'siteMethods' => require __DIR__ . '/config/siteMethods.php',
-        'routes' => require __DIR__ . '/config/routes.php',
-        'api' => require __DIR__ . '/config/api.php',
+        // Business defaults stay in the resolver so explicit project values
+        // remain distinguishable from plugin defaults.
+        'options' => [],
     ],
-    version: '0.7.0'
+    version: '0.7.0',
 );

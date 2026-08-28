@@ -1,15 +1,11 @@
 includes:
 	- vendor/phpstan/phpstan-phpunit/extension.neon
 	- vendor/phpstan/phpstan-phpunit/rules.neon
-	- phpstan-baseline.neon
 
 parameters:
 	level: max
 	phpVersion: 80200
 	paths:
-		- config
-		- helpers.php
 		- index.php
-		- src
 		- tests
 	reportUnmatchedIgnoredErrors: true

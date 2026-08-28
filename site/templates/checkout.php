@@ -3,8 +3,6 @@
 /** @var Kirby\Cms\Page $page */
 
 $fixtureMode = $page->mode()->or('hosted')->value();
-$configuredMode = option('programmatordev.stripe-checkout.uiMode', 'hosted');
-$endpoint = $fixtureMode === 'embedded' ? '/stripe/checkout/embedded' : '/stripe/checkout';
 ?>
 <?php snippet('layout', ['title' => $page->title()], slots: true) ?>
 
@@ -15,12 +13,8 @@ $endpoint = $fixtureMode === 'embedded' ? '/stripe/checkout/embedded' : '/stripe
 
     <div class="card">
         <p><strong>Fixture mode:</strong> <code><?= esc($fixtureMode) ?></code></p>
-        <p><strong>Effective local mode:</strong> <code><?= esc($configuredMode) ?></code></p>
-        <p><strong>Current endpoint:</strong> <code><?= esc($endpoint) ?></code></p>
-        <?php if ($fixtureMode !== $configuredMode): ?>
-            <p>Set <code>uiMode</code> to <code><?= esc($fixtureMode) ?></code> in <code>site/config/config.php</code> to exercise this mode.</p>
-        <?php endif ?>
+        <p>The fixture records the intended storefront context without assuming a runtime configuration or route contract.</p>
     </div>
 
-    <p>The fixture does not start a real Checkout Session with placeholder credentials. Interactive flows will be added with the redesigned Checkout pipeline.</p>
+    <p>Checkout behavior is not registered in the current foundation. Interactive flows will be added with the redesigned Checkout pipeline.</p>
 <?php endslot() ?>

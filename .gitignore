@@ -41,8 +41,8 @@ Icon
 /content/checkout/
 /content/checkout-settings/
 /content/orders/
-/content/stripe-orders/*
-!/content/stripe-orders/orders.txt
+/content/stripe-checkout-orders/
+/content/stripe-checkout-settings/
 
 /site/accounts/
 /site/cache/

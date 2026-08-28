@@ -103,6 +103,10 @@ try {
         throw new RuntimeException('Kirby loaded the plugin from an unexpected path.');
     }
 
+    if ($plugin->extends() !== ['options' => []]) {
+        throw new RuntimeException('The package registered an unexpected runtime extension.');
+    }
+
     fwrite(STDOUT, "Composer consumer smoke test passed.\n");
 } finally {
     try {

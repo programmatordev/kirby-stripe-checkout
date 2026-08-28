@@ -145,9 +145,6 @@ jobs:
             README.md
             composer.json
             index.php
-            src/StripeCheckout.php
-            translations/en.yml
-            blueprints/pages/order.yml
           )
 
           for required_file in "${required[@]}"; do
@@ -157,7 +154,7 @@ jobs:
             }
           done
 
-          forbidden='^(\.ddev|\.github|content|plans|site|tests|src/Test)(/|$)|^(\.editorconfig|\.env\.example|\.gitattributes|\.gitignore|\.htaccess|\.php-cs-fixer\.cache|\.php-cs-fixer\.dist\.php|\.phpunit\.result\.cache|CONTRIBUTING\.md|composer\.lock|coverage\.xml|index\.site\.php|phpstan-baseline\.neon|phpstan\.neon\.dist|phpunit\.xml\.dist)$'
+          forbidden='^(\.agents|\.codex|\.ddev|\.github|content|plans|site|tests|src/Test)(/|$)|^(\.editorconfig|\.gitattributes|\.gitignore|\.htaccess|\.php-cs-fixer\.cache|\.php-cs-fixer\.dist\.php|\.phpunit\.result\.cache|AGENTS\.md|CONTRIBUTING\.md|composer\.lock|coverage\.xml|index\.site\.php|phpstan\.neon\.dist|phpunit\.xml\.dist)$'
 
           if grep -Eq "$forbidden" "$list"; then
             echo "Development-only path found in Composer package artifact:" >&2

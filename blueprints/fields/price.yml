@@ -1,7 +1,0 @@
-label: stripe-checkout.fields.product.price.label
-type: number
-required: true
-step: .01
-min: .01
-before: "{{ site.stripeCurrencySymbol }}"
-translate: false
