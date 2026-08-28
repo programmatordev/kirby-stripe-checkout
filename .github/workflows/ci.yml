@@ -146,6 +146,10 @@ jobs:
             blueprints/pages/stripe-checkout-settings.yml
             composer.json
             config/site-methods.php
+            docs/configuration.md
+            docs/index.md
+            docs/panel.md
+            docs/translations.md
             index.php
             src/Configuration/PageSettings.php
             src/Configuration/Settings.php

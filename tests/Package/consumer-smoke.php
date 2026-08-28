@@ -163,7 +163,14 @@ try {
         throw new RuntimeException('The package did not register its bundled translations.');
     }
 
-    foreach (['translations/en.php', 'translations/pt_PT.php'] as $packageFile) {
+    foreach ([
+        'docs/configuration.md',
+        'docs/index.md',
+        'docs/panel.md',
+        'docs/translations.md',
+        'translations/en.php',
+        'translations/pt_PT.php',
+    ] as $packageFile) {
         if (is_file($installedPluginRoot . '/' . $packageFile) === false) {
             throw new RuntimeException('The installed package is missing ' . $packageFile . '.');
         }
