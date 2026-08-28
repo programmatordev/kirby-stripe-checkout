@@ -28,7 +28,8 @@ final class KirbyTestEnvironment
         $this->close();
     }
 
-    public static function start(): self
+    /** @param array<string, mixed> $options */
+    public static function start(array $options = []): self
     {
         $workspace = TestWorkspace::create();
         $previousStripeClient = ApiRequestor::httpClient();
@@ -38,17 +39,19 @@ final class KirbyTestEnvironment
             App::destroy();
             App::$enableWhoops = false;
 
+            $baseOptions = [
+                'cache' => false,
+                'debug' => false,
+                'session' => [
+                    'cookieName' => $sessionCookie,
+                    'gcInterval' => false,
+                ],
+                'whoops' => false,
+            ];
+
             $appProperties = [
                 'roots' => $workspace->roots(),
-                'options' => [
-                    'cache' => false,
-                    'debug' => false,
-                    'session' => [
-                        'cookieName' => $sessionCookie,
-                        'gcInterval' => false,
-                    ],
-                    'whoops' => false,
-                ],
+                'options' => array_replace_recursive($baseOptions, $options),
                 'urls' => [
                     'index' => 'https://kirby-stripe-checkout.test',
                 ],

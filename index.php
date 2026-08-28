@@ -10,6 +10,7 @@ App::plugin(
         // Business defaults stay in the resolver so explicit project values
         // remain distinguishable from plugin defaults.
         'options' => [],
+        'siteMethods' => require __DIR__ . '/config/site-methods.php',
     ],
     version: '0.7.0',
 );

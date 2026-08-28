@@ -62,7 +62,7 @@ The default suite is deterministic and offline. Its Stripe HTTP client rejects u
 
 CI keeps the committed lockfile matrix for PHP 8.2 through PHP 8.5 and adds two uncached dependency-range checks: Composer's lowest currently allowed resolution on PHP 8.2 and the latest allowed resolution on PHP 8.5. Composer's security-advisory blocking remains enabled. The package job also installs the built artifact as a mirrored Composer package in a disposable Kirby project and verifies Kirby discovers it from `site/plugins`. The files under `tests/Package` exist only for that package-install check and are not shipped with the plugin. Kirby's explicit plugin version is asserted once by the registration integration test; release validation compares it with the release tag.
 
-PHPStan analyzes at its maximum rule level. Do not add baselines for new production or test code. PHP-CS-Fixer checks the canonical bootstrap, tests, and each runtime path as it is introduced.
+PHPStan analyzes at its maximum rule level. Do not add baselines for new production or test code. PHP-CS-Fixer checks the canonical bootstrap, runtime configuration and source, and tests.
 
 Coverage measures the production PHP that currently exists. The project does not target 100% coverage; correctness-critical payment scenarios remain mandatory regardless of the percentage.
 
@@ -89,4 +89,4 @@ git archive --worktree-attributes --format=tar.gz --output=/tmp/kirby-stripe-che
 tar -tzf /tmp/kirby-stripe-checkout.tar.gz
 ```
 
-The package artifact must contain the canonical plugin bootstrap, Composer manifest, consumer documentation, and license. Runtime source, blueprints, translations, and assets join the artifact only when implemented. It must not contain DDEV configuration, development guidance, fixture content/site files, tests, plans, local environment files, or the lockfile.
+The package artifact must contain the canonical plugin bootstrap, runtime configuration and source, Composer manifest, consumer documentation, and license. Blueprints, translations, and assets join the artifact only when implemented. It must not contain DDEV configuration, development guidance, fixture content/site files, tests, plans, local environment files, or the lockfile.

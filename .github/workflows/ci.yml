@@ -144,7 +144,11 @@ jobs:
             LICENSE
             README.md
             composer.json
+            config/site-methods.php
             index.php
+            src/Configuration/Settings.php
+            src/Plugin/RuntimeFactory.php
+            src/StripeCheckout.php
           )
 
           for required_file in "${required[@]}"; do

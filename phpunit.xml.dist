@@ -18,7 +18,9 @@
 
   <source>
     <include>
+      <directory>config</directory>
       <file>index.php</file>
+      <directory>src</directory>
     </include>
   </source>
 

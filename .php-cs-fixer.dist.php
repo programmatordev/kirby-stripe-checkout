@@ -7,7 +7,11 @@ use PhpCsFixer\Finder;
 
 $finder = Finder::create()
     ->files()
-    ->in(__DIR__ . '/tests')
+    ->in([
+        __DIR__ . '/config',
+        __DIR__ . '/src',
+        __DIR__ . '/tests',
+    ])
     ->append([__DIR__ . '/index.php']);
 
 return (new Config())

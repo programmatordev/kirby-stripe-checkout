@@ -6,6 +6,8 @@ parameters:
 	level: max
 	phpVersion: 80200
 	paths:
+		- config
 		- index.php
+		- src
 		- tests
 	reportUnmatchedIgnoredErrors: true

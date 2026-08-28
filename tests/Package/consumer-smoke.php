@@ -6,6 +6,8 @@ use Composer\InstalledVersions;
 use Kirby\Cms\App;
 use Kirby\Filesystem\Dir;
 use Kirby\Plugin\Plugin;
+use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
+use ProgrammatorDev\StripeCheckout\StripeCheckout;
 
 // Exercises only the exported package's Composer installation boundary. It is
 // invoked by the package job and deliberately kept outside the PHPUnit suites.
@@ -103,8 +105,30 @@ try {
         throw new RuntimeException('Kirby loaded the plugin from an unexpected path.');
     }
 
-    if ($plugin->extends() !== ['options' => []]) {
+    $extensions = $plugin->extends();
+    $siteMethods = $extensions['siteMethods'] ?? null;
+
+    if (($extensions['options'] ?? null) !== []) {
         throw new RuntimeException('The package registered an unexpected runtime extension.');
+    }
+
+    if (
+        is_array($siteMethods) === false
+        || array_keys($siteMethods) !== ['stripeCheckout']
+        || is_callable($siteMethods['stripeCheckout']) === false
+    ) {
+        throw new RuntimeException('The package did not register its Site entry point.');
+    }
+
+    /** @phpstan-ignore-next-line method.notFound */
+    $stripeCheckout = $app->site()->stripeCheckout();
+
+    if ($stripeCheckout instanceof StripeCheckout === false) {
+        throw new RuntimeException('The installed Site entry point returned an unexpected value.');
+    }
+
+    if ($stripeCheckout->settings()->priceSource() !== PriceSource::Kirby) {
+        throw new RuntimeException('The installed package did not resolve its default Settings.');
     }
 
     fwrite(STDOUT, "Composer consumer smoke test passed.\n");

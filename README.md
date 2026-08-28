@@ -7,7 +7,7 @@
 Stripe Checkout integration for [Kirby CMS](https://getkirby.com).
 
 > [!CAUTION]
-> The plugin is under active development and is not ready for production use. The current package registers the plugin foundation only; Checkout, configuration, products, carts, orders, webhooks, and Panel tools are not implemented yet.
+> The plugin is under active development and is not ready for production use. The current package provides the strict configuration foundation only; Checkout, products, carts, orders, webhooks, and Panel tools are not implemented yet.
 
 ## Requirements
 
@@ -23,7 +23,54 @@ Composer is the supported installation method:
 composer require programmatordev/kirby-stripe-checkout
 ```
 
-The package currently verifies that Kirby discovers the plugin automatically. Configuration and commerce usage will be documented as those features become available.
+Kirby discovers the Composer-installed plugin automatically. No manual plugin registration is needed.
+
+## Configuration
+
+Add plugin options to the project's `site/config/config.php`. The nested form is the recommended format:
+
+```php
+<?php
+
+return [
+    'programmatordev.stripe-checkout' => [
+        'stripe' => [
+            'secretKey' => getenv('KIRBY_STRIPE_CHECKOUT_SECRET_KEY') ?: null,
+            'publishableKey' => getenv('KIRBY_STRIPE_CHECKOUT_PUBLISHABLE_KEY') ?: null,
+            'webhookSecret' => getenv('KIRBY_STRIPE_CHECKOUT_WEBHOOK_SECRET') ?: null,
+        ],
+        'settings' => [
+            'priceSource' => 'kirby',
+        ],
+    ],
+];
+```
+
+Stripe credentials are optional until a later operation needs them. Keep secret and webhook keys in environment or deployment configuration and never commit them. `publishableKey` is intended for the later embedded Checkout integration; the general Settings API does not expose any credential.
+
+`settings.priceSource` accepts `kirby` (the default) or `stripe`. An explicit PHP value is treated as locked deployment configuration. Fully dotted Kirby option keys are also accepted, but defining the same logical option in nested and dotted forms is an error.
+
+Unknown options, wrong types, unsupported values, duplicate definitions, blank credentials, and recognizable test/live key mismatches are rejected when plugin configuration is used. Invalid plugin configuration does not prevent unrelated Kirby pages from booting.
+
+## Reading settings
+
+The Site entry point provides the sanitized effective settings:
+
+```php
+<?php
+
+/** @var Kirby\Cms\Site $site */
+$settings = $site->stripeCheckout()->settings();
+
+$settings->priceSource(); // PriceSource::Kirby or PriceSource::Stripe
+
+$priceSource = $settings->setting('priceSource');
+$priceSource?->value();
+$priceSource?->source();
+$priceSource?->isLocked();
+```
+
+Only safe, store-facing settings are available through this API. Credentials and structural configuration are absent rather than redacted. The Settings Page and its Page-level values are introduced in a later implementation batch; reads currently resolve internal defaults and explicit PHP configuration without creating content.
 
 ## Development
 
