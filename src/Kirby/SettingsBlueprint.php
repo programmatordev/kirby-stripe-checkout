@@ -8,7 +8,10 @@ use Kirby\Cms\App;
 use Kirby\Data\Data;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
+use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Panel\DiagnosticsSections;
+use Symfony\Component\Intl\Currencies;
+use Throwable;
 
 /**
  * Adapts the plugin-owned Settings blueprint to permissions and PHP locks.
@@ -24,6 +27,24 @@ final class SettingsBlueprint
         $blueprint = Data::read(
             dirname(__DIR__, 2) . '/blueprints/pages/stripe-checkout.yml',
         );
+        /** @var array<string, array<string, mixed>> $tabs */
+        $tabs = $blueprint['tabs'];
+        /** @var array<string, mixed> $settingsTab */
+        $settingsTab = $tabs['settings'];
+        /** @var array<string, array<string, mixed>> $settingsSections */
+        $settingsSections = $settingsTab['sections'];
+        /** @var array<string, mixed> $settingsSection */
+        $settingsSection = $settingsSections['settings'];
+        /** @var array<string, array<string, mixed>> $settingsFields */
+        $settingsFields = $settingsSection['fields'];
+        // The provider registry and active Panel locale make these options
+        // runtime data; the YAML blueprint supplies only their static field.
+        $settingsFields['currency']['options'] = self::currencyOptions();
+        $settingsSection['fields'] = $settingsFields;
+        $settingsSections['settings'] = $settingsSection;
+        $settingsTab['sections'] = $settingsSections;
+        $tabs['settings'] = $settingsTab;
+        $blueprint['tabs'] = $tabs;
 
         $canReadSettings = PluginPermissions::allows($kirby, 'settings.read');
         $canReadDiagnostics = PluginPermissions::allows($kirby, 'diagnostics.read');
@@ -66,6 +87,24 @@ final class SettingsBlueprint
         }
 
         return $blueprint;
+    }
+
+    /** @return array<string, string> */
+    private static function currencyOptions(): array
+    {
+        $options = [];
+
+        foreach ((new StripeCurrencyRegistry())->codes() as $currency) {
+            try {
+                $name = Currencies::getName($currency, I18n::locale());
+            } catch (Throwable) {
+                $name = $currency;
+            }
+
+            $options[$currency] = $currency . ' — ' . $name;
+        }
+
+        return $options;
     }
 
     /**

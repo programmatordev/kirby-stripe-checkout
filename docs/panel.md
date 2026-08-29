@@ -43,7 +43,7 @@ The area path is `stripe-checkout`. Its native blueprint tabs use `overview`, `s
 
 ## Local diagnostics
 
-The Diagnostics tab checks the PHP, Kirby, and Stripe SDK versions; configuration validity; credential presence and detectable test/live mode; and protected Page ownership. These checks are local and never make a Stripe API request.
+The Diagnostics tab checks the PHP, Kirby, and Stripe SDK versions; configuration validity; credential presence and detectable test/live mode; store currency and default shipping configuration; and protected Page ownership. These checks are local and never make a Stripe API request.
 
 Configuration errors expose a stable code and safe option path:
 

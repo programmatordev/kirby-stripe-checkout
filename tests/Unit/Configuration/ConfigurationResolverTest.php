@@ -33,6 +33,8 @@ final class ConfigurationResolverTest extends TestCase
         $this->assertFalse($priceSource->isLocked());
         $this->assertFalse($priceSource->hasShadowedValue());
         $this->assertNull($priceSource->shadowedValue());
+        $this->assertNull($settings->currency());
+        $this->assertNull($settings->defaultRequiresShipping());
         $this->assertFalse($configuration->stripe()->hasSecretKey());
         $this->assertFalse($configuration->stripe()->hasPublishableKey());
         $this->assertFalse($configuration->stripe()->hasWebhookSecret());
@@ -43,6 +45,8 @@ final class ConfigurationResolverTest extends TestCase
         $configuration = $this->resolve([
             self::PREFIX => [
                 'settings' => [
+                    'currency' => 'EUR',
+                    'defaultRequiresShipping' => false,
                     'priceSource' => 'stripe',
                 ],
                 'stripe' => [
@@ -55,6 +59,8 @@ final class ConfigurationResolverTest extends TestCase
         $setting = $configuration->settings()->setting('priceSource');
 
         $this->assertSame(PriceSource::Stripe, $configuration->settings()->priceSource());
+        $this->assertSame('EUR', $configuration->settings()->currency());
+        $this->assertFalse($configuration->settings()->defaultRequiresShipping());
         $this->assertNotNull($setting);
         $this->assertSame(SettingSource::Php, $setting->source());
         $this->assertTrue($setting->isLocked());
@@ -69,11 +75,15 @@ final class ConfigurationResolverTest extends TestCase
     {
         $configuration = $this->resolve([
             self::PREFIX . '.settings.priceSource' => 'stripe',
+            self::PREFIX . '.settings.currency' => 'USD',
+            self::PREFIX . '.settings.defaultRequiresShipping' => true,
             self::PREFIX . '.stripe.secretKey' => 'custom-server-key',
             self::PREFIX . '.stripe.publishableKey' => 'custom-public-key',
         ])->configurationOrFail();
 
         $this->assertSame(PriceSource::Stripe, $configuration->settings()->priceSource());
+        $this->assertSame('USD', $configuration->settings()->currency());
+        $this->assertTrue($configuration->settings()->defaultRequiresShipping());
         $this->assertSame(CredentialMode::Unknown, $configuration->stripe()->serverMode());
         $this->assertSame(CredentialMode::Unknown, $configuration->stripe()->publishableMode());
     }
@@ -82,6 +92,8 @@ final class ConfigurationResolverTest extends TestCase
     {
         $configuration = $this->resolve([
             self::PREFIX => [
+                'settings.currency' => 'GBP',
+                'settings.defaultRequiresShipping' => false,
                 'settings.priceSource' => 'stripe',
                 'stripe.secretKey' => 'sk_live_server',
                 'stripe.publishableKey' => 'pk_live_public',
@@ -89,6 +101,8 @@ final class ConfigurationResolverTest extends TestCase
         ])->configurationOrFail();
 
         $this->assertSame(PriceSource::Stripe, $configuration->settings()->priceSource());
+        $this->assertSame('GBP', $configuration->settings()->currency());
+        $this->assertFalse($configuration->settings()->defaultRequiresShipping());
         $this->assertSame(CredentialMode::Live, $configuration->stripe()->serverMode());
         $this->assertSame(CredentialMode::Live, $configuration->stripe()->publishableMode());
     }
@@ -143,6 +157,35 @@ final class ConfigurationResolverTest extends TestCase
         $this->assertTrue($setting->isLocked());
         $this->assertTrue($setting->hasShadowedValue());
         $this->assertSame(PriceSource::Kirby->value, $setting->shadowedValue());
+    }
+
+    public function testEveryNewSettingRetainsIndependentPageAndPhpProvenance(): void
+    {
+        $settings = (new ConfigurationResolver())->resolve(
+            [
+                self::PREFIX => [
+                    'settings' => [
+                        'currency' => 'USD',
+                        'defaultRequiresShipping' => false,
+                    ],
+                ],
+            ],
+            new PageSettings(
+                currency: 'EUR',
+                defaultRequiresShipping: 'yes',
+            ),
+        )->configurationOrFail()->settings();
+        $currency = $settings->setting('currency');
+        $shipping = $settings->setting('defaultRequiresShipping');
+
+        $this->assertSame('USD', $settings->currency());
+        $this->assertFalse($settings->defaultRequiresShipping());
+        $this->assertNotNull($currency);
+        $this->assertSame(SettingSource::Php, $currency->source());
+        $this->assertSame('EUR', $currency->shadowedValue());
+        $this->assertNotNull($shipping);
+        $this->assertSame(SettingSource::Php, $shipping->source());
+        $this->assertTrue($shipping->shadowedValue());
     }
 
     public function testInvalidPageSettingUsesTheSafePersistenceFailure(): void
@@ -233,6 +276,26 @@ final class ConfigurationResolverTest extends TestCase
             [self::PREFIX => ['settings' => ['priceSource' => 'remote']]],
             'configuration.value_invalid',
             'settings.priceSource',
+        ];
+        yield 'currency boolean has wrong type' => [
+            [self::PREFIX => ['settings' => ['currency' => false]]],
+            'configuration.type_invalid',
+            'settings.currency',
+        ];
+        yield 'currency must be uppercase' => [
+            [self::PREFIX => ['settings' => ['currency' => 'eur']]],
+            'configuration.value_invalid',
+            'settings.currency',
+        ];
+        yield 'currency must be supported by Stripe' => [
+            [self::PREFIX => ['settings' => ['currency' => 'XXX']]],
+            'configuration.value_invalid',
+            'settings.currency',
+        ];
+        yield 'shipping default must be boolean' => [
+            [self::PREFIX => ['settings' => ['defaultRequiresShipping' => 'yes']]],
+            'configuration.type_invalid',
+            'settings.defaultRequiresShipping',
         ];
         yield 'credential has wrong type' => [
             [self::PREFIX => ['stripe' => ['secretKey' => false]]],
@@ -343,7 +406,10 @@ final class ConfigurationResolverTest extends TestCase
             ],
         ])->configurationOrFail()->settings();
 
-        $this->assertSame(['priceSource'], array_keys($settings->all()));
+        $this->assertSame(
+            ['priceSource', 'currency', 'defaultRequiresShipping'],
+            array_keys($settings->all()),
+        );
         $this->assertNull($settings->setting('settings.priceSource'));
         $this->assertNull($settings->setting('stripe'));
         $this->assertNull($settings->setting('secretKey'));

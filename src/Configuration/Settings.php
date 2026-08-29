@@ -21,8 +21,8 @@ final class Settings
      */
     public function __construct(array $settings)
     {
-        if (array_keys($settings) !== ['priceSource']) {
-            throw new LogicException('The public Settings view must contain only priceSource.');
+        if (array_keys($settings) !== ['priceSource', 'currency', 'defaultRequiresShipping']) {
+            throw new LogicException('The public Settings view contains an unexpected schema.');
         }
 
         $this->settings = $settings;
@@ -37,6 +37,28 @@ final class Settings
         }
 
         return PriceSource::from($value);
+    }
+
+    public function currency(): ?string
+    {
+        $value = $this->settings['currency']->value();
+
+        if ($value !== null && is_string($value) === false) {
+            throw new LogicException('The resolved currency must be a string or null.');
+        }
+
+        return $value;
+    }
+
+    public function defaultRequiresShipping(): ?bool
+    {
+        $value = $this->settings['defaultRequiresShipping']->value();
+
+        if ($value !== null && is_bool($value) === false) {
+            throw new LogicException('The resolved shipping default must be a boolean or null.');
+        }
+
+        return $value;
     }
 
     public function setting(string $path): ?Setting

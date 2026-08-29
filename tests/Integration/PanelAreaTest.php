@@ -220,15 +220,25 @@ final class PanelAreaTest extends KirbyTestCase
         $this->kirby->api()->call(
             'pages/stripe-checkout',
             'PATCH',
-            ['body' => ['priceSource' => 'stripe']],
+            ['body' => [
+                'priceSource' => 'stripe',
+                'currency' => 'EUR',
+                'defaultRequiresShipping' => 'no',
+            ]],
         );
 
         $page = (new StripeCheckoutPageStore($this->kirby))->page();
 
         $this->assertNotNull($page);
         $priceSource = $page->content()->get('priceSource');
+        $currency = $page->content()->get('currency');
+        $shipping = $page->content()->get('defaultRequiresShipping');
         $this->assertInstanceOf(Field::class, $priceSource);
+        $this->assertInstanceOf(Field::class, $currency);
+        $this->assertInstanceOf(Field::class, $shipping);
         $this->assertSame('stripe', $priceSource->value());
+        $this->assertSame('EUR', $currency->value());
+        $this->assertSame('no', $shipping->value());
     }
 
     public function testPhpLockedSettingCannotBeChangedThroughKirbysApiRoute(): void
@@ -250,7 +260,7 @@ final class PanelAreaTest extends KirbyTestCase
         $this->kirby->api()->call(
             'pages/stripe-checkout',
             'PATCH',
-            ['body' => ['priceSource' => 'kirby']],
+            ['body' => ['priceSource' => 'stripe']],
         );
     }
 
@@ -288,7 +298,11 @@ final class PanelAreaTest extends KirbyTestCase
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start(options: [
             'programmatordev.stripe-checkout' => [
-                'settings' => ['priceSource' => 'stripe'],
+                'settings' => [
+                    'priceSource' => 'stripe',
+                    'currency' => 'USD',
+                    'defaultRequiresShipping' => false,
+                ],
             ],
         ]);
         $this->kirby = $this->environment->app();
@@ -301,6 +315,8 @@ final class PanelAreaTest extends KirbyTestCase
 
         $this->assertSame('k-page-view', $view['component']);
         $this->assertSame('stripe', $props['versions']['latest']->pricesource);
+        $this->assertSame('USD', $props['versions']['latest']->currency);
+        $this->assertSame('no', $props['versions']['latest']->defaultrequiresshipping);
         $this->assertNotNull($blueprint);
         $field = $blueprint->field('priceSource');
         $this->assertIsArray($field);
@@ -310,6 +326,18 @@ final class PanelAreaTest extends KirbyTestCase
             'programmatordev.stripe-checkout.settings.priceSource',
             $field['help'],
         );
+
+        foreach (['currency', 'defaultRequiresShipping'] as $fieldName) {
+            $lockedField = $blueprint->field($fieldName);
+            $this->assertIsArray($lockedField);
+            $this->assertTrue($lockedField['disabled']);
+            $help = $lockedField['help'];
+            $this->assertIsString($help);
+            $this->assertStringContainsString(
+                'programmatordev.stripe-checkout.settings.' . $fieldName,
+                $help,
+            );
+        }
     }
 
     public function testSettingsBlueprintCannotBeReplacedByTheProject(): void
@@ -342,7 +370,13 @@ final class PanelAreaTest extends KirbyTestCase
         $fields = $settings['fields'];
 
         $this->assertArrayHasKey('priceSource', $fields);
+        $this->assertArrayHasKey('currency', $fields);
+        $this->assertArrayHasKey('defaultRequiresShipping', $fields);
         $this->assertArrayNotHasKey('projectField', $fields);
+        $priceSource = $fields['priceSource'];
+        $this->assertIsArray($priceSource);
+        $this->assertTrue($priceSource['required']);
+        $this->assertSame('kirby', $priceSource['default']);
         $this->assertSame(
             'programmatordev.stripe-checkout.area.label',
             $blueprint['title'],
@@ -362,6 +396,7 @@ final class PanelAreaTest extends KirbyTestCase
             impersonate: 'panel-admin',
         );
         $this->kirby = $this->environment->app();
+        $this->kirby->setCurrentTranslation('pt_PT');
         $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
         $field = Fields::for($page)->field('priceSource')->toArray();
         /** @var list<array{text: string, value: string}> $options */
@@ -373,6 +408,38 @@ final class PanelAreaTest extends KirbyTestCase
             'programmatordev.stripe-checkout.settings.priceSource',
             implode(' ', array_column($options, 'text')),
         );
+    }
+
+    public function testCommerceSettingOptionsAreLocalizedAndUseStableValues(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(
+            users: [[
+                'id' => 'panel-admin',
+                'email' => 'panel-admin@example.com',
+                'language' => 'pt_PT',
+                'role' => 'admin',
+            ]],
+            impersonate: 'panel-admin',
+        );
+        $this->kirby = $this->environment->app();
+        $this->kirby->setCurrentTranslation('pt_PT');
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
+        $currency = Fields::for($page)->field('currency')->toArray();
+        $shipping = Fields::for($page)->field('defaultRequiresShipping')->toArray();
+        /** @var list<array{text: string, value: string}> $currencyOptions */
+        $currencyOptions = $currency['options'];
+        /** @var list<array{text: string, value: string}> $shippingOptions */
+        $shippingOptions = $shipping['options'];
+        $eur = array_values(array_filter(
+            $currencyOptions,
+            static fn(array $option): bool => $option['value'] === 'EUR',
+        ));
+
+        $this->assertCount(1, $eur);
+        $this->assertStringStartsWith('EUR — ', $eur[0]['text']);
+        $this->assertSame(['Sim', 'Não'], array_column($shippingOptions, 'text'));
+        $this->assertSame(['yes', 'no'], array_column($shippingOptions, 'value'));
     }
 
     /**

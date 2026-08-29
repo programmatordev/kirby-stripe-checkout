@@ -87,20 +87,11 @@ final class StripeCheckoutPageStore
         }
 
         $page = $this->validate($page);
-        $priceSource = $this->fieldValue($page, 'priceSource');
-
-        if ($priceSource === null || $priceSource === '') {
-            return new PageSettings();
-        }
-
-        if (is_string($priceSource) === false) {
-            throw new ConfigurationException(
-                'persistence.content_invalid',
-                'settings.priceSource',
-            );
-        }
-
-        return new PageSettings($priceSource);
+        return new PageSettings(
+            priceSource: $this->fieldValue($page, 'priceSource'),
+            currency: $this->fieldValue($page, 'currency'),
+            defaultRequiresShipping: $this->fieldValue($page, 'defaultRequiresShipping'),
+        );
     }
 
     public function page(): ?StripeCheckoutPage

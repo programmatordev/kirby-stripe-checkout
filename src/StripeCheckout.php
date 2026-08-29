@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout;
 
+use Brick\Money\Currency;
+use Brick\Money\Money;
 use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
+use ProgrammatorDev\StripeCheckout\Money\MoneyFormatter;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 
 /**
@@ -26,5 +29,20 @@ final class StripeCheckout
     public function settings(): Settings
     {
         return (new RuntimeFactory($this->kirby))->settings();
+    }
+
+    public function formatMoney(
+        Money|string|int $amount,
+        Currency|string|null $currency = null,
+        ?string $locale = null,
+    ): string {
+        return (new MoneyFormatter($this->kirby))->format($amount, $currency, $locale);
+    }
+
+    public function currencySymbol(
+        Currency|string $currency,
+        ?string $locale = null,
+    ): string {
+        return (new MoneyFormatter($this->kirby))->symbol($currency, $locale);
     }
 }

@@ -13,7 +13,6 @@ use Kirby\Exception\PermissionException;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Configuration\PageSettings;
-use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 
 /**
  * Provides the plugin-owned hub Page and stores editable settings natively.
@@ -35,6 +34,12 @@ final class StripeCheckoutPage extends Page
         'publishablekey',
         'secretkey',
         'webhooksecret',
+    ];
+
+    private const SETTING_FIELDS = [
+        'pricesource' => 'priceSource',
+        'currency' => 'currency',
+        'defaultrequiresshipping' => 'defaultRequiresShipping',
     ];
 
     private const STRUCTURAL_FIELDS = [
@@ -79,35 +84,35 @@ final class StripeCheckoutPage extends Page
         $this->assertProtectedFieldsRemainUnchanged($input);
         $this->assertOnlySettingsFieldsAreUpdated($input);
 
-        $hasPriceSource = array_key_exists('pricesource', $input);
+        $settingInput = array_intersect_key($input, self::SETTING_FIELDS);
 
-        if ($hasPriceSource === true) {
-            $this->assertPriceSourceUpdate($input['pricesource']);
+        if ($settingInput !== []) {
+            $this->assertSettingUpdates($settingInput);
         }
 
         $defaultLanguageCode = $this->kirby()->defaultLanguage()?->code();
         $targetLanguageCode = $languageCode ?? $this->kirby()->languageCode();
 
         if (
-            $hasPriceSource === true
+            $settingInput !== []
             && $defaultLanguageCode !== null
             && $targetLanguageCode !== null
             && $targetLanguageCode !== $defaultLanguageCode
         ) {
             // Non-translatable settings belong to Kirby's default language even
             // when the Panel submits them while another language is active.
-            $priceSource = $input['pricesource'];
-            unset($input['pricesource']);
+            $defaultLanguageInput = [];
+
+            foreach ($settingInput as $field => $value) {
+                unset($input[$field]);
+                $defaultLanguageInput[self::SETTING_FIELDS[$field]] = $value;
+            }
 
             $page = $input === []
                 ? $this
                 : parent::update($input, $targetLanguageCode, $validate);
 
-            return $page->update(
-                ['priceSource' => $priceSource],
-                $defaultLanguageCode,
-                $validate,
-            );
+            return $page->update($defaultLanguageInput, $defaultLanguageCode, $validate);
         }
 
         return parent::update($input, $languageCode, $validate);
@@ -220,36 +225,45 @@ final class StripeCheckoutPage extends Page
         }
     }
 
-    private function assertPriceSourceUpdate(mixed $priceSource): void
+    /** @param array<string, mixed> $input */
+    private function assertSettingUpdates(array $input): void
     {
-        if ($priceSource !== null && is_string($priceSource) === false) {
-            throw new ConfigurationException(
-                'persistence.content_invalid',
-                'settings.priceSource',
-            );
-        }
-
-        // Validate the Page value independently from PHP precedence.
-        new PageSettings($priceSource);
+        $stored = new PageSettings(
+            priceSource: $this->fieldValue('priceSource'),
+            currency: $this->fieldValue('currency'),
+            defaultRequiresShipping: $this->fieldValue('defaultRequiresShipping'),
+        );
+        $candidate = new PageSettings(
+            priceSource: array_key_exists('pricesource', $input)
+                ? $input['pricesource']
+                : $this->fieldValue('priceSource'),
+            currency: array_key_exists('currency', $input)
+                ? $input['currency']
+                : $this->fieldValue('currency'),
+            defaultRequiresShipping: array_key_exists('defaultrequiresshipping', $input)
+                ? $input['defaultrequiresshipping']
+                : $this->fieldValue('defaultRequiresShipping'),
+        );
 
         /** @var array<string, mixed> $options */
         $options = $this->kirby()->options();
-        $report = (new ConfigurationResolver())->resolve($options);
-        $setting = $report->configurationOrFail()
-            ->settings()
-            ->setting('priceSource');
+        $settings = (new ConfigurationResolver())
+            ->resolve($options)
+            ->configurationOrFail()
+            ->settings();
 
-        if ($setting?->isLocked() !== true) {
-            return;
-        }
+        foreach (array_keys($input) as $field) {
+            $name = self::SETTING_FIELDS[$field];
+            $setting = $settings->setting($name);
 
-        $storedValue = $this->fieldValue('priceSource');
-        $storedValue = $storedValue === '' ? null : $storedValue;
-
-        if ($priceSource !== $storedValue) {
-            throw new PermissionException(
-                message: 'The Stripe Checkout price source is locked by PHP configuration.',
-            );
+            if (
+                $setting?->isLocked() === true
+                && $candidate->value($name) !== $stored->value($name)
+            ) {
+                throw new PermissionException(
+                    message: 'The Stripe Checkout setting is locked by PHP configuration.',
+                );
+            }
         }
     }
 

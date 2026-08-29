@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Configuration;
 
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
+use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 use SensitiveParameter;
 use Symfony\Component\OptionsResolver\OptionsResolver;
@@ -17,11 +18,12 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 final class ConfigurationResolver
 {
     private const ROOT_KEYS = ['settings', 'stripe', 'translations'];
-    private const SETTINGS_KEYS = ['priceSource'];
+    private const SETTINGS_KEYS = ['priceSource', 'currency', 'defaultRequiresShipping'];
     private const STRIPE_KEYS = ['publishableKey', 'secretKey', 'webhookSecret'];
 
     public function __construct(
         private readonly OptionExtractor $extractor = new OptionExtractor(),
+        private readonly StripeCurrencyRegistry $currencies = new StripeCurrencyRegistry(),
     ) {}
 
     /**
@@ -140,29 +142,82 @@ final class ConfigurationResolver
         }
 
         if (
-            isset($settings['priceSource'])
-            && in_array($settings['priceSource'], [PriceSource::Kirby->value, PriceSource::Stripe->value], true) === false
+            is_string($settings['priceSource'] ?? null)
+            && PriceSource::tryFrom($settings['priceSource']) === null
         ) {
             throw new ConfigurationException('configuration.value_invalid', 'settings.priceSource');
         }
 
+        if (
+            array_key_exists('currency', $settings)
+            && $settings['currency'] !== null
+            && is_string($settings['currency']) === false
+        ) {
+            throw new ConfigurationException('configuration.type_invalid', 'settings.currency');
+        }
+
+        $currency = $settings['currency'] ?? null;
+
+        if (
+            is_string($currency)
+            && $this->currencies->supports($currency) === false
+        ) {
+            throw new ConfigurationException('configuration.value_invalid', 'settings.currency');
+        }
+
+        if (
+            array_key_exists('defaultRequiresShipping', $settings)
+            && $settings['defaultRequiresShipping'] !== null
+            && is_bool($settings['defaultRequiresShipping']) === false
+        ) {
+            throw new ConfigurationException(
+                'configuration.type_invalid',
+                'settings.defaultRequiresShipping',
+            );
+        }
+
         $resolver = new OptionsResolver();
-        $resolver->setDefault('priceSource', null);
+        $resolver->setDefaults([
+            'priceSource' => null,
+            'currency' => null,
+            'defaultRequiresShipping' => null,
+        ]);
         $resolver->setAllowedTypes('priceSource', ['null', 'string']);
+        $resolver->setAllowedTypes('currency', ['null', 'string']);
+        $resolver->setAllowedTypes('defaultRequiresShipping', ['null', 'bool']);
         $resolver->setAllowedValues('priceSource', [
             null,
             PriceSource::Kirby->value,
             PriceSource::Stripe->value,
         ]);
 
-        /** @var array{priceSource: string|null} $resolved */
+        /** @var array{priceSource: string|null, currency: string|null, defaultRequiresShipping: bool|null} $resolved */
         $resolved = $resolver->resolve($settings);
 
-        // Null is deliberately "unset" and therefore cannot create a PHP lock.
-        $phpValue = $resolved['priceSource'];
-        $pageValue = $pageSettings?->priceSource();
+        return new Settings([
+            'priceSource' => $this->resolveSetting(
+                $resolved['priceSource'],
+                $pageSettings?->priceSource(),
+                PriceSource::Kirby->value,
+            ),
+            'currency' => $this->resolveSetting(
+                $resolved['currency'],
+                $pageSettings?->currency(),
+            ),
+            'defaultRequiresShipping' => $this->resolveSetting(
+                $resolved['defaultRequiresShipping'],
+                $pageSettings?->defaultRequiresShipping(),
+            ),
+        ]);
+    }
 
-        $setting = match (true) {
+    private function resolveSetting(
+        mixed $phpValue,
+        mixed $pageValue,
+        mixed $internalDefault = null,
+    ): Setting {
+        // Null is deliberately "unset" and therefore cannot create a PHP lock.
+        return match (true) {
             $phpValue !== null => new Setting(
                 settingValue: $phpValue,
                 settingSource: SettingSource::Php,
@@ -174,14 +229,10 @@ final class ConfigurationResolver
                 settingSource: SettingSource::Page,
             ),
             default => new Setting(
-                settingValue: PriceSource::Kirby->value,
+                settingValue: $internalDefault,
                 settingSource: SettingSource::InternalDefault,
             ),
         };
-
-        return new Settings([
-            'priceSource' => $setting,
-        ]);
     }
 
     /**

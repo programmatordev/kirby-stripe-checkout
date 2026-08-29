@@ -19,6 +19,7 @@ use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
+use Throwable;
 
 final class StripeCheckoutPageStoreTest extends KirbyTestCase
 {
@@ -35,13 +36,16 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $this->assertTrue($page->isDraft());
         $this->assertSame($page->id(), $initializedAgain->id());
         $this->assertSame('Stripe Checkout', $page->title()->value());
-        // Kirby creates an empty Field object for blueprint fields. The empty
-        // value proves initialization did not persist the effective default.
-        $this->assertTrue(in_array(
-            $this->fieldValue($page, 'priceSource'),
-            [null, ''],
-            true,
-        ));
+        $this->assertSame(PriceSource::Kirby->value, $this->fieldValue($page, 'priceSource'));
+        // Kirby creates empty Field objects for required settings without a
+        // safe deterministic default; their values must remain unconfigured.
+        foreach (['currency', 'defaultRequiresShipping'] as $field) {
+            $this->assertTrue(in_array(
+                $this->fieldValue($page, $field),
+                [null, ''],
+                true,
+            ));
+        }
         $this->assertSame([
             'owner' => StripeCheckoutPage::OWNER,
             'schemaVersion' => StripeCheckoutPage::SCHEMA_VERSION,
@@ -53,7 +57,7 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $store = new StripeCheckoutPageStore($this->kirby);
 
         $this->assertNotNull($store->page());
-        $this->assertNull($store->settings()->priceSource());
+        $this->assertSame(PriceSource::Kirby->value, $store->settings()->priceSource());
         $this->assertNotNull($store->page());
         $this->assertCount(1, $this->kirby->site()->childrenAndDrafts());
     }
@@ -65,12 +69,18 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
             'stripeCheckout' => Yaml::encode(self::metadata()),
         ]);
         $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
-        $page = $page->update(['priceSource' => PriceSource::Stripe->value]);
+        $page = $page->update([
+            'priceSource' => PriceSource::Stripe->value,
+            'currency' => 'EUR',
+            'defaultRequiresShipping' => 'no',
+        ]);
 
         $settings = $this->settings();
         $setting = $settings->setting('priceSource');
 
         $this->assertSame(PriceSource::Stripe, $settings->priceSource());
+        $this->assertSame('EUR', $settings->currency());
+        $this->assertFalse($settings->defaultRequiresShipping());
         $this->assertNotNull($setting);
         $this->assertSame(SettingSource::Page, $setting->source());
         $this->assertSame('Keep me', $this->fieldValue($page, 'projectNote'));
@@ -146,14 +156,63 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
 
         $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
         $this->kirby->setCurrentLanguage('pt');
-        $page = $page->update(['priceSource' => PriceSource::Stripe->value]);
+        $page = $page->update([
+            'priceSource' => PriceSource::Stripe->value,
+            'currency' => 'EUR',
+            'defaultRequiresShipping' => 'yes',
+        ]);
 
         $this->assertSame(
             PriceSource::Stripe->value,
             $this->fieldValue($page, 'priceSource'),
         );
+        $this->assertSame('EUR', $this->fieldValue($page, 'currency'));
+        $this->assertSame('yes', $this->fieldValue($page, 'defaultRequiresShipping'));
         $this->assertFalse($page->translation('pt')->exists());
         $this->assertSame(PriceSource::Stripe, $this->settings()->priceSource());
+    }
+
+    public function testEveryPhpSettingLockPreservesItsStoredPageShadow(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(
+            options: [self::PREFIX => [
+                'settings' => [
+                    'currency' => 'USD',
+                    'defaultRequiresShipping' => false,
+                ],
+            ]],
+            beforeApp: static function (TestWorkspace $workspace): void {
+                $workspace->writeDraftPage(
+                    StripeCheckoutPage::ID,
+                    StripeCheckoutPage::TEMPLATE,
+                    [
+                        'currency' => 'EUR',
+                        'defaultRequiresShipping' => 'yes',
+                        'stripeCheckout' => Yaml::encode(self::metadata()),
+                        'title' => 'Stripe Checkout',
+                    ],
+                );
+            },
+        );
+        $this->kirby = $this->environment->app();
+        $page = (new StripeCheckoutPageStore($this->kirby))->page();
+
+        $this->assertNotNull($page);
+        $this->assertSame('USD', $this->settings()->currency());
+        $this->assertFalse($this->settings()->defaultRequiresShipping());
+
+        $error = null;
+
+        try {
+            $page->update(['currency' => 'GBP']);
+        } catch (Throwable $error) {
+        }
+
+        $this->assertInstanceOf(PermissionException::class, $error);
+        $this->assertStringContainsString('locked by PHP configuration', $error->getMessage());
+        $this->assertSame('EUR', $this->fieldValue($page, 'currency'));
+        $this->assertSame('yes', $this->fieldValue($page, 'defaultRequiresShipping'));
     }
 
     public function testUpdatesUseKirbyHooksAndRefreshThroughANewOperation(): void
@@ -311,6 +370,34 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
             $this->assertSame('persistence.content_invalid', $exception->errorCode());
             $this->assertSame('settings.priceSource', $exception->path());
             $this->assertStringNotContainsString('remote', $exception->getMessage());
+        }
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function invalidCommerceSettingProvider(): iterable
+    {
+        yield 'unsupported currency' => ['currency', 'XXX'];
+        yield 'lowercase currency' => ['currency', 'eur'];
+        yield 'invalid shipping default' => ['defaultRequiresShipping', 'sometimes'];
+    }
+
+    #[DataProvider('invalidCommerceSettingProvider')]
+    public function testMalformedCommercePageValuesProduceSafeFailures(
+        string $field,
+        string $value,
+    ): void {
+        $this->restartWithDraftPage(StripeCheckoutPage::TEMPLATE, [
+            $field => $value,
+            'stripeCheckout' => Yaml::encode(self::metadata()),
+        ]);
+
+        try {
+            $this->settings();
+            $this->fail('Expected malformed Stripe Checkout Page content to fail.');
+        } catch (ConfigurationException $exception) {
+            $this->assertSame('persistence.content_invalid', $exception->errorCode());
+            $this->assertSame('settings.' . $field, $exception->path());
+            $this->assertStringNotContainsString($value, $exception->getMessage());
         }
     }
 

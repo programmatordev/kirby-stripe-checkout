@@ -17,6 +17,8 @@ final class OptionExtractor
     private const PREFIX = 'programmatordev.stripe-checkout';
 
     private const DOTTED_LEAVES = [
+        'settings.currency',
+        'settings.defaultRequiresShipping',
         'settings.priceSource',
         'stripe.publishableKey',
         'stripe.secretKey',

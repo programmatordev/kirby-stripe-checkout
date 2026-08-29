@@ -32,13 +32,35 @@ tabs:
             label: programmatordev.stripe-checkout.settings.priceSource.label
             help: programmatordev.stripe-checkout.settings.priceSource.help
             type: select
-            required: false
+            # Kirby persists blueprint defaults when it creates the hub Page.
+            default: kirby
+            required: true
             translate: false
             options:
               kirby:
                 "*": programmatordev.stripe-checkout.settings.priceSource.kirby
               stripe:
                 "*": programmatordev.stripe-checkout.settings.priceSource.stripe
+          currency:
+            label: programmatordev.stripe-checkout.settings.currency.label
+            help: programmatordev.stripe-checkout.settings.currency.help
+            type: select
+            required: true
+            translate: false
+            placeholder: programmatordev.stripe-checkout.settings.currency.placeholder
+            options: []
+          defaultRequiresShipping:
+            label: programmatordev.stripe-checkout.settings.defaultRequiresShipping.label
+            help: programmatordev.stripe-checkout.settings.defaultRequiresShipping.help
+            type: select
+            required: true
+            translate: false
+            placeholder: programmatordev.stripe-checkout.settings.defaultRequiresShipping.placeholder
+            options:
+              "yes":
+                "*": programmatordev.stripe-checkout.settings.defaultRequiresShipping.yes
+              "no":
+                "*": programmatordev.stripe-checkout.settings.defaultRequiresShipping.no
   diagnostics:
     label: programmatordev.stripe-checkout.tabs.diagnostics
     icon: info

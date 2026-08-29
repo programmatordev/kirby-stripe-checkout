@@ -50,12 +50,24 @@ final class LocalDiagnostics
             foreach (['secretKey', 'publishableKey', 'webhookSecret'] as $id) {
                 $checks[] = $this->check($id, self::UNKNOWN, 'credential.unknown');
             }
+
+            foreach (['currency', 'defaultRequiresShipping'] as $id) {
+                $checks[] = $this->check($id, self::UNKNOWN, 'setting.unknown');
+            }
         } else {
             $checks[] = $this->check('configuration', self::PASS, 'configuration.ready');
-            $stripe = $configuration->configurationOrFail()->stripe();
+            $resolved = $configuration->configurationOrFail();
+            $stripe = $resolved->stripe();
             $checks[] = $this->credential('secretKey', $stripe->hasSecretKey(), $stripe->serverMode());
             $checks[] = $this->credential('publishableKey', $stripe->hasPublishableKey(), $stripe->publishableMode());
             $checks[] = $this->credential('webhookSecret', $stripe->hasWebhookSecret(), CredentialMode::Unknown);
+            $settings = $resolved->settings();
+            $checks[] = $settings->currency() === null
+                ? $this->check('currency', self::WARNING, 'setting.missing')
+                : $this->check('currency', self::PASS, 'setting.ready');
+            $checks[] = $settings->defaultRequiresShipping() === null
+                ? $this->check('defaultRequiresShipping', self::WARNING, 'setting.missing')
+                : $this->check('defaultRequiresShipping', self::PASS, 'setting.ready');
         }
 
         try {

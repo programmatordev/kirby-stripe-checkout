@@ -2,8 +2,10 @@
 
 declare(strict_types=1);
 
+use Brick\Money\Money;
 use Composer\InstalledVersions;
 use Kirby\Cms\App;
+use Kirby\Content\Field;
 use Kirby\Filesystem\Dir;
 use Kirby\Plugin\Plugin;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
@@ -166,6 +168,7 @@ try {
     foreach ([
         'docs/configuration.md',
         'docs/index.md',
+        'docs/money.md',
         'docs/panel.md',
         'docs/translations.md',
         'translations/en.php',
@@ -187,13 +190,30 @@ try {
         throw new RuntimeException('The installed package did not resolve its default Settings.');
     }
 
+    if (
+        $stripeCheckout->settings()->currency() !== null
+        || $stripeCheckout->settings()->defaultRequiresShipping() !== null
+    ) {
+        throw new RuntimeException('The installed package guessed commerce Settings defaults.');
+    }
+
+    if (
+        $stripeCheckout->formatMoney('19.95', 'EUR', 'en_US')
+        !== Money::of('19.95', 'EUR')->formatToLocale('en_US')
+    ) {
+        throw new RuntimeException('The installed package did not format exact money values.');
+    }
+
     $hubPage = (new StripeCheckoutPageStore($app))->page();
+    $storedPriceSource = $hubPage?->content()->get('priceSource');
 
     if (
         $hubPage === null
         || $hubPage->id() !== StripeCheckoutPage::ID
         || $hubPage->isDraft() === false
         || $hubPage->intendedTemplate()->name() !== StripeCheckoutPage::TEMPLATE
+        || $storedPriceSource instanceof Field === false
+        || $storedPriceSource->value() !== PriceSource::Kirby->value
     ) {
         throw new RuntimeException('The installed package did not initialize its Stripe Checkout Page automatically.');
     }

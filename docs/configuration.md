@@ -42,10 +42,28 @@ return [
 
 ## Store settings
 
-`settings.priceSource` accepts `kirby` (the default) or `stripe`. An explicit PHP value is treated as locked deployment configuration:
+The Settings tab currently contains:
+
+- `priceSource`: `kirby` (the default) or `stripe`;
+- `currency`: one uppercase Stripe presentment currency, required before commerce features can run;
+- `defaultRequiresShipping`: the fallback used when a future product does not declare whether it needs shipping.
+
+The protected Page is created with `kirby` as its saved price source, so a fresh installation does not require an initial save for that deterministic default. The plugin does not guess a currency or whether products are physical. It can boot with those two fields empty so the Panel and diagnostics remain available, but the Settings tab asks the operator to select both values.
+
+An explicit PHP value is treated as locked deployment configuration:
 
 ```php
-'programmatordev.stripe-checkout.settings.priceSource' => 'stripe',
+<?php
+
+return [
+    'programmatordev.stripe-checkout' => [
+        'settings' => [
+            'priceSource' => 'kirby',
+            'currency' => 'EUR',
+            'defaultRequiresShipping' => false,
+        ],
+    ],
+];
 ```
 
 Fully dotted Kirby option keys are accepted, but defining the same logical option in nested and dotted forms is an error.
@@ -65,6 +83,8 @@ The Site entry point returns sanitized effective settings:
 $settings = $site->stripeCheckout()->settings();
 
 $settings->priceSource(); // PriceSource::Kirby or PriceSource::Stripe
+$settings->currency(); // "EUR" or null
+$settings->defaultRequiresShipping(); // true, false, or null
 
 $priceSource = $settings->setting('priceSource');
 $priceSource?->value();
@@ -77,3 +97,5 @@ Only safe, store-facing settings are available through this API. Credentials and
 Page values override internal defaults. Explicit PHP values remain authoritative and lock only their corresponding Page fields.
 
 See [Panel and diagnostics](panel.md) for the protected Page, permissions, and configuration troubleshooting.
+
+See [Money and currency](money.md) for exact amount syntax and localized formatting.

@@ -24,6 +24,8 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->assertSame(LocalDiagnostics::WARNING, $checks['secretKey']['status']);
         $this->assertSame(LocalDiagnostics::WARNING, $checks['publishableKey']['status']);
         $this->assertSame(LocalDiagnostics::WARNING, $checks['webhookSecret']['status']);
+        $this->assertSame(LocalDiagnostics::WARNING, $checks['currency']['status']);
+        $this->assertSame(LocalDiagnostics::WARNING, $checks['defaultRequiresShipping']['status']);
         $this->assertSame(LocalDiagnostics::PASS, $checks['hubPage']['status']);
     }
 
@@ -72,7 +74,31 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->assertSame(LocalDiagnostics::FAIL, $checks['configuration']['status']);
         $this->assertSame('configuration.option_unknown', $checks['configuration']['values']['code']);
         $this->assertSame(LocalDiagnostics::UNKNOWN, $checks['secretKey']['status']);
+        $this->assertSame(LocalDiagnostics::UNKNOWN, $checks['currency']['status']);
+        $this->assertSame(LocalDiagnostics::UNKNOWN, $checks['defaultRequiresShipping']['status']);
         $this->assertStringNotContainsString($secret, $encoded);
+    }
+
+    public function testReportsConfiguredCommerceDefaultsLocally(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(options: [
+            'programmatordev.stripe-checkout' => [
+                'settings' => [
+                    'currency' => 'EUR',
+                    'defaultRequiresShipping' => false,
+                ],
+            ],
+        ]);
+        $this->kirby = $this->environment->app();
+        $checks = array_column(
+            (new LocalDiagnostics($this->kirby))->report()['checks'],
+            null,
+            'id',
+        );
+
+        $this->assertSame(LocalDiagnostics::PASS, $checks['currency']['status']);
+        $this->assertSame(LocalDiagnostics::PASS, $checks['defaultRequiresShipping']['status']);
     }
 
     public function testReportsSettingsOwnershipProblemsWithoutThrowing(): void

@@ -117,7 +117,7 @@ final class StripeCheckoutArea
 
             foreach (['latest', 'changes'] as $version) {
                 if (isset($versions[$version])) {
-                    $versions[$version]->{strtolower($name)} = $setting->value();
+                    $versions[$version]->{strtolower($name)} = self::panelValue($setting->value());
                 }
             }
         }
@@ -126,6 +126,15 @@ final class StripeCheckoutArea
         $view['props'] = $props;
 
         return $view;
+    }
+
+    private static function panelValue(mixed $value): mixed
+    {
+        return match ($value) {
+            true => 'yes',
+            false => 'no',
+            default => $value,
+        };
     }
 
     /** @return array<string, mixed> */

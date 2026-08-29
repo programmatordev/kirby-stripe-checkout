@@ -148,16 +148,21 @@ jobs:
             config/site-methods.php
             docs/configuration.md
             docs/index.md
+            docs/money.md
             docs/panel.md
             docs/translations.md
             index.php
             src/Configuration/PageSettings.php
             src/Configuration/Settings.php
             src/Diagnostics/LocalDiagnostics.php
+            src/Exception/MoneyException.php
             src/Kirby/PluginPermissions.php
             src/Kirby/SettingsBlueprint.php
             src/Kirby/StripeCheckoutPage.php
             src/Kirby/StripeCheckoutPageStore.php
+            src/Money/MoneyFormatter.php
+            src/Money/MoneySnapshot.php
+            src/Money/StripeCurrencyRegistry.php
             src/Panel/DiagnosticsSections.php
             src/Panel/StripeCheckoutArea.php
             src/Plugin/RuntimeFactory.php
