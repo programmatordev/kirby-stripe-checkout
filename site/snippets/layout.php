@@ -74,6 +74,23 @@ $languageCode = $kirby->language()?->code() ?? 'en';
             overflow-wrap: anywhere;
         }
 
+        .variant-prototype {
+            display: grid;
+            gap: 1rem;
+            margin-block: 2rem;
+            max-width: 30rem;
+        }
+
+        .variant-prototype label {
+            display: grid;
+            gap: .25rem;
+        }
+
+        .variant-prototype select {
+            font: inherit;
+            padding: .5rem;
+        }
+
         footer {
             opacity: .7;
         }

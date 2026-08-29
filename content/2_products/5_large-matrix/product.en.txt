@@ -1,0 +1,51 @@
+Title: Large variant matrix
+
+----
+
+Summary: Ten colours and five sizes exercise a generated matrix of fifty variants.
+
+----
+
+Price: 22
+
+----
+
+Developmentfixture: true
+
+----
+
+Requiresshipping: true
+
+----
+
+Stripecheckoutvariants:
+
+groups:
+  -
+    id: colourGroup0001
+    label: Colour
+    values:
+      - { id: colourBlack0001, label: Black }
+      - { id: colourWhite0001, label: White }
+      - { id: colourRed000001, label: Red }
+      - { id: colourBlue00001, label: Blue }
+      - { id: colourGreen0001, label: Green }
+      - { id: colourYellow001, label: Yellow }
+      - { id: colourOrange001, label: Orange }
+      - { id: colourPurple001, label: Purple }
+      - { id: colourPink00001, label: Pink }
+      - { id: colourGrey00001, label: Grey }
+  -
+    id: sizeGroup000001
+    label: Size
+    values:
+      - { id: sizeExtraSmall1, label: XS }
+      - { id: sizeSmall000001, label: S }
+      - { id: sizeMedium00001, label: M }
+      - { id: sizeLarge000001, label: L }
+      - { id: sizeExtraLarge1, label: XL }
+variants: []
+
+----
+
+Uuid: devLargeMatrix001

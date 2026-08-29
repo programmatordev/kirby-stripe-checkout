@@ -5,11 +5,6 @@
 /vendor
 /kirby
 
-# Package managers
-# ------------
-
-package-lock.json
-
 # Test files
 # ------------
 .phpunit.result.cache
@@ -38,6 +33,7 @@ Icon
 
 # Kirby development runtime
 # ------------
+/content/**/_changes/
 /content/checkout/
 /content/checkout-settings/
 /content/orders/

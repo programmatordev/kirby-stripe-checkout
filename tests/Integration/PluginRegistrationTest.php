@@ -8,6 +8,7 @@ use Kirby\Cms\App;
 use Kirby\Plugin\Plugin;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
+use ProgrammatorDev\StripeCheckout\Kirby\VariantField;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
@@ -35,6 +36,7 @@ final class PluginRegistrationTest extends KirbyTestCase
         $extensions = $plugin->extends();
         $blueprints = $extensions['blueprints'] ?? null;
         $pageModels = $extensions['pageModels'] ?? null;
+        $fields = $extensions['fields'] ?? null;
         $siteMethods = $extensions['siteMethods'] ?? null;
         $areas = $extensions['areas'] ?? null;
         $translations = $extensions['translations'] ?? null;
@@ -47,6 +49,8 @@ final class PluginRegistrationTest extends KirbyTestCase
         );
         $this->assertIsArray($pageModels);
         $this->assertSame(StripeCheckoutPage::class, $pageModels['stripe-checkout']);
+        $this->assertIsArray($fields);
+        $this->assertSame(VariantField::class, $fields['stripe-checkout-variants']);
         $this->assertIsArray($siteMethods);
         $this->assertSame(['stripeCheckout'], array_keys($siteMethods));
         $this->assertIsCallable($siteMethods['stripeCheckout']);
@@ -71,12 +75,12 @@ final class PluginRegistrationTest extends KirbyTestCase
         $this->assertFalse(function_exists('stripeCheckout'));
     }
 
-    public function testPanelAreaNeedsNoCustomFrontendAssets(): void
+    public function testShipsTheCompiledPanelFieldAssets(): void
     {
         $root = dirname(__DIR__, 2);
 
-        $this->assertFileDoesNotExist($root . '/index.js');
-        $this->assertFileDoesNotExist($root . '/index.css');
+        $this->assertFileExists($root . '/index.js');
+        $this->assertFileExists($root . '/index.css');
     }
 
     public function testPluginRemainsRegisteredAcrossFreshApplications(): void

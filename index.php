@@ -7,6 +7,7 @@ use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
+use ProgrammatorDev\StripeCheckout\Kirby\VariantField;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 use ProgrammatorDev\StripeCheckout\Translation\Registration;
@@ -22,6 +23,9 @@ App::plugin(
         ],
         'pageModels' => [
             'stripe-checkout' => StripeCheckoutPage::class,
+        ],
+        'fields' => [
+            'stripe-checkout-variants' => VariantField::class,
         ],
         'translations' => Catalogue::bundled(),
         'permissions' => [

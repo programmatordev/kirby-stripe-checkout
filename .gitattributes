@@ -8,6 +8,8 @@
 /content/** export-ignore
 /plans export-ignore
 /plans/** export-ignore
+/panel-src export-ignore
+/panel-src/** export-ignore
 /site export-ignore
 /site/** export-ignore
 /tests export-ignore
@@ -31,3 +33,5 @@
 /index.site.php export-ignore
 /phpstan.neon.dist export-ignore
 /phpunit.xml.dist export-ignore
+/package-lock.json export-ignore
+/package.json export-ignore

@@ -18,6 +18,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  panel:
+    name: Validate Panel assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Install locked Panel dependencies
+        run: npm ci
+
+      - name: Execute Panel tests
+        run: npm test
+
+      - name: Build Panel assets
+        run: npm run build
+
+      - name: Check committed Panel assets
+        run: git diff --exit-code -- index.js index.css
+
   tests:
     name: PHP ${{ matrix.php }} Test
     runs-on: ubuntu-latest
@@ -151,7 +177,9 @@ jobs:
             docs/money.md
             docs/panel.md
             docs/translations.md
+            index.css
             index.php
+            index.js
             src/Configuration/PageSettings.php
             src/Configuration/Settings.php
             src/Diagnostics/LocalDiagnostics.php
@@ -160,12 +188,16 @@ jobs:
             src/Kirby/SettingsBlueprint.php
             src/Kirby/StripeCheckoutPage.php
             src/Kirby/StripeCheckoutPageStore.php
+            src/Kirby/VariantField.php
             src/Money/MoneyFormatter.php
             src/Money/MoneySnapshot.php
             src/Money/StripeCurrencyRegistry.php
             src/Panel/DiagnosticsSections.php
             src/Panel/StripeCheckoutArea.php
             src/Plugin/RuntimeFactory.php
+            src/Product/Prototype/VariantMatrix.php
+            src/Product/Prototype/VariantProjection.php
+            src/Product/Prototype/VariantSchema.php
             src/StripeCheckout.php
             src/Translation/Catalogue.php
             src/Translation/Registration.php
@@ -180,7 +212,7 @@ jobs:
             }
           done
 
-          forbidden='^(\.agents|\.codex|\.ddev|\.github|content|plans|site|tests|src/Test)(/|$)|^(\.editorconfig|\.gitattributes|\.gitignore|\.htaccess|\.php-cs-fixer\.cache|\.php-cs-fixer\.dist\.php|\.phpunit\.result\.cache|AGENTS\.md|CONTRIBUTING\.md|composer\.lock|coverage\.xml|index\.site\.php|phpstan\.neon\.dist|phpunit\.xml\.dist)$'
+          forbidden='^(\.agents|\.codex|\.ddev|\.github|content|node_modules|panel|plans|site|tests|src/Test)(/|$)|^(\.editorconfig|\.gitattributes|\.gitignore|\.htaccess|\.php-cs-fixer\.cache|\.php-cs-fixer\.dist\.php|\.phpunit\.result\.cache|AGENTS\.md|CONTRIBUTING\.md|composer\.lock|coverage\.xml|index\.site\.php|package-lock\.json|package\.json|phpstan\.neon\.dist|phpunit\.xml\.dist)$'
 
           if grep -Eq "$forbidden" "$list"; then
             echo "Development-only path found in Composer package artifact:" >&2

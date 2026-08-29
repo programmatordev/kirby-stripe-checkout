@@ -10,15 +10,18 @@ Price: 0
 
 ----
 
+Stripecheckoutvariants:
+
+groups: [ ]
+variants: [ ]
+
+----
+
 Developmentfixture: true
 
 ----
 
 Requiresshipping: false
-
-----
-
-Productoptions:
 
 ----
 

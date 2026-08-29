@@ -17,20 +17,22 @@ columns:
         step: 0.01
         required: true
         after: EUR
-      productOptions:
-        label: Product options
-        type: structure
-        help: Development-only shape; this is not a registered plugin field.
-        fields:
-          code:
-            type: slug
-            required: true
-          label:
-            type: text
-            required: true
-          values:
-            type: tags
-            required: true
+      stripeCheckoutVariants:
+        label: programmatordev.stripe-checkout.variants.label
+        type: stripe-checkout-variants
+        help: programmatordev.stripe-checkout.variants.help
+        presets:
+          - label: T-shirt
+            groups:
+              - label: Colour
+                values:
+                  - Red
+                  - Blue
+              - label: Size
+                values:
+                  - Small
+                  - Medium
+                  - Large
   behavior:
     width: 1/3
     fields:
@@ -39,6 +41,7 @@ columns:
         default: true
       requiresShipping:
         type: toggle
+        label: Shipping
         default: false
         text:
           - No shipping

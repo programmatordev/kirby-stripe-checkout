@@ -1,0 +1,31 @@
+Title: Produto com opções
+
+----
+
+Summary: Um produto com valores selecionáveis para testar a resolução e validação do carrinho.
+
+----
+
+Stripecheckoutvariants:
+
+groups:
+  -
+    id: formatGroup0001
+    label: Formato
+    values:
+      -
+        id: digitalValue001
+        label: Digital
+      -
+        id: printedValue001
+        label: Impresso
+  -
+    id: languageGroup01
+    label: Idioma
+    values:
+      -
+        id: englishValue001
+        label: Inglês
+      -
+        id: portugueseVal01
+        label: Português

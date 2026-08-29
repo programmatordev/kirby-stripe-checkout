@@ -1,0 +1,13 @@
+{
+  "name": "kirby-stripe-checkout-panel",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "kirbyup panel-src/src/index.js",
+    "dev": "kirbyup panel-src/src/index.js --watch",
+    "test": "node --test panel-src/tests/*.test.js"
+  },
+  "devDependencies": {
+    "kirbyup": "3.4.1"
+  }
+}

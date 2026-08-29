@@ -1,0 +1,88 @@
+Title: Option-bearing product
+
+----
+
+Summary: A product with explicit selectable values for resolver and cart validation tests.
+
+----
+
+Price: 18
+
+----
+
+Stripecheckoutvariants:
+
+groups:
+  -
+    id: formatGroup0001
+    label: Format
+    values:
+      -
+        id: digitalValue001
+        label: Digital
+      -
+        id: printedValue001
+        label: Printed
+  -
+    id: languageGroup01
+    label: Language
+    values:
+      -
+        id: portugueseVal01
+        label: Portuguese
+      -
+        id: englishValue001
+        label: English
+variants:
+  -
+    id: nfkos4re2ymf0w2o
+    choices:
+      formatGroup0001: digitalValue001
+      languageGroup01: portugueseVal01
+    enabled: true
+    sku: DIGITAL-PT
+    price: "18.75"
+    stripePriceId: price_fixture_digital_pt
+    requiresShipping: 'no'
+  -
+    id: 55gogbpul6ctm0np
+    choices:
+      formatGroup0001: digitalValue001
+      languageGroup01: englishValue001
+    enabled: false
+    sku: DIGITAL-EN
+    price: null
+    stripePriceId: null
+    requiresShipping: 'no'
+  -
+    id: 599z4vnkh28qbysc
+    choices:
+      formatGroup0001: printedValue001
+      languageGroup01: portugueseVal01
+    enabled: true
+    sku: PRINTED-PT
+    price: "22.00"
+    stripePriceId: price_fixture_printed_pt
+    requiresShipping: 'yes'
+  -
+    id: or1frhkz1s9hxd0x
+    choices:
+      formatGroup0001: printedValue001
+      languageGroup01: englishValue001
+    enabled: true
+    sku: PRINTED-EN
+    price: null
+    stripePriceId: null
+    requiresShipping: inherit
+
+----
+
+Developmentfixture: true
+
+----
+
+Requiresshipping: false
+
+----
+
+Uuid: devOptions0000001
