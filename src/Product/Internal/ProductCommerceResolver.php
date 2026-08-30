@@ -15,7 +15,7 @@ use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use Throwable;
 
 /**
- * Resolves effective product and variant commerce values from Kirby content.
+ * Keeps commerce fallbacks identical for product resolution and storefront projections.
  *
  * @internal
  */

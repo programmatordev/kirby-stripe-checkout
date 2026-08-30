@@ -57,6 +57,7 @@ final class ProductOptionsFactory
         $isTranslation = $defaultLanguage !== null
             && $languageCode !== null
             && $defaultLanguage->code() !== $languageCode;
+        // Translations may change names, but the default language owns IDs and commerce facts.
         $technical = $isTranslation
             ? $this->technicalContentValue($page, $field->key())
             : $field->value();
