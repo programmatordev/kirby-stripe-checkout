@@ -99,15 +99,14 @@ Presets are technical editor templates stored in the default language. Translate
 
 ## Rendering options
 
-`productOptions()` returns only the localized data needed to render and match controls safely:
+Convert the configured options field with Kirby's normal field API. The result contains only the localized data needed to render and match controls safely:
 
 ```php
 <?php
 
 /** @var Kirby\Cms\Page $page */
-/** @var Kirby\Cms\Site $site */
 
-$view = $site->stripeCheckout()->productOptions($page);
+$view = $page->stripeCheckoutOptions()->toProductOptions();
 
 foreach ($view->options() as $option) {
     echo esc($option->label());
@@ -118,6 +117,14 @@ $variant = $view->matchVariant([
     'sizeOption0000001' => 'largeValue00001',
 ]);
 ```
+
+Use the mapped field handle when it differs from the default:
+
+```php
+$view = $page->variants()->toProductOptions();
+```
+
+For programmatic code that starts with a Page reference instead of a field, use `$site->stripeCheckout()->productOptions($reference)`.
 
 `toArray()` provides a JSON-safe projection with options, values, variant IDs, complete selected-option maps, and active state. It deliberately omits prices, SKUs, and shipping facts. Browser matching is presentation feedback only; submit the option/value IDs and let the server resolve them again.
 

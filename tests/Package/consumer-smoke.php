@@ -119,6 +119,7 @@ try {
     $blueprints = $extensions['blueprints'] ?? null;
     $pageModels = $extensions['pageModels'] ?? null;
     $fields = $extensions['fields'] ?? null;
+    $fieldMethods = $extensions['fieldMethods'] ?? null;
     $siteMethods = $extensions['siteMethods'] ?? null;
     $areas = $extensions['areas'] ?? null;
     $translations = $extensions['translations'] ?? null;
@@ -156,6 +157,14 @@ try {
         || ($fields['stripe-checkout-options'] ?? null) !== OptionsField::class
     ) {
         throw new RuntimeException('The package did not register its variant field.');
+    }
+
+    if (
+        is_array($fieldMethods) === false
+        || array_keys($fieldMethods) !== ['toProductOptions']
+        || is_callable($fieldMethods['toProductOptions']) === false
+    ) {
+        throw new RuntimeException('The package did not register its product options converter.');
     }
 
     if (

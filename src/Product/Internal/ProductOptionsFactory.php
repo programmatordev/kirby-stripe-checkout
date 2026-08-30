@@ -7,7 +7,6 @@ namespace ProgrammatorDev\StripeCheckout\Product\Internal;
 use Kirby\Cms\Page;
 use Kirby\Content\Content;
 use Kirby\Content\Field;
-use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\ProductOption;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
@@ -16,22 +15,46 @@ use ProgrammatorDev\StripeCheckout\Product\ProductVariant;
 use Throwable;
 
 /**
- * Builds the safe localized storefront projection from one Kirby Page.
+ * Builds the safe localized storefront projection from a Kirby Page field.
  *
  * @internal
  */
 final class ProductOptionsFactory
 {
     public function __construct(
-        private readonly ProductConfiguration $configuration,
         private readonly VariantSchema $schema = new VariantSchema(),
     ) {}
 
-    public function forPage(Page $page, ?string $languageCode): ProductOptions
+    public function forPage(Page $page, string $field, ?string $languageCode): ProductOptions
     {
-        $fields = $this->configuration->fields();
-        $technical = $this->technicalContentValue($page, $fields['options']);
-        $translated = $this->translatedContentValue($page, $fields['options'], $languageCode);
+        $content = $languageCode === null
+            ? $page->content()
+            : $page->content($languageCode);
+
+        return $this->fromField($this->field($content, $field), $page, $languageCode);
+    }
+
+    public function forField(Field $field): ProductOptions
+    {
+        $page = $field->parent();
+
+        if ($page instanceof Page === false) {
+            throw new InvalidProductException('product.field_invalid');
+        }
+
+        return $this->fromField($field, $page, $page->kirby()->language()?->code());
+    }
+
+    private function fromField(Field $field, Page $page, ?string $languageCode): ProductOptions
+    {
+        $defaultLanguage = $page->kirby()->defaultLanguage();
+        $isTranslation = $defaultLanguage !== null
+            && $languageCode !== null
+            && $defaultLanguage->code() !== $languageCode;
+        $technical = $isTranslation
+            ? $this->technicalContentValue($page, $field->key())
+            : $field->value();
+        $translated = $isTranslation ? $field->value() : null;
 
         try {
             $canonical = $this->schema->canonical($technical);
@@ -74,20 +97,6 @@ final class ProductOptionsFactory
             : $page->content($defaultLanguage->code());
 
         return $this->field($content, $field)->value();
-    }
-
-    private function translatedContentValue(
-        Page $page,
-        string $field,
-        ?string $languageCode,
-    ): mixed {
-        $defaultLanguage = $page->kirby()->defaultLanguage();
-
-        if ($languageCode === null || $defaultLanguage?->code() === $languageCode) {
-            return null;
-        }
-
-        return $this->field($page->content($languageCode), $field)->value();
     }
 
     private function field(Content $content, string $name): Field

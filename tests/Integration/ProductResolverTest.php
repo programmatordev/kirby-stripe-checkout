@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Kirby\Cms\Page;
+use Kirby\Content\Field;
 use Kirby\Data\Yaml;
 use Kirby\Filesystem\F;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductNotFoundException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductUnavailableException;
 use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
+use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
@@ -133,12 +135,56 @@ final class ProductResolverTest extends KirbyTestCase
         $this->assertSame('Grande', $product->selectedOptions()[0]->valueLabel());
 
         $view = $this->stripeCheckout()->productOptions($page);
+        /** @phpstan-ignore-next-line method.notFound */
+        $fieldView = $page->stripeCheckoutOptions()->toProductOptions();
 
+        $this->assertInstanceOf(ProductOptions::class, $fieldView);
         $this->assertSame('Tamanho', $view->options()[0]->label());
+        $this->assertSame($view->toArray(), $fieldView->toArray());
         $this->assertSame(
             'largeVariant001',
             $view->matchVariant(['sizeOption000001' => 'largeValue00001'])?->id(),
         );
+    }
+
+    public function testProductOptionsFieldConverterUsesTheCallingField(): void
+    {
+        $this->restart([
+            self::PREFIX => [
+                'settings' => [
+                    'currency' => 'EUR',
+                    'defaultRequiresShipping' => false,
+                ],
+                'products' => [
+                    'fields' => ['options' => 'variants'],
+                ],
+            ],
+        ]);
+        $page = $this->publishedProduct('custom-options-field', [
+            'title' => 'Custom options field',
+            'stripeCheckoutPrice' => '20',
+            'variants' => self::variantFixture(),
+        ]);
+
+        /** @phpstan-ignore-next-line method.notFound */
+        $fieldView = $page->variants()->toProductOptions();
+        $configuredView = $this->stripeCheckout()->productOptions($page);
+
+        $this->assertInstanceOf(ProductOptions::class, $fieldView);
+        $this->assertSame($configuredView->toArray(), $fieldView->toArray());
+        $this->assertSame('Size', $fieldView->options()[0]->label());
+    }
+
+    public function testProductOptionsFieldConverterRequiresAPageField(): void
+    {
+        $field = $this->kirby->site()->content()->get('options');
+
+        $this->assertInstanceOf(Field::class, $field);
+        $this->expectException(InvalidProductException::class);
+        $this->expectExceptionMessage('product.field_invalid');
+
+        /** @phpstan-ignore-next-line method.notFound */
+        $field->toProductOptions();
     }
 
     public function testResolverRejectsDisabledStaleAndDraftProducts(): void

@@ -38,6 +38,7 @@ final class PluginRegistrationTest extends KirbyTestCase
         $blueprints = $extensions['blueprints'] ?? null;
         $pageModels = $extensions['pageModels'] ?? null;
         $fields = $extensions['fields'] ?? null;
+        $fieldMethods = $extensions['fieldMethods'] ?? null;
         $siteMethods = $extensions['siteMethods'] ?? null;
         $areas = $extensions['areas'] ?? null;
         $translations = $extensions['translations'] ?? null;
@@ -66,6 +67,9 @@ final class PluginRegistrationTest extends KirbyTestCase
         $this->assertSame(StripeCheckoutPage::class, $pageModels['stripe-checkout']);
         $this->assertIsArray($fields);
         $this->assertSame(OptionsField::class, $fields['stripe-checkout-options']);
+        $this->assertIsArray($fieldMethods);
+        $this->assertSame(['toProductOptions'], array_keys($fieldMethods));
+        $this->assertIsCallable($fieldMethods['toProductOptions']);
         $this->assertIsArray($siteMethods);
         $this->assertSame(['stripeCheckout'], array_keys($siteMethods));
         $this->assertIsCallable($siteMethods['stripeCheckout']);

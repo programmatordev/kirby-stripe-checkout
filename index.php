@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Kirby\Cms\App;
+use Kirby\Content\Field;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\OptionsField;
 use ProgrammatorDev\StripeCheckout\Kirby\ProductBlueprint;
@@ -10,6 +11,8 @@ use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
+use ProgrammatorDev\StripeCheckout\Product\Internal\ProductOptionsFactory;
+use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 use ProgrammatorDev\StripeCheckout\Translation\Registration;
 
@@ -35,6 +38,10 @@ App::plugin(
         ],
         'fields' => [
             'stripe-checkout-options' => OptionsField::class,
+        ],
+        'fieldMethods' => [
+            'toProductOptions' => static fn(Field $field): ProductOptions =>
+                (new ProductOptionsFactory())->forField($field),
         ],
         'translations' => Catalogue::bundled(),
         'permissions' => [

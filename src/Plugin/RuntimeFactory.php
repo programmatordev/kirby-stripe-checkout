@@ -57,8 +57,9 @@ final class RuntimeFactory
     {
         $page = (new KirbyPageLocator())->find($this->kirby->site(), $reference);
 
-        return (new ProductOptionsFactory($this->products()))->forPage(
+        return (new ProductOptionsFactory())->forPage(
             $page,
+            $this->products()->fields()['options'],
             $this->kirby->language()?->code(),
         );
     }
