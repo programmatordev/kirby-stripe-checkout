@@ -10,31 +10,47 @@ Stripecheckoutprice: 18
 
 ----
 
+Stripecheckoutdescription: 
+
+----
+
+Stripecheckoutimages: 
+
+----
+
+Stripecheckoutsku: 
+
+----
+
+Stripecheckoutrequiresshipping: no
+
+----
+
 Stripecheckoutoptions:
 
 options:
-  -
+  - 
     id: formatOption0001
     label: Format
     values:
-      -
+      - 
         id: digitalValue001
         label: Digital
-      -
+      - 
         id: printedValue001
         label: Printed
-  -
+  - 
     id: languageOption01
     label: Language
     values:
-      -
+      - 
         id: portugueseVal01
         label: Portuguese
-      -
+      - 
         id: englishValue001
         label: English
 variants:
-  -
+  - 
     id: nfkos4re2ymf0w2o
     selectedOptions:
       formatOption0001: digitalValue001
@@ -44,7 +60,7 @@ variants:
     price: "16"
     stripePriceId: price_fixtureDigitalPt
     requiresShipping: 'no'
-  -
+  - 
     id: 55gogbpul6ctm0np
     selectedOptions:
       formatOption0001: digitalValue001
@@ -54,7 +70,7 @@ variants:
     price: null
     stripePriceId: null
     requiresShipping: 'no'
-  -
+  - 
     id: 599z4vnkh28qbysc
     selectedOptions:
       formatOption0001: printedValue001
@@ -64,7 +80,7 @@ variants:
     price: "22.00"
     stripePriceId: price_fixturePrintedPt
     requiresShipping: 'yes'
-  -
+  - 
     id: or1frhkz1s9hxd0x
     selectedOptions:
       formatOption0001: printedValue001
@@ -78,10 +94,6 @@ variants:
 ----
 
 Developmentfixture: true
-
-----
-
-Stripecheckoutrequiresshipping: no
 
 ----
 
