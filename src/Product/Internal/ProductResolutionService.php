@@ -8,9 +8,9 @@ use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductPriceSourceMismatchException;
 use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
+use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelection;
 use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use Throwable;
 
@@ -24,11 +24,11 @@ final class ProductResolutionService
     public function __construct(private readonly ProductResolverInterface $resolver) {}
 
     public function resolve(
-        ProductSelection $selection,
+        ProductRequest $request,
         ProductResolutionContext $context,
     ): ResolvedProduct {
         try {
-            $resolved = $this->resolver->resolve($selection, $context);
+            $resolved = $this->resolver->resolve($request, $context);
         } catch (ProductException $error) {
             throw $error;
         } catch (Throwable $error) {
@@ -40,10 +40,10 @@ final class ProductResolutionService
         }
 
         if (
-            $resolved->selection()->quantity() !== $selection->quantity()
-            || $resolved->selection()->choices() !== $selection->choices()
+            $resolved->request()->quantity() !== $request->quantity()
+            || $resolved->request()->selectedOptions() !== $request->selectedOptions()
         ) {
-            throw new InvalidProductException('product.resolver_changed_selection');
+            throw new InvalidProductException('product.resolver_changed_request');
         }
 
         if (

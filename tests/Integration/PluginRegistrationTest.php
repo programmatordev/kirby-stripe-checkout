@@ -6,10 +6,10 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Kirby\Cms\App;
 use Kirby\Plugin\Plugin;
+use ProgrammatorDev\StripeCheckout\Kirby\OptionsField;
 use ProgrammatorDev\StripeCheckout\Kirby\ProductBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
-use ProgrammatorDev\StripeCheckout\Kirby\VariantField;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
@@ -56,7 +56,7 @@ final class PluginRegistrationTest extends KirbyTestCase
             'fields/stripe-checkout/images' => [ProductBlueprint::class, 'images'],
             'fields/stripe-checkout/sku' => [ProductBlueprint::class, 'sku'],
             'fields/stripe-checkout/requires-shipping' => [ProductBlueprint::class, 'requiresShipping'],
-            'fields/stripe-checkout/variants' => [ProductBlueprint::class, 'variants'],
+            'fields/stripe-checkout/options' => [ProductBlueprint::class, 'options'],
         ];
 
         foreach ($productBlueprints as $name => $definition) {
@@ -65,7 +65,7 @@ final class PluginRegistrationTest extends KirbyTestCase
         $this->assertIsArray($pageModels);
         $this->assertSame(StripeCheckoutPage::class, $pageModels['stripe-checkout']);
         $this->assertIsArray($fields);
-        $this->assertSame(VariantField::class, $fields['stripe-checkout-variants']);
+        $this->assertSame(OptionsField::class, $fields['stripe-checkout-options']);
         $this->assertIsArray($siteMethods);
         $this->assertSame(['stripeCheckout'], array_keys($siteMethods));
         $this->assertIsCallable($siteMethods['stripeCheckout']);

@@ -9,7 +9,7 @@ use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
 
-final class VariantFieldTest extends KirbyTestCase
+final class OptionsFieldTest extends KirbyTestCase
 {
     public function testFieldRemainsTechnicallyEditableOnSingleLanguageSites(): void
     {
@@ -20,7 +20,7 @@ final class VariantFieldTest extends KirbyTestCase
                     'title' => 'Product',
                     'fields' => [
                         'variants' => [
-                            'type' => 'stripe-checkout-variants',
+                            'type' => 'stripe-checkout-options',
                             'priceSource' => 'kirby',
                             'currency' => 'EUR',
                         ],
@@ -42,7 +42,7 @@ final class VariantFieldTest extends KirbyTestCase
         $this->assertFalse($props['serverTechnicalLocked'] ?? false);
         $value = $props['value'];
         $this->assertIsArray($value);
-        $this->assertSame(self::canonicalFixture()['groups'], $value['groups'] ?? null);
+        $this->assertSame(self::canonicalFixture()['options'], $value['options'] ?? null);
         $variants = $value['variants'] ?? null;
         $this->assertIsArray($variants);
         $this->assertCount(2, $variants);
@@ -61,7 +61,7 @@ final class VariantFieldTest extends KirbyTestCase
                     'title' => 'Product',
                     'fields' => [
                         'variants' => [
-                            'type' => 'stripe-checkout-variants',
+                            'type' => 'stripe-checkout-options',
                             'priceSource' => 'stripe',
                             'currency' => 'EUR',
                         ],
@@ -91,8 +91,8 @@ final class VariantFieldTest extends KirbyTestCase
 
         $page = $page->update([
             'variants' => [
-                'groups' => [[
-                    'id' => 'colourGroup',
+                'options' => [[
+                    'id' => 'colourOption',
                     'label' => 'Cor',
                     'values' => [
                         ['id' => 'redValue', 'label' => 'Vermelho'],
@@ -107,9 +107,9 @@ final class VariantFieldTest extends KirbyTestCase
         $this->assertTrue($translatedProps['serverTechnicalLocked']);
         $translatedValue = $translatedProps['value'];
         $this->assertIsArray($translatedValue);
-        $this->assertIsArray($translatedValue['groups'] ?? null);
-        $this->assertIsArray($translatedValue['groups'][0] ?? null);
-        $this->assertSame('Cor', $translatedValue['groups'][0]['label'] ?? null);
+        $this->assertIsArray($translatedValue['options'] ?? null);
+        $this->assertIsArray($translatedValue['options'][0] ?? null);
+        $this->assertSame('Cor', $translatedValue['options'][0]['label'] ?? null);
         $this->assertIsArray($translatedValue['variants'] ?? null);
         $this->assertCount(2, $translatedValue['variants']);
 
@@ -117,22 +117,22 @@ final class VariantFieldTest extends KirbyTestCase
             ...$translatedValue,
             'variants' => [[
                 'id' => 'malicious',
-                'choices' => [],
+                'selectedOptions' => [],
                 'enabled' => true,
                 'price' => '0.01',
             ]],
         ])->toStoredValue();
 
         $this->assertIsArray($stored);
-        $this->assertSame(['groups'], array_keys($stored));
+        $this->assertSame(['options'], array_keys($stored));
     }
 
     /** @return array<string, mixed> */
     private static function canonicalFixture(): array
     {
         return [
-            'groups' => [[
-                'id' => 'colourGroup',
+            'options' => [[
+                'id' => 'colourOption',
                 'label' => 'Colour',
                 'values' => [
                     ['id' => 'redValue', 'label' => 'Red'],

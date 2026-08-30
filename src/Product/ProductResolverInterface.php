@@ -8,7 +8,7 @@ namespace ProgrammatorDev\StripeCheckout\Product;
 interface ProductResolverInterface
 {
     public function resolve(
-        ProductSelection $selection,
+        ProductRequest $request,
         ProductResolutionContext $context,
     ): ResolvedProduct;
 }

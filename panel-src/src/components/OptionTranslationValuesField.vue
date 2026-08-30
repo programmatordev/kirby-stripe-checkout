@@ -1,6 +1,6 @@
 <script>
 /**
- * Reuses Kirby's Structure table while limiting translated variant values to
+ * Reuses Kirby's Structure table while limiting translated option values to
  * label edits. Kirby has no membership-locked mode for editable nested fields.
  */
 export default {
@@ -26,7 +26,7 @@ export default {
 
 			this.stopSelecting();
 			this.$panel.drawer.open({
-				component: "k-stripe-checkout-variant-drawer",
+				component: "k-stripe-checkout-options-drawer",
 				id: this.id,
 				on: {
 					input: value => {
@@ -65,7 +65,7 @@ export default {
 </script>
 
 <style>
-.k-field-type-stripe-checkout-variant-translation-values > .k-field-header > .k-button-group {
+.k-field-type-stripe-checkout-option-translation-values > .k-field-header > .k-button-group {
 	display: none;
 }
 </style>

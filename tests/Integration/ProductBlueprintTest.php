@@ -24,14 +24,14 @@ final class ProductBlueprintTest extends KirbyTestCase
             ],
         ]);
         $price = ProductBlueprint::price($this->kirby);
-        $variants = ProductBlueprint::variants($this->kirby);
+        $options = ProductBlueprint::options($this->kirby);
 
         $this->assertSame('EUR', $price['after'] ?? null);
         $this->assertSame('text', $price['type'] ?? null);
-        $this->assertSame('EUR', $variants['currency'] ?? null);
+        $this->assertSame('EUR', $options['currency'] ?? null);
         $this->assertSame(
-            'stripe-checkout-variants',
-            $variants['type'] ?? null,
+            'stripe-checkout-options',
+            $options['type'] ?? null,
         );
     }
 
@@ -48,16 +48,16 @@ final class ProductBlueprintTest extends KirbyTestCase
     public function testIncompleteSettingsOnlyReplaceDependentFieldsWithAWarning(): void
     {
         $price = ProductBlueprint::price($this->kirby);
-        $variants = ProductBlueprint::variants($this->kirby);
+        $options = ProductBlueprint::options($this->kirby);
 
         $this->assertSame('info', $price['type'] ?? null);
         $this->assertSame('warning', $price['theme'] ?? null);
-        $this->assertSame('info', $variants['type'] ?? null);
-        $this->assertSame('warning', $variants['theme'] ?? null);
+        $this->assertSame('info', $options['type'] ?? null);
+        $this->assertSame('warning', $options['theme'] ?? null);
         $this->assertSame('textarea', ProductBlueprint::description($this->kirby)['type'] ?? null);
     }
 
-    public function testSettingsPresetsAreCopiedIntoTheVariantFieldDefinition(): void
+    public function testSettingsPresetsAreCopiedIntoTheOptionsFieldDefinition(): void
     {
         $this->restart([
             self::PREFIX => [
@@ -68,24 +68,24 @@ final class ProductBlueprintTest extends KirbyTestCase
             ],
         ]);
         $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
-        $page->update(['variantPresets' => [[
+        $page->update(['optionPresets' => [[
             'label' => 'T-shirt',
-            'groups' => [[
+            'options' => [[
                 'label' => 'Size',
                 'values' => ['Small', 'Large'],
             ]],
         ]]]);
-        $variants = ProductBlueprint::variants($this->kirby);
+        $options = ProductBlueprint::options($this->kirby);
 
         $this->assertSame([
             [
                 'label' => 'T-shirt',
-                'groups' => [[
+                'options' => [[
                     'label' => 'Size',
                     'values' => ['Small', 'Large'],
                 ]],
             ],
-        ], $variants['presets'] ?? null);
+        ], $options['presets'] ?? null);
     }
 
     /** @param array<string, mixed> $options */

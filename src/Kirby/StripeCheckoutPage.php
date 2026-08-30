@@ -44,7 +44,7 @@ final class StripeCheckoutPage extends Page
 
     private const DEFAULT_LANGUAGE_FIELDS = [
         ...self::SETTING_FIELDS,
-        'variantpresets' => 'variantPresets',
+        'optionpresets' => 'optionPresets',
     ];
 
     private const STRUCTURAL_FIELDS = [

@@ -7,33 +7,33 @@ namespace ProgrammatorDev\StripeCheckout\Product;
 use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
 
 /** Captures one selected value with its customer-language labels. */
-final readonly class SelectedChoice
+final readonly class SelectedOption
 {
-    private string $groupId;
-    private string $groupLabel;
+    private string $optionId;
+    private string $optionLabel;
     private string $valueId;
     private string $valueLabel;
 
     public function __construct(
-        string $groupId,
-        string $groupLabel,
+        string $optionId,
+        string $optionLabel,
         string $valueId,
         string $valueLabel,
     ) {
-        $this->groupId = ProductData::identifier($groupId);
-        $this->groupLabel = ProductData::label($groupLabel);
+        $this->optionId = ProductData::identifier($optionId);
+        $this->optionLabel = ProductData::label($optionLabel);
         $this->valueId = ProductData::identifier($valueId);
         $this->valueLabel = ProductData::label($valueLabel);
     }
 
-    public function groupId(): string
+    public function optionId(): string
     {
-        return $this->groupId;
+        return $this->optionId;
     }
 
-    public function groupLabel(): string
+    public function optionLabel(): string
     {
-        return $this->groupLabel;
+        return $this->optionLabel;
     }
 
     public function valueId(): string

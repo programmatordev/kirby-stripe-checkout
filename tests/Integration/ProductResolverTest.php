@@ -11,8 +11,8 @@ use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductNotFoundException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductUnavailableException;
 use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
+use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelection;
 use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
@@ -47,13 +47,13 @@ final class ProductResolverTest extends KirbyTestCase
         $plugin = $this->stripeCheckout();
 
         foreach ([$page, $page->id(), $page->uuid()->toString()] as $reference) {
-            $product = $plugin->resolveProduct(new ProductSelection(
+            $product = $plugin->resolveProduct(new ProductRequest(
                 $reference instanceof Page ? $reference->id() : $reference,
                 2,
             ));
 
-            $this->assertSame($page->uuid()->toString(), $product->selection()->reference());
-            $this->assertSame(2, $product->selection()->quantity());
+            $this->assertSame($page->uuid()->toString(), $product->request()->reference());
+            $this->assertSame(2, $product->request()->quantity());
             $this->assertSame('Simple product', $product->name());
             $this->assertTrue($product->requiresShipping());
             $this->assertSame('SIMPLE-1', $product->sku());
@@ -74,8 +74,8 @@ final class ProductResolverTest extends KirbyTestCase
 
         $this->assertSame(
             $unlisted->uuid()->toString(),
-            $plugin->resolveProduct(new ProductSelection($unlisted->id()))
-                ->selection()
+            $plugin->resolveProduct(new ProductRequest($unlisted->id()))
+                ->request()
                 ->reference(),
         );
     }
@@ -100,13 +100,13 @@ final class ProductResolverTest extends KirbyTestCase
             'title' => 'Shirt',
             'stripeCheckoutPrice' => '20',
             'stripeCheckoutRequiresShipping' => 'no',
-            'stripeCheckoutVariants' => self::variantFixture(),
+            'stripeCheckoutOptions' => self::variantFixture(),
         ]);
         $page = $page->update([
             'title' => 'Camisola',
-            'stripeCheckoutVariants' => [
-                'groups' => [[
-                    'id' => 'sizeGroup000001',
+            'stripeCheckoutOptions' => [
+                'options' => [[
+                    'id' => 'sizeOption000001',
                     'label' => 'Tamanho',
                     'values' => [
                         ['id' => 'smallValue00001', 'label' => 'Pequeno'],
@@ -116,11 +116,11 @@ final class ProductResolverTest extends KirbyTestCase
             ],
         ], 'pt');
         $this->kirby->setCurrentLanguage('pt');
-        $selection = new ProductSelection(
+        $request = new ProductRequest(
             $page->id(),
-            choices: ['sizeGroup000001' => 'largeValue00001'],
+            selectedOptions: ['sizeOption000001' => 'largeValue00001'],
         );
-        $product = $this->stripeCheckout()->resolveProduct($selection);
+        $product = $this->stripeCheckout()->resolveProduct($request);
 
         $this->assertSame('Camisola', $product->name());
         $this->assertSame('largeVariant001', $product->variantId());
@@ -129,15 +129,15 @@ final class ProductResolverTest extends KirbyTestCase
         $price = $product->price();
         $this->assertInstanceOf(InlinePrice::class, $price);
         $this->assertSame('24.00', $price->unitPrice()->getAmount()->toString());
-        $this->assertSame('Tamanho', $product->choices()[0]->groupLabel());
-        $this->assertSame('Grande', $product->choices()[0]->valueLabel());
+        $this->assertSame('Tamanho', $product->selectedOptions()[0]->optionLabel());
+        $this->assertSame('Grande', $product->selectedOptions()[0]->valueLabel());
 
-        $view = $this->stripeCheckout()->productSelection($page);
+        $view = $this->stripeCheckout()->productOptions($page);
 
-        $this->assertSame('Tamanho', $view->groups()[0]->label());
+        $this->assertSame('Tamanho', $view->options()[0]->label());
         $this->assertSame(
             'largeVariant001',
-            $view->match(['sizeGroup000001' => 'largeValue00001'])?->id(),
+            $view->matchVariant(['sizeOption000001' => 'largeValue00001'])?->id(),
         );
     }
 
@@ -147,13 +147,13 @@ final class ProductResolverTest extends KirbyTestCase
             'title' => 'Shirt',
             'stripeCheckoutPrice' => '20',
             'stripeCheckoutRequiresShipping' => 'no',
-            'stripeCheckoutVariants' => self::variantFixture(),
+            'stripeCheckoutOptions' => self::variantFixture(),
         ]);
 
         try {
-            $this->stripeCheckout()->resolveProduct(new ProductSelection(
+            $this->stripeCheckout()->resolveProduct(new ProductRequest(
                 $page->id(),
-                choices: ['sizeGroup000001' => 'smallValue00001'],
+                selectedOptions: ['sizeOption000001' => 'smallValue00001'],
             ));
             $this->fail('Expected the disabled variant to be rejected.');
         } catch (ProductUnavailableException $error) {
@@ -161,13 +161,13 @@ final class ProductResolverTest extends KirbyTestCase
         }
 
         try {
-            $this->stripeCheckout()->resolveProduct(new ProductSelection(
+            $this->stripeCheckout()->resolveProduct(new ProductRequest(
                 $page->id(),
-                choices: ['sizeGroup000001' => 'unknownValue0001'],
+                selectedOptions: ['sizeOption000001' => 'unknownValue0001'],
             ));
-            $this->fail('Expected a stale selection to be rejected.');
+            $this->fail('Expected a stale option selection to be rejected.');
         } catch (InvalidProductException $error) {
-            $this->assertSame('product.choices_invalid', $error->errorCode());
+            $this->assertSame('product.selected_options_invalid', $error->errorCode());
         }
 
         $draft = $this->kirby->site()->createChild([
@@ -181,7 +181,7 @@ final class ProductResolverTest extends KirbyTestCase
         ]);
 
         $this->expectException(ProductNotFoundException::class);
-        $this->stripeCheckout()->resolveProduct(new ProductSelection($draft->id()));
+        $this->stripeCheckout()->resolveProduct(new ProductRequest($draft->id()));
     }
 
     public function testStripeSourceReturnsAnUnhydratedPriceReferenceForTheNextBatch(): void
@@ -200,7 +200,7 @@ final class ProductResolverTest extends KirbyTestCase
             'stripeCheckoutPriceId' => 'price_fixture',
             'stripeCheckoutRequiresShipping' => 'no',
         ]);
-        $product = $this->stripeCheckout()->resolveProduct(new ProductSelection($page->id()));
+        $product = $this->stripeCheckout()->resolveProduct(new ProductRequest($page->id()));
 
         $price = $product->price();
         $this->assertInstanceOf(StripePriceReference::class, $price);
@@ -232,7 +232,7 @@ final class ProductResolverTest extends KirbyTestCase
             'unitPrice' => '7.50',
             'shippingOverride' => 'inherit',
         ]);
-        $product = $this->stripeCheckout()->resolveProduct(new ProductSelection($page->id()));
+        $product = $this->stripeCheckout()->resolveProduct(new ProductRequest($page->id()));
 
         $this->assertSame('Mapped product', $product->name());
         $this->assertNull($product->description());
@@ -260,7 +260,7 @@ final class ProductResolverTest extends KirbyTestCase
         }
 
         $page = $page->update(['stripeCheckoutImages' => Yaml::encode($references)]);
-        $product = $this->stripeCheckout()->resolveProduct(new ProductSelection($page->id()));
+        $product = $this->stripeCheckout()->resolveProduct(new ProductRequest($page->id()));
 
         $this->assertCount(8, $product->imageUrls());
         $this->assertStringEndsWith('/image-1.jpg', $product->imageUrls()[0]);
@@ -278,11 +278,11 @@ final class ProductResolverTest extends KirbyTestCase
                 ],
                 'products' => [
                     'resolver' => static function (
-                        ProductSelection $selection,
+                        ProductRequest $request,
                         ProductResolutionContext $context,
                     ): ResolvedProduct {
                         return new ResolvedProduct(
-                            selection: $selection,
+                            request: $request,
                             name: 'External catalogue product',
                             requiresShipping: $context->settings()->defaultRequiresShipping() ?? false,
                             price: new InlinePrice(\Brick\Money\Money::of('9.50', 'EUR')),
@@ -291,10 +291,10 @@ final class ProductResolverTest extends KirbyTestCase
                 ],
             ],
         ]);
-        $product = $this->stripeCheckout()->resolveProduct(new ProductSelection('catalogue:42'));
+        $product = $this->stripeCheckout()->resolveProduct(new ProductRequest('catalogue:42'));
 
         $this->assertSame('External catalogue product', $product->name());
-        $this->assertSame('catalogue:42', $product->selection()->reference());
+        $this->assertSame('catalogue:42', $product->request()->reference());
     }
 
     public function testCustomResolverCannotChangeTheSelection(): void
@@ -306,8 +306,8 @@ final class ProductResolverTest extends KirbyTestCase
                     'defaultRequiresShipping' => false,
                 ],
                 'products' => [
-                    'resolver' => static fn(ProductSelection $selection): ResolvedProduct => new ResolvedProduct(
-                        selection: new ProductSelection($selection->reference(), 2),
+                    'resolver' => static fn(ProductRequest $request): ResolvedProduct => new ResolvedProduct(
+                        request: new ProductRequest($request->reference(), 2),
                         name: 'Invalid product',
                         requiresShipping: false,
                         price: new InlinePrice(\Brick\Money\Money::of('9.50', 'USD')),
@@ -317,10 +317,10 @@ final class ProductResolverTest extends KirbyTestCase
         ]);
 
         try {
-            $this->stripeCheckout()->resolveProduct(new ProductSelection('catalogue:42'));
-            $this->fail('Expected a resolver-mutated selection to be rejected.');
+            $this->stripeCheckout()->resolveProduct(new ProductRequest('catalogue:42'));
+            $this->fail('Expected a resolver-mutated request to be rejected.');
         } catch (InvalidProductException $error) {
-            $this->assertSame('product.resolver_changed_selection', $error->errorCode());
+            $this->assertSame('product.resolver_changed_request', $error->errorCode());
         }
     }
 
@@ -355,8 +355,8 @@ final class ProductResolverTest extends KirbyTestCase
     private static function variantFixture(): array
     {
         return [
-            'groups' => [[
-                'id' => 'sizeGroup000001',
+            'options' => [[
+                'id' => 'sizeOption000001',
                 'label' => 'Size',
                 'values' => [
                     ['id' => 'smallValue00001', 'label' => 'Small'],
@@ -366,7 +366,7 @@ final class ProductResolverTest extends KirbyTestCase
             'variants' => [
                 [
                     'id' => 'smallVariant001',
-                    'choices' => ['sizeGroup000001' => 'smallValue00001'],
+                    'selectedOptions' => ['sizeOption000001' => 'smallValue00001'],
                     'enabled' => false,
                     'sku' => 'SHIRT-S',
                     'price' => null,
@@ -375,7 +375,7 @@ final class ProductResolverTest extends KirbyTestCase
                 ],
                 [
                     'id' => 'largeVariant001',
-                    'choices' => ['sizeGroup000001' => 'largeValue00001'],
+                    'selectedOptions' => ['sizeOption000001' => 'largeValue00001'],
                     'enabled' => true,
                     'sku' => 'SHIRT-L',
                     'price' => '24',

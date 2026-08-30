@@ -53,8 +53,8 @@ final class ProductBlueprint
             return self::configurationWarning();
         }
 
-        // The searchable Stripe Price selector replaces this informational
-        // state in Batch 6.2c; raw Price IDs are never a normal Panel input.
+        // Raw Price IDs are not exposed as normal Panel input. A searchable
+        // Stripe Price selector will replace this informational state.
         return [
             'label' => 'programmatordev.stripe-checkout.product.price.label',
             'text' => 'programmatordev.stripe-checkout.product.stripePrice.pending',
@@ -114,7 +114,7 @@ final class ProductBlueprint
     }
 
     /** @return array<string, mixed> */
-    public static function variants(App $kirby): array
+    public static function options(App $kirby): array
     {
         try {
             $settings = (new RuntimeFactory($kirby))->settings();
@@ -128,12 +128,12 @@ final class ProductBlueprint
         }
 
         return [
-            'label' => 'programmatordev.stripe-checkout.variants.label',
-            'help' => 'programmatordev.stripe-checkout.variants.help',
+            'label' => 'programmatordev.stripe-checkout.options.label',
+            'help' => 'programmatordev.stripe-checkout.options.help',
             'currency' => $currency,
-            'presets' => (new VariantPresetLibrary($kirby))->all(),
+            'presets' => (new OptionPresetLibrary($kirby))->all(),
             'priceSource' => $settings->priceSource()->value,
-            'type' => 'stripe-checkout-variants',
+            'type' => 'stripe-checkout-options',
         ];
     }
 

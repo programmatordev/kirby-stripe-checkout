@@ -9,10 +9,10 @@ use Kirby\Content\Content;
 use Kirby\Content\Field;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelectionGroup;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelectionValue;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelectionVariant;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelectionView;
+use ProgrammatorDev\StripeCheckout\Product\ProductOption;
+use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
+use ProgrammatorDev\StripeCheckout\Product\ProductOptionValue;
+use ProgrammatorDev\StripeCheckout\Product\ProductVariant;
 use Throwable;
 
 /**
@@ -20,50 +20,50 @@ use Throwable;
  *
  * @internal
  */
-final class ProductSelectionViewFactory
+final class ProductOptionsFactory
 {
     public function __construct(
         private readonly ProductConfiguration $configuration,
         private readonly VariantSchema $schema = new VariantSchema(),
     ) {}
 
-    public function forPage(Page $page, ?string $languageCode): ProductSelectionView
+    public function forPage(Page $page, ?string $languageCode): ProductOptions
     {
         $fields = $this->configuration->fields();
-        $technical = $this->technicalContentValue($page, $fields['variants']);
-        $translated = $this->translatedContentValue($page, $fields['variants'], $languageCode);
+        $technical = $this->technicalContentValue($page, $fields['options']);
+        $translated = $this->translatedContentValue($page, $fields['options'], $languageCode);
 
         try {
             $canonical = $this->schema->canonical($technical);
             $localized = $this->schema->localized($canonical, $translated);
         } catch (Throwable $error) {
-            throw new InvalidProductException('product.variants_invalid', $error);
+            throw new InvalidProductException('product.options_invalid', $error);
         }
 
-        $groups = array_map(
-            static fn(array $group): ProductSelectionGroup => new ProductSelectionGroup(
-                $group['id'],
-                $group['label'],
+        $options = array_map(
+            static fn(array $option): ProductOption => new ProductOption(
+                $option['id'],
+                $option['label'],
                 array_map(
-                    static fn(array $value): ProductSelectionValue => new ProductSelectionValue(
+                    static fn(array $value): ProductOptionValue => new ProductOptionValue(
                         $value['id'],
                         $value['label'],
                     ),
-                    $group['values'],
+                    $option['values'],
                 ),
             ),
-            $localized['groups'],
+            $localized['options'],
         );
         $variants = array_map(
-            static fn(array $variant): ProductSelectionVariant => new ProductSelectionVariant(
+            static fn(array $variant): ProductVariant => new ProductVariant(
                 $variant['id'],
-                $variant['choices'],
+                $variant['selectedOptions'],
                 $variant['enabled'],
             ),
             $localized['variants'],
         );
 
-        return new ProductSelectionView($groups, $variants);
+        return new ProductOptions($options, $variants);
     }
 
     private function technicalContentValue(Page $page, string $field): mixed

@@ -10,9 +10,9 @@ Stripecheckoutprice: 0
 
 ----
 
-Stripecheckoutvariants:
+Stripecheckoutoptions:
 
-groups: [ ]
+options: [ ]
 variants: [ ]
 
 ----

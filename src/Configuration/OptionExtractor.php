@@ -24,7 +24,7 @@ final class OptionExtractor
         'products.fields.requiresShipping',
         'products.fields.sku',
         'products.fields.stripePriceId',
-        'products.fields.variants',
+        'products.fields.options',
         'products.resolver',
         'settings.currency',
         'settings.defaultRequiresShipping',

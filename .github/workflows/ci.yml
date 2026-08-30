@@ -191,8 +191,8 @@ jobs:
             src/Kirby/SettingsBlueprint.php
             src/Kirby/StripeCheckoutPage.php
             src/Kirby/StripeCheckoutPageStore.php
-            src/Kirby/VariantField.php
-            src/Kirby/VariantPresetLibrary.php
+            src/Kirby/OptionsField.php
+            src/Kirby/OptionPresetLibrary.php
             src/Money/MoneyFormatter.php
             src/Money/MoneySnapshot.php
             src/Money/StripeCurrencyRegistry.php
@@ -209,18 +209,18 @@ jobs:
             src/Product/Internal/KirbyPageLocator.php
             src/Product/Internal/KirbyPageProductResolver.php
             src/Product/Internal/ProductResolutionService.php
-            src/Product/Internal/ProductSelectionViewFactory.php
+            src/Product/Internal/ProductOptionsFactory.php
             src/Product/Internal/VariantMatrix.php
             src/Product/Internal/VariantSchema.php
             src/Product/ProductResolutionContext.php
             src/Product/ProductResolverInterface.php
-            src/Product/ProductSelection.php
-            src/Product/ProductSelectionGroup.php
-            src/Product/ProductSelectionValue.php
-            src/Product/ProductSelectionVariant.php
-            src/Product/ProductSelectionView.php
+            src/Product/ProductRequest.php
+            src/Product/ProductOption.php
+            src/Product/ProductOptionValue.php
+            src/Product/ProductVariant.php
+            src/Product/ProductOptions.php
             src/Product/ResolvedProduct.php
-            src/Product/SelectedChoice.php
+            src/Product/SelectedOption.php
             src/Product/StripePriceReference.php
             src/Product/Support/ProductData.php
             src/StripeCheckout.php

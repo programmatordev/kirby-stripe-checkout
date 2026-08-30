@@ -15,8 +15,8 @@ final readonly class ResolvedProduct
 {
     private string $name;
 
-    /** @var list<SelectedChoice> */
-    private array $choices;
+    /** @var list<SelectedOption> */
+    private array $selectedOptions;
 
     private ?string $description;
 
@@ -31,16 +31,16 @@ final readonly class ResolvedProduct
     private ?string $variantId;
 
     /**
-     * @param array<mixed> $choices
+     * @param array<mixed> $selectedOptions
      * @param array<mixed> $imageUrls
      * @param array<mixed, mixed> $metadata
      */
     public function __construct(
-        private ProductSelection $selection,
+        private ProductRequest $request,
         string $name,
         private bool $requiresShipping,
         private InlinePrice|StripePriceReference $price,
-        array $choices = [],
+        array $selectedOptions = [],
         ?string $description = null,
         array $imageUrls = [],
         ?string $sku = null,
@@ -51,14 +51,14 @@ final readonly class ResolvedProduct
         $this->description = ProductData::optionalString($description, 5000);
         $this->sku = ProductData::optionalString($sku, 500);
         $this->variantId = $variantId === null ? null : ProductData::identifier($variantId);
-        $this->choices = $this->validateChoices($choices);
+        $this->selectedOptions = $this->validateSelectedOptions($selectedOptions);
         $this->imageUrls = $this->validateImages($imageUrls);
         $this->metadata = $this->validateMetadata($metadata);
     }
 
-    public function selection(): ProductSelection
+    public function request(): ProductRequest
     {
-        return $this->selection;
+        return $this->request;
     }
 
     public function name(): string
@@ -81,10 +81,10 @@ final readonly class ResolvedProduct
         return $this->price instanceof InlinePrice ? PriceSource::Kirby : PriceSource::Stripe;
     }
 
-    /** @return list<SelectedChoice> */
-    public function choices(): array
+    /** @return list<SelectedOption> */
+    public function selectedOptions(): array
     {
-        return $this->choices;
+        return $this->selectedOptions;
     }
 
     public function description(): ?string
@@ -115,39 +115,42 @@ final readonly class ResolvedProduct
     }
 
     /**
-     * @param array<mixed> $choices
-     * @return list<SelectedChoice>
+     * @param array<mixed> $selectedOptions
+     * @return list<SelectedOption>
      */
-    private function validateChoices(array $choices): array
+    private function validateSelectedOptions(array $selectedOptions): array
     {
-        $selectionChoices = $this->selection->choices();
+        $requestedOptions = $this->request->selectedOptions();
 
-        if (($selectionChoices === []) !== ($choices === [])) {
-            throw new InvalidProductException('product.choices_invalid');
+        if (($requestedOptions === []) !== ($selectedOptions === [])) {
+            throw new InvalidProductException('product.selected_options_invalid');
         }
 
         $resolved = [];
 
-        foreach ($choices as $choice) {
-            if ($choice instanceof SelectedChoice === false || isset($resolved[$choice->groupId()])) {
-                throw new InvalidProductException('product.choices_invalid');
+        foreach ($selectedOptions as $selectedOption) {
+            if (
+                $selectedOption instanceof SelectedOption === false
+                || isset($resolved[$selectedOption->optionId()])
+            ) {
+                throw new InvalidProductException('product.selected_options_invalid');
             }
 
-            $resolved[$choice->groupId()] = $choice->valueId();
+            $resolved[$selectedOption->optionId()] = $selectedOption->valueId();
         }
 
         ksort($resolved);
 
-        if ($resolved !== $selectionChoices) {
-            throw new InvalidProductException('product.choices_invalid');
+        if ($resolved !== $requestedOptions) {
+            throw new InvalidProductException('product.selected_options_invalid');
         }
 
-        if (($selectionChoices === []) !== ($this->variantId === null)) {
+        if (($requestedOptions === []) !== ($this->variantId === null)) {
             throw new InvalidProductException('product.variant_invalid');
         }
 
-        /** @var list<SelectedChoice> $choices */
-        return $choices;
+        /** @var list<SelectedOption> $selectedOptions */
+        return $selectedOptions;
     }
 
     /**

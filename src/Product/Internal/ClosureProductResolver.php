@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Product\Internal;
 
 use Closure;
+use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelection;
 use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 
 /**
@@ -17,19 +17,19 @@ use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
  */
 final class ClosureProductResolver implements ProductResolverInterface
 {
-    /** @var Closure(ProductSelection, ProductResolutionContext): ResolvedProduct */
+    /** @var Closure(ProductRequest, ProductResolutionContext): ResolvedProduct */
     private readonly Closure $resolver;
 
-    /** @param Closure(ProductSelection, ProductResolutionContext): ResolvedProduct $resolver */
+    /** @param Closure(ProductRequest, ProductResolutionContext): ResolvedProduct $resolver */
     public function __construct(Closure $resolver)
     {
         $this->resolver = $resolver;
     }
 
     public function resolve(
-        ProductSelection $selection,
+        ProductRequest $request,
         ProductResolutionContext $context,
     ): ResolvedProduct {
-        return ($this->resolver)($selection, $context);
+        return ($this->resolver)($request, $context);
     }
 }

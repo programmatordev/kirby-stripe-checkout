@@ -8,21 +8,21 @@ use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Product\Internal\VariantMatrix;
 use ProgrammatorDev\StripeCheckout\Product\Internal\VariantSchema;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelectionGroup;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelectionValue;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelectionVariant;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelectionView;
+use ProgrammatorDev\StripeCheckout\Product\ProductOption;
+use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
+use ProgrammatorDev\StripeCheckout\Product\ProductOptionValue;
+use ProgrammatorDev\StripeCheckout\Product\ProductVariant;
 
-final class VariantStorageTest extends TestCase
+final class ProductOptionsStorageTest extends TestCase
 {
     public function testReconcilesTheMatrixWithoutDiscardingExistingCommerceData(): void
     {
         $schema = new VariantSchema();
         $canonical = $schema->canonical([
-            'groups' => self::fixtureGroups(),
+            'options' => self::fixtureOptions(),
             'variants' => [[
                 'id' => 'existingVariant',
-                'choices' => ['sizeGroup' => 'smallValue', 'colourGroup' => 'redValue'],
+                'selectedOptions' => ['sizeOption' => 'smallValue', 'colourOption' => 'redValue'],
                 'enabled' => false,
                 'sku' => 'RED-S',
                 'price' => '19.95',
@@ -41,7 +41,7 @@ final class VariantStorageTest extends TestCase
     public function testGeneratedIdsRemainStableBeforeTheFieldIsSaved(): void
     {
         $schema = new VariantSchema();
-        $value = ['groups' => self::fixtureGroups(), 'variants' => []];
+        $value = ['options' => self::fixtureOptions(), 'variants' => []];
 
         $first = $schema->canonical($value);
         $second = $schema->canonical($value);
@@ -55,10 +55,10 @@ final class VariantStorageTest extends TestCase
     public function testPreservesStringZeroAsAVariantPrice(): void
     {
         $canonical = (new VariantSchema())->canonical([
-            'groups' => self::fixtureGroups(),
+            'options' => self::fixtureOptions(),
             'variants' => [[
                 'id' => 'freeVariant',
-                'choices' => ['colourGroup' => 'redValue', 'sizeGroup' => 'smallValue'],
+                'selectedOptions' => ['colourOption' => 'redValue', 'sizeOption' => 'smallValue'],
                 'enabled' => true,
                 'sku' => null,
                 'price' => '0',
@@ -76,10 +76,10 @@ final class VariantStorageTest extends TestCase
         $this->expectExceptionMessage('Variant commerce values must be strings.');
 
         (new VariantSchema())->canonical([
-            'groups' => self::fixtureGroups(),
+            'options' => self::fixtureOptions(),
             'variants' => [[
                 'id' => 'floatVariant',
-                'choices' => ['colourGroup' => 'redValue', 'sizeGroup' => 'smallValue'],
+                'selectedOptions' => ['colourOption' => 'redValue', 'sizeOption' => 'smallValue'],
                 'enabled' => true,
                 'sku' => null,
                 'price' => 19.95,
@@ -89,16 +89,16 @@ final class VariantStorageTest extends TestCase
         ]);
     }
 
-    public function testRejectsVariantsWithoutSelectionGroups(): void
+    public function testRejectsVariantsWithoutSelectionOptions(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Variants require at least one group.');
+        $this->expectExceptionMessage('Variants require at least one option.');
 
         (new VariantSchema())->canonical([
-            'groups' => [],
+            'options' => [],
             'variants' => [[
                 'id' => 'orphanVariant001',
-                'choices' => [],
+                'selectedOptions' => [],
                 'enabled' => true,
                 'sku' => null,
                 'price' => null,
@@ -108,33 +108,33 @@ final class VariantStorageTest extends TestCase
         ]);
     }
 
-    public function testLabelsAndGroupOrderDoNotReplaceVariantIdentity(): void
+    public function testLabelsAndOptionOrderDoNotReplaceVariantIdentity(): void
     {
         $schema = new VariantSchema();
         $canonical = $schema->canonical([
-            'groups' => self::fixtureGroups(),
+            'options' => self::fixtureOptions(),
             'variants' => [],
         ]);
-        $reorderedGroups = array_reverse(self::fixtureGroups());
-        $group = $reorderedGroups[1];
-        $reorderedGroups[1] = [
-            ...$group,
+        $reorderedOptions = array_reverse(self::fixtureOptions());
+        $option = $reorderedOptions[1];
+        $reorderedOptions[1] = [
+            ...$option,
             'label' => 'Cor',
-            'values' => array_reverse($group['values']),
+            'values' => array_reverse($option['values']),
         ];
         $reconciled = $schema->canonical([
-            'groups' => $reorderedGroups,
+            'options' => $reorderedOptions,
             'variants' => $canonical['variants'],
         ]);
         $before = [];
         $after = [];
 
         foreach ($canonical['variants'] as $variant) {
-            $before[VariantMatrix::choiceKey($variant['choices'])] = $variant['id'];
+            $before[VariantMatrix::optionCombinationKey($variant['selectedOptions'])] = $variant['id'];
         }
 
         foreach ($reconciled['variants'] as $variant) {
-            $after[VariantMatrix::choiceKey($variant['choices'])] = $variant['id'];
+            $after[VariantMatrix::optionCombinationKey($variant['selectedOptions'])] = $variant['id'];
         }
 
         ksort($before);
@@ -145,32 +145,32 @@ final class VariantStorageTest extends TestCase
 
     public function testLargeFixtureGeneratesFiftyVariants(): void
     {
-        $groups = [
-            ['id' => 'colourGroup', 'label' => 'Colour', 'values' => []],
-            ['id' => 'sizeGroup', 'label' => 'Size', 'values' => []],
+        $options = [
+            ['id' => 'colourOption', 'label' => 'Colour', 'values' => []],
+            ['id' => 'sizeOption', 'label' => 'Size', 'values' => []],
         ];
 
         for ($index = 1; $index <= 10; $index++) {
-            $groups[0]['values'][] = ['id' => 'colour' . $index, 'label' => 'Colour ' . $index];
+            $options[0]['values'][] = ['id' => 'colour' . $index, 'label' => 'Colour ' . $index];
         }
 
         for ($index = 1; $index <= 5; $index++) {
-            $groups[1]['values'][] = ['id' => 'sizeValue' . $index, 'label' => 'Size ' . $index];
+            $options[1]['values'][] = ['id' => 'sizeValue' . $index, 'label' => 'Size ' . $index];
         }
 
         $this->assertCount(
             50,
-            (new VariantSchema())->canonical(['groups' => $groups, 'variants' => []])['variants'],
+            (new VariantSchema())->canonical(['options' => $options, 'variants' => []])['variants'],
         );
     }
 
     public function testTranslatedOverlayCannotReplaceTechnicalData(): void
     {
         $schema = new VariantSchema();
-        $canonical = $schema->canonical(['groups' => self::fixtureGroups(), 'variants' => []]);
+        $canonical = $schema->canonical(['options' => self::fixtureOptions(), 'variants' => []]);
         $overlay = $schema->overlay($canonical, [
-            'groups' => [[
-                'id' => 'colourGroup',
+            'options' => [[
+                'id' => 'colourOption',
                 'label' => 'Cor',
                 'values' => [[
                     'id' => 'redValue',
@@ -179,25 +179,25 @@ final class VariantStorageTest extends TestCase
             ]],
             'variants' => [[
                 'id' => 'injectedVariant',
-                'choices' => [],
+                'selectedOptions' => [],
                 'price' => '0.01',
             ]],
         ]);
         $localized = $schema->localized($canonical, $overlay);
 
-        $this->assertSame('Cor', $localized['groups'][0]['label']);
-        $this->assertSame('Vermelho', $localized['groups'][0]['values'][0]['label']);
-        $this->assertSame('Blue', $localized['groups'][0]['values'][1]['label']);
+        $this->assertSame('Cor', $localized['options'][0]['label']);
+        $this->assertSame('Vermelho', $localized['options'][0]['values'][0]['label']);
+        $this->assertSame('Blue', $localized['options'][0]['values'][1]['label']);
         $this->assertSame($canonical['variants'], $localized['variants']);
     }
 
-    public function testStorefrontRematchesChoicesAndRejectsDisabledOrStaleSelections(): void
+    public function testStorefrontRematchesSelectedOptionsAndRejectsDisabledOrStaleSelections(): void
     {
         $canonical = [
-            'groups' => self::fixtureGroups(),
+            'options' => self::fixtureOptions(),
             'variants' => [[
                 'id' => 'disabledVariant',
-                'choices' => ['colourGroup' => 'redValue', 'sizeGroup' => 'smallValue'],
+                'selectedOptions' => ['colourOption' => 'redValue', 'sizeOption' => 'smallValue'],
                 'enabled' => false,
                 'sku' => null,
                 'price' => null,
@@ -205,75 +205,75 @@ final class VariantStorageTest extends TestCase
                 'requiresShipping' => 'inherit',
             ]],
         ];
-        $view = self::selectionView($canonical['variants'][0]);
+        $view = self::productOptions($canonical['variants'][0]);
 
-        $this->assertNull($view->match([
-            'sizeGroup' => 'smallValue',
-            'colourGroup' => 'redValue',
+        $this->assertNull($view->matchVariant([
+            'sizeOption' => 'smallValue',
+            'colourOption' => 'redValue',
         ]));
-        $this->assertNull($view->match([
-            'sizeGroup' => 'staleValue',
-            'colourGroup' => 'redValue',
+        $this->assertNull($view->matchVariant([
+            'sizeOption' => 'staleValue',
+            'colourOption' => 'redValue',
         ]));
-        $this->assertNull($view->match([
-            'colourGroup' => 'redValue',
+        $this->assertNull($view->matchVariant([
+            'colourOption' => 'redValue',
         ]));
 
         $canonical['variants'][0]['enabled'] = true;
         $this->assertSame(
             'disabledVariant',
-            self::selectionView($canonical['variants'][0])->match([
-                'sizeGroup' => 'smallValue',
-                'colourGroup' => 'redValue',
+            self::productOptions($canonical['variants'][0])->matchVariant([
+                'sizeOption' => 'smallValue',
+                'colourOption' => 'redValue',
             ])?->id(),
         );
     }
 
-    public function testCanonicalChoiceKeysDoNotDependOnSubmissionOrder(): void
+    public function testCanonicalSelectedOptionKeysDoNotDependOnSubmissionOrder(): void
     {
         $this->assertSame(
-            VariantMatrix::choiceKey(['colourGroup' => 'redValue', 'sizeGroup' => 'smallValue']),
-            VariantMatrix::choiceKey(['sizeGroup' => 'smallValue', 'colourGroup' => 'redValue']),
+            VariantMatrix::optionCombinationKey(['colourOption' => 'redValue', 'sizeOption' => 'smallValue']),
+            VariantMatrix::optionCombinationKey(['sizeOption' => 'smallValue', 'colourOption' => 'redValue']),
         );
     }
 
     public function testStorefrontMatchingRejectsDelimiterCollisions(): void
     {
-        $this->assertNull(self::selectionView([
+        $this->assertNull(self::productOptions([
             'id' => 'canonicalVariant',
-            'choices' => ['colourGroup' => 'redValue', 'sizeGroup' => 'smallValue'],
+            'selectedOptions' => ['colourOption' => 'redValue', 'sizeOption' => 'smallValue'],
             'enabled' => true,
-        ])->match([
-            'colourGroup' => 'redValue|sizeGroup:smallValue',
+        ])->matchVariant([
+            'colourOption' => 'redValue|sizeOption:smallValue',
         ]));
     }
 
-    /** @param array{id: string, choices: array<string, string>, enabled: bool} $variant */
-    private static function selectionView(array $variant): ProductSelectionView
+    /** @param array{id: string, selectedOptions: array<string, string>, enabled: bool} $variant */
+    private static function productOptions(array $variant): ProductOptions
     {
-        return new ProductSelectionView(
+        return new ProductOptions(
             [
-                new ProductSelectionGroup('colourGroup', 'Colour', [
-                    new ProductSelectionValue('redValue', 'Red'),
-                    new ProductSelectionValue('blueValue', 'Blue'),
+                new ProductOption('colourOption', 'Colour', [
+                    new ProductOptionValue('redValue', 'Red'),
+                    new ProductOptionValue('blueValue', 'Blue'),
                 ]),
-                new ProductSelectionGroup('sizeGroup', 'Size', [
-                    new ProductSelectionValue('smallValue', 'Small'),
-                    new ProductSelectionValue('largeValue', 'Large'),
+                new ProductOption('sizeOption', 'Size', [
+                    new ProductOptionValue('smallValue', 'Small'),
+                    new ProductOptionValue('largeValue', 'Large'),
                 ]),
             ],
-            [new ProductSelectionVariant($variant['id'], $variant['choices'], $variant['enabled'])],
+            [new ProductVariant($variant['id'], $variant['selectedOptions'], $variant['enabled'])],
         );
     }
 
     /**
      * @return list<array{id: string, label: string, values: list<array{id: string, label: string}>}>
      */
-    private static function fixtureGroups(): array
+    private static function fixtureOptions(): array
     {
         return [
             [
-                'id' => 'colourGroup',
+                'id' => 'colourOption',
                 'label' => 'Colour',
                 'values' => [
                     ['id' => 'redValue', 'label' => 'Red'],
@@ -281,7 +281,7 @@ final class VariantStorageTest extends TestCase
                 ],
             ],
             [
-                'id' => 'sizeGroup',
+                'id' => 'sizeOption',
                 'label' => 'Size',
                 'values' => [
                     ['id' => 'smallValue', 'label' => 'Small'],

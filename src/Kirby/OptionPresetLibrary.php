@@ -11,16 +11,16 @@ use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use Throwable;
 
 /**
- * Reads the default-language, Settings-owned variant preset copies.
+ * Reads the default-language, Settings-owned option preset copies.
  *
  * @internal
  */
-final class VariantPresetLibrary
+final class OptionPresetLibrary
 {
     public function __construct(private readonly App $kirby) {}
 
     /**
-     * @return list<array{label: string, groups: list<array{label: string, values: list<string>}>}>
+     * @return list<array{label: string, options: list<array{label: string, values: list<string>}>}>
      */
     public function all(): array
     {
@@ -30,7 +30,7 @@ final class VariantPresetLibrary
             return [];
         }
 
-        $field = $page->content($this->kirby->defaultLanguage()?->code())->get('variantPresets');
+        $field = $page->content($this->kirby->defaultLanguage()?->code())->get('optionPresets');
         $value = $field instanceof Field ? $field->value() : null;
 
         if ($value === null || $value === '') {
@@ -42,48 +42,48 @@ final class VariantPresetLibrary
         } catch (Throwable $error) {
             throw new ConfigurationException(
                 'persistence.content_invalid',
-                'variantPresets',
+                'optionPresets',
                 $error,
             );
         }
 
         if (array_is_list($presets) === false) {
-            throw new ConfigurationException('persistence.content_invalid', 'variantPresets');
+            throw new ConfigurationException('persistence.content_invalid', 'optionPresets');
         }
 
         $normalized = [];
 
         foreach ($presets as $preset) {
             if (is_array($preset) === false) {
-                throw new ConfigurationException('persistence.content_invalid', 'variantPresets');
+                throw new ConfigurationException('persistence.content_invalid', 'optionPresets');
             }
 
             $label = $this->requiredLabel($preset['label'] ?? null);
-            $groups = $this->decodeList($preset['groups'] ?? null);
-            $normalizedGroups = [];
+            $options = $this->decodeList($preset['options'] ?? null);
+            $normalizedOptions = [];
 
-            foreach ($groups as $group) {
-                if (is_array($group) === false) {
-                    throw new ConfigurationException('persistence.content_invalid', 'variantPresets');
+            foreach ($options as $option) {
+                if (is_array($option) === false) {
+                    throw new ConfigurationException('persistence.content_invalid', 'optionPresets');
                 }
 
-                $values = $this->decodeValues($group['values'] ?? null);
+                $values = $this->decodeValues($option['values'] ?? null);
 
                 if ($values === []) {
-                    throw new ConfigurationException('persistence.content_invalid', 'variantPresets');
+                    throw new ConfigurationException('persistence.content_invalid', 'optionPresets');
                 }
 
-                $normalizedGroups[] = [
-                    'label' => $this->requiredLabel($group['label'] ?? null),
+                $normalizedOptions[] = [
+                    'label' => $this->requiredLabel($option['label'] ?? null),
                     'values' => $values,
                 ];
             }
 
-            if ($normalizedGroups === []) {
-                throw new ConfigurationException('persistence.content_invalid', 'variantPresets');
+            if ($normalizedOptions === []) {
+                throw new ConfigurationException('persistence.content_invalid', 'optionPresets');
             }
 
-            $normalized[] = ['label' => $label, 'groups' => $normalizedGroups];
+            $normalized[] = ['label' => $label, 'options' => $normalizedOptions];
         }
 
         return $normalized;
@@ -98,14 +98,14 @@ final class VariantPresetLibrary
             } catch (Throwable $error) {
                 throw new ConfigurationException(
                     'persistence.content_invalid',
-                    'variantPresets',
+                    'optionPresets',
                     $error,
                 );
             }
         }
 
         if (is_array($value) === false || array_is_list($value) === false) {
-            throw new ConfigurationException('persistence.content_invalid', 'variantPresets');
+            throw new ConfigurationException('persistence.content_invalid', 'optionPresets');
         }
 
         return $value;
@@ -121,7 +121,7 @@ final class VariantPresetLibrary
         }
 
         if (is_array($value) === false || array_is_list($value) === false) {
-            throw new ConfigurationException('persistence.content_invalid', 'variantPresets');
+            throw new ConfigurationException('persistence.content_invalid', 'optionPresets');
         }
 
         $normalized = [];
@@ -137,7 +137,7 @@ final class VariantPresetLibrary
     private function requiredLabel(mixed $value): string
     {
         if (is_string($value) === false || trim($value) === '' || strlen(trim($value)) > 500) {
-            throw new ConfigurationException('persistence.content_invalid', 'variantPresets');
+            throw new ConfigurationException('persistence.content_invalid', 'optionPresets');
         }
 
         return trim($value);

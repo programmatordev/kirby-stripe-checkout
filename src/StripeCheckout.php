@@ -11,8 +11,8 @@ use Kirby\Cms\Page;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Money\MoneyFormatter;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelection;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelectionView;
+use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
+use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 
 /**
@@ -50,13 +50,13 @@ final class StripeCheckout
         return (new MoneyFormatter($this->kirby))->symbol($currency, $locale);
     }
 
-    public function resolveProduct(ProductSelection $selection): ResolvedProduct
+    public function resolveProduct(ProductRequest $request): ResolvedProduct
     {
-        return (new RuntimeFactory($this->kirby))->resolveProduct($selection);
+        return (new RuntimeFactory($this->kirby))->resolveProduct($request);
     }
 
-    public function productSelection(Page|string $reference): ProductSelectionView
+    public function productOptions(Page|string $reference): ProductOptions
     {
-        return (new RuntimeFactory($this->kirby))->productSelection($reference);
+        return (new RuntimeFactory($this->kirby))->productOptions($reference);
     }
 }

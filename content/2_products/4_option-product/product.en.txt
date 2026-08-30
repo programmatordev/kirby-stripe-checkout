@@ -10,11 +10,11 @@ Stripecheckoutprice: 18
 
 ----
 
-Stripecheckoutvariants:
+Stripecheckoutoptions:
 
-groups:
+options:
   -
-    id: formatGroup0001
+    id: formatOption0001
     label: Format
     values:
       -
@@ -24,7 +24,7 @@ groups:
         id: printedValue001
         label: Printed
   -
-    id: languageGroup01
+    id: languageOption01
     label: Language
     values:
       -
@@ -36,9 +36,9 @@ groups:
 variants:
   -
     id: nfkos4re2ymf0w2o
-    choices:
-      formatGroup0001: digitalValue001
-      languageGroup01: portugueseVal01
+    selectedOptions:
+      formatOption0001: digitalValue001
+      languageOption01: portugueseVal01
     enabled: true
     sku: DIGITAL-PT
     price: "16"
@@ -46,9 +46,9 @@ variants:
     requiresShipping: 'no'
   -
     id: 55gogbpul6ctm0np
-    choices:
-      formatGroup0001: digitalValue001
-      languageGroup01: englishValue001
+    selectedOptions:
+      formatOption0001: digitalValue001
+      languageOption01: englishValue001
     enabled: false
     sku: DIGITAL-EN
     price: null
@@ -56,9 +56,9 @@ variants:
     requiresShipping: 'no'
   -
     id: 599z4vnkh28qbysc
-    choices:
-      formatGroup0001: printedValue001
-      languageGroup01: portugueseVal01
+    selectedOptions:
+      formatOption0001: printedValue001
+      languageOption01: portugueseVal01
     enabled: true
     sku: PRINTED-PT
     price: "22.00"
@@ -66,9 +66,9 @@ variants:
     requiresShipping: 'yes'
   -
     id: or1frhkz1s9hxd0x
-    choices:
-      formatGroup0001: printedValue001
-      languageGroup01: englishValue001
+    selectedOptions:
+      formatOption0001: printedValue001
+      languageOption01: englishValue001
     enabled: true
     sku: PRINTED-EN
     price: null

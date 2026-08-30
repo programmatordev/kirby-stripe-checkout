@@ -173,7 +173,7 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $this->assertSame(PriceSource::Stripe, $this->settings()->priceSource());
     }
 
-    public function testVariantPresetsRemainOwnedByTheDefaultLanguage(): void
+    public function testOptionPresetsRemainOwnedByTheDefaultLanguage(): void
     {
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start(languages: [
@@ -183,15 +183,15 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $this->kirby = $this->environment->app();
         $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
         $this->kirby->setCurrentLanguage('pt');
-        $page = $page->update(['variantPresets' => [[
+        $page = $page->update(['optionPresets' => [[
             'label' => 'T-shirt',
-            'groups' => [[
+            'options' => [[
                 'label' => 'Size',
                 'values' => ['Small', 'Large'],
             ]],
         ]]]);
 
-        $this->assertNotSame('', $this->fieldValue($page, 'variantPresets'));
+        $this->assertNotSame('', $this->fieldValue($page, 'optionPresets'));
         $this->assertFalse($page->translation('pt')->exists());
     }
 

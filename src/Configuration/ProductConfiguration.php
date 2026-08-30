@@ -23,7 +23,7 @@ final readonly class ProductConfiguration
      *   price: string,
      *   stripePriceId: string,
      *   requiresShipping: string,
-     *   variants: string
+     *   options: string
      * } $fields
      */
     public function __construct(
@@ -45,7 +45,7 @@ final readonly class ProductConfiguration
      *   price: string,
      *   stripePriceId: string,
      *   requiresShipping: string,
-     *   variants: string
+     *   options: string
      * }
      */
     public function fields(): array

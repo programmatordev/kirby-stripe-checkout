@@ -9,14 +9,14 @@ use Kirby\Content\Field;
 use Kirby\Filesystem\Dir;
 use Kirby\Plugin\Plugin;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
+use ProgrammatorDev\StripeCheckout\Kirby\OptionsField;
 use ProgrammatorDev\StripeCheckout\Kirby\ProductBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
-use ProgrammatorDev\StripeCheckout\Kirby\VariantField;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelection;
+use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 
 // Exercises only the exported package's Composer installation boundary. It is
@@ -142,7 +142,7 @@ try {
         'fields/stripe-checkout/images' => [ProductBlueprint::class, 'images'],
         'fields/stripe-checkout/sku' => [ProductBlueprint::class, 'sku'],
         'fields/stripe-checkout/requires-shipping' => [ProductBlueprint::class, 'requiresShipping'],
-        'fields/stripe-checkout/variants' => [ProductBlueprint::class, 'variants'],
+        'fields/stripe-checkout/options' => [ProductBlueprint::class, 'options'],
     ];
 
     foreach ($productBlueprints as $name => $definition) {
@@ -153,7 +153,7 @@ try {
 
     if (
         is_array($fields) === false
-        || ($fields['stripe-checkout-variants'] ?? null) !== VariantField::class
+        || ($fields['stripe-checkout-options'] ?? null) !== OptionsField::class
     ) {
         throw new RuntimeException('The package did not register its variant field.');
     }
@@ -261,11 +261,11 @@ try {
             'stripeCheckoutRequiresShipping' => 'inherit',
         ],
     ])->changeStatus('listed');
-    $resolvedProduct = $stripeCheckout->resolveProduct(new ProductSelection($productPage->id()));
+    $resolvedProduct = $stripeCheckout->resolveProduct(new ProductRequest($productPage->id()));
     $resolvedPrice = $resolvedProduct->price();
 
     if (
-        $resolvedProduct->selection()->reference() !== $productPage->uuid()->toString()
+        $resolvedProduct->request()->reference() !== $productPage->uuid()->toString()
         || $resolvedProduct->name() !== 'Consumer product'
         || $resolvedProduct->requiresShipping() !== false
         || $resolvedPrice instanceof InlinePrice === false

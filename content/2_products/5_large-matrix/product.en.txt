@@ -18,11 +18,11 @@ Stripecheckoutrequiresshipping: yes
 
 ----
 
-Stripecheckoutvariants:
+Stripecheckoutoptions:
 
-groups:
+options:
   -
-    id: colourGroup0001
+    id: colourOption0001
     label: Colour
     values:
       - { id: colourBlack0001, label: Black }
@@ -36,7 +36,7 @@ groups:
       - { id: colourPink00001, label: Pink }
       - { id: colourGrey00001, label: Grey }
   -
-    id: sizeGroup000001
+    id: sizeOption000001
     label: Size
     values:
       - { id: sizeExtraSmall1, label: XS }

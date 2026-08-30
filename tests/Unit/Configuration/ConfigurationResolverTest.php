@@ -144,7 +144,7 @@ final class ConfigurationResolverTest extends TestCase
             'price' => 'unitPrice',
             'stripePriceId' => 'stripeCheckoutPriceId',
             'requiresShipping' => 'stripeCheckoutRequiresShipping',
-            'variants' => 'stripeCheckoutVariants',
+            'options' => 'stripeCheckoutOptions',
         ], $products->fields());
     }
 

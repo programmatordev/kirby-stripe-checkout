@@ -1,26 +1,26 @@
 <template>
-	<k-field v-bind="$props" class="k-stripe-checkout-variants-field">
+	<k-field v-bind="$props" class="k-stripe-checkout-options-field">
 		<template
 			v-if="languageTransitioning === false && technicalLocked === false && disabled === false"
 			#options
 		>
-			<k-button-group layout="collapsed">
+			<k-button-option layout="collapsed">
 				<k-button
 					:responsive="true"
 					icon="add"
 					size="xs"
 					variant="filled"
-					@click="addGroup"
+					@click="addOption"
 				>
-					{{ $t("programmatordev.stripe-checkout.variants.addGroup") }}
+					{{ $t("programmatordev.stripe-checkout.options.addOption") }}
 				</k-button>
 				<k-button
 					v-if="presets.length"
 					icon="angle-down"
 					size="xs"
 					variant="filled"
-					:aria-label="$t('programmatordev.stripe-checkout.variants.addOptions')"
-					:title="$t('programmatordev.stripe-checkout.variants.addOptions')"
+					:aria-label="$t('programmatordev.stripe-checkout.options.addOptions')"
+					:title="$t('programmatordev.stripe-checkout.options.addOptions')"
 					@click="$refs.addOptions.toggle()"
 				/>
 				<k-dropdown-content
@@ -29,55 +29,55 @@
 					align-x="end"
 					:options="addOptions"
 				/>
-			</k-button-group>
+			</k-button-option>
 		</template>
 
 		<div
-			class="k-stripe-checkout-variants-field__content"
+			class="k-stripe-checkout-options-field__content"
 			:aria-busy="languageTransitioning"
 			:data-language-transitioning="languageTransitioning"
 		>
 			<k-box
 				v-if="technicalLocked"
 				theme="info"
-				:text="$t('programmatordev.stripe-checkout.variants.translationHelp')"
+				:text="$t('programmatordev.stripe-checkout.options.translationHelp')"
 			/>
 
 			<k-box
-				v-if="localValue.groups.length === 0"
+				v-if="localValue.options.length === 0"
 				theme="empty"
 				:text="emptyText"
 			/>
 
 			<k-table
-				v-if="localValue.groups.length"
-				class="k-stripe-checkout-variants-field__groups-table"
-				:columns="groupColumns"
+				v-if="localValue.options.length"
+				class="k-stripe-checkout-options-field__options-table"
+				:columns="optionColumns"
 				:disabled="disabled"
 				:index="1"
-				:options="groupOptions"
-				:rows="groupRows"
-				:sortable="technicalLocked === false && localValue.groups.length > 1"
-				@cell="openGroupByRow($event.row)"
-				@input="sortGroups"
-				@option="handleGroupOption"
+				:options="optionOptions"
+				:rows="optionRows"
+				:sortable="technicalLocked === false && localValue.options.length > 1"
+				@cell="openOptionByRow($event.row)"
+				@input="sortOptions"
+				@option="handleOptionAction"
 			/>
 
 			<section
 				v-if="technicalLocked === false && localValue.variants.length"
-				class="k-stripe-checkout-variants-field__matrix"
+				class="k-stripe-checkout-options-field__matrix"
 			>
-				<header class="k-stripe-checkout-variants-field__matrix-header">
+				<header class="k-stripe-checkout-options-field__matrix-header">
 					<h3 class="k-label">
-						{{ $t("programmatordev.stripe-checkout.variants.matrix") }}
+						{{ $t("programmatordev.stripe-checkout.options.matrix") }}
 					</h3>
-					<span class="k-stripe-checkout-variants-field__matrix-count">
+					<span class="k-stripe-checkout-options-field__matrix-count">
 						{{ variantCountText }}
 					</span>
 				</header>
 
 				<k-table
-					class="k-stripe-checkout-variants-field__variants-table"
+					class="k-stripe-checkout-options-field__variants-table"
 					:columns="variantColumns"
 					:disabled="disabled"
 					:fields="variantTableFields"
@@ -88,7 +88,7 @@
 					:sortable="false"
 					@cell="openVariantByRow($event.row)"
 					@input="updateVariantRows"
-					@option="handleVariantOption"
+					@option="handleVariantAction"
 					@paginate="variantPage = $event.page"
 				/>
 			</section>
@@ -104,9 +104,9 @@ import {
 	reconcile,
 	resolveStableId,
 	stableId
-} from "../variants.js";
+} from "../product-options.js";
 
-const emptyValue = () => ({ groups: [], variants: [] });
+const emptyValue = () => ({ options: [], variants: [] });
 
 export default {
 	props: {
@@ -119,7 +119,7 @@ export default {
 		required: Boolean,
 		type: {
 			type: String,
-			default: "stripe-checkout-variants"
+			default: "stripe-checkout-options"
 		},
 		when: String,
 		value: {
@@ -154,15 +154,15 @@ export default {
 		addOptions() {
 			return [
 				{
-					click: () => this.addGroup(),
+					click: () => this.addOption(),
 					icon: "add",
-					text: this.$t("programmatordev.stripe-checkout.variants.addGroup")
+					text: this.$t("programmatordev.stripe-checkout.options.addOption")
 				},
 				"-",
 				...this.presets.map(preset => ({
 					click: () => this.importPreset(preset),
 					icon: "download",
-					text: this.$t("programmatordev.stripe-checkout.variants.importPreset", {
+					text: this.$t("programmatordev.stripe-checkout.options.importPreset", {
 						label: preset.label
 					})
 				}))
@@ -171,28 +171,28 @@ export default {
 		emptyText() {
 			return this.$t(
 				this.presets.length
-					? "programmatordev.stripe-checkout.variants.emptyWithPresets"
-					: "programmatordev.stripe-checkout.variants.empty"
+					? "programmatordev.stripe-checkout.options.emptyWithPresets"
+					: "programmatordev.stripe-checkout.options.empty"
 			);
 		},
-		groupColumns() {
+		optionColumns() {
 			return {
 				label: {
-					label: this.$t("programmatordev.stripe-checkout.variants.groupLabel"),
+					label: this.$t("programmatordev.stripe-checkout.options.optionLabel"),
 					mobile: true,
 					type: "text",
 					width: "1/3"
 				},
 				values: {
-					label: this.$t("programmatordev.stripe-checkout.variants.valuesLabel"),
+					label: this.$t("programmatordev.stripe-checkout.options.valuesLabel"),
 					type: "text"
 				}
 			};
 		},
-		groupDrawerId() {
-			return `${this.name ?? "stripe-checkout-variants"}-group`;
+		optionDrawerId() {
+			return `${this.name ?? "stripe-checkout-options"}-option`;
 		},
-		groupOptions() {
+		optionOptions() {
 			const options = [
 				{
 					click: "edit",
@@ -214,11 +214,11 @@ export default {
 
 			return options;
 		},
-		groupRows() {
-			return this.localValue.groups.map(group => ({
-				_id: group.id,
-				label: group.label,
-				values: group.values.map(value => value.label).join(", ")
+		optionRows() {
+			return this.localValue.options.map(option => ({
+				_id: option.id,
+				label: option.label,
+				values: option.values.map(value => value.label).join(", ")
 			}));
 		},
 		variantPages() {
@@ -229,8 +229,8 @@ export default {
 
 			return this.$t(
 				count === 1
-					? "programmatordev.stripe-checkout.variants.count.one"
-					: "programmatordev.stripe-checkout.variants.count.many",
+					? "programmatordev.stripe-checkout.options.count.one"
+					: "programmatordev.stripe-checkout.options.count.many",
 				{ count }
 			);
 		},
@@ -244,26 +244,26 @@ export default {
 					width: "4rem"
 				},
 				combination: {
-					label: this.$t("programmatordev.stripe-checkout.variants.variantColumn"),
+					label: this.$t("programmatordev.stripe-checkout.options.variantColumn"),
 					mobile: true,
 					type: "text"
 				},
 				sku: {
-					label: this.$t("programmatordev.stripe-checkout.variants.sku"),
+					label: this.$t("programmatordev.stripe-checkout.options.sku"),
 					type: "text"
 				},
 				price: {
-					label: this.$t("programmatordev.stripe-checkout.variants.price"),
+					label: this.$t("programmatordev.stripe-checkout.options.price"),
 					type: "stripe-checkout-variant-value"
 				},
 				shipping: {
-					label: this.$t("programmatordev.stripe-checkout.variants.shipping.label"),
+					label: this.$t("programmatordev.stripe-checkout.options.shipping.label"),
 					type: "stripe-checkout-variant-value"
 				}
 			};
 		},
 		variantDrawerId() {
-			return `${this.name ?? "stripe-checkout-variants"}-variant`;
+			return `${this.name ?? "stripe-checkout-options"}-variant`;
 		},
 		variantOptions() {
 			return [
@@ -305,8 +305,8 @@ export default {
 				enabled: {
 					disabled: this.disabled,
 					text: [
-						this.$t("programmatordev.stripe-checkout.variants.disabled"),
-						this.$t("programmatordev.stripe-checkout.variants.enabled")
+						this.$t("programmatordev.stripe-checkout.options.disabled"),
+						this.$t("programmatordev.stripe-checkout.options.enabled")
 					],
 					type: "toggle"
 				}
@@ -314,9 +314,9 @@ export default {
 		},
 		shippingOptions() {
 			return [
-				{ value: "inherit", text: this.$t("programmatordev.stripe-checkout.variants.shipping.inherit") },
-				{ value: "yes", text: this.$t("programmatordev.stripe-checkout.variants.shipping.yes") },
-				{ value: "no", text: this.$t("programmatordev.stripe-checkout.variants.shipping.no") }
+				{ value: "inherit", text: this.$t("programmatordev.stripe-checkout.options.shipping.inherit") },
+				{ value: "yes", text: this.$t("programmatordev.stripe-checkout.options.shipping.yes") },
+				{ value: "no", text: this.$t("programmatordev.stripe-checkout.options.shipping.no") }
 			];
 		},
 		technicalLocked() {
@@ -351,27 +351,27 @@ export default {
 		},
 		reconcile() {
 			this.localValue.variants = reconcile(
-				this.localValue.groups,
+				this.localValue.options,
 				this.localValue.variants
 			);
 			this.variantPage = Math.min(this.variantPage, this.variantPages);
 			this.emit();
 		},
-		addGroup() {
-			this.openGroup({
+		addOption() {
+			this.openOption({
 				id: stableId(),
 				label: "",
 				values: [{ id: stableId(), label: "" }]
 			});
 		},
 		importPreset(preset) {
-			this.localValue.groups.push(...importPreset(preset));
+			this.localValue.options.push(...importPreset(preset));
 			this.reconcile();
 		},
-		groupFields(group) {
+		optionFields(option) {
 			const fields = {
 				label: {
-					label: this.$t("programmatordev.stripe-checkout.variants.groupLabel"),
+					label: this.$t("programmatordev.stripe-checkout.options.optionLabel"),
 					name: "label",
 					required: true,
 					type: "text"
@@ -379,20 +379,20 @@ export default {
 				values: {
 					columns: {
 						label: {
-							label: this.$t("programmatordev.stripe-checkout.variants.valueColumn"),
+							label: this.$t("programmatordev.stripe-checkout.options.valueColumn"),
 							width: "1/1"
 						}
 					},
-					empty: this.$t("programmatordev.stripe-checkout.variants.valuesEmpty"),
+					empty: this.$t("programmatordev.stripe-checkout.options.valuesEmpty"),
 					fields: {
 						label: {
-							label: this.$t("programmatordev.stripe-checkout.variants.valueLabel"),
+							label: this.$t("programmatordev.stripe-checkout.options.valueLabel"),
 							name: "label",
 							required: true,
 							type: "text"
 						}
 					},
-					label: this.$t("programmatordev.stripe-checkout.variants.valuesLabel"),
+					label: this.$t("programmatordev.stripe-checkout.options.valuesLabel"),
 					min: 1,
 					name: "values",
 					required: true,
@@ -405,64 +405,64 @@ export default {
 				// Keep the familiar Structure editor while fixing its membership and
 				// order to the canonical default-language values.
 				fields.values.duplicate = false;
-				fields.values.max = group.values.length;
-				fields.values.min = group.values.length;
+				fields.values.max = option.values.length;
+				fields.values.min = option.values.length;
 				fields.values.sortable = false;
-				fields.values.type = "stripe-checkout-variant-translation-values";
+				fields.values.type = "stripe-checkout-option-translation-values";
 			}
 
 			return this.$helper.field.subfields(this, fields);
 		},
-		groupFormValue(group) {
+		optionFormValue(option) {
 			return {
-				label: group.label,
-				values: group.values.map(value => ({
+				label: option.label,
+				values: option.values.map(value => ({
 					_id: value.id,
 					label: value.label
 				}))
 			};
 		},
-		groupFromForm(group, value, valueIds) {
+		optionFromForm(option, value, valueIds) {
 			return {
-				...group,
+				...option,
 				label: value.label ?? "",
 				values: Array.isArray(value.values)
-					? value.values.map(option => ({
-						id: resolveStableId(option._id, valueIds),
-						label: option.label ?? ""
+					? value.values.map(submittedValue => ({
+						id: resolveStableId(submittedValue._id, valueIds),
+						label: submittedValue.label ?? ""
 					}))
 					: []
 			};
 		},
-		groupIsComplete(group) {
-			return typeof group.label === "string" &&
-				group.label.trim() !== "" &&
-				group.values.length > 0 &&
-				group.values.every(value => typeof value.label === "string" && value.label.trim() !== "");
+		optionIsComplete(option) {
+			return typeof option.label === "string" &&
+				option.label.trim() !== "" &&
+				option.values.length > 0 &&
+				option.values.every(value => typeof value.label === "string" && value.label.trim() !== "");
 		},
-		handleGroupOption(option, row) {
-			if (option === "edit") {
-				this.openGroupByRow(row);
-			} else if (option === "remove") {
+		handleOptionAction(action, row) {
+			if (action === "edit") {
+				this.openOptionByRow(row);
+			} else if (action === "remove") {
 				this.requestRemoval(row._id);
 			}
 		},
-		openGroup(group, replace = false) {
-			const index = this.localValue.groups.findIndex(item => item.id === group.id);
-			const previous = index > 0 ? this.localValue.groups[index - 1] : null;
-			const next = index >= 0 ? this.localValue.groups[index + 1] ?? null : null;
-			const valueIds = new Map(group.values.map(value => [value.id, value.id]));
+		openOption(option, replace = false) {
+			const index = this.localValue.options.findIndex(item => item.id === option.id);
+			const previous = index > 0 ? this.localValue.options[index - 1] : null;
+			const next = index >= 0 ? this.localValue.options[index + 1] ?? null : null;
+			const valueIds = new Map(option.values.map(value => [value.id, value.id]));
 
 			this.$panel.drawer.open({
-				component: "k-stripe-checkout-variant-drawer",
-				id: this.groupDrawerId,
+				component: "k-stripe-checkout-options-drawer",
+				id: this.optionDrawerId,
 				on: {
-					input: value => this.updateGroupFromForm(group, value, valueIds),
-					next: () => this.openGroup(next, true),
-					prev: () => this.openGroup(previous, true),
+					input: value => this.updateOptionFromForm(option, value, valueIds),
+					next: () => this.openOption(next, true),
+					prev: () => this.openOption(previous, true),
 					remove: () => {
 						if (index >= 0) {
-							this.requestRemoval(group.id);
+							this.requestRemoval(option.id);
 						}
 					}
 				},
@@ -474,54 +474,54 @@ export default {
 					removable: index >= 0 && this.technicalLocked === false && this.disabled === false,
 					tabs: {
 						content: {
-							fields: this.groupFields(group)
+							fields: this.optionFields(option)
 						}
 					},
-					title: group.label || this.$t("programmatordev.stripe-checkout.variants.addGroup"),
-					value: this.groupFormValue(group)
+					title: option.label || this.$t("programmatordev.stripe-checkout.options.addOption"),
+					value: this.optionFormValue(option)
 				},
 				replace
 			});
 		},
-		openGroupByRow(row) {
-			const group = this.localValue.groups.find(group => group.id === row._id);
+		openOptionByRow(row) {
+			const option = this.localValue.options.find(option => option.id === row._id);
 
-			if (group) {
-				this.openGroup(group);
+			if (option) {
+				this.openOption(option);
 			}
 		},
-		sortGroups(rows) {
+		sortOptions(rows) {
 			if (this.technicalLocked || this.disabled) {
 				return;
 			}
 
-			const groups = new Map(this.localValue.groups.map(group => [group.id, group]));
-			this.localValue.groups = rows
-				.map(row => groups.get(row._id))
+			const options = new Map(this.localValue.options.map(option => [option.id, option]));
+			this.localValue.options = rows
+				.map(row => options.get(row._id))
 				.filter(Boolean);
 			this.reconcile();
 		},
-		updateGroupFromForm(group, value, valueIds) {
-			const updated = this.groupFromForm(group, value, valueIds);
+		updateOptionFromForm(option, value, valueIds) {
+			const updated = this.optionFromForm(option, value, valueIds);
 
 			// Keep incomplete drawer drafts local so Kirby never receives a
-			// temporarily invalid group while the merchant is still editing it.
-			if (this.groupIsComplete(updated) === false) {
+			// temporarily invalid option while the merchant is still editing it.
+			if (this.optionIsComplete(updated) === false) {
 				return;
 			}
 
-			const index = this.localValue.groups.findIndex(item => item.id === group.id);
+			const index = this.localValue.options.findIndex(item => item.id === option.id);
 
 			if (index === -1) {
-				this.localValue.groups.push(updated);
+				this.localValue.options.push(updated);
 			} else {
-				this.localValue.groups.splice(index, 1, updated);
+				this.localValue.options.splice(index, 1, updated);
 			}
 
 			this.reconcile();
 		},
-		handleVariantOption(option, row) {
-			if (option === "edit") {
+		handleVariantAction(action, row) {
+			if (action === "edit") {
 				this.openVariantByRow(row);
 			}
 		},
@@ -535,7 +535,7 @@ export default {
 			const next = index >= 0 ? this.localValue.variants[index + 1] ?? null : null;
 
 			this.$panel.drawer.open({
-				component: "k-stripe-checkout-variant-drawer",
+				component: "k-stripe-checkout-options-drawer",
 				id: this.variantDrawerId,
 				on: {
 					input: value => this.updateVariantFromForm(variant, value),
@@ -572,7 +572,7 @@ export default {
 			return {
 				inherited,
 				text: inherited
-					? this.$t("programmatordev.stripe-checkout.variants.price.inherit")
+					? this.$t("programmatordev.stripe-checkout.options.price.inherit")
 					: this.formatPrice(value)
 			};
 		},
@@ -635,16 +635,16 @@ export default {
 		variantFields() {
 			const fields = {
 				enabled: {
-					label: this.$t("programmatordev.stripe-checkout.variants.active"),
+					label: this.$t("programmatordev.stripe-checkout.options.active"),
 					name: "enabled",
 					text: [
-						this.$t("programmatordev.stripe-checkout.variants.disabled"),
-						this.$t("programmatordev.stripe-checkout.variants.enabled")
+						this.$t("programmatordev.stripe-checkout.options.disabled"),
+						this.$t("programmatordev.stripe-checkout.options.enabled")
 					],
 					type: "toggle"
 				},
 				sku: {
-					label: this.$t("programmatordev.stripe-checkout.variants.sku"),
+					label: this.$t("programmatordev.stripe-checkout.options.sku"),
 					name: "sku",
 					type: "text"
 				}
@@ -653,25 +653,25 @@ export default {
 			if (this.priceSource === "kirby") {
 				fields.price = {
 					after: this.currency,
-					label: this.$t("programmatordev.stripe-checkout.variants.price"),
+					label: this.$t("programmatordev.stripe-checkout.options.price"),
 					min: 0,
 					name: "price",
-					placeholder: this.$t("programmatordev.stripe-checkout.variants.price.inherit"),
+					placeholder: this.$t("programmatordev.stripe-checkout.options.price.inherit"),
 					step: "any",
 					type: "number"
 				};
 			} else {
 				fields.stripePriceId = {
-					label: this.$t("programmatordev.stripe-checkout.variants.price"),
+					label: this.$t("programmatordev.stripe-checkout.options.price"),
 					name: "stripePriceId",
-					placeholder: this.$t("programmatordev.stripe-checkout.variants.price.inherit"),
+					placeholder: this.$t("programmatordev.stripe-checkout.options.price.inherit"),
 					type: "text"
 				};
 			}
 
 			fields.requiresShipping = {
 				empty: false,
-				label: this.$t("programmatordev.stripe-checkout.variants.shipping.label"),
+				label: this.$t("programmatordev.stripe-checkout.options.shipping.label"),
 				name: "requiresShipping",
 				options: this.shippingOptions,
 				type: "select"
@@ -692,7 +692,7 @@ export default {
 			if (
 				this.technicalLocked ||
 				this.disabled ||
-				this.localValue.groups.some(group => group.id === id) === false
+				this.localValue.options.some(option => option.id === id) === false
 			) {
 				return;
 			}
@@ -700,23 +700,23 @@ export default {
 			this.$panel.dialog.open({
 				component: "k-remove-dialog",
 				props: {
-					text: this.$t("programmatordev.stripe-checkout.variants.removalWarning")
+					text: this.$t("programmatordev.stripe-checkout.options.removalWarning")
 				},
 				on: {
 					submit: () => {
-						this.localValue.groups = this.localValue.groups.filter(
-							group => group.id !== id
+						this.localValue.options = this.localValue.options.filter(
+							option => option.id !== id
 						);
 						this.reconcile();
 						this.$panel.dialog.close();
-						this.$panel.drawer.close(this.groupDrawerId);
+						this.$panel.drawer.close(this.optionDrawerId);
 					}
 				}
 			});
 		},
 		variantLabel(variant) {
-			return this.localValue.groups
-				.map(group => group.values.find(value => value.id === variant.choices[group.id])?.label)
+			return this.localValue.options
+				.map(option => option.values.find(value => value.id === variant.selectedOptions[option.id])?.label)
 				.filter(Boolean)
 				.join(" / ");
 		}
@@ -725,49 +725,49 @@ export default {
 </script>
 
 <style>
-.k-stripe-checkout-variants-field__content {
+.k-stripe-checkout-options-field__content {
 	display: grid;
 	gap: var(--spacing-4);
 }
 
-.k-stripe-checkout-variants-field__content[data-language-transitioning="true"] {
+.k-stripe-checkout-options-field__content[data-language-transitioning="true"] {
 	visibility: hidden;
 }
 
-.k-stripe-checkout-variants-field__matrix {
+.k-stripe-checkout-options-field__matrix {
 	display: grid;
 	gap: var(--spacing-2);
 }
 
-.k-stripe-checkout-variants-field__matrix-header {
+.k-stripe-checkout-options-field__matrix-header {
 	display: flex;
 	align-items: center;
 	gap: var(--spacing-2);
 }
 
-.k-stripe-checkout-variants-field__matrix-count {
+.k-stripe-checkout-options-field__matrix-count {
 	color: var(--color-text-dimmed);
 	font-size: var(--text-xs);
 }
 
-.k-stripe-checkout-variants-field__groups-table td.k-table-column,
-.k-stripe-checkout-variants-field__variants-table td.k-table-column {
+.k-stripe-checkout-options-field__options-table td.k-table-column,
+.k-stripe-checkout-options-field__variants-table td.k-table-column {
 	cursor: pointer;
 }
 
-.k-stripe-checkout-variants-field__variants-table :is(th, td)[data-column-id="enabled"] {
+.k-stripe-checkout-options-field__variants-table :is(th, td)[data-column-id="enabled"] {
 	width: 4rem !important;
 }
 
-.k-stripe-checkout-variants-field__variants-table td[data-column-id="enabled"] {
+.k-stripe-checkout-options-field__variants-table td[data-column-id="enabled"] {
 	cursor: default;
 }
 
-.k-stripe-checkout-variants-field__variants-table td[data-column-id="enabled"] .k-toggle-input {
+.k-stripe-checkout-options-field__variants-table td[data-column-id="enabled"] .k-toggle-input {
 	justify-content: center;
 }
 
-.k-stripe-checkout-variants-field__variants-table td[data-column-id="enabled"] .k-choice-input-label {
+.k-stripe-checkout-options-field__variants-table td[data-column-id="enabled"] .k-choice-input-label {
 	/* Preserve the toggle's accessible text without adding visual table noise. */
 	position: absolute;
 	width: 1px;

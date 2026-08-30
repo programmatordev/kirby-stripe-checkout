@@ -15,11 +15,11 @@ use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductUnavailableException;
 use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
+use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelection;
 use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
-use ProgrammatorDev\StripeCheckout\Product\SelectedChoice;
+use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use Throwable;
 
@@ -38,27 +38,27 @@ final class KirbyPageProductResolver implements ProductResolverInterface
     ) {}
 
     public function resolve(
-        ProductSelection $selection,
+        ProductRequest $request,
         ProductResolutionContext $context,
     ): ResolvedProduct {
-        $page = $this->locator->find($context->site(), $selection->reference());
+        $page = $this->locator->find($context->site(), $request->reference());
         $fields = $this->configuration->fields();
         $technicalContent = $this->technicalContent($page);
         $displayContent = $this->displayContent($page, $context->languageCode());
-        $canonical = $this->variants($this->field($technicalContent, $fields['variants'])->value());
+        $canonical = $this->optionData($this->field($technicalContent, $fields['options'])->value());
         $localized = $this->localizedVariants(
             $canonical,
-            $this->field($displayContent, $fields['variants'])->value(),
+            $this->field($displayContent, $fields['options'])->value(),
         );
-        $variant = $this->matchedVariant($canonical, $selection->choices());
-        $resolvedSelection = new ProductSelection(
+        $variant = $this->matchedVariant($canonical, $request->selectedOptions());
+        $resolvedRequest = new ProductRequest(
             $this->locator->canonicalReference($page),
-            $selection->quantity(),
-            $selection->choices(),
+            $request->quantity(),
+            $request->selectedOptions(),
         );
         $price = $this->price($technicalContent, $fields, $variant, $context);
         $shipping = $this->shipping($technicalContent, $fields, $variant, $context);
-        $selectedChoices = $this->selectedChoices($localized['groups'], $selection->choices());
+        $selectedOptions = $this->selectedOptions($localized['options'], $request->selectedOptions());
         [$images, $imagesTruncated] = $this->images(
             $displayContent,
             $technicalContent,
@@ -68,7 +68,7 @@ final class KirbyPageProductResolver implements ProductResolverInterface
             ? null
             : $this->localizedString($displayContent, $technicalContent, $fields['description']);
         $name = $this->localizedString($displayContent, $technicalContent, $fields['name']);
-        if ($canonical['groups'] === []) {
+        if ($canonical['options'] === []) {
             $sku = $this->optionalString($this->field($technicalContent, $fields['sku'])->value());
         } elseif ($variant !== null) {
             $sku = $variant['sku'];
@@ -81,11 +81,11 @@ final class KirbyPageProductResolver implements ProductResolverInterface
         }
 
         return new ResolvedProduct(
-            selection: $resolvedSelection,
+            request: $resolvedRequest,
             name: $name,
             requiresShipping: $shipping,
             price: $price,
-            choices: $selectedChoices,
+            selectedOptions: $selectedOptions,
             description: $description,
             imageUrls: $images,
             sku: $sku,
@@ -95,50 +95,50 @@ final class KirbyPageProductResolver implements ProductResolverInterface
     }
 
     /**
-     * @return array{groups: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, choices: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>}
+     * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>}
      */
-    private function variants(mixed $value): array
+    private function optionData(mixed $value): array
     {
         try {
             return $this->schema->canonical($value);
         } catch (Throwable $error) {
-            throw new InvalidProductException('product.variants_invalid', $error);
+            throw new InvalidProductException('product.options_invalid', $error);
         }
     }
 
     /**
-     * @param array{groups: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, choices: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>} $canonical
-     * @return array{groups: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, choices: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>}
+     * @param array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>} $canonical
+     * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>}
      */
     private function localizedVariants(array $canonical, mixed $overlay): array
     {
         try {
             return $this->schema->localized($canonical, $overlay);
         } catch (Throwable $error) {
-            throw new InvalidProductException('product.variants_invalid', $error);
+            throw new InvalidProductException('product.options_invalid', $error);
         }
     }
 
     /**
-     * @param array{groups: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, choices: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>} $canonical
-     * @param array<string, string> $choices
-     * @return array{id: string, choices: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}|null
+     * @param array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>} $canonical
+     * @param array<string, string> $selectedOptions
+     * @return array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}|null
      */
-    private function matchedVariant(array $canonical, array $choices): ?array
+    private function matchedVariant(array $canonical, array $selectedOptions): ?array
     {
-        if ($canonical['groups'] === []) {
-            if ($choices !== []) {
-                throw new InvalidProductException('product.choices_invalid');
+        if ($canonical['options'] === []) {
+            if ($selectedOptions !== []) {
+                throw new InvalidProductException('product.selected_options_invalid');
             }
 
             return null;
         }
 
         foreach ($canonical['variants'] as $variant) {
-            $variantChoices = $variant['choices'];
-            ksort($variantChoices);
+            $variantOptions = $variant['selectedOptions'];
+            ksort($variantOptions);
 
-            if ($variantChoices === $choices) {
+            if ($variantOptions === $selectedOptions) {
                 if ($variant['enabled'] === false) {
                     throw new ProductUnavailableException('product.variant_unavailable');
                 }
@@ -147,12 +147,12 @@ final class KirbyPageProductResolver implements ProductResolverInterface
             }
         }
 
-        throw new InvalidProductException('product.choices_invalid');
+        throw new InvalidProductException('product.selected_options_invalid');
     }
 
     /**
-     * @param array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePriceId: string, requiresShipping: string, variants: string} $fields
-     * @param array{id: string, choices: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}|null $variant
+     * @param array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePriceId: string, requiresShipping: string, options: string} $fields
+     * @param array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}|null $variant
      */
     private function price(
         Content $content,
@@ -189,8 +189,8 @@ final class KirbyPageProductResolver implements ProductResolverInterface
     }
 
     /**
-     * @param array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePriceId: string, requiresShipping: string, variants: string} $fields
-     * @param array{id: string, choices: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}|null $variant
+     * @param array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePriceId: string, requiresShipping: string, options: string} $fields
+     * @param array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}|null $variant
      */
     private function shipping(
         Content $content,
@@ -220,19 +220,19 @@ final class KirbyPageProductResolver implements ProductResolverInterface
     }
 
     /**
-     * @param list<array{id: string, label: string, values: list<array{id: string, label: string}>}> $groups
-     * @param array<string, string> $choices
-     * @return list<SelectedChoice>
+     * @param list<array{id: string, label: string, values: list<array{id: string, label: string}>}> $options
+     * @param array<string, string> $selectedOptions
+     * @return list<SelectedOption>
      */
-    private function selectedChoices(array $groups, array $choices): array
+    private function selectedOptions(array $options, array $selectedOptions): array
     {
         $selected = [];
 
-        foreach ($groups as $group) {
-            $valueId = $choices[$group['id']] ?? null;
+        foreach ($options as $option) {
+            $valueId = $selectedOptions[$option['id']] ?? null;
             $value = null;
 
-            foreach ($group['values'] as $candidate) {
+            foreach ($option['values'] as $candidate) {
                 if ($candidate['id'] === $valueId) {
                     $value = $candidate;
                     break;
@@ -240,12 +240,12 @@ final class KirbyPageProductResolver implements ProductResolverInterface
             }
 
             if ($value === null) {
-                throw new InvalidProductException('product.choices_invalid');
+                throw new InvalidProductException('product.selected_options_invalid');
             }
 
-            $selected[] = new SelectedChoice(
-                $group['id'],
-                $group['label'],
+            $selected[] = new SelectedOption(
+                $option['id'],
+                $option['label'],
                 $value['id'],
                 $value['label'],
             );

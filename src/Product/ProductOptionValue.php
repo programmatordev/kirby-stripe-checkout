@@ -6,8 +6,8 @@ namespace ProgrammatorDev\StripeCheckout\Product;
 
 use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
 
-/** Exposes one stable, localized value within a selection group. */
-final readonly class ProductSelectionValue
+/** Exposes one stable, localized value within a product option. */
+final readonly class ProductOptionValue
 {
     private string $id;
     private string $label;

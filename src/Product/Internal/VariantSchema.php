@@ -15,51 +15,51 @@ use Kirby\Data\Yaml;
 final class VariantSchema
 {
     /**
-     * @return array{groups: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, choices: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>}
+     * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>}
      */
     public function canonical(mixed $value): array
     {
         $data = $this->decode($value);
 
-        if (array_diff(array_keys($data), ['groups', 'variants']) !== []) {
+        if (array_diff(array_keys($data), ['options', 'variants']) !== []) {
             throw new InvalidArgumentException('Variant data contains an unknown root property.');
         }
 
-        $groups = $this->groups($data['groups'] ?? []);
-        $variants = $this->variants($data['variants'] ?? [], $groups);
+        $options = $this->options($data['options'] ?? []);
+        $variants = $this->variants($data['variants'] ?? [], $options);
 
-        if ($groups === [] && $variants !== []) {
-            throw new InvalidArgumentException('Variants require at least one group.');
+        if ($options === [] && $variants !== []) {
+            throw new InvalidArgumentException('Variants require at least one option.');
         }
 
         return [
-            'groups' => $groups,
-            'variants' => (new VariantMatrix())->reconcile($groups, $variants),
+            'options' => $options,
+            'variants' => (new VariantMatrix())->reconcile($options, $variants),
         ];
     }
 
     /**
-     * @param array{groups: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, choices: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>} $canonical
-     * @return array{groups: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>}
+     * @param array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>} $canonical
+     * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>}
      */
     public function overlay(array $canonical, mixed $value): array
     {
         $input = $this->decode($value);
-        $submittedGroups = is_array($input['groups'] ?? null) ? $input['groups'] : [];
+        $submittedOptions = is_array($input['options'] ?? null) ? $input['options'] : [];
         $submittedById = [];
 
-        foreach ($submittedGroups as $submittedGroup) {
-            if (is_array($submittedGroup) && is_string($submittedGroup['id'] ?? null)) {
-                $submittedById[$submittedGroup['id']] = $submittedGroup;
+        foreach ($submittedOptions as $submittedOption) {
+            if (is_array($submittedOption) && is_string($submittedOption['id'] ?? null)) {
+                $submittedById[$submittedOption['id']] = $submittedOption;
             }
         }
 
-        $groups = [];
+        $options = [];
 
-        foreach ($canonical['groups'] as $group) {
-            $submittedGroup = $submittedById[$group['id']] ?? [];
-            $submittedValues = is_array($submittedGroup['values'] ?? null)
-                ? $submittedGroup['values']
+        foreach ($canonical['options'] as $option) {
+            $submittedOption = $submittedById[$option['id']] ?? [];
+            $submittedValues = is_array($submittedOption['values'] ?? null)
+                ? $submittedOption['values']
                 : [];
             $submittedValuesById = [];
 
@@ -71,7 +71,7 @@ final class VariantSchema
 
             $values = [];
 
-            foreach ($group['values'] as $valueDefinition) {
+            foreach ($option['values'] as $valueDefinition) {
                 $submittedValue = $submittedValuesById[$valueDefinition['id']] ?? [];
                 $values[] = [
                     'id' => $valueDefinition['id'],
@@ -79,39 +79,39 @@ final class VariantSchema
                 ];
             }
 
-            $groups[] = [
-                'id' => $group['id'],
-                'label' => $this->optionalLabel($submittedGroup['label'] ?? null),
+            $options[] = [
+                'id' => $option['id'],
+                'label' => $this->optionalLabel($submittedOption['label'] ?? null),
                 'values' => $values,
             ];
         }
 
-        return ['groups' => $groups];
+        return ['options' => $options];
     }
 
     /**
-     * @param array{groups: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, choices: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>} $canonical
-     * @return array{groups: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, choices: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>}
+     * @param array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>} $canonical
+     * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>}
      */
     public function localized(array $canonical, mixed $overlay): array
     {
         $overlayData = $this->decode($overlay);
-        $overlayGroups = is_array($overlayData['groups'] ?? null) ? $overlayData['groups'] : [];
-        $groupsById = [];
+        $overlayOptions = is_array($overlayData['options'] ?? null) ? $overlayData['options'] : [];
+        $optionsById = [];
 
-        foreach ($overlayGroups as $group) {
-            if (is_array($group) && is_string($group['id'] ?? null)) {
-                $groupsById[$group['id']] = $group;
+        foreach ($overlayOptions as $option) {
+            if (is_array($option) && is_string($option['id'] ?? null)) {
+                $optionsById[$option['id']] = $option;
             }
         }
 
-        $localizedGroups = [];
+        $localizedOptions = [];
 
-        foreach ($canonical['groups'] as $group) {
-            $overlayGroup = $groupsById[$group['id']] ?? [];
+        foreach ($canonical['options'] as $option) {
+            $overlayOption = $optionsById[$option['id']] ?? [];
             $valuesById = [];
 
-            foreach (is_array($overlayGroup['values'] ?? null) ? $overlayGroup['values'] : [] as $value) {
+            foreach (is_array($overlayOption['values'] ?? null) ? $overlayOption['values'] : [] as $value) {
                 if (is_array($value) && is_string($value['id'] ?? null)) {
                     $valuesById[$value['id']] = $value;
                 }
@@ -119,20 +119,20 @@ final class VariantSchema
 
             $values = [];
 
-            foreach ($group['values'] as $value) {
+            foreach ($option['values'] as $value) {
                 $label = $this->optionalLabel($valuesById[$value['id']]['label'] ?? null);
                 $values[] = [...$value, 'label' => $label === '' ? $value['label'] : $label];
             }
 
-            $label = $this->optionalLabel($overlayGroup['label'] ?? null);
-            $localizedGroups[] = [
-                ...$group,
-                'label' => $label === '' ? $group['label'] : $label,
+            $label = $this->optionalLabel($overlayOption['label'] ?? null);
+            $localizedOptions[] = [
+                ...$option,
+                'label' => $label === '' ? $option['label'] : $label,
                 'values' => $values,
             ];
         }
 
-        return [...$canonical, 'groups' => $localizedGroups];
+        return [...$canonical, 'options' => $localizedOptions];
     }
 
     /** @return array<string, mixed> */
@@ -156,26 +156,26 @@ final class VariantSchema
     /**
      * @return list<array{id: string, label: string, values: list<array{id: string, label: string}>}>
      */
-    private function groups(mixed $groups): array
+    private function options(mixed $options): array
     {
-        if (is_array($groups) === false || array_is_list($groups) === false) {
-            throw new InvalidArgumentException('Variant groups must be a list.');
+        if (is_array($options) === false || array_is_list($options) === false) {
+            throw new InvalidArgumentException('Variant options must be a list.');
         }
 
         $normalized = [];
         $ids = [];
 
-        foreach ($groups as $group) {
-            if (is_array($group) === false) {
-                throw new InvalidArgumentException('Each variant group must be an object.');
+        foreach ($options as $option) {
+            if (is_array($option) === false) {
+                throw new InvalidArgumentException('Each variant option must be an object.');
             }
 
-            $id = $this->requiredId($group['id'] ?? null, 'group');
-            $this->assertUnique($ids, $id, 'group');
-            $values = $group['values'] ?? null;
+            $id = $this->requiredId($option['id'] ?? null, 'option');
+            $this->assertUnique($ids, $id, 'option');
+            $values = $option['values'] ?? null;
 
             if (is_array($values) === false || array_is_list($values) === false || $values === []) {
-                throw new InvalidArgumentException('Each variant group must contain at least one value.');
+                throw new InvalidArgumentException('Each variant option must contain at least one value.');
             }
 
             $normalizedValues = [];
@@ -196,7 +196,7 @@ final class VariantSchema
 
             $normalized[] = [
                 'id' => $id,
-                'label' => $this->requiredLabel($group['label'] ?? null, 'group'),
+                'label' => $this->requiredLabel($option['label'] ?? null, 'option'),
                 'values' => $normalizedValues,
             ];
         }
@@ -205,10 +205,10 @@ final class VariantSchema
     }
 
     /**
-     * @param list<array{id: string, label: string, values: list<array{id: string, label: string}>}> $groups
-     * @return list<array{id: string, choices: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>
+     * @param list<array{id: string, label: string, values: list<array{id: string, label: string}>}> $options
+     * @return list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>
      */
-    private function variants(mixed $variants, array $groups): array
+    private function variants(mixed $variants, array $options): array
     {
         if (is_array($variants) === false || array_is_list($variants) === false) {
             throw new InvalidArgumentException('Variants must be a list.');
@@ -216,13 +216,13 @@ final class VariantSchema
 
         $knownValues = [];
 
-        foreach ($groups as $group) {
-            $knownValues[$group['id']] = array_column($group['values'], 'id');
+        foreach ($options as $option) {
+            $knownValues[$option['id']] = array_column($option['values'], 'id');
         }
 
         $normalized = [];
         $ids = [];
-        $choiceKeys = [];
+        $optionCombinationKeys = [];
 
         foreach ($variants as $variant) {
             if (is_array($variant) === false) {
@@ -231,30 +231,30 @@ final class VariantSchema
 
             $id = $this->requiredId($variant['id'] ?? null, 'variant');
             $this->assertUnique($ids, $id, 'variant');
-            $choices = $variant['choices'] ?? null;
+            $selectedOptions = $variant['selectedOptions'] ?? null;
 
-            if (is_array($choices) === false) {
-                throw new InvalidArgumentException('Each variant must define its choices.');
+            if (is_array($selectedOptions) === false) {
+                throw new InvalidArgumentException('Each variant must define its selected options.');
             }
 
-            $normalizedChoices = [];
+            $normalizedOptions = [];
 
-            foreach ($knownValues as $groupId => $valueIds) {
-                $valueId = $choices[$groupId] ?? null;
+            foreach ($knownValues as $optionId => $valueIds) {
+                $valueId = $selectedOptions[$optionId] ?? null;
 
                 if (is_string($valueId) === false || in_array($valueId, $valueIds, true) === false) {
-                    throw new InvalidArgumentException('A variant references an unknown group value.');
+                    throw new InvalidArgumentException('A variant references an unknown option value.');
                 }
 
-                $normalizedChoices[$groupId] = $valueId;
+                $normalizedOptions[$optionId] = $valueId;
             }
 
-            if (count($choices) !== count($normalizedChoices)) {
-                throw new InvalidArgumentException('A variant contains an unknown group choice.');
+            if (count($selectedOptions) !== count($normalizedOptions)) {
+                throw new InvalidArgumentException('A variant contains an unknown selected option.');
             }
 
-            $choiceKey = VariantMatrix::choiceKey($normalizedChoices);
-            $this->assertUnique($choiceKeys, $choiceKey, 'combination');
+            $optionCombinationKey = VariantMatrix::optionCombinationKey($normalizedOptions);
+            $this->assertUnique($optionCombinationKeys, $optionCombinationKey, 'combination');
             $shipping = $variant['requiresShipping'] ?? 'inherit';
             $enabled = $variant['enabled'] ?? true;
 
@@ -268,7 +268,7 @@ final class VariantSchema
 
             $normalized[] = [
                 'id' => $id,
-                'choices' => $normalizedChoices,
+                'selectedOptions' => $normalizedOptions,
                 'enabled' => $enabled,
                 'sku' => $this->nullableString($variant['sku'] ?? null, 'sku'),
                 'price' => $this->nullableString($variant['price'] ?? null, 'price'),

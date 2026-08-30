@@ -8,8 +8,8 @@ use Kirby\Data\Json;
 $stripeCheckout = $site->stripeCheckout();
 $settings = $stripeCheckout->settings();
 $currency = $settings->currency();
-$selectionView = $stripeCheckout->productSelection($page);
-$selectionData = $selectionView->toArray();
+$productOptions = $stripeCheckout->productOptions($page);
+$optionsData = $productOptions->toArray();
 $price = $page->stripeCheckoutPrice()->value();
 $formattedPrice = $currency === null
     ? $price
@@ -24,18 +24,18 @@ snippet('layout', ['title' => $page->title()], slots: true);
     <p><?= esc($page->summary()) ?></p>
     <p><strong><?= esc($formattedPrice) ?></strong></p>
 
-    <?php if ($selectionData['groups'] !== []): ?>
+    <?php if ($optionsData['options'] !== []): ?>
         <form
             class="variant-prototype"
-            data-variants="<?= esc(Json::encode($selectionData['variants']), 'attr') ?>"
+            data-variants="<?= esc(Json::encode($optionsData['variants']), 'attr') ?>"
             onsubmit="return false"
         >
             <h2>Available options</h2>
-            <?php foreach ($selectionData['groups'] as $group): ?>
+            <?php foreach ($optionsData['options'] as $option): ?>
                 <label>
-                    <span><?= esc($group['label']) ?></span>
-                    <select name="stripeCheckoutChoices[<?= esc($group['id'], 'attr') ?>]">
-                        <?php foreach ($group['values'] as $value): ?>
+                    <span><?= esc($option['label']) ?></span>
+                    <select name="stripeCheckoutSelectedOptions[<?= esc($option['id'], 'attr') ?>]">
+                        <?php foreach ($option['values'] as $value): ?>
                             <option value="<?= esc($value['id'], 'attr') ?>"><?= esc($value['label']) ?></option>
                         <?php endforeach ?>
                     </select>
@@ -50,7 +50,7 @@ snippet('layout', ['title' => $page->title()], slots: true);
                 const status = form.querySelector('[data-variant-status]');
 
                 const resolve = () => {
-                    const choices = Object.fromEntries(
+                    const selectedOptions = Object.fromEntries(
                         [...form.querySelectorAll('select')].map(select => [
                             select.name.match(/\[([^\]]+)\]/)[1],
                             select.value,
@@ -58,13 +58,13 @@ snippet('layout', ['title' => $page->title()], slots: true);
                     );
                     const variant = variants.find(candidate =>
                         candidate.enabled === true
-                        && Object.entries(choices).every(([groupId, valueId]) =>
-                            candidate.choices[groupId] === valueId
+                        && Object.entries(selectedOptions).every(([optionId, valueId]) =>
+                            candidate.selectedOptions[optionId] === valueId
                         )
                     );
 
                     // The browser resolves feedback only. A future cart endpoint
-                    // will rematch the submitted choices against canonical data.
+                    // will rematch the submitted options against canonical data.
                     status.textContent = variant ? 'Available combination' : 'Unavailable combination';
                 };
 

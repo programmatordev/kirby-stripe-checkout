@@ -16,12 +16,12 @@ use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Product\Internal\ClosureProductResolver;
 use ProgrammatorDev\StripeCheckout\Product\Internal\KirbyPageLocator;
 use ProgrammatorDev\StripeCheckout\Product\Internal\KirbyPageProductResolver;
+use ProgrammatorDev\StripeCheckout\Product\Internal\ProductOptionsFactory;
 use ProgrammatorDev\StripeCheckout\Product\Internal\ProductResolutionService;
-use ProgrammatorDev\StripeCheckout\Product\Internal\ProductSelectionViewFactory;
+use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
+use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelection;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelectionView;
 use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use ProgrammatorDev\StripeCheckout\Translation\LocaleResolver;
 
@@ -45,19 +45,19 @@ final class RuntimeFactory
             ->settings();
     }
 
-    public function resolveProduct(ProductSelection $selection): ResolvedProduct
+    public function resolveProduct(ProductRequest $request): ResolvedProduct
     {
         return (new ProductResolutionService($this->productResolver()))->resolve(
-            $selection,
+            $request,
             $this->productContext(),
         );
     }
 
-    public function productSelection(Page|string $reference): ProductSelectionView
+    public function productOptions(Page|string $reference): ProductOptions
     {
         $page = (new KirbyPageLocator())->find($this->kirby->site(), $reference);
 
-        return (new ProductSelectionViewFactory($this->products()))->forPage(
+        return (new ProductOptionsFactory($this->products()))->forPage(
             $page,
             $this->kirby->language()?->code(),
         );

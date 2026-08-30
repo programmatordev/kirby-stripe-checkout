@@ -6,11 +6,11 @@ Summary: Um produto com valores selecionáveis para testar a resolução e valid
 
 ----
 
-Stripecheckoutvariants:
+Stripecheckoutoptions:
 
-groups:
+options:
   -
-    id: formatGroup0001
+    id: formatOption0001
     label: Formato
     values:
       -
@@ -20,7 +20,7 @@ groups:
         id: printedValue001
         label: Impresso
   -
-    id: languageGroup01
+    id: languageOption01
     label: Idioma
     values:
       -

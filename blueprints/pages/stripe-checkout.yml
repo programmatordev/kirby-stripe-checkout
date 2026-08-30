@@ -61,28 +61,28 @@ tabs:
                 "*": programmatordev.stripe-checkout.settings.defaultRequiresShipping.yes
               "no":
                 "*": programmatordev.stripe-checkout.settings.defaultRequiresShipping.no
-          variantPresets:
-            label: programmatordev.stripe-checkout.settings.variantPresets.label
-            help: programmatordev.stripe-checkout.settings.variantPresets.help
+          optionPresets:
+            label: programmatordev.stripe-checkout.settings.optionPresets.label
+            help: programmatordev.stripe-checkout.settings.optionPresets.help
             type: structure
             translate: false
             fields:
               label:
-                label: programmatordev.stripe-checkout.settings.variantPresets.presetLabel
+                label: programmatordev.stripe-checkout.settings.optionPresets.presetLabel
                 type: text
                 required: true
-              groups:
-                label: programmatordev.stripe-checkout.settings.variantPresets.groups
+              options:
+                label: programmatordev.stripe-checkout.settings.optionPresets.options
                 type: structure
                 required: true
                 min: 1
                 fields:
                   label:
-                    label: programmatordev.stripe-checkout.settings.variantPresets.groupLabel
+                    label: programmatordev.stripe-checkout.settings.optionPresets.optionLabel
                     type: text
                     required: true
                   values:
-                    label: programmatordev.stripe-checkout.settings.variantPresets.values
+                    label: programmatordev.stripe-checkout.settings.optionPresets.values
                     type: tags
                     required: true
                     min: 1

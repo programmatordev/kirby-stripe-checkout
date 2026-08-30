@@ -28,7 +28,7 @@ final class ConfigurationResolver
         'price',
         'stripePriceId',
         'requiresShipping',
-        'variants',
+        'options',
     ];
     private const PRODUCT_KEYS = ['fields', 'resolver'];
     private const SETTINGS_KEYS = ['priceSource', 'currency', 'defaultRequiresShipping'];
@@ -123,7 +123,7 @@ final class ConfigurationResolver
             'price' => 'stripeCheckoutPrice',
             'stripePriceId' => 'stripeCheckoutPriceId',
             'requiresShipping' => 'stripeCheckoutRequiresShipping',
-            'variants' => 'stripeCheckoutVariants',
+            'options' => 'stripeCheckoutOptions',
             ...$fields,
         ];
 
@@ -145,7 +145,7 @@ final class ConfigurationResolver
             }
         }
 
-        /** @var array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePriceId: string, requiresShipping: string, variants: string} $fields */
+        /** @var array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePriceId: string, requiresShipping: string, options: string} $fields */
         return new ProductConfiguration($resolver, $fields);
     }
 

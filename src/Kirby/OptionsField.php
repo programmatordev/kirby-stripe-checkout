@@ -18,7 +18,7 @@ use ProgrammatorDev\StripeCheckout\Product\Internal\VariantSchema;
  *
  * @internal
  */
-final class VariantField extends FieldClass
+final class OptionsField extends FieldClass
 {
     private readonly string $currency;
     private readonly string $priceSource;
@@ -45,11 +45,11 @@ final class VariantField extends FieldClass
         $this->presets = $presets;
     }
 
-    /** @return array{groups: array<mixed>, variants: array<mixed>} */
+    /** @return array{options: array<mixed>, variants: array<mixed>} */
     public function emptyValue(): array
     {
         return [
-            'groups' => [],
+            'options' => [],
             'variants' => [],
         ];
     }
@@ -106,7 +106,7 @@ final class VariantField extends FieldClass
 
     public function type(): string
     {
-        return 'stripe-checkout-variants';
+        return 'stripe-checkout-options';
     }
 
     /** @return array<string, callable> */
@@ -122,7 +122,7 @@ final class VariantField extends FieldClass
     }
 
     /**
-     * @return array{groups: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, choices: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>}
+     * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>}
      */
     private function canonicalValue(): array
     {

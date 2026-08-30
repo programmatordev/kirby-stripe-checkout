@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-	choiceKey,
+	optionCombinationKey,
 	combinations,
 	decimalString,
 	formatCurrency,
@@ -11,9 +11,9 @@ import {
 	reconcile,
 	resolveStableId,
 	stableId
-} from "../src/variants.js";
+} from "../src/product-options.js";
 
-const groups = [
+const options = [
 	{
 		id: "colour",
 		label: "Colour",
@@ -65,8 +65,8 @@ test("formats storefront prices with the currency's standard decimal digits", ()
 	assert.equal(formatCurrency("16", "KWD", "en-US"), "KWD\u00a016.000");
 });
 
-test("generates the Cartesian product of group values", () => {
-	assert.deepEqual(combinations(groups), [
+test("generates the Cartesian product of option values", () => {
+	assert.deepEqual(combinations(options), [
 		{ colour: "red", size: "small" },
 		{ colour: "red", size: "large" },
 		{ colour: "blue", size: "small" },
@@ -86,25 +86,25 @@ test("generates unique combinations across representative matrix shapes", () => 
 	];
 
 	for (const { sizes, expected } of cases) {
-		const matrixGroups = sizes.map((size, groupIndex) => ({
-			id: `group-${groupIndex}`,
-			label: `Group ${groupIndex}`,
+		const matrixOptions = sizes.map((size, optionIndex) => ({
+			id: `option-${optionIndex}`,
+			label: `Option ${optionIndex}`,
 			values: Array.from({ length: size }, (_, valueIndex) => ({
-				id: `value-${groupIndex}-${valueIndex}`,
+				id: `value-${optionIndex}-${valueIndex}`,
 				label: `Value ${valueIndex}`
 			}))
 		}));
-		const generated = combinations(matrixGroups);
+		const generated = combinations(matrixOptions);
 
 		assert.equal(generated.length, expected, sizes.join("×") || "empty");
-		assert.equal(new Set(generated.map(choiceKey)).size, expected);
+		assert.equal(new Set(generated.map(optionCombinationKey)).size, expected);
 	}
 });
 
 test("reconciliation preserves matching merchant data and creates only missing variants", () => {
 	const existing = [{
 		id: "kept-variant",
-		choices: { size: "small", colour: "red" },
+		selectedOptions: { size: "small", colour: "red" },
 		enabled: false,
 		sku: "RED-S",
 		price: "20.00",
@@ -112,7 +112,7 @@ test("reconciliation preserves matching merchant data and creates only missing v
 		requiresShipping: "yes"
 	}];
 	let nextId = 0;
-	const variants = reconcile(groups, existing, () => `new-${++nextId}`);
+	const variants = reconcile(options, existing, () => `new-${++nextId}`);
 
 	assert.equal(variants.length, 4);
 	assert.deepEqual(variants[0], existing[0]);
@@ -128,61 +128,61 @@ test("reconciliation preserves matching merchant data and creates only missing v
 
 test("reconciliation preserves identities through reorder, addition, and removal", () => {
 	let nextId = 0;
-	const initial = reconcile(groups, [], () => `variant-${++nextId}`);
-	const initialIds = new Map(initial.map(variant => [choiceKey(variant.choices), variant.id]));
-	const reorderedGroups = [
-		{ ...groups[1], values: [...groups[1].values].reverse() },
-		{ ...groups[0], values: [...groups[0].values].reverse() }
+	const initial = reconcile(options, [], () => `variant-${++nextId}`);
+	const initialIds = new Map(initial.map(variant => [optionCombinationKey(variant.selectedOptions), variant.id]));
+	const reorderedOptions = [
+		{ ...options[1], values: [...options[1].values].reverse() },
+		{ ...options[0], values: [...options[0].values].reverse() }
 	];
-	const reordered = reconcile(reorderedGroups, initial, () => {
+	const reordered = reconcile(reorderedOptions, initial, () => {
 		throw new Error("Reordering must not create variants");
 	});
 
 	assert.deepEqual(
-		new Map(reordered.map(variant => [choiceKey(variant.choices), variant.id])),
+		new Map(reordered.map(variant => [optionCombinationKey(variant.selectedOptions), variant.id])),
 		initialIds
 	);
 
-	const expandedGroups = [
+	const expandedOptions = [
 		{
-			...groups[0],
-			values: [...groups[0].values, { id: "green", label: "Green" }]
+			...options[0],
+			values: [...options[0].values, { id: "green", label: "Green" }]
 		},
-		groups[1]
+		options[1]
 	];
-	const expanded = reconcile(expandedGroups, initial, () => `variant-${++nextId}`);
+	const expanded = reconcile(expandedOptions, initial, () => `variant-${++nextId}`);
 
 	assert.equal(expanded.length, 6);
-	assert.equal(expanded.filter(variant => initialIds.has(choiceKey(variant.choices))).length, 4);
+	assert.equal(expanded.filter(variant => initialIds.has(optionCombinationKey(variant.selectedOptions))).length, 4);
 
-	const reducedGroups = [
-		{ ...groups[0], values: [groups[0].values[0]] },
-		groups[1]
+	const reducedOptions = [
+		{ ...options[0], values: [options[0].values[0]] },
+		options[1]
 	];
-	const reduced = reconcile(reducedGroups, expanded, () => {
+	const reduced = reconcile(reducedOptions, expanded, () => {
 		throw new Error("Removing values must not create variants");
 	});
 
 	assert.equal(reduced.length, 2);
-	assert.ok(reduced.every(variant => variant.choices.colour === "red"));
-	assert.ok(reduced.every(variant => initialIds.get(choiceKey(variant.choices)) === variant.id));
+	assert.ok(reduced.every(variant => variant.selectedOptions.colour === "red"));
+	assert.ok(reduced.every(variant => initialIds.get(optionCombinationKey(variant.selectedOptions)) === variant.id));
 });
 
-test("choice matching ignores object key order and rejects disabled variants", () => {
+test("option matching ignores object key order and rejects disabled variants", () => {
 	const variants = [
-		{ id: "enabled", choices: { colour: "red", size: "small" }, enabled: true },
-		{ id: "disabled", choices: { colour: "blue", size: "large" }, enabled: false }
+		{ id: "enabled", selectedOptions: { colour: "red", size: "small" }, enabled: true },
+		{ id: "disabled", selectedOptions: { colour: "blue", size: "large" }, enabled: false }
 	];
 
-	assert.equal(choiceKey({ size: "small", colour: "red" }), "colour:red|size:small");
+	assert.equal(optionCombinationKey({ size: "small", colour: "red" }), "colour:red|size:small");
 	assert.equal(matchVariant(variants, { size: "small", colour: "red" })?.id, "enabled");
 	assert.equal(matchVariant(variants, { size: "large", colour: "blue" }), null);
 });
 
-test("choice matching rejects delimiter collisions and incomplete selections", () => {
+test("option matching rejects delimiter collisions and incomplete selections", () => {
 	const variants = [{
 		id: "canonical",
-		choices: { colour: "red", size: "small" },
+		selectedOptions: { colour: "red", size: "small" },
 		enabled: true
 	}];
 
@@ -193,7 +193,7 @@ test("choice matching rejects delimiter collisions and incomplete selections", (
 test("preset imports are independent copies with fresh local IDs", () => {
 	const preset = {
 		label: "T-shirt",
-		groups: [{ label: "Size", values: ["Small", "Large"] }]
+		options: [{ label: "Size", values: ["Small", "Large"] }]
 	};
 	let id = 0;
 	const first = importPreset(preset, () => `first-${++id}`);

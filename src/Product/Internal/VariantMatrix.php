@@ -23,31 +23,31 @@ final class VariantMatrix
     }
 
     /**
-     * @param list<array{id: string, label: string, values: list<array{id: string, label: string}>}> $groups
-     * @param list<array{id: string, choices: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}> $variants
-     * @return list<array{id: string, choices: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>
+     * @param list<array{id: string, label: string, values: list<array{id: string, label: string}>}> $options
+     * @param list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}> $variants
+     * @return list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>
      */
-    public function reconcile(array $groups, array $variants): array
+    public function reconcile(array $options, array $variants): array
     {
-        if ($groups === []) {
+        if ($options === []) {
             return [];
         }
 
         $existing = [];
 
         foreach ($variants as $variant) {
-            $existing[self::choiceKey($variant['choices'])] = $variant;
+            $existing[self::optionCombinationKey($variant['selectedOptions'])] = $variant;
         }
 
         $reconciled = [];
 
-        foreach ($this->combinations($groups) as $choices) {
-            $key = self::choiceKey($choices);
+        foreach ($this->combinations($options) as $selectedOptions) {
+            $key = self::optionCombinationKey($selectedOptions);
             $variant = $existing[$key] ?? null;
 
             $reconciled[] = $variant ?? [
-                'id' => ($this->idGenerator)($choices),
-                'choices' => $choices,
+                'id' => ($this->idGenerator)($selectedOptions),
+                'selectedOptions' => $selectedOptions,
                 'enabled' => true,
                 'sku' => null,
                 'price' => null,
@@ -59,40 +59,40 @@ final class VariantMatrix
         return $reconciled;
     }
 
-    /** @param array<string, string> $choices */
-    public static function choiceKey(array $choices): string
+    /** @param array<string, string> $selectedOptions */
+    public static function optionCombinationKey(array $selectedOptions): string
     {
-        ksort($choices);
+        ksort($selectedOptions);
 
         return implode('|', array_map(
-            static fn(string $groupId, string $valueId): string => $groupId . ':' . $valueId,
-            array_keys($choices),
-            array_values($choices),
+            static fn(string $optionId, string $valueId): string => $optionId . ':' . $valueId,
+            array_keys($selectedOptions),
+            array_values($selectedOptions),
         ));
     }
 
-    /** @param array<string, string> $choices */
-    private static function generatedId(array $choices): string
+    /** @param array<string, string> $selectedOptions */
+    private static function generatedId(array $selectedOptions): string
     {
         // Keep server-projected variants stable until the Panel persists the
         // random identifier created during an interactive edit.
-        return substr(hash('sha256', self::choiceKey($choices)), 0, 16);
+        return substr(hash('sha256', self::optionCombinationKey($selectedOptions)), 0, 16);
     }
 
     /**
-     * @param list<array{id: string, label: string, values: list<array{id: string, label: string}>}> $groups
+     * @param list<array{id: string, label: string, values: list<array{id: string, label: string}>}> $options
      * @return list<array<string, string>>
      */
-    private function combinations(array $groups): array
+    private function combinations(array $options): array
     {
         $combinations = [[]];
 
-        foreach ($groups as $group) {
+        foreach ($options as $option) {
             $next = [];
 
             foreach ($combinations as $combination) {
-                foreach ($group['values'] as $value) {
-                    $next[] = [...$combination, $group['id'] => $value['id']];
+                foreach ($option['values'] as $value) {
+                    $next[] = [...$combination, $option['id'] => $value['id']];
                 }
             }
 

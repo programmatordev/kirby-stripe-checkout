@@ -9,56 +9,56 @@ use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelection;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelectionGroup;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelectionValue;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelectionVariant;
-use ProgrammatorDev\StripeCheckout\Product\ProductSelectionView;
+use ProgrammatorDev\StripeCheckout\Product\ProductOption;
+use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
+use ProgrammatorDev\StripeCheckout\Product\ProductOptionValue;
+use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
+use ProgrammatorDev\StripeCheckout\Product\ProductVariant;
 use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
-use ProgrammatorDev\StripeCheckout\Product\SelectedChoice;
+use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 
 final class ProductValuesTest extends TestCase
 {
-    public function testSelectionNormalizesChoiceOrderWithoutChangingTheInput(): void
+    public function testRequestNormalizesSelectedOptionOrderWithoutChangingTheInput(): void
     {
-        $selection = new ProductSelection(
+        $request = new ProductRequest(
             'products/shirt',
             2,
-            ['sizeGroup' => 'largeValue', 'colourGroup' => 'blueValue'],
+            ['sizeOption' => 'largeValue', 'colourOption' => 'blueValue'],
         );
 
-        $this->assertSame('products/shirt', $selection->reference());
-        $this->assertSame(2, $selection->quantity());
+        $this->assertSame('products/shirt', $request->reference());
+        $this->assertSame(2, $request->quantity());
         $this->assertSame([
-            'colourGroup' => 'blueValue',
-            'sizeGroup' => 'largeValue',
-        ], $selection->choices());
+            'colourOption' => 'blueValue',
+            'sizeOption' => 'largeValue',
+        ], $request->selectedOptions());
     }
 
-    public function testSelectionRejectsInvalidQuantity(): void
+    public function testRequestRejectsInvalidQuantity(): void
     {
         try {
-            new ProductSelection('products/shirt', 0);
+            new ProductRequest('products/shirt', 0);
             $this->fail('Expected an invalid quantity to be rejected.');
         } catch (InvalidProductException $error) {
-            $this->assertSame('product.selection_invalid', $error->errorCode());
+            $this->assertSame('product.request_invalid', $error->errorCode());
         }
     }
 
     public function testResolvedProductCarriesAnExactTrustedSnapshot(): void
     {
-        $selection = new ProductSelection(
+        $request = new ProductRequest(
             'page://shirt000000001',
             2,
-            ['sizeGroup' => 'largeValue'],
+            ['sizeOption' => 'largeValue'],
         );
         $product = new ResolvedProduct(
-            selection: $selection,
+            request: $request,
             name: 'T-shirt',
             requiresShipping: true,
             price: new InlinePrice(Money::of('16.00', 'EUR')),
-            choices: [new SelectedChoice('sizeGroup', 'Size', 'largeValue', 'Large')],
+            selectedOptions: [new SelectedOption('sizeOption', 'Size', 'largeValue', 'Large')],
             description: 'Heavy cotton.',
             imageUrls: ['https://example.test/shirt.jpg'],
             sku: 'SHIRT-L',
@@ -75,39 +75,39 @@ final class ProductValuesTest extends TestCase
         $this->assertSame(['https://example.test/shirt.jpg'], $product->imageUrls());
     }
 
-    public function testResolvedProductRejectsChoicesThatDoNotMatchTheSelection(): void
+    public function testResolvedProductRejectsSelectedOptionsThatDoNotMatchTheRequest(): void
     {
         $this->expectException(InvalidProductException::class);
-        $this->expectExceptionMessage('product.choices_invalid');
+        $this->expectExceptionMessage('product.selected_options_invalid');
 
         new ResolvedProduct(
-            selection: new ProductSelection('page://shirt000000001', choices: [
-                'sizeGroup' => 'largeValue',
+            request: new ProductRequest('page://shirt000000001', selectedOptions: [
+                'sizeOption' => 'largeValue',
             ]),
             name: 'T-shirt',
             requiresShipping: true,
             price: new StripePriceReference('price_fixture'),
-            choices: [new SelectedChoice('sizeGroup', 'Size', 'smallValue', 'Small')],
+            selectedOptions: [new SelectedOption('sizeOption', 'Size', 'smallValue', 'Small')],
             variantId: 'largeVariant0001',
         );
     }
 
-    public function testSelectionViewExposesOnlySafeLocalizedSelectionFacts(): void
+    public function testProductOptionsExposeOnlySafeLocalizedFacts(): void
     {
-        $view = new ProductSelectionView(
-            [new ProductSelectionGroup('sizeGroup', 'Tamanho', [
-                new ProductSelectionValue('smallValue', 'Pequeno'),
-                new ProductSelectionValue('largeValue', 'Grande'),
+        $view = new ProductOptions(
+            [new ProductOption('sizeOption', 'Tamanho', [
+                new ProductOptionValue('smallValue', 'Pequeno'),
+                new ProductOptionValue('largeValue', 'Grande'),
             ])],
             [
-                new ProductSelectionVariant(
+                new ProductVariant(
                     'smallVariant001',
-                    ['sizeGroup' => 'smallValue'],
+                    ['sizeOption' => 'smallValue'],
                     true,
                 ),
-                new ProductSelectionVariant(
+                new ProductVariant(
                     'largeVariant001',
-                    ['sizeGroup' => 'largeValue'],
+                    ['sizeOption' => 'largeValue'],
                     false,
                 ),
             ],
@@ -115,25 +115,25 @@ final class ProductValuesTest extends TestCase
 
         $this->assertSame(
             'smallVariant001',
-            $view->match(['sizeGroup' => 'smallValue'])?->id(),
+            $view->matchVariant(['sizeOption' => 'smallValue'])?->id(),
         );
-        $this->assertNull($view->match(['sizeGroup' => 'largeValue']));
-        $this->assertSame('Tamanho', $view->toArray()['groups'][0]['label']);
+        $this->assertNull($view->matchVariant(['sizeOption' => 'largeValue']));
+        $this->assertSame('Tamanho', $view->toArray()['options'][0]['label']);
         $this->assertArrayNotHasKey('price', $view->toArray()['variants'][0]);
     }
 
-    public function testSelectionViewRejectsVariantsOutsideItsGroups(): void
+    public function testProductOptionsRejectVariantsOutsideTheirOptions(): void
     {
         $this->expectException(InvalidProductException::class);
-        $this->expectExceptionMessage('product.selection_view_invalid');
+        $this->expectExceptionMessage('product.options_invalid');
 
-        new ProductSelectionView(
-            [new ProductSelectionGroup('sizeGroup', 'Size', [
-                new ProductSelectionValue('smallValue', 'Small'),
+        new ProductOptions(
+            [new ProductOption('sizeOption', 'Size', [
+                new ProductOptionValue('smallValue', 'Small'),
             ])],
-            [new ProductSelectionVariant(
+            [new ProductVariant(
                 'colourVariant01',
-                ['colourGroup' => 'redValue'],
+                ['colourOption' => 'redValue'],
                 true,
             )],
         );

@@ -1,15 +1,15 @@
-import VariantField from "./components/VariantField.vue";
-import VariantDrawer from "./components/VariantDrawer.vue";
-import VariantTranslationValuesField from "./components/VariantTranslationValuesField.vue";
+import OptionsField from "./components/OptionsField.vue";
+import OptionsDrawer from "./components/OptionsDrawer.vue";
+import OptionTranslationValuesField from "./components/OptionTranslationValuesField.vue";
 import VariantValuePreview from "./components/VariantValuePreview.vue";
 
 panel.plugin("programmatordev/stripe-checkout", {
 	components: {
-		"k-stripe-checkout-variant-drawer": VariantDrawer,
+		"k-stripe-checkout-options-drawer": OptionsDrawer,
 		"k-stripe-checkout-variant-value-field-preview": VariantValuePreview
 	},
 	fields: {
-		"stripe-checkout-variant-translation-values": VariantTranslationValuesField,
-		"stripe-checkout-variants": VariantField
+		"stripe-checkout-option-translation-values": OptionTranslationValuesField,
+		"stripe-checkout-options": OptionsField
 	}
 });

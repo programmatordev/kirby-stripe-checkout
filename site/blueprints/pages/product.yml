@@ -21,8 +21,8 @@ columns:
         extends: fields/stripe-checkout/sku
       stripeCheckoutRequiresShipping:
         extends: fields/stripe-checkout/requires-shipping
-      stripeCheckoutVariants:
-        extends: fields/stripe-checkout/variants
+      stripeCheckoutOptions:
+        extends: fields/stripe-checkout/options
       developmentFixture:
         type: hidden
         default: true

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
+use ProgrammatorDev\StripeCheckout\Kirby\OptionsField;
 use ProgrammatorDev\StripeCheckout\Kirby\ProductBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
-use ProgrammatorDev\StripeCheckout\Kirby\VariantField;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 use ProgrammatorDev\StripeCheckout\Translation\Registration;
@@ -28,13 +28,13 @@ App::plugin(
             'fields/stripe-checkout/images' => [ProductBlueprint::class, 'images'],
             'fields/stripe-checkout/sku' => [ProductBlueprint::class, 'sku'],
             'fields/stripe-checkout/requires-shipping' => [ProductBlueprint::class, 'requiresShipping'],
-            'fields/stripe-checkout/variants' => [ProductBlueprint::class, 'variants'],
+            'fields/stripe-checkout/options' => [ProductBlueprint::class, 'options'],
         ],
         'pageModels' => [
             'stripe-checkout' => StripeCheckoutPage::class,
         ],
         'fields' => [
-            'stripe-checkout-variants' => VariantField::class,
+            'stripe-checkout-options' => OptionsField::class,
         ],
         'translations' => Catalogue::bundled(),
         'permissions' => [
