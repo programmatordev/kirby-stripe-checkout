@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Plugin;
 use Closure;
 use Kirby\Cms\App;
 use Kirby\Cms\Page;
+use Kirby\Content\Field;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationReport;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
@@ -57,11 +58,15 @@ final class RuntimeFactory
     {
         $page = (new KirbyPageLocator())->find($this->kirby->site(), $reference);
 
-        return (new ProductOptionsFactory())->forPage(
+        return $this->productOptionsFactory()->forPage(
             $page,
             $this->products()->fields()['options'],
-            $this->kirby->language()?->code(),
         );
+    }
+
+    public function productOptionsFromField(Field $field): ProductOptions
+    {
+        return $this->productOptionsFactory()->forField($field);
     }
 
     public function configurationReport(): ConfigurationReport
@@ -122,5 +127,10 @@ final class RuntimeFactory
             priceSource: $settings->priceSource(),
             settings: $settings,
         );
+    }
+
+    private function productOptionsFactory(): ProductOptionsFactory
+    {
+        return new ProductOptionsFactory($this->products(), $this->productContext());
     }
 }

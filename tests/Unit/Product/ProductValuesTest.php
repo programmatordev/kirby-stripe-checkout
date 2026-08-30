@@ -92,7 +92,7 @@ final class ProductValuesTest extends TestCase
         );
     }
 
-    public function testProductOptionsExposeOnlySafeLocalizedFacts(): void
+    public function testProductOptionsExposeLocalizedNamesAndEffectiveVariantFacts(): void
     {
         $view = new ProductOptions(
             [new ProductOption('sizeOption', 'Tamanho', [
@@ -104,10 +104,15 @@ final class ProductValuesTest extends TestCase
                     'smallVariant001',
                     ['sizeOption' => 'smallValue'],
                     true,
+                    new InlinePrice(Money::of('19.95', 'EUR')),
+                    true,
+                    sku: 'SHIRT-S',
                 ),
                 new ProductVariant(
                     'largeVariant001',
                     ['sizeOption' => 'largeValue'],
+                    false,
+                    new InlinePrice(Money::of('20.00', 'EUR')),
                     false,
                 ),
             ],
@@ -118,8 +123,38 @@ final class ProductValuesTest extends TestCase
             $view->matchVariant(['sizeOption' => 'smallValue'])?->id(),
         );
         $this->assertNull($view->matchVariant(['sizeOption' => 'largeValue']));
-        $this->assertSame('Tamanho', $view->toArray()['options'][0]['label']);
-        $this->assertArrayNotHasKey('price', $view->toArray()['variants'][0]);
+        $this->assertSame('Tamanho', $view->toArray()['options'][0]['name']);
+        $variant = $view->variants()[0];
+        $variantPrice = $variant->price();
+
+        $this->assertSame('SHIRT-S', $variant->sku());
+        $this->assertInstanceOf(InlinePrice::class, $variantPrice);
+        $this->assertSame('19.95', $variantPrice->unitPrice()->getAmount()->toString());
+        $this->assertTrue($variant->requiresShipping());
+        $this->assertSame([
+            'source' => 'kirby',
+            'amount' => '19.95',
+            'currency' => 'EUR',
+        ], $view->toArray()['variants'][0]['price']);
+    }
+
+    public function testProductVariantExposesAnEffectiveStripePrice(): void
+    {
+        $variant = new ProductVariant(
+            'smallVariant001',
+            ['sizeOption' => 'smallValue'],
+            true,
+            new StripePriceReference('price_fixture'),
+            false,
+        );
+        $price = $variant->price();
+
+        $this->assertInstanceOf(StripePriceReference::class, $price);
+        $this->assertSame('price_fixture', $price->priceId());
+        $this->assertSame([
+            'source' => 'stripe',
+            'priceId' => 'price_fixture',
+        ], $variant->toArray()['price']);
     }
 
     public function testProductOptionsRejectVariantsOutsideTheirOptions(): void
@@ -135,6 +170,8 @@ final class ProductValuesTest extends TestCase
                 'colourVariant01',
                 ['colourOption' => 'redValue'],
                 true,
+                new InlinePrice(Money::of('10.00', 'EUR')),
+                false,
             )],
         );
     }

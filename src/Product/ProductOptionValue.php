@@ -10,12 +10,12 @@ use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
 final readonly class ProductOptionValue
 {
     private string $id;
-    private string $label;
+    private string $name;
 
-    public function __construct(string $id, string $label)
+    public function __construct(string $id, string $name)
     {
         $this->id = ProductData::identifier($id);
-        $this->label = ProductData::label($label);
+        $this->name = ProductData::label($name);
     }
 
     public function id(): string
@@ -23,14 +23,14 @@ final readonly class ProductOptionValue
         return $this->id;
     }
 
-    public function label(): string
+    public function name(): string
     {
-        return $this->label;
+        return $this->name;
     }
 
-    /** @return array{id: string, label: string} */
+    /** @return array{id: string, name: string} */
     public function toArray(): array
     {
-        return ['id' => $this->id, 'label' => $this->label];
+        return ['id' => $this->id, 'name' => $this->name];
     }
 }

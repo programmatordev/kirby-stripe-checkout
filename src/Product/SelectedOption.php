@@ -6,24 +6,24 @@ namespace ProgrammatorDev\StripeCheckout\Product;
 
 use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
 
-/** Captures one selected value with its customer-language labels. */
+/** Captures one selected value with its customer-language names. */
 final readonly class SelectedOption
 {
     private string $optionId;
-    private string $optionLabel;
+    private string $optionName;
     private string $valueId;
-    private string $valueLabel;
+    private string $valueName;
 
     public function __construct(
         string $optionId,
-        string $optionLabel,
+        string $optionName,
         string $valueId,
-        string $valueLabel,
+        string $valueName,
     ) {
         $this->optionId = ProductData::identifier($optionId);
-        $this->optionLabel = ProductData::label($optionLabel);
+        $this->optionName = ProductData::label($optionName);
         $this->valueId = ProductData::identifier($valueId);
-        $this->valueLabel = ProductData::label($valueLabel);
+        $this->valueName = ProductData::label($valueName);
     }
 
     public function optionId(): string
@@ -31,9 +31,9 @@ final readonly class SelectedOption
         return $this->optionId;
     }
 
-    public function optionLabel(): string
+    public function optionName(): string
     {
-        return $this->optionLabel;
+        return $this->optionName;
     }
 
     public function valueId(): string
@@ -41,8 +41,8 @@ final readonly class SelectedOption
         return $this->valueId;
     }
 
-    public function valueLabel(): string
+    public function valueName(): string
     {
-        return $this->valueLabel;
+        return $this->valueName;
     }
 }

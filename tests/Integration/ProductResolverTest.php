@@ -131,16 +131,29 @@ final class ProductResolverTest extends KirbyTestCase
         $price = $product->price();
         $this->assertInstanceOf(InlinePrice::class, $price);
         $this->assertSame('24.00', $price->unitPrice()->getAmount()->toString());
-        $this->assertSame('Tamanho', $product->selectedOptions()[0]->optionLabel());
-        $this->assertSame('Grande', $product->selectedOptions()[0]->valueLabel());
+        $this->assertSame('Tamanho', $product->selectedOptions()[0]->optionName());
+        $this->assertSame('Grande', $product->selectedOptions()[0]->valueName());
 
         $view = $this->stripeCheckout()->productOptions($page);
         /** @phpstan-ignore-next-line method.notFound */
         $fieldView = $page->stripeCheckoutOptions()->toProductOptions();
 
         $this->assertInstanceOf(ProductOptions::class, $fieldView);
-        $this->assertSame('Tamanho', $view->options()[0]->label());
+        $this->assertSame('Tamanho', $view->options()[0]->name());
         $this->assertSame($view->toArray(), $fieldView->toArray());
+        $smallVariant = $view->variants()[0];
+        $largeVariant = $view->variants()[1];
+
+        $smallPrice = $smallVariant->price();
+        $this->assertInstanceOf(InlinePrice::class, $smallPrice);
+        $this->assertSame('20.00', $smallPrice->unitPrice()->getAmount()->toString());
+        $this->assertFalse($smallVariant->requiresShipping());
+
+        $this->assertSame('SHIRT-L', $largeVariant->sku());
+        $variantPrice = $largeVariant->price();
+        $this->assertInstanceOf(InlinePrice::class, $variantPrice);
+        $this->assertSame('24.00', $variantPrice->unitPrice()->getAmount()->toString());
+        $this->assertTrue($largeVariant->requiresShipping());
         $this->assertSame(
             'largeVariant001',
             $view->matchVariant(['sizeOption000001' => 'largeValue00001'])?->id(),
@@ -172,7 +185,7 @@ final class ProductResolverTest extends KirbyTestCase
 
         $this->assertInstanceOf(ProductOptions::class, $fieldView);
         $this->assertSame($configuredView->toArray(), $fieldView->toArray());
-        $this->assertSame('Size', $fieldView->options()[0]->label());
+        $this->assertSame('Size', $fieldView->options()[0]->name());
     }
 
     public function testProductOptionsFieldConverterRequiresAPageField(): void

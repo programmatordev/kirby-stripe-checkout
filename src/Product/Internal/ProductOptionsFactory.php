@@ -7,10 +7,12 @@ namespace ProgrammatorDev\StripeCheckout\Product\Internal;
 use Kirby\Cms\Page;
 use Kirby\Content\Content;
 use Kirby\Content\Field;
+use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\ProductOption;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptionValue;
+use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductVariant;
 use Throwable;
 
@@ -22,11 +24,15 @@ use Throwable;
 final class ProductOptionsFactory
 {
     public function __construct(
+        private readonly ProductConfiguration $configuration,
+        private readonly ProductResolutionContext $context,
         private readonly VariantSchema $schema = new VariantSchema(),
+        private readonly ProductCommerceResolver $commerce = new ProductCommerceResolver(),
     ) {}
 
-    public function forPage(Page $page, string $field, ?string $languageCode): ProductOptions
+    public function forPage(Page $page, string $field): ProductOptions
     {
+        $languageCode = $this->context->languageCode();
         $content = $languageCode === null
             ? $page->content()
             : $page->content($languageCode);
@@ -42,7 +48,7 @@ final class ProductOptionsFactory
             throw new InvalidProductException('product.field_invalid');
         }
 
-        return $this->fromField($field, $page, $page->kirby()->language()?->code());
+        return $this->fromField($field, $page, $this->context->languageCode());
     }
 
     private function fromField(Field $field, Page $page, ?string $languageCode): ProductOptions
@@ -55,6 +61,8 @@ final class ProductOptionsFactory
             ? $this->technicalContentValue($page, $field->key())
             : $field->value();
         $translated = $isTranslation ? $field->value() : null;
+        $technicalContent = $this->technicalContent($page);
+        $fields = $this->configuration->fields();
 
         try {
             $canonical = $this->schema->canonical($technical);
@@ -78,10 +86,18 @@ final class ProductOptionsFactory
             $localized['options'],
         );
         $variants = array_map(
-            static fn(array $variant): ProductVariant => new ProductVariant(
+            fn(array $variant): ProductVariant => new ProductVariant(
                 $variant['id'],
                 $variant['selectedOptions'],
                 $variant['enabled'],
+                $this->commerce->price($technicalContent, $fields, $variant, $this->context),
+                $this->commerce->requiresShipping(
+                    $technicalContent,
+                    $fields,
+                    $variant,
+                    $this->context,
+                ),
+                sku: $variant['sku'],
             ),
             $localized['variants'],
         );
@@ -91,12 +107,16 @@ final class ProductOptionsFactory
 
     private function technicalContentValue(Page $page, string $field): mixed
     {
+        return $this->field($this->technicalContent($page), $field)->value();
+    }
+
+    private function technicalContent(Page $page): Content
+    {
         $defaultLanguage = $page->kirby()->defaultLanguage();
-        $content = $defaultLanguage === null
+
+        return $defaultLanguage === null
             ? $page->content()
             : $page->content($defaultLanguage->code());
-
-        return $this->field($content, $field)->value();
     }
 
     private function field(Content $content, string $name): Field

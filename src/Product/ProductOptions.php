@@ -105,8 +105,8 @@ final readonly class ProductOptions
 
     /**
      * @return array{
-     *   options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>,
-     *   variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool}>
+     *   options: list<array{id: string, name: string, values: list<array{id: string, name: string}>}>,
+     *   variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: array{source: 'kirby', amount: string, currency: string}|array{source: 'stripe', priceId: string}, requiresShipping: bool}>
      * }
      */
     public function toArray(): array

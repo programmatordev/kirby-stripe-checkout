@@ -7,7 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Product;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
 
-/** Exposes the safe identity, selected options, and state of one generated variant. */
+/** Exposes one variant with its effective commerce values. */
 final readonly class ProductVariant
 {
     private string $id;
@@ -15,9 +15,17 @@ final readonly class ProductVariant
     /** @var array<string, string> */
     private array $selectedOptions;
 
+    private ?string $sku;
+
     /** @param array<mixed, mixed> $selectedOptions */
-    public function __construct(string $id, array $selectedOptions, private bool $enabled)
-    {
+    public function __construct(
+        string $id,
+        array $selectedOptions,
+        private bool $enabled,
+        private InlinePrice|StripePriceReference $price,
+        private bool $requiresShipping,
+        ?string $sku = null,
+    ) {
         $this->id = ProductData::identifier($id);
         $normalized = [];
 
@@ -35,6 +43,7 @@ final readonly class ProductVariant
 
         ksort($normalized);
         $this->selectedOptions = $normalized;
+        $this->sku = ProductData::optionalString($sku, 500);
     }
 
     public function id(): string
@@ -53,13 +62,49 @@ final readonly class ProductVariant
         return $this->enabled;
     }
 
-    /** @return array{id: string, selectedOptions: array<string, string>, enabled: bool} */
+    public function sku(): ?string
+    {
+        return $this->sku;
+    }
+
+    public function price(): InlinePrice|StripePriceReference
+    {
+        return $this->price;
+    }
+
+    public function requiresShipping(): bool
+    {
+        return $this->requiresShipping;
+    }
+
+    /**
+     * @return array{
+     *   id: string,
+     *   selectedOptions: array<string, string>,
+     *   enabled: bool,
+     *   sku: ?string,
+     *   price: array{source: 'kirby', amount: string, currency: string}|array{source: 'stripe', priceId: string},
+     *   requiresShipping: bool
+     * }
+     */
     public function toArray(): array
     {
         return [
             'id' => $this->id,
             'selectedOptions' => $this->selectedOptions,
             'enabled' => $this->enabled,
+            'sku' => $this->sku,
+            'price' => $this->price instanceof InlinePrice
+                ? [
+                    'source' => 'kirby',
+                    'amount' => $this->price->unitPrice()->getAmount()->toString(),
+                    'currency' => $this->price->unitPrice()->getCurrency()->getCurrencyCode(),
+                ]
+                : [
+                    'source' => 'stripe',
+                    'priceId' => $this->price->priceId(),
+                ],
+            'requiresShipping' => $this->requiresShipping,
         ];
     }
 }

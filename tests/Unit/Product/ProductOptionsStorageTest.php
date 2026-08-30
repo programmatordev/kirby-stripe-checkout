@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Test\Unit\Product;
 
+use Brick\Money\Money;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
+use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
 use ProgrammatorDev\StripeCheckout\Product\Internal\VariantMatrix;
 use ProgrammatorDev\StripeCheckout\Product\Internal\VariantSchema;
 use ProgrammatorDev\StripeCheckout\Product\ProductOption;
@@ -262,7 +264,13 @@ final class ProductOptionsStorageTest extends TestCase
                     new ProductOptionValue('largeValue', 'Large'),
                 ]),
             ],
-            [new ProductVariant($variant['id'], $variant['selectedOptions'], $variant['enabled'])],
+            [new ProductVariant(
+                $variant['id'],
+                $variant['selectedOptions'],
+                $variant['enabled'],
+                new InlinePrice(Money::of('10.00', 'EUR')),
+                false,
+            )],
         );
     }
 

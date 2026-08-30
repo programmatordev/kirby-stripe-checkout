@@ -33,10 +33,10 @@ snippet('layout', ['title' => $page->title()], slots: true);
             <h2>Available options</h2>
             <?php foreach ($optionsData['options'] as $option): ?>
                 <label>
-                    <span><?= esc($option['label']) ?></span>
+                    <span><?= esc($option['name']) ?></span>
                     <select name="stripeCheckoutSelectedOptions[<?= esc($option['id'], 'attr') ?>]">
                         <?php foreach ($option['values'] as $value): ?>
-                            <option value="<?= esc($value['id'], 'attr') ?>"><?= esc($value['label']) ?></option>
+                            <option value="<?= esc($value['id'], 'attr') ?>"><?= esc($value['name']) ?></option>
                         <?php endforeach ?>
                     </select>
                 </label>
@@ -65,7 +65,25 @@ snippet('layout', ['title' => $page->title()], slots: true);
 
                     // The browser resolves feedback only. A future cart endpoint
                     // will rematch the submitted options against canonical data.
-                    status.textContent = variant ? 'Available combination' : 'Unavailable combination';
+                    if (!variant) {
+                        status.textContent = 'Unavailable combination';
+                        return;
+                    }
+
+                    const price = variant.price.source === 'kirby'
+                        ? `${variant.price.amount} ${variant.price.currency}`
+                        : 'Stripe-managed price';
+                    const details = [
+                        'Available combination',
+                        price,
+                        variant.requiresShipping ? 'Shipping required' : 'No shipping required',
+                    ];
+
+                    if (variant.sku) {
+                        details.push(`SKU ${variant.sku}`);
+                    }
+
+                    status.textContent = details.join(' · ');
                 };
 
                 form.addEventListener('change', resolve);

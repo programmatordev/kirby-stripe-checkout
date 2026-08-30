@@ -11,16 +11,16 @@ use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
 final readonly class ProductOption
 {
     private string $id;
-    private string $label;
+    private string $name;
 
     /** @var list<ProductOptionValue> */
     private array $values;
 
     /** @param array<mixed> $values */
-    public function __construct(string $id, string $label, array $values)
+    public function __construct(string $id, string $name, array $values)
     {
         $this->id = ProductData::identifier($id);
-        $this->label = ProductData::label($label);
+        $this->name = ProductData::label($name);
 
         if ($values === [] || array_is_list($values) === false) {
             throw new InvalidProductException('product.options_invalid');
@@ -44,9 +44,9 @@ final readonly class ProductOption
         return $this->id;
     }
 
-    public function label(): string
+    public function name(): string
     {
-        return $this->label;
+        return $this->name;
     }
 
     /** @return list<ProductOptionValue> */
@@ -55,12 +55,12 @@ final readonly class ProductOption
         return $this->values;
     }
 
-    /** @return array{id: string, label: string, values: list<array{id: string, label: string}>} */
+    /** @return array{id: string, name: string, values: list<array{id: string, name: string}>} */
     public function toArray(): array
     {
         return [
             'id' => $this->id,
-            'label' => $this->label,
+            'name' => $this->name,
             'values' => array_map(
                 static fn(ProductOptionValue $value): array => $value->toArray(),
                 $this->values,

@@ -9,18 +9,14 @@ use Kirby\Cms\Files;
 use Kirby\Cms\Page;
 use Kirby\Content\Content;
 use Kirby\Content\Field;
-use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
-use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductUnavailableException;
-use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
 use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
-use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use Throwable;
 
 /**
@@ -34,7 +30,7 @@ final class KirbyPageProductResolver implements ProductResolverInterface
         private readonly ProductConfiguration $configuration,
         private readonly KirbyPageLocator $locator = new KirbyPageLocator(),
         private readonly VariantSchema $schema = new VariantSchema(),
-        private readonly StripeCurrencyRegistry $currencies = new StripeCurrencyRegistry(),
+        private readonly ProductCommerceResolver $commerce = new ProductCommerceResolver(),
     ) {}
 
     public function resolve(
@@ -56,8 +52,8 @@ final class KirbyPageProductResolver implements ProductResolverInterface
             $request->quantity(),
             $request->selectedOptions(),
         );
-        $price = $this->price($technicalContent, $fields, $variant, $context);
-        $shipping = $this->shipping($technicalContent, $fields, $variant, $context);
+        $price = $this->commerce->price($technicalContent, $fields, $variant, $context);
+        $shipping = $this->commerce->requiresShipping($technicalContent, $fields, $variant, $context);
         $selectedOptions = $this->selectedOptions($localized['options'], $request->selectedOptions());
         [$images, $imagesTruncated] = $this->images(
             $displayContent,
@@ -148,75 +144,6 @@ final class KirbyPageProductResolver implements ProductResolverInterface
         }
 
         throw new InvalidProductException('product.selected_options_invalid');
-    }
-
-    /**
-     * @param array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePriceId: string, requiresShipping: string, options: string} $fields
-     * @param array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}|null $variant
-     */
-    private function price(
-        Content $content,
-        array $fields,
-        ?array $variant,
-        ProductResolutionContext $context,
-    ): InlinePrice|StripePriceReference {
-        if ($context->priceSource() === PriceSource::Stripe) {
-            $priceId = $variant['stripePriceId'] ?? null;
-            $priceId ??= $this->optionalString($this->field($content, $fields['stripePriceId'])->value());
-
-            if ($priceId === null) {
-                throw new InvalidProductException('product.price_missing');
-            }
-
-            return new StripePriceReference($priceId);
-        }
-
-        $amount = $variant['price'] ?? null;
-        $amount ??= $this->optionalString($this->field($content, $fields['price'])->value());
-        $currency = $context->settings()->currency();
-
-        if ($amount === null || $currency === null) {
-            throw new InvalidProductException('product.price_missing');
-        }
-
-        try {
-            $snapshot = $this->currencies->fromDecimal($amount, $currency);
-
-            return new InlinePrice($this->currencies->toMoney($snapshot));
-        } catch (Throwable $error) {
-            throw new InvalidProductException('product.price_invalid', $error);
-        }
-    }
-
-    /**
-     * @param array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePriceId: string, requiresShipping: string, options: string} $fields
-     * @param array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}|null $variant
-     */
-    private function shipping(
-        Content $content,
-        array $fields,
-        ?array $variant,
-        ProductResolutionContext $context,
-    ): bool {
-        $shipping = $this->shippingValue($variant['requiresShipping'] ?? null);
-        $shipping ??= $this->shippingValue($this->field($content, $fields['requiresShipping'])->value());
-        $shipping ??= $context->settings()->defaultRequiresShipping();
-
-        if ($shipping === null) {
-            throw new InvalidProductException('product.shipping_missing');
-        }
-
-        return $shipping;
-    }
-
-    private function shippingValue(mixed $value): ?bool
-    {
-        return match ($value) {
-            null, '', 'inherit' => null,
-            true, 'yes' => true,
-            false, 'no' => false,
-            default => throw new InvalidProductException('product.shipping_invalid'),
-        };
     }
 
     /**

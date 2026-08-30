@@ -89,17 +89,17 @@ Each generated variant has a stable internal ID and can define:
 
 An empty variant price inherits the product price. `inherit` shipping first uses the product override and then the store default. A variant SKU does not inherit the simple-product SKU.
 
-Options and values can be renamed without changing their stable IDs. On multi-language sites, the default language owns IDs, combinations, availability, SKUs, prices, and shipping facts. Other languages translate only product and option labels. The resolved snapshot keeps the language-specific labels used for the customer flow.
+Options and values can be renamed without changing their stable IDs. On multi-language sites, the default language owns IDs, combinations, availability, SKUs, prices, and shipping facts. Other languages translate only product and option names. The resolved snapshot keeps the language-specific names used for the customer flow.
 
 ### Variant presets
 
 The Settings tab can store reusable presets such as Colour and Size. Importing a preset creates an independent copy with fresh IDs in the current product. Later edits to a preset do not rewrite products that already imported it.
 
-Presets are technical editor templates stored in the default language. Translate the copied option and value labels on each product. This avoids a live cross-language relationship between every preset and product.
+Presets are technical editor templates stored in the default language. Translate the copied option and value names on each product. This avoids a live cross-language relationship between every preset and product.
 
 ## Rendering options
 
-Convert the configured options field with Kirby's normal field API. The result contains only the localized data needed to render and match controls safely:
+Convert the configured options field with Kirby's normal field API. The result contains the localized names and effective variant data needed to render and match controls:
 
 ```php
 <?php
@@ -109,14 +109,22 @@ Convert the configured options field with Kirby's normal field API. The result c
 $view = $page->stripeCheckoutOptions()->toProductOptions();
 
 foreach ($view->options() as $option) {
-    echo esc($option->label());
+    echo esc($option->name());
 }
 
 $variant = $view->matchVariant([
     'colourOption0001' => 'blueValue000001',
     'sizeOption0000001' => 'largeValue00001',
 ]);
+
+if ($variant !== null) {
+    $variant->sku();
+    $variant->price();
+    $variant->requiresShipping();
+}
 ```
+
+`price()` and `requiresShipping()` contain the effective values after applying the product and store fallbacks. Kirby prices are returned as `InlinePrice`; Stripe-owned prices are returned as `StripePriceReference`. The variant SKU remains `null` when it is not configured because it does not inherit the simple-product SKU.
 
 Use the mapped field handle when it differs from the default:
 
@@ -126,7 +134,54 @@ $view = $page->variants()->toProductOptions();
 
 For programmatic code that starts with a Page reference instead of a field, use `$site->stripeCheckout()->productOptions($reference)`.
 
-`toArray()` provides a JSON-safe projection with options, values, variant IDs, complete selected-option maps, and active state. It deliberately omits prices, SKUs, and shipping facts. Browser matching is presentation feedback only; submit the option/value IDs and let the server resolve them again.
+`toArray()` provides a JSON-safe projection with option and value names, variant IDs, complete selected-option maps, active state, SKU, effective price, and effective shipping behavior. Browser values are presentation feedback only; submit the option/value IDs and let the server resolve them again.
+
+For example, expose the projection to JavaScript through an escaped data attribute and match the currently selected IDs:
+
+```php
+<?php
+
+use Kirby\Data\Json;
+
+/** @var ProgrammatorDev\StripeCheckout\Product\ProductOptions $view */
+?>
+
+<form data-product-options="<?= esc(Json::encode($view->toArray()), 'attr') ?>">
+    <?php foreach ($view->options() as $option): ?>
+        <label>
+            <?= esc($option->name()) ?>
+            <select name="stripeCheckoutSelectedOptions[<?= esc($option->id(), 'attr') ?>]">
+                <?php foreach ($option->values() as $value): ?>
+                    <option value="<?= esc($value->id(), 'attr') ?>">
+                        <?= esc($value->name()) ?>
+                    </option>
+                <?php endforeach ?>
+            </select>
+        </label>
+    <?php endforeach ?>
+</form>
+
+<script>
+const form = document.querySelector('[data-product-options]');
+const { variants } = JSON.parse(form.dataset.productOptions);
+const selectedOptions = Object.fromEntries(
+    [...form.querySelectorAll('select')].map(select => [
+        select.name.match(/\[([^\]]+)\]/)[1],
+        select.value,
+    ]),
+);
+const variant = variants.find(candidate =>
+    candidate.enabled
+    && Object.entries(selectedOptions).every(([optionId, valueId]) =>
+        candidate.selectedOptions[optionId] === valueId
+    )
+);
+
+if (variant) {
+    console.log(variant.price, variant.sku, variant.requiresShipping);
+}
+</script>
+```
 
 ## Resolving a product
 
@@ -151,7 +206,7 @@ $request = new ProductRequest(
 $product = $site->stripeCheckout()->resolveProduct($request);
 ```
 
-The default resolver accepts the same useful Page locator forms as Kirby, rejects drafts and missing pages, validates the complete request, and normalizes the result to the Page's canonical `page://...` UUID. The returned `ResolvedProduct` is an immutable snapshot containing the exact price, effective shipping boolean, localized labels, optional SKU and images, and matched variant ID.
+The default resolver accepts the same useful Page locator forms as Kirby, rejects drafts and missing pages, validates the complete request, and normalizes the result to the Page's canonical `page://...` UUID. The returned `ResolvedProduct` is an immutable snapshot containing the exact price, effective shipping boolean, localized option names, optional SKU and images, and matched variant ID.
 
 Resolution is read-only. It does not change stock, create an order, create a Checkout Session, or contact Stripe.
 
