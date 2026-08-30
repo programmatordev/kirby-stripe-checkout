@@ -193,6 +193,27 @@ final class ProductOptionsStorageTest extends TestCase
         $this->assertSame($canonical['variants'], $localized['variants']);
     }
 
+    public function testTranslatedNamesUseTheCanonicalValidationRules(): void
+    {
+        $schema = new VariantSchema();
+        $canonical = $schema->canonical(['options' => self::fixtureOptions(), 'variants' => []]);
+
+        foreach ([str_repeat('a', 501), "Invalid\nname", 123] as $name) {
+            try {
+                $schema->overlay($canonical, [
+                    'options' => [[
+                        'id' => 'colourOption',
+                        'label' => $name,
+                        'values' => [],
+                    ]],
+                ]);
+                $this->fail('Expected an invalid translated name to be rejected.');
+            } catch (InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
+
     public function testStorefrontRematchesSelectedOptionsAndRejectsDisabledOrStaleSelections(): void
     {
         $canonical = [
@@ -253,6 +274,25 @@ final class ProductOptionsStorageTest extends TestCase
     /** @param array{id: string, selectedOptions: array<string, string>, enabled: bool} $variant */
     private static function productOptions(array $variant): ProductOptions
     {
+        $selections = [
+            ['colourOption' => 'redValue', 'sizeOption' => 'smallValue'],
+            ['colourOption' => 'redValue', 'sizeOption' => 'largeValue'],
+            ['colourOption' => 'blueValue', 'sizeOption' => 'smallValue'],
+            ['colourOption' => 'blueValue', 'sizeOption' => 'largeValue'],
+        ];
+        $variants = [];
+
+        foreach ($selections as $index => $selectedOptions) {
+            $matchesFixture = $selectedOptions === $variant['selectedOptions'];
+            $variants[] = new ProductVariant(
+                $matchesFixture ? $variant['id'] : 'fallbackVariant' . $index,
+                $selectedOptions,
+                $matchesFixture && $variant['enabled'],
+                new InlinePrice(Money::of('10.00', 'EUR')),
+                false,
+            );
+        }
+
         return new ProductOptions(
             [
                 new ProductOption('colourOption', 'Colour', [
@@ -264,13 +304,7 @@ final class ProductOptionsStorageTest extends TestCase
                     new ProductOptionValue('largeValue', 'Large'),
                 ]),
             ],
-            [new ProductVariant(
-                $variant['id'],
-                $variant['selectedOptions'],
-                $variant['enabled'],
-                new InlinePrice(Money::of('10.00', 'EUR')),
-                false,
-            )],
+            $variants,
         );
     }
 

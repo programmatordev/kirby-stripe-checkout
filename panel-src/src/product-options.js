@@ -33,25 +33,30 @@ export function resolveStableId(temporaryId, ids, createId = stableId) {
 	return createId();
 }
 
-export function decimalString(value) {
-	if (value === null || value === "") {
-		return null;
+export function formatAmount(value, currency) {
+	const amount = String(value);
+	const match = amount.match(/^([0-9]+)(?:\.([0-9]+))?$/);
+
+	if (match === null) {
+		return amount;
 	}
 
-	// Kirby's Number field emits a JavaScript number, while canonical money
-	// remains a decimal string and is validated again by the PHP boundary.
-	if (typeof value === "number") {
-		return Number.isFinite(value) ? String(value) : null;
-	}
-
-	return typeof value === "string" ? value : null;
-}
-
-export function formatCurrency(value, currency, locale = "en") {
-	return new Intl.NumberFormat(locale, {
+	const fractionDigits = new Intl.NumberFormat("en", {
 		currency,
 		style: "currency"
-	}).format(Number(value));
+	}).resolvedOptions().minimumFractionDigits;
+	const fraction = match[2] ?? "";
+
+	// Pad the display string without converting exact money through a JS number.
+	if (fraction.length > fractionDigits) {
+		return amount;
+	}
+
+	if (fractionDigits === 0) {
+		return match[1];
+	}
+
+	return `${match[1]}.${fraction.padEnd(fractionDigits, "0")}`;
 }
 
 export function optionCombinationKey(selectedOptions) {
@@ -104,22 +109,4 @@ export function importPreset(preset, createId = stableId) {
 		label: option.label,
 		values: (option.values ?? []).map(label => ({ id: createId(), label }))
 	}));
-}
-
-export function matchVariant(variants, selectedOptions) {
-	const submitted = Object.entries(selectedOptions)
-		.sort(([left], [right]) => left.localeCompare(right));
-
-	return variants.find(
-		variant => {
-			const canonical = Object.entries(variant.selectedOptions)
-				.sort(([left], [right]) => left.localeCompare(right));
-
-			return variant.enabled === true &&
-				canonical.length === submitted.length &&
-				canonical.every(([optionId, valueId], index) =>
-					optionId === submitted[index][0] && valueId === submitted[index][1]
-				);
-		}
-	) ?? null;
 }

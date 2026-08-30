@@ -32,6 +32,9 @@ final readonly class ProductOptions
         }
 
         $valuesByOption = [];
+        // Disabled variants still occupy a valid combination, so every Cartesian
+        // row must be present for deterministic matching and availability checks.
+        $expectedVariantCount = $options === [] ? 0 : 1;
 
         foreach ($options as $option) {
             if ($option instanceof ProductOption === false || isset($valuesByOption[$option->id()])) {
@@ -45,9 +48,17 @@ final readonly class ProductOptions
                 ),
                 true,
             );
+            $valueCount = count($valuesByOption[$option->id()]);
+
+            if ($expectedVariantCount > intdiv(PHP_INT_MAX, $valueCount)) {
+                throw new InvalidProductException('product.options_invalid');
+            }
+
+            $expectedVariantCount *= $valueCount;
         }
 
         $variantIds = [];
+        $variantSelections = [];
         $optionIds = array_keys($valuesByOption);
         sort($optionIds);
 
@@ -68,7 +79,18 @@ final readonly class ProductOptions
                 }
             }
 
+            $selectionKey = serialize($selectedOptions);
+
+            if (isset($variantSelections[$selectionKey])) {
+                throw new InvalidProductException('product.options_invalid');
+            }
+
             $variantIds[$variant->id()] = true;
+            $variantSelections[$selectionKey] = true;
+        }
+
+        if (count($variants) !== $expectedVariantCount) {
+            throw new InvalidProductException('product.options_invalid');
         }
 
         /** @var list<ProductOption> $options */

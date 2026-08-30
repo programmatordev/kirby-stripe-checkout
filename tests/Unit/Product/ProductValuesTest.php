@@ -175,4 +175,53 @@ final class ProductValuesTest extends TestCase
             )],
         );
     }
+
+    public function testProductOptionsRejectDuplicateVariantCombinations(): void
+    {
+        $this->expectException(InvalidProductException::class);
+        $this->expectExceptionMessage('product.options_invalid');
+
+        new ProductOptions(
+            [new ProductOption('sizeOption', 'Size', [
+                new ProductOptionValue('smallValue', 'Small'),
+                new ProductOptionValue('largeValue', 'Large'),
+            ])],
+            [
+                new ProductVariant(
+                    'firstVariant001',
+                    ['sizeOption' => 'smallValue'],
+                    true,
+                    new InlinePrice(Money::of('10.00', 'EUR')),
+                    false,
+                ),
+                new ProductVariant(
+                    'secondVariant01',
+                    ['sizeOption' => 'smallValue'],
+                    true,
+                    new InlinePrice(Money::of('10.00', 'EUR')),
+                    false,
+                ),
+            ],
+        );
+    }
+
+    public function testProductOptionsRequireTheCompleteVariantMatrix(): void
+    {
+        $this->expectException(InvalidProductException::class);
+        $this->expectExceptionMessage('product.options_invalid');
+
+        new ProductOptions(
+            [new ProductOption('sizeOption', 'Size', [
+                new ProductOptionValue('smallValue', 'Small'),
+                new ProductOptionValue('largeValue', 'Large'),
+            ])],
+            [new ProductVariant(
+                'smallVariant001',
+                ['sizeOption' => 'smallValue'],
+                true,
+                new InlinePrice(Money::of('10.00', 'EUR')),
+                false,
+            )],
+        );
+    }
 }

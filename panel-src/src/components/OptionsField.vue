@@ -21,13 +21,13 @@
 					variant="filled"
 					:aria-label="$t('programmatordev.stripe-checkout.options.addOptions')"
 					:title="$t('programmatordev.stripe-checkout.options.addOptions')"
-					@click="$refs.addOptions.toggle()"
+					@click="$refs.addOptionMenu.toggle()"
 				/>
 				<k-dropdown-content
 					v-if="presets.length"
-					ref="addOptions"
+					ref="addOptionMenu"
 					align-x="end"
-					:options="addOptions"
+					:options="addOptionActions"
 				/>
 			</k-button-option>
 		</template>
@@ -55,7 +55,7 @@
 				:columns="optionColumns"
 				:disabled="disabled"
 				:index="1"
-				:options="optionOptions"
+				:options="optionActions"
 				:rows="optionRows"
 				:sortable="technicalLocked === false && localValue.options.length > 1"
 				@cell="openOptionByRow($event.row)"
@@ -82,7 +82,7 @@
 					:disabled="disabled"
 					:fields="variantTableFields"
 					:index="false"
-					:options="variantOptions"
+					:options="variantActions"
 					:pagination="variantPages > 1 ? variantPagination : false"
 					:rows="variantRows"
 					:sortable="false"
@@ -98,8 +98,7 @@
 
 <script>
 import {
-	decimalString,
-	formatCurrency,
+	formatAmount,
 	importPreset,
 	reconcile,
 	resolveStableId,
@@ -151,7 +150,7 @@ export default {
 		};
 	},
 	computed: {
-		addOptions() {
+		addOptionActions() {
 			return [
 				{
 					click: () => this.addOption(),
@@ -192,8 +191,8 @@ export default {
 		optionDrawerId() {
 			return `${this.name ?? "stripe-checkout-options"}-option`;
 		},
-		optionOptions() {
-			const options = [
+		optionActions() {
+			const actions = [
 				{
 					click: "edit",
 					icon: "edit",
@@ -202,7 +201,7 @@ export default {
 			];
 
 			if (this.technicalLocked === false && this.disabled === false) {
-				options.push(
+				actions.push(
 					"-",
 					{
 						click: "remove",
@@ -212,7 +211,7 @@ export default {
 				);
 			}
 
-			return options;
+			return actions;
 		},
 		optionRows() {
 			return this.localValue.options.map(option => ({
@@ -253,6 +252,7 @@ export default {
 					type: "text"
 				},
 				price: {
+					after: this.currency,
 					label: this.$t("programmatordev.stripe-checkout.options.price"),
 					type: "stripe-checkout-variant-value"
 				},
@@ -265,7 +265,7 @@ export default {
 		variantDrawerId() {
 			return `${this.name ?? "stripe-checkout-options"}-variant`;
 		},
-		variantOptions() {
+		variantActions() {
 			return [
 				{
 					click: "edit",
@@ -581,13 +581,7 @@ export default {
 				return value;
 			}
 
-			// Number conversion is presentation-only. Canonical values remain exact
-			// decimal strings and are validated again at the PHP boundary.
-			return formatCurrency(
-				value,
-				this.currency,
-				document.documentElement.lang || "en"
-			);
+			return formatAmount(value, this.currency);
 		},
 		shippingLabel(value) {
 			return this.shippingOptions.find(option => option.value === value)?.text ?? "";
@@ -612,7 +606,9 @@ export default {
 				: "inherit";
 
 			if (this.priceSource === "kirby") {
-				current.price = decimalString(value.price);
+				current.price = typeof value.price === "string" && value.price !== ""
+					? value.price
+					: null;
 			} else {
 				current.stripePriceId = value.stripePriceId || null;
 			}
@@ -654,11 +650,10 @@ export default {
 				fields.price = {
 					after: this.currency,
 					label: this.$t("programmatordev.stripe-checkout.options.price"),
-					min: 0,
 					name: "price",
+					pattern: "[0-9]+(?:\\.[0-9]+)?",
 					placeholder: this.$t("programmatordev.stripe-checkout.options.price.inherit"),
-					step: "any",
-					type: "number"
+					type: "text"
 				};
 			} else {
 				fields.stripePriceId = {

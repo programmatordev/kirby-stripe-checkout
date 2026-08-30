@@ -18,7 +18,7 @@ final class ProductData
         return self::requiredString($value, 128);
     }
 
-    public static function label(mixed $value): string
+    public static function name(mixed $value): string
     {
         return self::requiredString($value, 500);
     }

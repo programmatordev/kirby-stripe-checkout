@@ -47,7 +47,7 @@ final readonly class ResolvedProduct
         array $metadata = [],
         ?string $variantId = null,
     ) {
-        $this->name = ProductData::label($name);
+        $this->name = ProductData::name($name);
         $this->description = ProductData::optionalString($description, 5000);
         $this->sku = ProductData::optionalString($sku, 500);
         $this->variantId = $variantId === null ? null : ProductData::identifier($variantId);

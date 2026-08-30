@@ -309,7 +309,17 @@ final class VariantSchema
 
     private function optionalLabel(mixed $value): string
     {
-        return is_string($value) ? trim($value) : '';
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        if (is_string($value) === false) {
+            throw new InvalidArgumentException('A translated name must be a string.');
+        }
+
+        $value = trim($value);
+
+        return $value === '' ? '' : $this->requiredLabel($value, 'translation');
     }
 
     private function nullableString(mixed $value, string $kind): ?string

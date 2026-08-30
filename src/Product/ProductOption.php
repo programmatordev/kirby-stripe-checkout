@@ -20,7 +20,7 @@ final readonly class ProductOption
     public function __construct(string $id, string $name, array $values)
     {
         $this->id = ProductData::identifier($id);
-        $this->name = ProductData::label($name);
+        $this->name = ProductData::name($name);
 
         if ($values === [] || array_is_list($values) === false) {
             throw new InvalidProductException('product.options_invalid');

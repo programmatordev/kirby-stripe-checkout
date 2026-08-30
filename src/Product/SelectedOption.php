@@ -21,9 +21,9 @@ final readonly class SelectedOption
         string $valueName,
     ) {
         $this->optionId = ProductData::identifier($optionId);
-        $this->optionName = ProductData::label($optionName);
+        $this->optionName = ProductData::name($optionName);
         $this->valueId = ProductData::identifier($valueId);
-        $this->valueName = ProductData::label($valueName);
+        $this->valueName = ProductData::name($valueName);
     }
 
     public function optionId(): string

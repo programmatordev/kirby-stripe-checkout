@@ -4,10 +4,8 @@ import test from "node:test";
 import {
 	optionCombinationKey,
 	combinations,
-	decimalString,
-	formatCurrency,
+	formatAmount,
 	importPreset,
-	matchVariant,
 	reconcile,
 	resolveStableId,
 	stableId
@@ -50,19 +48,11 @@ test("maps Kirby Structure helper IDs to stable plugin IDs", () => {
 	assert.equal(generated, 1);
 });
 
-test("normalizes Kirby number-field output without losing zero", () => {
-	assert.equal(decimalString(16.5), "16.5");
-	assert.equal(decimalString(0), "0");
-	assert.equal(decimalString("16.50"), "16.50");
-	assert.equal(decimalString(""), null);
-	assert.equal(decimalString(null), null);
-	assert.equal(decimalString(Number.NaN), null);
-});
-
-test("formats storefront prices with the currency's standard decimal digits", () => {
-	assert.equal(formatCurrency("16", "EUR", "en-US"), "€16.00");
-	assert.equal(formatCurrency("16", "JPY", "ja-JP"), "￥16");
-	assert.equal(formatCurrency("16", "KWD", "en-US"), "KWD\u00a016.000");
+test("formats table amounts with the currency's standard decimal digits", () => {
+	assert.equal(formatAmount("16", "EUR"), "16.00");
+	assert.equal(formatAmount("16", "JPY"), "16");
+	assert.equal(formatAmount("16", "KWD"), "16.000");
+	assert.equal(formatAmount("16.5", "EUR"), "16.50");
 });
 
 test("generates the Cartesian product of option values", () => {
@@ -166,28 +156,6 @@ test("reconciliation preserves identities through reorder, addition, and removal
 	assert.equal(reduced.length, 2);
 	assert.ok(reduced.every(variant => variant.selectedOptions.colour === "red"));
 	assert.ok(reduced.every(variant => initialIds.get(optionCombinationKey(variant.selectedOptions)) === variant.id));
-});
-
-test("option matching ignores object key order and rejects disabled variants", () => {
-	const variants = [
-		{ id: "enabled", selectedOptions: { colour: "red", size: "small" }, enabled: true },
-		{ id: "disabled", selectedOptions: { colour: "blue", size: "large" }, enabled: false }
-	];
-
-	assert.equal(optionCombinationKey({ size: "small", colour: "red" }), "colour:red|size:small");
-	assert.equal(matchVariant(variants, { size: "small", colour: "red" })?.id, "enabled");
-	assert.equal(matchVariant(variants, { size: "large", colour: "blue" }), null);
-});
-
-test("option matching rejects delimiter collisions and incomplete selections", () => {
-	const variants = [{
-		id: "canonical",
-		selectedOptions: { colour: "red", size: "small" },
-		enabled: true
-	}];
-
-	assert.equal(matchVariant(variants, { colour: "red|size:small" }), null);
-	assert.equal(matchVariant(variants, { colour: "red" }), null);
 });
 
 test("preset imports are independent copies with fresh local IDs", () => {

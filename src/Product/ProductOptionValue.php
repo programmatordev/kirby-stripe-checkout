@@ -15,7 +15,7 @@ final readonly class ProductOptionValue
     public function __construct(string $id, string $name)
     {
         $this->id = ProductData::identifier($id);
-        $this->name = ProductData::label($name);
+        $this->name = ProductData::name($name);
     }
 
     public function id(): string
