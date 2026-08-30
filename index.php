@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
+use ProgrammatorDev\StripeCheckout\Kirby\ProductBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
@@ -20,6 +21,14 @@ App::plugin(
         'options' => [],
         'blueprints' => [
             'pages/stripe-checkout' => [SettingsBlueprint::class, 'load'],
+            'fields/stripe-checkout/name' => [ProductBlueprint::class, 'name'],
+            'fields/stripe-checkout/price' => [ProductBlueprint::class, 'price'],
+            'fields/stripe-checkout/stripe-price' => [ProductBlueprint::class, 'stripePrice'],
+            'fields/stripe-checkout/description' => [ProductBlueprint::class, 'description'],
+            'fields/stripe-checkout/images' => [ProductBlueprint::class, 'images'],
+            'fields/stripe-checkout/sku' => [ProductBlueprint::class, 'sku'],
+            'fields/stripe-checkout/requires-shipping' => [ProductBlueprint::class, 'requiresShipping'],
+            'fields/stripe-checkout/variants' => [ProductBlueprint::class, 'variants'],
         ],
         'pageModels' => [
             'stripe-checkout' => StripeCheckoutPage::class,

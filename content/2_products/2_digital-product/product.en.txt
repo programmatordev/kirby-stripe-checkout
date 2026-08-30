@@ -6,7 +6,7 @@ Summary: A paid product that does not require shipping.
 
 ----
 
-Price: 12.5
+Stripecheckoutprice: 12.5
 
 ----
 
@@ -14,7 +14,7 @@ Developmentfixture: true
 
 ----
 
-Requiresshipping: false
+Stripecheckoutrequiresshipping: no
 
 ----
 

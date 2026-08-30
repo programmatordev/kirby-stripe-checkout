@@ -6,7 +6,7 @@ Summary: A product with explicit selectable values for resolver and cart validat
 
 ----
 
-Price: 18
+Stripecheckoutprice: 18
 
 ----
 
@@ -41,8 +41,8 @@ variants:
       languageGroup01: portugueseVal01
     enabled: true
     sku: DIGITAL-PT
-    price: "18.75"
-    stripePriceId: price_fixture_digital_pt
+    price: "16"
+    stripePriceId: price_fixtureDigitalPt
     requiresShipping: 'no'
   -
     id: 55gogbpul6ctm0np
@@ -62,7 +62,7 @@ variants:
     enabled: true
     sku: PRINTED-PT
     price: "22.00"
-    stripePriceId: price_fixture_printed_pt
+    stripePriceId: price_fixturePrintedPt
     requiresShipping: 'yes'
   -
     id: or1frhkz1s9hxd0x
@@ -81,7 +81,7 @@ Developmentfixture: true
 
 ----
 
-Requiresshipping: false
+Stripecheckoutrequiresshipping: no
 
 ----
 

@@ -6,7 +6,7 @@ Summary: A zero-amount fixture for the no-payment-required order path.
 
 ----
 
-Price: 0
+Stripecheckoutprice: 0
 
 ----
 
@@ -21,7 +21,7 @@ Developmentfixture: true
 
 ----
 
-Requiresshipping: false
+Stripecheckoutrequiresshipping: no
 
 ----
 

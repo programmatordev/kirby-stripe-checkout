@@ -7,9 +7,13 @@ namespace ProgrammatorDev\StripeCheckout;
 use Brick\Money\Currency;
 use Brick\Money\Money;
 use Kirby\Cms\App;
+use Kirby\Cms\Page;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Money\MoneyFormatter;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
+use ProgrammatorDev\StripeCheckout\Product\ProductSelection;
+use ProgrammatorDev\StripeCheckout\Product\ProductSelectionView;
+use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 
 /**
  * Provides the immutable, Site-scoped entry point for plugin developers.
@@ -44,5 +48,15 @@ final class StripeCheckout
         ?string $locale = null,
     ): string {
         return (new MoneyFormatter($this->kirby))->symbol($currency, $locale);
+    }
+
+    public function resolveProduct(ProductSelection $selection): ResolvedProduct
+    {
+        return (new RuntimeFactory($this->kirby))->resolveProduct($selection);
+    }
+
+    public function productSelection(Page|string $reference): ProductSelectionView
+    {
+        return (new RuntimeFactory($this->kirby))->productSelection($reference);
     }
 }

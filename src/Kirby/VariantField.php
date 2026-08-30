@@ -11,12 +11,12 @@ use Kirby\Form\FieldClass;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
-use ProgrammatorDev\StripeCheckout\Product\Prototype\VariantSchema;
+use ProgrammatorDev\StripeCheckout\Product\Internal\VariantSchema;
 
 /**
- * Adapts the internal variant prototype to Kirby's custom Panel field API.
+ * Adapts canonical variant storage to Kirby's custom Panel field API.
  *
- * @internal The field is an evaluation surface, not a stable public extension.
+ * @internal
  */
 final class VariantField extends FieldClass
 {

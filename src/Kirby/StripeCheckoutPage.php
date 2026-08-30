@@ -42,6 +42,11 @@ final class StripeCheckoutPage extends Page
         'defaultrequiresshipping' => 'defaultRequiresShipping',
     ];
 
+    private const DEFAULT_LANGUAGE_FIELDS = [
+        ...self::SETTING_FIELDS,
+        'variantpresets' => 'variantPresets',
+    ];
+
     private const STRUCTURAL_FIELDS = [
         'stripecheckout',
         'title',
@@ -81,10 +86,15 @@ final class StripeCheckoutPage extends Page
         /** @var array<string, mixed> $input */
         $input = array_change_key_case($input ?? [], CASE_LOWER);
 
+        // Kirby includes its changes-version lock when publishing through the
+        // Panel, but removes it again before writing the latest version.
+        unset($input['lock']);
+
         $this->assertProtectedFieldsRemainUnchanged($input);
         $this->assertOnlySettingsFieldsAreUpdated($input);
 
         $settingInput = array_intersect_key($input, self::SETTING_FIELDS);
+        $defaultLanguageInput = array_intersect_key($input, self::DEFAULT_LANGUAGE_FIELDS);
 
         if ($settingInput !== []) {
             $this->assertSettingUpdates($settingInput);
@@ -94,25 +104,25 @@ final class StripeCheckoutPage extends Page
         $targetLanguageCode = $languageCode ?? $this->kirby()->languageCode();
 
         if (
-            $settingInput !== []
+            $defaultLanguageInput !== []
             && $defaultLanguageCode !== null
             && $targetLanguageCode !== null
             && $targetLanguageCode !== $defaultLanguageCode
         ) {
             // Non-translatable settings belong to Kirby's default language even
             // when the Panel submits them while another language is active.
-            $defaultLanguageInput = [];
+            $normalizedDefaultLanguageInput = [];
 
-            foreach ($settingInput as $field => $value) {
+            foreach ($defaultLanguageInput as $field => $value) {
                 unset($input[$field]);
-                $defaultLanguageInput[self::SETTING_FIELDS[$field]] = $value;
+                $normalizedDefaultLanguageInput[self::DEFAULT_LANGUAGE_FIELDS[$field]] = $value;
             }
 
             $page = $input === []
                 ? $this
                 : parent::update($input, $targetLanguageCode, $validate);
 
-            return $page->update($defaultLanguageInput, $defaultLanguageCode, $validate);
+            return $page->update($normalizedDefaultLanguageInput, $defaultLanguageCode, $validate);
         }
 
         return parent::update($input, $languageCode, $validate);

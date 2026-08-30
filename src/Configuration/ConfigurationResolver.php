@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Configuration;
 
+use Closure;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
+use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 use SensitiveParameter;
 use Symfony\Component\OptionsResolver\OptionsResolver;
@@ -17,7 +19,18 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
  */
 final class ConfigurationResolver
 {
-    private const ROOT_KEYS = ['settings', 'stripe', 'translations'];
+    private const ROOT_KEYS = ['products', 'settings', 'stripe', 'translations'];
+    private const PRODUCT_FIELD_KEYS = [
+        'name',
+        'description',
+        'images',
+        'sku',
+        'price',
+        'stripePriceId',
+        'requiresShipping',
+        'variants',
+    ];
+    private const PRODUCT_KEYS = ['fields', 'resolver'];
     private const SETTINGS_KEYS = ['priceSource', 'currency', 'defaultRequiresShipping'];
     private const STRIPE_KEYS = ['publishableKey', 'secretKey', 'webhookSecret'];
 
@@ -36,6 +49,7 @@ final class ConfigurationResolver
     ): ConfigurationReport {
         try {
             $root = $this->resolveRoot($this->extractor->extract($options));
+            $products = $this->resolveProducts($root['products']);
             $stripe = $this->resolveStripe($root['stripe']);
             $settings = $this->resolveSettings($root['settings'], $pageSettings);
             $translations = $this->resolveTranslations($root['translations']);
@@ -46,6 +60,7 @@ final class ConfigurationResolver
                 settings: $settings,
                 stripe: $stripe,
                 translations: $translations,
+                products: $products,
             ));
         } catch (ConfigurationException $error) {
             return ConfigurationReport::invalid($error);
@@ -54,7 +69,7 @@ final class ConfigurationResolver
 
     /**
      * @param array<string, mixed> $root
-     * @return array{settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>}
+     * @return array{products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>}
      */
     private function resolveRoot(#[SensitiveParameter] array $root): array
     {
@@ -68,16 +83,102 @@ final class ConfigurationResolver
 
         $resolver = new OptionsResolver();
         $resolver->setDefaults([
+            'products' => [],
             'settings' => [],
             'stripe' => [],
             'translations' => [],
         ]);
+        $resolver->setAllowedTypes('products', 'array');
         $resolver->setAllowedTypes('settings', 'array');
         $resolver->setAllowedTypes('stripe', 'array');
         $resolver->setAllowedTypes('translations', 'array');
 
-        /** @var array{settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>} */
+        /** @var array{products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>} */
         return $resolver->resolve($root);
+    }
+
+    /** @param array<string, mixed> $products */
+    private function resolveProducts(array $products): ProductConfiguration
+    {
+        $this->assertKnownKeys($products, self::PRODUCT_KEYS, 'products');
+        $resolver = $products['resolver'] ?? null;
+
+        if ($resolver !== null && $resolver instanceof ProductResolverInterface === false && $resolver instanceof Closure === false) {
+            throw new ConfigurationException('configuration.type_invalid', 'products.resolver');
+        }
+
+        $fields = $products['fields'] ?? [];
+
+        if (is_array($fields) === false) {
+            throw new ConfigurationException('configuration.type_invalid', 'products.fields');
+        }
+
+        /** @var array<string, mixed> $fields */
+        $this->assertKnownKeys($fields, self::PRODUCT_FIELD_KEYS, 'products.fields');
+        $fields = [
+            'name' => 'title',
+            'description' => 'stripeCheckoutDescription',
+            'images' => ['stripeCheckoutImages'],
+            'sku' => 'stripeCheckoutSku',
+            'price' => 'stripeCheckoutPrice',
+            'stripePriceId' => 'stripeCheckoutPriceId',
+            'requiresShipping' => 'stripeCheckoutRequiresShipping',
+            'variants' => 'stripeCheckoutVariants',
+            ...$fields,
+        ];
+
+        foreach (self::PRODUCT_FIELD_KEYS as $key) {
+            $value = $fields[$key];
+
+            if ($key === 'description' && $value === null) {
+                continue;
+            }
+
+            if ($key === 'images') {
+                $fields[$key] = $this->resolveImageFields($value);
+
+                continue;
+            }
+
+            if ($this->validFieldHandle($value) === false) {
+                throw new ConfigurationException('configuration.value_invalid', 'products.fields.' . $key);
+            }
+        }
+
+        /** @var array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePriceId: string, requiresShipping: string, variants: string} $fields */
+        return new ProductConfiguration($resolver, $fields);
+    }
+
+    /** @return list<string> */
+    private function resolveImageFields(mixed $value): array
+    {
+        if ($value === null) {
+            return [];
+        }
+
+        $values = is_string($value) ? [$value] : $value;
+
+        if (is_array($values) === false || array_is_list($values) === false || $values === []) {
+            throw new ConfigurationException('configuration.value_invalid', 'products.fields.images');
+        }
+
+        $normalized = [];
+
+        foreach ($values as $field) {
+            if (is_string($field) === false || $this->validFieldHandle($field) === false || isset($normalized[$field])) {
+                throw new ConfigurationException('configuration.value_invalid', 'products.fields.images');
+            }
+
+            $normalized[$field] = true;
+        }
+
+        return array_keys($normalized);
+    }
+
+    private function validFieldHandle(mixed $value): bool
+    {
+        return is_string($value)
+            && preg_match('/^[A-Za-z][A-Za-z0-9_-]*$/D', $value) === 1;
     }
 
     /**

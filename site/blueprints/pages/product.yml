@@ -6,44 +6,23 @@ options:
 
 columns:
   main:
-    width: 2/3
+    width: 1/1
     fields:
       summary:
         type: textarea
         required: true
-      price:
-        type: number
-        min: 0
-        step: 0.01
-        required: true
-        after: EUR
+      stripeCheckoutPrice:
+        extends: fields/stripe-checkout/price
+      stripeCheckoutDescription:
+        extends: fields/stripe-checkout/description
+      stripeCheckoutImages:
+        extends: fields/stripe-checkout/images
+      stripeCheckoutSku:
+        extends: fields/stripe-checkout/sku
+      stripeCheckoutRequiresShipping:
+        extends: fields/stripe-checkout/requires-shipping
       stripeCheckoutVariants:
-        label: programmatordev.stripe-checkout.variants.label
-        type: stripe-checkout-variants
-        help: programmatordev.stripe-checkout.variants.help
-        presets:
-          - label: T-shirt
-            groups:
-              - label: Colour
-                values:
-                  - Red
-                  - Blue
-              - label: Size
-                values:
-                  - Small
-                  - Medium
-                  - Large
-  behavior:
-    width: 1/3
-    fields:
+        extends: fields/stripe-checkout/variants
       developmentFixture:
         type: hidden
         default: true
-      requiresShipping:
-        type: toggle
-        label: Shipping
-        default: false
-        text:
-          - No shipping
-          - Requires shipping
-        help: Provisional source override used only by the development fixture.

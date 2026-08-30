@@ -60,6 +60,7 @@ final class SiteApiTest extends KirbyTestCase
             Money::of('19.95', 'EUR')->formatToLocale('pt_PT'),
             $plugin->formatMoney('19.95', 'EUR', 'pt_PT'),
         );
+        $this->assertSame('€16.00', $plugin->formatMoney('16', 'EUR', 'en_US'));
         $this->assertSame(
             Money::of(-5, 'USD')->formatToLocale('en_US'),
             $plugin->formatMoney(-5, Currency::of('USD'), 'en_US'),

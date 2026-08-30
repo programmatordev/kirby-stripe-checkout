@@ -7,7 +7,7 @@
 Stripe Checkout integration for [Kirby CMS](https://getkirby.com).
 
 > [!CAUTION]
-> The plugin is under active development and is not ready for production use. The current package provides configuration, exact money formatting, the native Stripe Checkout Page, and local Panel diagnostics; Checkout, products, carts, orders, and webhooks are not implemented yet.
+> The plugin is under active development and is not ready for production use. The current package provides configuration, exact money formatting, Kirby product resolution and variants, the native Stripe Checkout Page, and local Panel diagnostics; Checkout, carts, orders, and webhooks are not implemented yet.
 
 ## Requirements
 
@@ -51,10 +51,11 @@ See [Configuration](docs/configuration.md) for environment-specific credentials,
 - [Documentation overview](docs/index.md)
 - [Configuration](docs/configuration.md)
 - [Money and currency](docs/money.md)
+- [Products and variants](docs/products.md)
 - [Panel and diagnostics](docs/panel.md)
 - [Translations](docs/translations.md)
 
-Guides for products, carts, Checkout, orders, webhooks, and extension points will be added alongside those implementations. They are not available in the current package.
+Guides for carts, Checkout, orders, webhooks, and extension points will be added alongside those implementations. They are not available in the current package.
 
 ## Development
 

@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace ProgrammatorDev\StripeCheckout\Product\Prototype;
+namespace ProgrammatorDev\StripeCheckout\Product\Internal;
 
 use InvalidArgumentException;
 use Kirby\Data\Yaml;
 
 /**
- * Normalizes the prototype's canonical data and translated label overlays.
+ * Normalizes canonical variant data and translated label overlays.
  *
- * @internal The storage format is intentionally not a public plugin contract.
+ * @internal
  */
 final class VariantSchema
 {
@@ -20,8 +20,17 @@ final class VariantSchema
     public function canonical(mixed $value): array
     {
         $data = $this->decode($value);
+
+        if (array_diff(array_keys($data), ['groups', 'variants']) !== []) {
+            throw new InvalidArgumentException('Variant data contains an unknown root property.');
+        }
+
         $groups = $this->groups($data['groups'] ?? []);
         $variants = $this->variants($data['variants'] ?? [], $groups);
+
+        if ($groups === [] && $variants !== []) {
+            throw new InvalidArgumentException('Variants require at least one group.');
+        }
 
         return [
             'groups' => $groups,
@@ -247,18 +256,26 @@ final class VariantSchema
             $choiceKey = VariantMatrix::choiceKey($normalizedChoices);
             $this->assertUnique($choiceKeys, $choiceKey, 'combination');
             $shipping = $variant['requiresShipping'] ?? 'inherit';
+            $enabled = $variant['enabled'] ?? true;
 
             if (in_array($shipping, ['inherit', 'yes', 'no'], true) === false) {
                 throw new InvalidArgumentException('A variant has an invalid shipping override.');
             }
 
+            if (is_bool($enabled) === false) {
+                throw new InvalidArgumentException('A variant has an invalid availability value.');
+            }
+
             $normalized[] = [
                 'id' => $id,
                 'choices' => $normalizedChoices,
-                'enabled' => ($variant['enabled'] ?? true) === true,
-                'sku' => $this->nullableString($variant['sku'] ?? null),
-                'price' => $this->nullableString($variant['price'] ?? null),
-                'stripePriceId' => $this->nullableString($variant['stripePriceId'] ?? null),
+                'enabled' => $enabled,
+                'sku' => $this->nullableString($variant['sku'] ?? null, 'sku'),
+                'price' => $this->nullableString($variant['price'] ?? null, 'price'),
+                'stripePriceId' => $this->nullableString(
+                    $variant['stripePriceId'] ?? null,
+                    'stripePriceId',
+                ),
                 'requiresShipping' => $shipping,
             ];
         }
@@ -277,11 +294,17 @@ final class VariantSchema
 
     private function requiredLabel(mixed $value, string $kind): string
     {
-        if (is_string($value) === false || trim($value) === '') {
+        if (
+            is_string($value) === false
+            || trim($value) === ''
+            || trim($value) !== $value
+            || strlen($value) > 500
+            || preg_match('/[\x00-\x1F\x7F]/', $value) === 1
+        ) {
             throw new InvalidArgumentException(sprintf('Each %s requires a label.', $kind));
         }
 
-        return trim($value);
+        return $value;
     }
 
     private function optionalLabel(mixed $value): string
@@ -289,7 +312,7 @@ final class VariantSchema
         return is_string($value) ? trim($value) : '';
     }
 
-    private function nullableString(mixed $value): ?string
+    private function nullableString(mixed $value, string $kind): ?string
     {
         if ($value === null || $value === '') {
             return null;
@@ -297,6 +320,25 @@ final class VariantSchema
 
         if (is_string($value) === false) {
             throw new InvalidArgumentException('Variant commerce values must be strings.');
+        }
+
+        if (
+            trim($value) !== $value
+            || strlen($value) > 500
+            || preg_match('/[\x00-\x1F\x7F]/', $value) === 1
+        ) {
+            throw new InvalidArgumentException('A variant has an invalid commerce value.');
+        }
+
+        if ($kind === 'price' && preg_match('/^[0-9]+(?:\.[0-9]+)?$/D', $value) !== 1) {
+            throw new InvalidArgumentException('A variant has an invalid price.');
+        }
+
+        if (
+            $kind === 'stripePriceId'
+            && preg_match('/^price_[A-Za-z0-9]{1,249}$/D', $value) !== 1
+        ) {
+            throw new InvalidArgumentException('A variant has an invalid Stripe Price ID.');
         }
 
         return $value;

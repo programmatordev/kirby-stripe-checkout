@@ -6,11 +6,14 @@ namespace ProgrammatorDev\StripeCheckout\Test\Unit\Product;
 
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
-use ProgrammatorDev\StripeCheckout\Product\Prototype\VariantMatrix;
-use ProgrammatorDev\StripeCheckout\Product\Prototype\VariantProjection;
-use ProgrammatorDev\StripeCheckout\Product\Prototype\VariantSchema;
+use ProgrammatorDev\StripeCheckout\Product\Internal\VariantMatrix;
+use ProgrammatorDev\StripeCheckout\Product\Internal\VariantSchema;
+use ProgrammatorDev\StripeCheckout\Product\ProductSelectionGroup;
+use ProgrammatorDev\StripeCheckout\Product\ProductSelectionValue;
+use ProgrammatorDev\StripeCheckout\Product\ProductSelectionVariant;
+use ProgrammatorDev\StripeCheckout\Product\ProductSelectionView;
 
-final class VariantPrototypeTest extends TestCase
+final class VariantStorageTest extends TestCase
 {
     public function testReconcilesTheMatrixWithoutDiscardingExistingCommerceData(): void
     {
@@ -35,7 +38,7 @@ final class VariantPrototypeTest extends TestCase
         $this->assertNotSame('', $canonical['variants'][1]['id']);
     }
 
-    public function testGeneratedIdsRemainStableBeforeThePrototypeIsSaved(): void
+    public function testGeneratedIdsRemainStableBeforeTheFieldIsSaved(): void
     {
         $schema = new VariantSchema();
         $value = ['groups' => self::fixtureGroups(), 'variants' => []];
@@ -80,6 +83,25 @@ final class VariantPrototypeTest extends TestCase
                 'enabled' => true,
                 'sku' => null,
                 'price' => 19.95,
+                'stripePriceId' => null,
+                'requiresShipping' => 'inherit',
+            ]],
+        ]);
+    }
+
+    public function testRejectsVariantsWithoutSelectionGroups(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Variants require at least one group.');
+
+        (new VariantSchema())->canonical([
+            'groups' => [],
+            'variants' => [[
+                'id' => 'orphanVariant001',
+                'choices' => [],
+                'enabled' => true,
+                'sku' => null,
+                'price' => null,
                 'stripePriceId' => null,
                 'requiresShipping' => 'inherit',
             ]],
@@ -183,27 +205,27 @@ final class VariantPrototypeTest extends TestCase
                 'requiresShipping' => 'inherit',
             ]],
         ];
-        $projection = new VariantProjection();
+        $view = self::selectionView($canonical['variants'][0]);
 
-        $this->assertNull($projection->match($canonical, [
+        $this->assertNull($view->match([
             'sizeGroup' => 'smallValue',
             'colourGroup' => 'redValue',
         ]));
-        $this->assertNull($projection->match($canonical, [
+        $this->assertNull($view->match([
             'sizeGroup' => 'staleValue',
             'colourGroup' => 'redValue',
         ]));
-        $this->assertNull($projection->match($canonical, [
+        $this->assertNull($view->match([
             'colourGroup' => 'redValue',
         ]));
 
         $canonical['variants'][0]['enabled'] = true;
         $this->assertSame(
             'disabledVariant',
-            $projection->match($canonical, [
+            self::selectionView($canonical['variants'][0])->match([
                 'sizeGroup' => 'smallValue',
                 'colourGroup' => 'redValue',
-            ])['id'] ?? null,
+            ])?->id(),
         );
     }
 
@@ -217,14 +239,31 @@ final class VariantPrototypeTest extends TestCase
 
     public function testStorefrontMatchingRejectsDelimiterCollisions(): void
     {
-        $canonical = [
-            'groups' => self::fixtureGroups(),
-            'variants' => [],
-        ];
-
-        $this->assertNull((new VariantProjection())->match($canonical, [
+        $this->assertNull(self::selectionView([
+            'id' => 'canonicalVariant',
+            'choices' => ['colourGroup' => 'redValue', 'sizeGroup' => 'smallValue'],
+            'enabled' => true,
+        ])->match([
             'colourGroup' => 'redValue|sizeGroup:smallValue',
         ]));
+    }
+
+    /** @param array{id: string, choices: array<string, string>, enabled: bool} $variant */
+    private static function selectionView(array $variant): ProductSelectionView
+    {
+        return new ProductSelectionView(
+            [
+                new ProductSelectionGroup('colourGroup', 'Colour', [
+                    new ProductSelectionValue('redValue', 'Red'),
+                    new ProductSelectionValue('blueValue', 'Blue'),
+                ]),
+                new ProductSelectionGroup('sizeGroup', 'Size', [
+                    new ProductSelectionValue('smallValue', 'Small'),
+                    new ProductSelectionValue('largeValue', 'Large'),
+                ]),
+            ],
+            [new ProductSelectionVariant($variant['id'], $variant['choices'], $variant['enabled'])],
+        );
     }
 
     /**

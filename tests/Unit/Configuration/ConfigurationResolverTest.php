@@ -124,6 +124,30 @@ final class ConfigurationResolverTest extends TestCase
         $this->assertFalse($setting->isLocked());
     }
 
+    public function testResolvesProductDefaultsAndDottedFieldOverrides(): void
+    {
+        $resolver = static fn(): never => throw new LogicException('Not called.');
+        $products = $this->resolve([
+            self::PREFIX . '.products.resolver' => $resolver,
+            self::PREFIX . '.products.fields.name' => 'productName',
+            self::PREFIX . '.products.fields.description' => null,
+            self::PREFIX . '.products.fields.images' => ['thumbnail', 'gallery'],
+            self::PREFIX . '.products.fields.price' => 'unitPrice',
+        ])->configurationOrFail()->products();
+
+        $this->assertSame($resolver, $products->resolver());
+        $this->assertSame([
+            'name' => 'productName',
+            'description' => null,
+            'images' => ['thumbnail', 'gallery'],
+            'sku' => 'stripeCheckoutSku',
+            'price' => 'unitPrice',
+            'stripePriceId' => 'stripeCheckoutPriceId',
+            'requiresShipping' => 'stripeCheckoutRequiresShipping',
+            'variants' => 'stripeCheckoutVariants',
+        ], $products->fields());
+    }
+
     public function testPageSettingOverridesTheInternalDefault(): void
     {
         $settings = (new ConfigurationResolver())->resolve(
@@ -296,6 +320,31 @@ final class ConfigurationResolverTest extends TestCase
             [self::PREFIX => ['settings' => ['defaultRequiresShipping' => 'yes']]],
             'configuration.type_invalid',
             'settings.defaultRequiresShipping',
+        ];
+        yield 'product section has wrong type' => [
+            [self::PREFIX => ['products' => false]],
+            'configuration.type_invalid',
+            'products',
+        ];
+        yield 'product resolver must be typed or a Closure' => [
+            [self::PREFIX => ['products' => ['resolver' => 'resolver']]],
+            'configuration.type_invalid',
+            'products.resolver',
+        ];
+        yield 'unknown product field mapping is rejected' => [
+            [self::PREFIX => ['products' => ['fields' => ['stock' => 'stock']]]],
+            'configuration.option_unknown',
+            'products.fields.stock',
+        ];
+        yield 'invalid product field handle is rejected' => [
+            [self::PREFIX => ['products' => ['fields' => ['price' => 'unit.price']]]],
+            'configuration.value_invalid',
+            'products.fields.price',
+        ];
+        yield 'duplicate image mappings are rejected' => [
+            [self::PREFIX => ['products' => ['fields' => ['images' => ['gallery', 'gallery']]]]],
+            'configuration.value_invalid',
+            'products.fields.images',
         ];
         yield 'credential has wrong type' => [
             [self::PREFIX => ['stripe' => ['secretKey' => false]]],

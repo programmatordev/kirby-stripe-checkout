@@ -47,6 +47,13 @@ export function decimalString(value) {
 	return typeof value === "string" ? value : null;
 }
 
+export function formatCurrency(value, currency, locale = "en") {
+	return new Intl.NumberFormat(locale, {
+		currency,
+		style: "currency"
+	}).format(Number(value));
+}
+
 export function choiceKey(choices) {
 	return Object.entries(choices)
 		.sort(([left], [right]) => left.localeCompare(right))

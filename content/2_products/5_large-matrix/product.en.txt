@@ -6,7 +6,7 @@ Summary: Ten colours and five sizes exercise a generated matrix of fifty variant
 
 ----
 
-Price: 22
+Stripecheckoutprice: 22
 
 ----
 
@@ -14,7 +14,7 @@ Developmentfixture: true
 
 ----
 
-Requiresshipping: true
+Stripecheckoutrequiresshipping: yes
 
 ----
 

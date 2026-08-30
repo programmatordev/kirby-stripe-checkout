@@ -31,6 +31,7 @@
 
 - Read the surrounding implementation and public contracts before changing them. Keep each change small, cohesive, and independently testable.
 - Prefer explicit domain names and typed objects over ambiguous arrays. Public APIs should be predictable from their names and return types.
+- Name plugin-owned interfaces with the `Interface` suffix, including their filenames.
 - Keep runtime code independent from development-site fixtures and test support.
 - Do not add a new abstraction, adapter, dependency, or configuration option without a concrete use case.
 - Add concise class documentation when a class's responsibility is not immediately clear. Add inline comments only for non-obvious constraints, decisions, or edge cases.

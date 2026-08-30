@@ -6,7 +6,7 @@ Summary: A paid product that requires an order-level shipping address and shippi
 
 ----
 
-Price: 29
+Stripecheckoutprice: 29
 
 ----
 
@@ -14,7 +14,7 @@ Developmentfixture: true
 
 ----
 
-Requiresshipping: true
+Stripecheckoutrequiresshipping: yes
 
 ----
 

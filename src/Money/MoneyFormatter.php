@@ -8,6 +8,7 @@ use Brick\Money\Currency;
 use Brick\Money\Money;
 use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Exception\MoneyException;
+use ProgrammatorDev\StripeCheckout\Translation\LocaleResolver;
 use Symfony\Component\Intl\Currencies;
 use Throwable;
 
@@ -28,7 +29,7 @@ final class MoneyFormatter
         ?string $locale = null,
     ): string {
         $money = $this->money($amount, $currency);
-        $locale = $this->locale($locale);
+        $locale = (new LocaleResolver($this->kirby))->resolve($locale);
 
         try {
             return $money->formatToLocale($locale);
@@ -42,7 +43,7 @@ final class MoneyFormatter
         ?string $locale = null,
     ): string {
         $code = $this->currency($currency)->getCurrencyCode();
-        $locale = $this->locale($locale);
+        $locale = (new LocaleResolver($this->kirby))->resolve($locale);
 
         try {
             return Currencies::getSymbol($code, $locale);
@@ -89,53 +90,5 @@ final class MoneyFormatter
         } catch (Throwable $error) {
             throw new MoneyException('money.currency_invalid', $error);
         }
-    }
-
-    private function locale(?string $explicit): string
-    {
-        if ($explicit !== null) {
-            return $this->normalizeLocale($explicit);
-        }
-
-        $languageLocale = $this->kirby->language()?->locale(LC_MONETARY);
-
-        if (is_string($languageLocale) && trim($languageLocale) !== '') {
-            return $this->normalizeLocale($languageLocale);
-        }
-
-        $configured = $this->kirby->option('locale');
-
-        if (is_array($configured)) {
-            $configured = $configured[LC_MONETARY]
-                ?? $configured['LC_MONETARY']
-                ?? $configured[LC_ALL]
-                ?? $configured['LC_ALL']
-                ?? null;
-        }
-
-        if (is_string($configured) && trim($configured) !== '') {
-            return $this->normalizeLocale($configured);
-        }
-
-        return 'en_US';
-    }
-
-    private function normalizeLocale(string $locale): string
-    {
-        if ($locale === '' || trim($locale) !== $locale) {
-            throw new MoneyException('money.locale_invalid');
-        }
-
-        $locale = preg_replace('/[.@].*$/', '', str_replace('-', '_', $locale));
-        $locale = is_string($locale) ? \Locale::canonicalize($locale) : null;
-
-        if (
-            is_string($locale) === false
-            || preg_match('/^[A-Za-z]{2,3}(?:_[A-Za-z0-9]{2,8})*$/D', $locale) !== 1
-        ) {
-            throw new MoneyException('money.locale_invalid');
-        }
-
-        return $locale;
     }
 }

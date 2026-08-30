@@ -1,41 +1,37 @@
 <?php
 
 use Kirby\Data\Json;
-use ProgrammatorDev\StripeCheckout\Product\Prototype\VariantProjection;
 
-/** @var Kirby\Cms\App $kirby */
 /** @var Kirby\Cms\Page $page */
+/** @var Kirby\Cms\Site $site */
 
-$defaultLanguageCode = $kirby->defaultLanguage()?->code();
-$currentLanguageCode = $kirby->language()?->code();
-$canonicalVariants = $defaultLanguageCode === null
-    ? $page->stripeCheckoutVariants()->value()
-    : $page->content($defaultLanguageCode)->get('stripeCheckoutVariants')->value();
-$translatedVariants = $defaultLanguageCode !== null && $currentLanguageCode !== $defaultLanguageCode
-    ? $page->content($currentLanguageCode)->get('stripeCheckoutVariants')->value()
-    : null;
-$variantProjection = (new VariantProjection())->project(
-    $canonicalVariants,
-    $translatedVariants,
-);
+$stripeCheckout = $site->stripeCheckout();
+$settings = $stripeCheckout->settings();
+$currency = $settings->currency();
+$selectionView = $stripeCheckout->productSelection($page);
+$selectionData = $selectionView->toArray();
+$price = $page->stripeCheckoutPrice()->value();
+$formattedPrice = $currency === null
+    ? $price
+    : $stripeCheckout->formatMoney($price, $currency);
 
 snippet('layout', ['title' => $page->title()], slots: true);
 ?>
 
 <?php slot('content') ?>
-    <p class="eyebrow"><?= $page->requiresShipping()->toBool() ? 'Physical product' : 'Digital or service product' ?></p>
+    <p class="eyebrow"><?= $page->stripeCheckoutRequiresShipping()->value() === 'yes' ? 'Physical product' : 'Digital or service product' ?></p>
     <h1><?= esc($page->title()) ?></h1>
     <p><?= esc($page->summary()) ?></p>
-    <p><strong><?= number_format($page->price()->toFloat(), 2) ?> EUR</strong></p>
+    <p><strong><?= esc($formattedPrice) ?></strong></p>
 
-    <?php if ($variantProjection['groups'] !== []): ?>
+    <?php if ($selectionData['groups'] !== []): ?>
         <form
             class="variant-prototype"
-            data-variants="<?= esc(Json::encode($variantProjection['variants']), 'attr') ?>"
+            data-variants="<?= esc(Json::encode($selectionData['variants']), 'attr') ?>"
             onsubmit="return false"
         >
             <h2>Available options</h2>
-            <?php foreach ($variantProjection['groups'] as $group): ?>
+            <?php foreach ($selectionData['groups'] as $group): ?>
                 <label>
                     <span><?= esc($group['label']) ?></span>
                     <select name="stripeCheckoutChoices[<?= esc($group['id'], 'attr') ?>]">

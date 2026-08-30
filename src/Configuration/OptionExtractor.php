@@ -17,6 +17,15 @@ final class OptionExtractor
     private const PREFIX = 'programmatordev.stripe-checkout';
 
     private const DOTTED_LEAVES = [
+        'products.fields.description',
+        'products.fields.images',
+        'products.fields.name',
+        'products.fields.price',
+        'products.fields.requiresShipping',
+        'products.fields.sku',
+        'products.fields.stripePriceId',
+        'products.fields.variants',
+        'products.resolver',
         'settings.currency',
         'settings.defaultRequiresShipping',
         'settings.priceSource',
@@ -114,6 +123,22 @@ final class OptionExtractor
                 continue;
             }
 
+            if ($section === 'products' && is_array($value)) {
+                foreach (array_keys($value) as $leaf) {
+                    if ($leaf === 'fields' && is_array($value[$leaf])) {
+                        foreach (array_keys($value[$leaf]) as $field) {
+                            $paths['products.fields.' . (string) $field] = true;
+                        }
+
+                        continue;
+                    }
+
+                    $paths['products.' . (string) $leaf] = true;
+                }
+
+                continue;
+            }
+
             $paths[(string) $section] = true;
         }
 
@@ -136,7 +161,8 @@ final class OptionExtractor
             return;
         }
 
-        [$section, $leaf] = explode('.', $path, 2);
+        $parts = explode('.', $path);
+        $section = array_shift($parts);
 
         $sectionOptions = $root[$section] ?? [];
 
@@ -145,7 +171,25 @@ final class OptionExtractor
         }
 
         /** @var array<string, mixed> $sectionOptions */
-        $sectionOptions[$leaf] = $value;
+        $cursor = &$sectionOptions;
+
+        foreach ($parts as $index => $leaf) {
+            if ($index === array_key_last($parts)) {
+                $cursor[$leaf] = $value;
+
+                break;
+            }
+
+            $nested = $cursor[$leaf] ?? [];
+
+            if (is_array($nested) === false) {
+                throw new ConfigurationException('configuration.type_invalid', $section . '.' . $leaf);
+            }
+
+            $cursor[$leaf] = $nested;
+            $cursor = &$cursor[$leaf];
+        }
+
         $root[$section] = $sectionOptions;
     }
 }

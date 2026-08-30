@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Closure;
+use Kirby\Api\Controller\Changes;
 use Kirby\Cms\Page;
 use Kirby\Content\Field;
 use Kirby\Data\Yaml;
@@ -172,6 +173,28 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $this->assertSame(PriceSource::Stripe, $this->settings()->priceSource());
     }
 
+    public function testVariantPresetsRemainOwnedByTheDefaultLanguage(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(languages: [
+            ['code' => 'en', 'default' => true, 'locale' => 'en_US', 'name' => 'English'],
+            ['code' => 'pt', 'locale' => 'pt_PT', 'name' => 'Português'],
+        ]);
+        $this->kirby = $this->environment->app();
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
+        $this->kirby->setCurrentLanguage('pt');
+        $page = $page->update(['variantPresets' => [[
+            'label' => 'T-shirt',
+            'groups' => [[
+                'label' => 'Size',
+                'values' => ['Small', 'Large'],
+            ]],
+        ]]]);
+
+        $this->assertNotSame('', $this->fieldValue($page, 'variantPresets'));
+        $this->assertFalse($page->translation('pt')->exists());
+    }
+
     public function testEveryPhpSettingLockPreservesItsStoredPageShadow(): void
     {
         $this->environment->close();
@@ -234,6 +257,25 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
 
         $this->assertSame(1, $updateCount);
         $this->assertSame(PriceSource::Stripe, $this->settings()->priceSource());
+    }
+
+    public function testPanelChangesCanBePublished(): void
+    {
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
+
+        Changes::save($page, [
+            'priceSource' => PriceSource::Kirby->value,
+            'currency' => 'EUR',
+            'defaultRequiresShipping' => 'no',
+        ]);
+        Changes::publish($page, []);
+
+        $page = (new StripeCheckoutPageStore($this->kirby))->page();
+
+        $this->assertNotNull($page);
+        $this->assertSame('EUR', $this->fieldValue($page, 'currency'));
+        $this->assertSame('no', $this->fieldValue($page, 'defaultRequiresShipping'));
+        $this->assertFalse($page->version('changes')->exists('current'));
     }
 
     public function testModelRejectsUnknownFields(): void

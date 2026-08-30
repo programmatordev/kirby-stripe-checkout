@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Kirby\Cms\App;
 use Kirby\Plugin\Plugin;
+use ProgrammatorDev\StripeCheckout\Kirby\ProductBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Kirby\VariantField;
@@ -47,6 +48,20 @@ final class PluginRegistrationTest extends KirbyTestCase
             [SettingsBlueprint::class, 'load'],
             $blueprints['pages/stripe-checkout'],
         );
+        $productBlueprints = [
+            'fields/stripe-checkout/name' => [ProductBlueprint::class, 'name'],
+            'fields/stripe-checkout/price' => [ProductBlueprint::class, 'price'],
+            'fields/stripe-checkout/stripe-price' => [ProductBlueprint::class, 'stripePrice'],
+            'fields/stripe-checkout/description' => [ProductBlueprint::class, 'description'],
+            'fields/stripe-checkout/images' => [ProductBlueprint::class, 'images'],
+            'fields/stripe-checkout/sku' => [ProductBlueprint::class, 'sku'],
+            'fields/stripe-checkout/requires-shipping' => [ProductBlueprint::class, 'requiresShipping'],
+            'fields/stripe-checkout/variants' => [ProductBlueprint::class, 'variants'],
+        ];
+
+        foreach ($productBlueprints as $name => $definition) {
+            $this->assertSame($definition, $blueprints[$name] ?? null);
+        }
         $this->assertIsArray($pageModels);
         $this->assertSame(StripeCheckoutPage::class, $pageModels['stripe-checkout']);
         $this->assertIsArray($fields);

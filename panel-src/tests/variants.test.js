@@ -5,6 +5,7 @@ import {
 	choiceKey,
 	combinations,
 	decimalString,
+	formatCurrency,
 	importPreset,
 	matchVariant,
 	reconcile,
@@ -56,6 +57,12 @@ test("normalizes Kirby number-field output without losing zero", () => {
 	assert.equal(decimalString(""), null);
 	assert.equal(decimalString(null), null);
 	assert.equal(decimalString(Number.NaN), null);
+});
+
+test("formats storefront prices with the currency's standard decimal digits", () => {
+	assert.equal(formatCurrency("16", "EUR", "en-US"), "€16.00");
+	assert.equal(formatCurrency("16", "JPY", "ja-JP"), "￥16");
+	assert.equal(formatCurrency("16", "KWD", "en-US"), "KWD\u00a016.000");
 });
 
 test("generates the Cartesian product of group values", () => {

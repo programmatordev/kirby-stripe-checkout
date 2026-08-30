@@ -18,6 +18,7 @@ final class ResolvedConfiguration
         private readonly Settings $settings,
         private readonly StripeConfiguration $stripe,
         private readonly array $translations,
+        private readonly ProductConfiguration $products,
     ) {}
 
     public function settings(): Settings
@@ -28,6 +29,11 @@ final class ResolvedConfiguration
     public function stripe(): StripeConfiguration
     {
         return $this->stripe;
+    }
+
+    public function products(): ProductConfiguration
+    {
+        return $this->products;
     }
 
     /** @return array<string, array<string, string>> */

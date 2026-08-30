@@ -176,30 +176,56 @@ jobs:
             docs/index.md
             docs/money.md
             docs/panel.md
+            docs/products.md
             docs/translations.md
             index.css
             index.php
             index.js
             src/Configuration/PageSettings.php
+            src/Configuration/ProductConfiguration.php
             src/Configuration/Settings.php
             src/Diagnostics/LocalDiagnostics.php
             src/Exception/MoneyException.php
             src/Kirby/PluginPermissions.php
+            src/Kirby/ProductBlueprint.php
             src/Kirby/SettingsBlueprint.php
             src/Kirby/StripeCheckoutPage.php
             src/Kirby/StripeCheckoutPageStore.php
             src/Kirby/VariantField.php
+            src/Kirby/VariantPresetLibrary.php
             src/Money/MoneyFormatter.php
             src/Money/MoneySnapshot.php
             src/Money/StripeCurrencyRegistry.php
             src/Panel/DiagnosticsSections.php
             src/Panel/StripeCheckoutArea.php
             src/Plugin/RuntimeFactory.php
-            src/Product/Prototype/VariantMatrix.php
-            src/Product/Prototype/VariantProjection.php
-            src/Product/Prototype/VariantSchema.php
+            src/Product/Exception/InvalidProductException.php
+            src/Product/Exception/ProductException.php
+            src/Product/Exception/ProductNotFoundException.php
+            src/Product/Exception/ProductPriceSourceMismatchException.php
+            src/Product/Exception/ProductUnavailableException.php
+            src/Product/InlinePrice.php
+            src/Product/Internal/ClosureProductResolver.php
+            src/Product/Internal/KirbyPageLocator.php
+            src/Product/Internal/KirbyPageProductResolver.php
+            src/Product/Internal/ProductResolutionService.php
+            src/Product/Internal/ProductSelectionViewFactory.php
+            src/Product/Internal/VariantMatrix.php
+            src/Product/Internal/VariantSchema.php
+            src/Product/ProductResolutionContext.php
+            src/Product/ProductResolverInterface.php
+            src/Product/ProductSelection.php
+            src/Product/ProductSelectionGroup.php
+            src/Product/ProductSelectionValue.php
+            src/Product/ProductSelectionVariant.php
+            src/Product/ProductSelectionView.php
+            src/Product/ResolvedProduct.php
+            src/Product/SelectedChoice.php
+            src/Product/StripePriceReference.php
+            src/Product/Support/ProductData.php
             src/StripeCheckout.php
             src/Translation/Catalogue.php
+            src/Translation/LocaleResolver.php
             src/Translation/Registration.php
             translations/en.php
             translations/pt_PT.php

@@ -61,6 +61,31 @@ tabs:
                 "*": programmatordev.stripe-checkout.settings.defaultRequiresShipping.yes
               "no":
                 "*": programmatordev.stripe-checkout.settings.defaultRequiresShipping.no
+          variantPresets:
+            label: programmatordev.stripe-checkout.settings.variantPresets.label
+            help: programmatordev.stripe-checkout.settings.variantPresets.help
+            type: structure
+            translate: false
+            fields:
+              label:
+                label: programmatordev.stripe-checkout.settings.variantPresets.presetLabel
+                type: text
+                required: true
+              groups:
+                label: programmatordev.stripe-checkout.settings.variantPresets.groups
+                type: structure
+                required: true
+                min: 1
+                fields:
+                  label:
+                    label: programmatordev.stripe-checkout.settings.variantPresets.groupLabel
+                    type: text
+                    required: true
+                  values:
+                    label: programmatordev.stripe-checkout.settings.variantPresets.values
+                    type: tags
+                    required: true
+                    min: 1
   diagnostics:
     label: programmatordev.stripe-checkout.tabs.diagnostics
     icon: info

@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace ProgrammatorDev\StripeCheckout\Product\Prototype;
+namespace ProgrammatorDev\StripeCheckout\Product\Internal;
 
 use Closure;
 
 /**
  * Reconciles generated product combinations without discarding merchant data.
  *
- * @internal The variant storage contract remains provisional until batch 6.2b2.
+ * @internal
  */
 final class VariantMatrix
 {

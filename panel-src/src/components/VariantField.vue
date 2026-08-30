@@ -99,6 +99,7 @@
 <script>
 import {
 	decimalString,
+	formatCurrency,
 	importPreset,
 	reconcile,
 	resolveStableId,
@@ -252,7 +253,6 @@ export default {
 					type: "text"
 				},
 				price: {
-					after: this.priceSource === "kirby" ? this.currency : null,
 					label: this.$t("programmatordev.stripe-checkout.variants.price"),
 					type: "stripe-checkout-variant-value"
 				},
@@ -573,8 +573,21 @@ export default {
 				inherited,
 				text: inherited
 					? this.$t("programmatordev.stripe-checkout.variants.price.inherit")
-					: value
+					: this.formatPrice(value)
 			};
+		},
+		formatPrice(value) {
+			if (this.priceSource !== "kirby") {
+				return value;
+			}
+
+			// Number conversion is presentation-only. Canonical values remain exact
+			// decimal strings and are validated again at the PHP boundary.
+			return formatCurrency(
+				value,
+				this.currency,
+				document.documentElement.lang || "en"
+			);
 		},
 		shippingLabel(value) {
 			return this.shippingOptions.find(option => option.value === value)?.text ?? "";
