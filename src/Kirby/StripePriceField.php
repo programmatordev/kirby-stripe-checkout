@@ -96,7 +96,7 @@ final class StripePriceField extends FieldClass
             }
 
             $state = $runtime->stripePriceCatalogue()->current($currency);
-            $selected = $this->selected($state['items'], $value, $this->kirby());
+            $selected = $this->selected($state['items'], $value);
 
             return [
                 ...$props,
@@ -158,7 +158,7 @@ final class StripePriceField extends FieldClass
                     if ($view === 'selected') {
                         return StripePriceField::selectedResponse(
                             $api->kirby(),
-                            $api->requestQuery('price'),
+                            $api->requestQuery('prices') ?? $api->requestQuery('price'),
                         );
                     }
 
@@ -318,21 +318,26 @@ final class StripePriceField extends FieldClass
     }
 
     /**
-     * Resolves a saved ID from the cache without contacting Stripe.
+     * Resolves one or more saved IDs from the cache without contacting Stripe.
      *
      * @return array{catalogue: array{error: ?string, failedAt: ?int, refreshedAt: ?int, status: string}, data: list<array<string, mixed>>, pagination: array{limit: int, page: int, pages: int, total: int}}
      */
-    public static function selectedResponse(App $kirby, mixed $priceId): array
+    public static function selectedResponse(App $kirby, mixed $priceIds): array
     {
         [$catalogue, $currency] = self::catalogue($kirby);
         $state = $catalogue->current($currency);
-        $priceId = is_string($priceId) ? $priceId : '';
+        $priceIds = is_array($priceIds)
+            ? $priceIds
+            : (is_string($priceIds) ? explode(',', $priceIds) : []);
+        $priceIds = array_fill_keys(array_values(array_filter(
+            $priceIds,
+            static fn(mixed $value): bool => is_string($value) && $value !== '',
+        )), true);
         $data = [];
 
         foreach ($state['items'] as $price) {
-            if ($price->priceId() === $priceId) {
+            if (isset($priceIds[$price->priceId()])) {
                 $data[] = self::item($price);
-                break;
             }
         }
 
@@ -346,7 +351,7 @@ final class StripePriceField extends FieldClass
      * @param list<ResolvedPrice> $items
      * @return array<string, mixed>|null
      */
-    private function selected(array $items, string $value, App $kirby): ?array
+    private function selected(array $items, string $value): ?array
     {
         if ($value === '') {
             return null;
@@ -381,21 +386,17 @@ final class StripePriceField extends FieldClass
     /** @return array<string, mixed> */
     private static function item(ResolvedPrice $price): array
     {
-        $details = array_filter([
+        $text = array_filter([
+            $price->name(),
             $price->nickname(),
-            self::formattedAmount($price),
-            self::translated(
-                'programmatordev.stripe-checkout.prices.taxBehavior.' . $price->taxBehavior(),
-            ),
-            $price->priceId(),
         ]);
 
         return [
             'id' => $price->priceId(),
             'icon' => 'money',
             'image' => self::itemImage($price->images()[0] ?? null, 'money'),
-            'info' => implode(' · ', $details),
-            'text' => $price->name(),
+            'info' => self::formattedAmount($price),
+            'text' => implode(' · ', $text),
         ];
     }
 
@@ -440,14 +441,9 @@ final class StripePriceField extends FieldClass
         return [
             'id' => $price->priceId(),
             'image' => self::itemImage($price->images()[0] ?? null, 'money'),
-            'info' => implode(' · ', [
-                self::translated(
-                    'programmatordev.stripe-checkout.prices.taxBehavior.' . $price->taxBehavior(),
-                ),
-                $price->priceId(),
-            ]),
+            'info' => $amount,
             'selected' => self::item($price),
-            'text' => $nickname === null ? $amount : $nickname . ' · ' . $amount,
+            'text' => $nickname ?? $price->name(),
         ];
     }
 

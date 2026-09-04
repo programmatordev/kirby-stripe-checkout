@@ -149,6 +149,7 @@ export default {
 	data() {
 		return {
 			localValue: this.clone(this.value),
+			localStripePriceItems: {},
 			variantPage: 1,
 			variantPageSize: 10
 		};
@@ -256,7 +257,7 @@ export default {
 					type: "text"
 				},
 				price: {
-					after: this.currency,
+					after: this.priceSource === "kirby" ? this.currency : null,
 					label: this.$t("programmatordev.stripe-checkout.options.price"),
 					type: "stripe-checkout-variant-value"
 				},
@@ -291,10 +292,7 @@ export default {
 			};
 		},
 		variantRows() {
-			const offset = this.variantPagination.offset;
-
-			return this.localValue.variants
-				.slice(offset, offset + this.variantPageSize)
+			return this.visibleVariants
 				.map(variant => ({
 					_id: variant.id,
 					combination: this.variantLabel(variant),
@@ -303,6 +301,11 @@ export default {
 					shipping: this.shippingPreview(variant.requiresShipping),
 					sku: variant.sku
 				}));
+		},
+		visibleVariants() {
+			const offset = this.variantPagination.offset;
+
+			return this.localValue.variants.slice(offset, offset + this.variantPageSize);
 		},
 		variantTableFields() {
 			return {
@@ -338,13 +341,20 @@ export default {
 		}
 	},
 	watch: {
+		variantPage() {
+			this.hydrateVisibleStripePrices();
+		},
 		value: {
 			deep: true,
 			handler(value) {
 				this.localValue = this.clone(value);
 				this.variantPage = 1;
+				this.$nextTick(() => this.hydrateVisibleStripePrices());
 			}
 		}
+	},
+	mounted() {
+		this.hydrateVisibleStripePrices();
 	},
 	methods: {
 		clone(value) {
@@ -573,6 +583,18 @@ export default {
 			const value = this.priceSource === "kirby" ? variant.price : variant.stripePriceId;
 			const inherited = value === null || value === "";
 
+			if (inherited === false && this.priceSource === "stripe") {
+				return {
+					inherited: false,
+					item: this.localStripePriceItems[value] ?? {
+						icon: "alert",
+						info: value,
+						text: this.$t("programmatordev.stripe-checkout.prices.savedReference"),
+						theme: "warning"
+					}
+				};
+			}
+
 			return {
 				inherited,
 				text: inherited
@@ -581,10 +603,6 @@ export default {
 			};
 		},
 		formatPrice(value) {
-			if (this.priceSource !== "kirby") {
-				return value;
-			}
-
 			return formatAmount(value, this.currency);
 		},
 		shippingLabel(value) {
@@ -615,9 +633,41 @@ export default {
 					: null;
 			} else {
 				current.stripePriceId = value.stripePriceId || null;
+				this.hydrateStripePrices([current.stripePriceId]);
 			}
 
 			this.emit();
+		},
+		async hydrateStripePrices(priceIds) {
+			const missing = [...new Set(priceIds)]
+				.filter(priceId => priceId && !this.localStripePriceItems[priceId]);
+
+			if (
+				this.priceSource !== "stripe" ||
+				missing.length === 0 ||
+				this.pricesReadable === false ||
+				!this.endpoints.field
+			) {
+				return;
+			}
+
+			try {
+				const response = await this.$api.get(`${this.endpoints.field}/prices`, {
+					prices: missing.join(","),
+					view: "selected"
+				});
+
+				for (const item of response?.data ?? []) {
+					this.$set(this.localStripePriceItems, item.id, item);
+				}
+			} catch (error) {
+				// Keep the saved references visible when cached details are unavailable.
+			}
+		},
+		hydrateVisibleStripePrices() {
+			this.hydrateStripePrices(
+				this.visibleVariants.map(variant => variant.stripePriceId)
+			);
 		},
 		updateVariantRows(rows) {
 			const variants = new Map(this.localValue.variants.map(variant => [variant.id, variant]));
@@ -764,8 +814,14 @@ export default {
 	cursor: default;
 }
 
-.k-stripe-checkout-options-field__variants-table td[data-column-id="enabled"] .k-toggle-input {
-	justify-content: center;
+.k-stripe-checkout-options-field__variants-table td[data-column-id="enabled"] .k-toggle-field-preview {
+	display: grid;
+	place-items: center;
+	height: 100%;
+}
+
+.k-stripe-checkout-options-field__variants-table td[data-column-id="enabled"] .k-choice-input input {
+	top: 0;
 }
 
 .k-stripe-checkout-options-field__variants-table td[data-column-id="enabled"] .k-choice-input-label {

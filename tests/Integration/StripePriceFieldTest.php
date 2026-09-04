@@ -24,11 +24,8 @@ final class StripePriceFieldTest extends KirbyTestCase
         $this->assertInstanceOf(StripePriceField::class, $field);
         $this->assertSame('price_canvas', $field->toStoredValue());
         $this->assertSame('price_canvas', $props['value']);
-        $this->assertSame('Canvas bag', $props['selected']['text']);
-        $this->assertSame(
-            'Standard · 16.00 EUR · Tax excluded · price_canvas',
-            $props['selected']['info'],
-        );
+        $this->assertSame('Canvas bag · Standard', $props['selected']['text']);
+        $this->assertSame('16.00 EUR', $props['selected']['info']);
         $this->assertSame('ready', $props['catalogue']['status']);
     }
 
@@ -98,7 +95,7 @@ final class StripePriceFieldTest extends KirbyTestCase
             'GET',
             ['query' => ['view' => 'products']],
         );
-        /** @var array{data: list<array{id: string, text: string, image: array<string, string>, selected: array{text: string}}>, pagination: array{total: int}} $prices */
+        /** @var array{data: list<array{id: string, info: string, text: string, image: array<string, string>, selected: array{text: string}}>, pagination: array{total: int}} $prices */
         $prices = $this->kirby->api()->call(
             'pages/product/fields/price',
             'GET',
@@ -111,9 +108,13 @@ final class StripePriceFieldTest extends KirbyTestCase
         $this->assertSame('https://example.test/canvas.jpg', $products['data'][0]['image']['src']);
         $this->assertSame('pattern', $products['data'][1]['image']['back']);
         $this->assertSame(2, $prices['pagination']['total']);
-        $this->assertSame('Standard · 16.00 EUR', $prices['data'][0]['text']);
+        $this->assertSame('Standard', $prices['data'][0]['text']);
+        $this->assertSame('16.00 EUR', $prices['data'][0]['info']);
         $this->assertSame('https://example.test/canvas.jpg', $prices['data'][0]['image']['src']);
-        $this->assertSame('Canvas bag', $prices['data'][0]['selected']['text']);
+        $this->assertSame(
+            'Canvas bag · Standard',
+            $prices['data'][0]['selected']['text'],
+        );
     }
 
     public function testFieldApiHydratesOneSavedSelectionFromCache(): void
@@ -129,11 +130,8 @@ final class StripePriceFieldTest extends KirbyTestCase
 
         $this->assertSame(1, $response['pagination']['total']);
         $this->assertSame('price_canvas', $response['data'][0]['id']);
-        $this->assertSame('Canvas bag', $response['data'][0]['text']);
-        $this->assertSame(
-            'Standard · 16.00 EUR · Tax excluded · price_canvas',
-            $response['data'][0]['info'],
-        );
+        $this->assertSame('Canvas bag · Standard', $response['data'][0]['text']);
+        $this->assertSame('16.00 EUR', $response['data'][0]['info']);
     }
 
     public function testOptionsFieldReusesTheSameCatalogueEndpointForVariantPrices(): void
@@ -145,6 +143,10 @@ final class StripePriceFieldTest extends KirbyTestCase
         $response = $this->kirby->api()->call(
             'pages/product/fields/variants/prices',
             'GET',
+            ['query' => [
+                'view' => 'selected',
+                'prices' => 'price_canvas,price_missing',
+            ]],
         );
 
         $this->assertTrue($options['pricesReadable'] ?? false);
