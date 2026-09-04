@@ -227,7 +227,7 @@ The catalogue is a Kirby-native, read-only cache for Panel convenience:
 - the first authorized lookup fills an empty catalogue;
 - opening or searching the picker refreshes a catalogue whose last successful refresh is at least 24 hours old;
 - after a failed automatic refresh, the last successful catalogue remains available and another automatic attempt waits 15 minutes;
-- the refresh button retrieves every Stripe result page;
+- the picker dialog's refresh button retrieves every Stripe result page;
 - searching and pagination then use the local catalogue;
 - a failed refresh keeps the last successful catalogue and marks it as stale;
 - a refresh immediately rehydrates the saved selection; if it is no longer eligible, its ID is preserved with a warning;

@@ -5,25 +5,14 @@
 		class="k-stripe-checkout-price-field"
 	>
 		<template v-if="disabled === false" #options>
-			<k-button-group layout="collapsed">
-				<k-button
-					:responsive="true"
-					:text="$t('select')"
-					icon="checklist"
-					size="xs"
-					variant="filled"
-					@click="open"
-				/>
-				<k-button
-					:aria-label="$t('programmatordev.stripe-checkout.prices.refresh')"
-					:disabled="refreshing"
-					:title="$t('programmatordev.stripe-checkout.prices.refresh')"
-					icon="refresh"
-					size="xs"
-					variant="filled"
-					@click="refresh"
-				/>
-			</k-button-group>
+			<k-button
+				:responsive="true"
+				:text="$t('select')"
+				icon="checklist"
+				size="xs"
+				variant="filled"
+				@click="open"
+			/>
 		</template>
 
 		<k-input-validator :required="required" :value="value">
@@ -115,8 +104,7 @@ export default {
 		return {
 			localCatalogue: { ...this.catalogue },
 			localSelected: this.selected ?? (hydrating ? null : this.fallback(this.value)),
-			hydrating,
-			refreshing: false
+			hydrating
 		};
 	},
 	computed: {
@@ -257,6 +245,7 @@ export default {
 				},
 				on: {
 					fetched: response => this.applyResponse(response),
+					refreshed: response => this.handleRefresh(response),
 					submit: items => {
 						const submitted = items[0] ?? null;
 						const selected = submitted?.text
@@ -271,33 +260,14 @@ export default {
 				}
 			});
 		},
-		async refresh() {
-			if (this.disabled || !this.apiEndpoint || this.refreshing) {
-				return;
+		async handleRefresh(response) {
+			if (response?.catalogue) {
+				this.localCatalogue = response.catalogue;
 			}
 
-			try {
-				this.refreshing = true;
-				const response = await this.$api.post(this.apiEndpoint);
-
-				if (response?.catalogue) {
-					this.localCatalogue = response.catalogue;
-				}
-
-				// Re-read the saved selection from the refreshed catalogue. The refresh
-				// response is paginated and therefore cannot authoritatively hydrate it.
-				await this.hydrate(this.value);
-
-				if (response.catalogue?.status === "ready") {
-					this.$panel.notification.success(
-						this.$t("programmatordev.stripe-checkout.prices.refreshSuccess")
-					);
-				}
-			} catch (error) {
-				this.$panel.error(error);
-			} finally {
-				this.refreshing = false;
-			}
+			// The refresh response is paginated and therefore cannot authoritatively
+			// hydrate a saved selection that may be on another result page.
+			await this.hydrate(this.value);
 		}
 	}
 };

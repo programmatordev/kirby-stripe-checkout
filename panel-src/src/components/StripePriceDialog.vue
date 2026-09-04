@@ -18,6 +18,15 @@
 			<k-headline>
 				{{ product?.text ?? $t("programmatordev.stripe-checkout.prices.dialogTitle") }}
 			</k-headline>
+			<k-button
+				:aria-label="$t('programmatordev.stripe-checkout.prices.refresh')"
+				:disabled="refreshing || $panel.dialog.isLoading"
+				:title="$t('programmatordev.stripe-checkout.prices.refresh')"
+				:icon="refreshing ? 'loader' : 'refresh'"
+				class="k-stripe-checkout-price-dialog__refresh"
+				variant="filled"
+				@click="refresh"
+			/>
 		</header>
 
 		<k-dialog-search :value="query" @search="setQuery" />
@@ -75,7 +84,7 @@ export default {
 			default: ""
 		}
 	},
-	emits: ["cancel", "fetched", "submit"],
+	emits: ["cancel", "fetched", "refreshed", "submit"],
 	data() {
 		return {
 			items: [],
@@ -86,6 +95,7 @@ export default {
 			},
 			product: null,
 			query: "",
+			refreshing: false,
 			searchTimeout: null,
 			selected: null
 		};
@@ -170,6 +180,37 @@ export default {
 			this.pagination.limit = pagination.limit;
 			this.fetch();
 		},
+		async refresh() {
+			if (this.refreshing || this.$panel.dialog.isLoading) {
+				return;
+			}
+
+			try {
+				this.refreshing = true;
+				this.$panel.dialog.isLoading = true;
+				const refreshed = await this.$api.post(this.endpoint);
+				this.$emit("refreshed", refreshed);
+
+				const response = await this.$api.get(this.endpoint, {
+					page: this.pagination.page,
+					product: this.product?.id,
+					search: this.query,
+					view: this.product === null ? "products" : "prices"
+				});
+				this.applyResponse(response);
+
+				if (refreshed.catalogue?.status === "ready") {
+					this.$panel.notification.success(
+						this.$t("programmatordev.stripe-checkout.prices.refreshSuccess")
+					);
+				}
+			} catch (error) {
+				this.$panel.error(error);
+			} finally {
+				this.$panel.dialog.isLoading = false;
+				this.refreshing = false;
+			}
+		},
 		setQuery(value) {
 			this.query = value ?? "";
 			clearTimeout(this.searchTimeout);
@@ -202,5 +243,13 @@ export default {
 .k-stripe-checkout-price-dialog :is(.k-item-title, .k-item-info) {
 	min-width: 0;
 	max-width: 100%;
+}
+
+.k-stripe-checkout-price-dialog .k-pages-dialog-navbar {
+	padding-inline-end: 0;
+}
+
+.k-stripe-checkout-price-dialog .k-stripe-checkout-price-dialog__refresh[aria-disabled="true"] {
+	opacity: 1;
 }
 </style>
