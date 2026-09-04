@@ -90,7 +90,6 @@ return [
     'programmatordev.stripe-checkout.prices.productCount.one' => '1 Preço elegível',
     'programmatordev.stripe-checkout.prices.productCount.many' => '{count} Preços elegíveis',
     'programmatordev.stripe-checkout.prices.denied' => 'Não tem permissão para consultar os Preços do Stripe.',
-    'programmatordev.stripe-checkout.prices.refreshed' => 'Última atualização: {date}.',
     'programmatordev.stripe-checkout.prices.stale' => 'Não foi possível atualizar os dados do Stripe. Continua a ser apresentado o último catálogo válido.',
     'programmatordev.stripe-checkout.prices.error' => 'Não foi possível carregar os Preços do Stripe. Verifique a chave de servidor e as respetivas permissões e volte a atualizar.',
     'programmatordev.stripe-checkout.prices.configurationInvalid' => 'Configure a moeda da loja e a chave de servidor do Stripe antes de carregar os Preços.',

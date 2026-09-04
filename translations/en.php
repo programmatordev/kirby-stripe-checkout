@@ -90,7 +90,6 @@ return [
     'programmatordev.stripe-checkout.prices.productCount.one' => '1 eligible Price',
     'programmatordev.stripe-checkout.prices.productCount.many' => '{count} eligible Prices',
     'programmatordev.stripe-checkout.prices.denied' => 'You do not have permission to read Stripe Prices.',
-    'programmatordev.stripe-checkout.prices.refreshed' => 'Last refreshed {date}.',
     'programmatordev.stripe-checkout.prices.stale' => 'Stripe could not be refreshed. The last successful catalogue is still shown.',
     'programmatordev.stripe-checkout.prices.error' => 'Stripe Prices could not be loaded. Check the server key and its permissions, then refresh.',
     'programmatordev.stripe-checkout.prices.configurationInvalid' => 'Complete the store currency and Stripe server-key configuration before loading Prices.',

@@ -153,12 +153,6 @@ export default {
 				return this.$t("programmatordev.stripe-checkout.prices.selectedUnavailable");
 			}
 
-			if (this.localCatalogue.refreshedAt) {
-				return this.$t("programmatordev.stripe-checkout.prices.refreshed", {
-					date: new Date(this.localCatalogue.refreshedAt * 1000).toLocaleString()
-				});
-			}
-
 			return null;
 		},
 		statusTheme() {
