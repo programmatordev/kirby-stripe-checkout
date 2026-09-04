@@ -28,6 +28,7 @@ final class ProductBlueprintTest extends KirbyTestCase
 
         $this->assertSame('EUR', $price['after'] ?? null);
         $this->assertSame('text', $price['type'] ?? null);
+        $this->assertTrue($price['required'] ?? false);
         $this->assertSame('EUR', $options['currency'] ?? null);
         $this->assertSame(
             'stripe-checkout-options',
@@ -56,8 +57,10 @@ final class ProductBlueprintTest extends KirbyTestCase
 
         $this->assertSame('text', $price['type'] ?? null);
         $this->assertTrue($price['disabled'] ?? false);
+        $this->assertArrayNotHasKey('required', $price);
         $this->assertSame('stripe-checkout-price', $stripePrice['type'] ?? null);
         $this->assertArrayNotHasKey('disabled', $stripePrice);
+        $this->assertTrue($stripePrice['required'] ?? false);
     }
 
     public function testOnlyTheActivePriceFieldShowsAnIncompleteConfigurationWarning(): void

@@ -58,6 +58,7 @@ final class ProductBlueprint
             'help' => 'programmatordev.stripe-checkout.product.price.help',
             'after' => $currency,
             'pattern' => '[0-9]+(?:\.[0-9]+)?',
+            'required' => true,
             'translate' => false,
             'type' => 'text',
         ];
@@ -90,6 +91,7 @@ final class ProductBlueprint
         return [
             'label' => 'programmatordev.stripe-checkout.product.stripePrice.label',
             'help' => 'programmatordev.stripe-checkout.product.stripePrice.help',
+            'required' => true,
             'translate' => false,
             'type' => 'stripe-checkout-price',
         ];

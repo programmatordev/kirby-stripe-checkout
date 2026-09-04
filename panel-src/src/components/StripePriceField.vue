@@ -15,7 +15,10 @@
 			/>
 		</template>
 
-		<k-input-validator :required="required" :value="value">
+		<k-input-validator
+			:required="required"
+			:value="JSON.stringify(value ? [value] : [])"
+		>
 			<k-collection
 				v-if="localSelected"
 				:items="[localSelected]"

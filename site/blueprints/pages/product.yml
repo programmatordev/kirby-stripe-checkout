@@ -10,7 +10,6 @@ columns:
     fields:
       summary:
         type: textarea
-        required: true
       stripeCheckoutPrice:
         extends: fields/stripe-checkout/price
       stripeCheckoutPriceId:
