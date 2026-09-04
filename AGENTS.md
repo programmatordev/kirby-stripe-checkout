@@ -31,13 +31,22 @@
 
 - Read the surrounding implementation and public contracts before changing them. Keep each change small, cohesive, and independently testable.
 - Prefer explicit domain names and typed objects over ambiguous arrays. Public APIs should be predictable from their names and return types.
-- Name plugin-owned interfaces with the `Interface` suffix, including their filenames.
 - Keep runtime code independent from development-site fixtures and test support.
 - Do not add a new abstraction, adapter, dependency, or configuration option without a concrete use case.
 - Add concise class documentation when a class's responsibility is not immediately clear. Add inline comments only for non-obvious constraints, decisions, or edge cases.
 - In templates and snippets, add PHPDoc types for implicit Kirby or passed variables only when those variables are used.
 - Use the project's PHP-CS-Fixer and PHPStan configuration as the source of truth for formatting and static analysis.
 - Add translatable labels and messages instead of hard-coded user-facing Panel text.
+
+## Naming conventions
+
+- Let namespaces provide domain context instead of repeating every namespace segment in class names. Use a more explicit name when a class is imported into a broader context and would otherwise be ambiguous.
+- Name classes by their responsibility rather than their current implementation technology. Name external implementations after the stable integration boundary, such as an API, rather than the client library used internally.
+- Name plugin-owned interfaces with the `Interface` suffix, including their filenames.
+- Use precise role names such as `Resolver`, `Factory`, `Catalogue`, `Record`, `Reference`, and `Formatter` consistently.
+- Use `Reference` for an unresolved identifier, `Record` for untrusted provider data, and `Resolved...` for a validated domain value.
+- Avoid vague names such as `Manager`, `Service`, `Helper`, and `Handler` when a more specific responsibility can be named.
+- Keep related PHP classes, Panel components, tests, factory methods, and documentation terminology aligned when a concept is renamed.
 
 ## Testing
 
