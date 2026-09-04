@@ -46,6 +46,13 @@
 			</k-collection>
 
 			<k-empty
+				v-else-if="hydrating"
+				icon="loader"
+			>
+				{{ $t("loading") }}
+			</k-empty>
+
+			<k-empty
 				v-else
 				:icon="disabled ? 'lock' : 'money'"
 				@click="open"
@@ -97,9 +104,18 @@ export default {
 	},
 	emits: ["input"],
 	data() {
+		const hydrating = Boolean(
+			this.value &&
+			!this.selected &&
+			!this.sourceInactive &&
+			!this.disabled &&
+			(this.endpoint ?? this.endpoints.field)
+		);
+
 		return {
 			localCatalogue: { ...this.catalogue },
-			localSelected: this.selected ?? this.fallback(this.value),
+			localSelected: this.selected ?? (hydrating ? null : this.fallback(this.value)),
+			hydrating,
 			refreshing: false
 		};
 	},
@@ -156,12 +172,20 @@ export default {
 			this.localCatalogue = { ...value };
 		},
 		selected(value) {
-			this.localSelected = value ?? this.fallback(this.value);
+			if (value) {
+				this.localSelected = value;
+				this.hydrating = false;
+			}
 		},
 		value(value) {
 			if (value !== this.localSelected?.id) {
-				this.localSelected = this.fallback(value);
+				this.hydrate(value);
 			}
+		}
+	},
+	mounted() {
+		if (this.hydrating) {
+			this.hydrate(this.value);
 		}
 	},
 	methods: {
@@ -194,23 +218,48 @@ export default {
 				unavailable: this.sourceInactive === false
 			} : null;
 		},
+		async hydrate(value) {
+			if (!value) {
+				this.hydrating = false;
+				this.localSelected = null;
+				return;
+			}
+
+			if (this.sourceInactive || this.disabled || !this.apiEndpoint) {
+				this.hydrating = false;
+				this.localSelected = this.fallback(value);
+				return;
+			}
+
+			try {
+				this.hydrating = true;
+				const response = await this.$api.get(this.apiEndpoint, {
+					price: value,
+					view: "selected"
+				});
+
+				if (response?.catalogue) {
+					this.localCatalogue = response.catalogue;
+				}
+
+				this.localSelected = response?.data?.find(item => item.id === value)
+					?? this.fallback(value);
+			} catch (error) {
+				this.localSelected = this.fallback(value);
+			} finally {
+				this.hydrating = false;
+			}
+		},
 		open() {
 			if (this.disabled || !this.apiEndpoint) {
 				return;
 			}
 
 			this.$panel.dialog.open({
-				component: "k-models-dialog",
+				component: "k-stripe-checkout-price-dialog",
 				props: {
-					empty: {
-						icon: "money",
-						text: this.$t("programmatordev.stripe-checkout.prices.emptyCatalogue")
-					},
 					endpoint: this.apiEndpoint,
-					hasSearch: true,
-					max: 1,
-					multiple: false,
-					value: this.value ? [this.value] : []
+					value: this.value
 				},
 				on: {
 					fetched: response => this.applyResponse(response),
@@ -236,7 +285,14 @@ export default {
 			try {
 				this.refreshing = true;
 				const response = await this.$api.post(this.apiEndpoint);
-				this.applyResponse(response);
+
+				if (response?.catalogue) {
+					this.localCatalogue = response.catalogue;
+				}
+
+				// Re-read the saved selection from the refreshed catalogue. The refresh
+				// response is paginated and therefore cannot authoritatively hydrate it.
+				await this.hydrate(this.value);
 
 				if (response.catalogue?.status === "ready") {
 					this.$panel.notification.success(

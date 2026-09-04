@@ -14,6 +14,7 @@ use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogue;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\ResolvedPrice;
 
 /**
@@ -23,6 +24,8 @@ use ProgrammatorDev\StripeCheckout\Stripe\Price\ResolvedPrice;
  */
 final class StripePriceField extends FieldClass
 {
+    private const PAGE_LIMIT = 20;
+
     private readonly bool $sourceInactive;
 
     /** @param array<string, mixed> $params */
@@ -141,6 +144,25 @@ final class StripePriceField extends FieldClass
                     // @phpstan-ignore-next-line variable.undefined
                     $api = $this;
                     /** @var Api $api */
+                    $view = $api->requestQuery('view');
+
+                    if (in_array($view, ['products', 'prices'], true)) {
+                        return StripePriceField::pickerResponse(
+                            $api->kirby(),
+                            $view,
+                            $api->requestQuery('product'),
+                            $api->requestQuery('search'),
+                            $api->requestQuery('page'),
+                        );
+                    }
+
+                    if ($view === 'selected') {
+                        return StripePriceField::selectedResponse(
+                            $api->kirby(),
+                            $api->requestQuery('price'),
+                        );
+                    }
+
                     return StripePriceField::apiResponse(
                         $api->kirby(),
                         $api->requestQuery('search'),
@@ -216,15 +238,8 @@ final class StripePriceField extends FieldClass
         mixed $page,
         bool $refresh,
     ): array {
-        PluginPermissions::require($kirby, 'prices.read');
-        $runtime = new RuntimeFactory($kirby);
-        $currency = $runtime->settings()->currency();
-
-        if ($currency === null) {
-            throw new InvalidArgumentException('Store currency is missing.');
-        }
-
-        $result = $runtime->stripePriceCatalogue()->search(
+        [$catalogue, $currency] = self::catalogue($kirby);
+        $result = $catalogue->search(
             $currency,
             is_string($query) ? $query : null,
             is_numeric($page) ? (int) $page : 1,
@@ -238,11 +253,93 @@ final class StripePriceField extends FieldClass
                 $result['items'],
             ),
             'pagination' => [
-                'limit' => 20,
+                'limit' => self::PAGE_LIMIT,
                 'page' => $result['page'],
                 'pages' => $result['pages'],
                 'total' => $result['total'],
             ],
+        ];
+    }
+
+    /**
+     * Presents the cached flat catalogue as a Product-first picker.
+     *
+     * @return array{catalogue: array{error: ?string, failedAt: ?int, refreshedAt: ?int, status: string}, data: list<array<string, mixed>>, pagination: array{limit: int, page: int, pages: int, total: int}}
+     */
+    public static function pickerResponse(
+        App $kirby,
+        string $view,
+        mixed $productId,
+        mixed $query,
+        mixed $page,
+    ): array {
+        [$catalogue, $currency] = self::catalogue($kirby);
+        $state = $catalogue->load($currency);
+        $query = is_string($query) ? mb_strtolower(trim($query)) : '';
+        $page = is_numeric($page) ? (int) $page : 1;
+
+        if ($view === 'prices') {
+            $productId = is_string($productId) ? $productId : '';
+            $prices = array_values(array_filter(
+                $state['items'],
+                static fn(ResolvedPrice $price): bool => $price->productId() === $productId
+                    && self::priceMatches($price, $query),
+            ));
+            $data = array_map(
+                static fn(ResolvedPrice $price): array => self::pickerPriceItem($price, $kirby),
+                $prices,
+            );
+        } else {
+            $groups = [];
+
+            foreach ($state['items'] as $price) {
+                $groups[$price->productId()] ??= [
+                    'id' => $price->productId(),
+                    'name' => $price->name(),
+                    'images' => $price->images(),
+                    'prices' => [],
+                ];
+                $groups[$price->productId()]['prices'][] = $price;
+            }
+
+            $groups = array_values(array_filter(
+                $groups,
+                static fn(array $group): bool => self::productMatches($group, $query),
+            ));
+            $data = array_map(
+                static fn(array $group): array => self::pickerProductItem($group),
+                $groups,
+            );
+        }
+
+        return [
+            'catalogue' => self::status($state),
+            ...self::paginate($data, $page),
+        ];
+    }
+
+    /**
+     * Resolves a saved ID from the cache without contacting Stripe.
+     *
+     * @return array{catalogue: array{error: ?string, failedAt: ?int, refreshedAt: ?int, status: string}, data: list<array<string, mixed>>, pagination: array{limit: int, page: int, pages: int, total: int}}
+     */
+    public static function selectedResponse(App $kirby, mixed $priceId): array
+    {
+        [$catalogue, $currency] = self::catalogue($kirby);
+        $state = $catalogue->current($currency);
+        $priceId = is_string($priceId) ? $priceId : '';
+        $data = [];
+
+        foreach ($state['items'] as $price) {
+            if ($price->priceId() === $priceId) {
+                $data[] = self::item($price, $kirby);
+                break;
+            }
+        }
+
+        return [
+            'catalogue' => self::status($state),
+            ...self::paginate($data, 1),
         ];
     }
 
@@ -296,13 +393,130 @@ final class StripePriceField extends FieldClass
             self::translated(
                 'programmatordev.stripe-checkout.prices.taxBehavior.' . $price->taxBehavior(),
             ),
+            $price->priceId(),
         ]);
 
         return [
             'id' => $price->priceId(),
             'icon' => 'money',
+            'image' => self::itemImage($price->images()[0] ?? null, 'money'),
             'info' => implode(' · ', $details),
             'text' => $price->name(),
+        ];
+    }
+
+    /** @return array{PriceCatalogue, string} */
+    private static function catalogue(App $kirby): array
+    {
+        PluginPermissions::require($kirby, 'prices.read');
+        $runtime = new RuntimeFactory($kirby);
+        $currency = $runtime->settings()->currency();
+
+        if ($currency === null) {
+            throw new InvalidArgumentException('Store currency is missing.');
+        }
+
+        return [$runtime->stripePriceCatalogue(), $currency];
+    }
+
+    /**
+     * @param array{id: string, name: string, images: list<string>, prices: list<ResolvedPrice>} $group
+     * @return array<string, mixed>
+     */
+    private static function pickerProductItem(array $group): array
+    {
+        $count = count($group['prices']);
+        return [
+            'id' => $group['id'],
+            'image' => self::itemImage($group['images'][0] ?? null, 'box'),
+            'info' => I18n::template(
+                'programmatordev.stripe-checkout.prices.productCount.' . ($count === 1 ? 'one' : 'many'),
+                ['count' => $count],
+            ),
+            'text' => $group['name'],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private static function pickerPriceItem(ResolvedPrice $price, App $kirby): array
+    {
+        $amount = (new MoneyFormatter($kirby))->format(
+            (new StripeCurrencyRegistry())->toMoney($price->unitPrice()),
+        );
+        $nickname = $price->nickname();
+
+        return [
+            'id' => $price->priceId(),
+            'image' => self::itemImage($price->images()[0] ?? null, 'money'),
+            'info' => implode(' · ', [
+                strtoupper($price->unitPrice()->currency()),
+                self::translated(
+                    'programmatordev.stripe-checkout.prices.taxBehavior.' . $price->taxBehavior(),
+                ),
+                $price->priceId(),
+            ]),
+            'selected' => self::item($price, $kirby),
+            'text' => $nickname === null ? $amount : $nickname . ' · ' . $amount,
+        ];
+    }
+
+    /** @return array<string, string> */
+    private static function itemImage(?string $src, string $icon): array
+    {
+        return $src === null
+            ? ['back' => 'pattern', 'color' => 'gray-500', 'icon' => $icon]
+            : ['src' => $src];
+    }
+
+    /**
+     * @param array{id: string, name: string, images: list<string>, prices: list<ResolvedPrice>} $group
+     */
+    private static function productMatches(array $group, string $query): bool
+    {
+        if ($query === '') {
+            return true;
+        }
+
+        $values = [$group['id'], $group['name']];
+
+        foreach ($group['prices'] as $price) {
+            $values[] = $price->priceId();
+            $values[] = $price->nickname() ?? '';
+        }
+
+        return str_contains(mb_strtolower(implode(' ', $values)), $query);
+    }
+
+    private static function priceMatches(ResolvedPrice $price, string $query): bool
+    {
+        if ($query === '') {
+            return true;
+        }
+
+        return str_contains(mb_strtolower(implode(' ', [
+            $price->priceId(),
+            $price->nickname() ?? '',
+        ])), $query);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $data
+     * @return array{data: list<array<string, mixed>>, pagination: array{limit: int, page: int, pages: int, total: int}}
+     */
+    private static function paginate(array $data, int $page): array
+    {
+        $total = count($data);
+        $pages = max(1, (int) ceil($total / self::PAGE_LIMIT));
+        $page = min(max(1, $page), $pages);
+
+        return [
+            'data' => array_slice($data, ($page - 1) * self::PAGE_LIMIT, self::PAGE_LIMIT),
+            'pagination' => [
+                'limit' => self::PAGE_LIMIT,
+                'page' => $page,
+                'pages' => $pages,
+                'total' => $total,
+            ],
         ];
     }
 

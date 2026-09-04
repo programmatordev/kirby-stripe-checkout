@@ -69,6 +69,66 @@ final class StripePriceFieldTest extends KirbyTestCase
         $this->assertSame('ready', $response['catalogue']['status']);
     }
 
+    public function testFieldApiListsProductsBeforeTheirPrices(): void
+    {
+        $this->restartWithStripePriceField();
+        $this->seedCatalogue([
+            $this->priceItem(),
+            $this->priceItem(
+                priceId: 'price_canvas_large',
+                nickname: 'Large',
+                minorAmount: 2400,
+            ),
+            $this->priceItem(
+                priceId: 'price_poster',
+                productId: 'prod_poster',
+                name: 'Poster',
+                nickname: null,
+                minorAmount: 2500,
+                images: [],
+            ),
+        ]);
+        /** @var array{data: list<array{id: string, info: string, image: array<string, string>}>, pagination: array{total: int}} $products */
+        $products = $this->kirby->api()->call(
+            'pages/product/fields/price',
+            'GET',
+            ['query' => ['view' => 'products']],
+        );
+        /** @var array{data: list<array{id: string, text: string, image: array<string, string>, selected: array{text: string}}>, pagination: array{total: int}} $prices */
+        $prices = $this->kirby->api()->call(
+            'pages/product/fields/price',
+            'GET',
+            ['query' => ['view' => 'prices', 'product' => 'prod_canvas']],
+        );
+
+        $this->assertSame(2, $products['pagination']['total']);
+        $this->assertSame('prod_canvas', $products['data'][0]['id']);
+        $this->assertSame('2 eligible Prices', $products['data'][0]['info']);
+        $this->assertSame('https://example.test/canvas.jpg', $products['data'][0]['image']['src']);
+        $this->assertSame('pattern', $products['data'][1]['image']['back']);
+        $this->assertSame(2, $prices['pagination']['total']);
+        $this->assertSame('Standard · €16.00', $prices['data'][0]['text']);
+        $this->assertSame('https://example.test/canvas.jpg', $prices['data'][0]['image']['src']);
+        $this->assertSame('Canvas bag', $prices['data'][0]['selected']['text']);
+    }
+
+    public function testFieldApiHydratesOneSavedSelectionFromCache(): void
+    {
+        $this->restartWithStripePriceField();
+        $this->seedCatalogue();
+        /** @var array{data: list<array{id: string, info: string, text: string}>, pagination: array{total: int}} $response */
+        $response = $this->kirby->api()->call(
+            'pages/product/fields/price',
+            'GET',
+            ['query' => ['view' => 'selected', 'price' => 'price_canvas']],
+        );
+
+        $this->assertSame(1, $response['pagination']['total']);
+        $this->assertSame('price_canvas', $response['data'][0]['id']);
+        $this->assertSame('Canvas bag', $response['data'][0]['text']);
+        $this->assertStringContainsString('price_canvas', $response['data'][0]['info']);
+    }
+
     public function testOptionsFieldReusesTheSameCatalogueEndpointForVariantPrices(): void
     {
         $page = $this->restartWithStripePriceField();
@@ -188,24 +248,40 @@ final class StripePriceFieldTest extends KirbyTestCase
         ]);
     }
 
-    private function seedCatalogue(): void
+    /** @param list<array<string, mixed>>|null $items */
+    private function seedCatalogue(?array $items = null): void
     {
         $this->kirby->cache('programmatordev.stripe-checkout.prices')->set('catalogue-eur', [
             'error' => null,
             'failedAt' => null,
-            'refreshedAt' => 1_700_000_000,
-            'items' => [[
-                'priceId' => 'price_canvas',
-                'productId' => 'prod_canvas',
-                'name' => 'Canvas bag',
-                'currency' => 'EUR',
-                'minorAmount' => 1600,
-                'taxBehavior' => 'exclusive',
-                'description' => null,
-                'images' => [],
-                'nickname' => 'Standard',
-                'taxCode' => null,
-            ]],
+            'refreshedAt' => time(),
+            'items' => $items ?? [$this->priceItem()],
         ]);
+    }
+
+    /**
+     * @param list<string> $images
+     * @return array<string, mixed>
+     */
+    private function priceItem(
+        string $priceId = 'price_canvas',
+        string $productId = 'prod_canvas',
+        string $name = 'Canvas bag',
+        ?string $nickname = 'Standard',
+        int $minorAmount = 1600,
+        array $images = ['https://example.test/canvas.jpg'],
+    ): array {
+        return [
+            'priceId' => $priceId,
+            'productId' => $productId,
+            'name' => $name,
+            'currency' => 'EUR',
+            'minorAmount' => $minorAmount,
+            'taxBehavior' => 'exclusive',
+            'description' => null,
+            'images' => $images,
+            'nickname' => $nickname,
+            'taxCode' => null,
+        ];
     }
 }

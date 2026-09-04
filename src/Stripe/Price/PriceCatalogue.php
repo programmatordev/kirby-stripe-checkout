@@ -15,7 +15,9 @@ use Throwable;
  */
 final class PriceCatalogue
 {
+    private const FAILED_REFRESH_COOLDOWN_SECONDS = 15 * 60;
     private const PAGE_LIMIT = 20;
+    private const REFRESH_AFTER_SECONDS = 24 * 60 * 60;
 
     public function __construct(
         private readonly Cache $cache,
@@ -38,7 +40,16 @@ final class PriceCatalogue
     {
         $state = $this->current($currency);
 
-        return $state['refreshedAt'] === null
+        if ($state['refreshedAt'] === null) {
+            return $this->refresh($currency);
+        }
+
+        $now = time();
+        $expired = $state['refreshedAt'] <= $now - self::REFRESH_AFTER_SECONDS;
+        $retryAllowed = $state['failedAt'] === null
+            || $state['failedAt'] <= $now - self::FAILED_REFRESH_COOLDOWN_SECONDS;
+
+        return $expired && $retryAllowed
             ? $this->refresh($currency)
             : $state;
     }

@@ -15,6 +15,17 @@ columns:
         extends: fields/stripe-checkout/price
       stripeCheckoutPriceId:
         extends: fields/stripe-checkout/stripe-price
+        width: 1/2
+      nativePagePickerComparison:
+        label:
+          en: Native Page picker
+          pt: Seletor de páginas nativo
+        help:
+          en: Development-only reference for comparing Kirby's native nested picker.
+          pt: Referência apenas para desenvolvimento para comparar o seletor nativo do Kirby.
+        type: pages
+        multiple: false
+        width: 1/2
       stripeCheckoutDescription:
         extends: fields/stripe-checkout/description
       stripeCheckoutImages:

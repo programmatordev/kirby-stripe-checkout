@@ -220,12 +220,18 @@ Resolution is read-only. It does not change stock, create an order, create a Che
 
 Set the store price source to Stripe, choose the store currency, and configure a Stripe server key that can read Prices and Products. The `stripe-checkout-price` field then opens a searchable, single-value picker containing eligible active one-time Prices in that currency.
 
-The picker shows the Stripe Product name, optional Price nickname, localized amount, currency, and tax behavior. It stores only the scalar `price_...` ID. The catalogue is a Kirby-native, read-only cache for Panel convenience:
+The picker lists Stripe Products first, with their first image and number of eligible Prices. Choose a Product to see its Prices, including the optional nickname, localized amount, currency, tax behavior, and full Price ID. The saved field keeps showing the Product and Price summary, including the Price ID, after the Page reloads, but stores only the scalar `price_...` ID.
+
+The catalogue is a Kirby-native, read-only cache for Panel convenience:
 
 - the first authorized lookup fills an empty catalogue;
+- opening or searching the picker refreshes a catalogue whose last successful refresh is at least 24 hours old;
+- after a failed automatic refresh, the last successful catalogue remains available and another automatic attempt waits 15 minutes;
 - the refresh button retrieves every Stripe result page;
 - searching and pagination then use the local catalogue;
 - a failed refresh keeps the last successful catalogue and marks it as stale;
+- a refresh immediately rehydrates the saved selection; if it is no longer eligible, its ID is preserved with a warning;
+- a saved selection is hydrated from the cache without contacting Stripe on every Page load;
 - a saved ID is shown and preserved even if the catalogue is unavailable or that Price is no longer eligible.
 
 The cache is never charging authority. Before later order creation, the selected Price and associated Product are retrieved freshly and revalidated. Supported Prices must be active, fixed, per-unit, one-time Prices whose default currency exactly matches the store currency and whose Product is active and named. Recurring, tiered, customer-chosen, fractional-provider-unit, quantity-transformed, or otherwise ambiguous Prices are rejected. Extra `currency_options` are ignored.

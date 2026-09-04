@@ -70,6 +70,52 @@ final class PriceCatalogueTest extends TestCase
         $this->assertSame([null], $provider->listCursors);
     }
 
+    public function testLoadingAnExpiredCatalogueRefreshesItOnDemand(): void
+    {
+        $cache = new MemoryCache();
+        $cachedProvider = new FakePriceProvider(pages: [
+            'first' => new PriceListResult([self::record('price_current', 'Current')], false),
+        ]);
+        (new PriceCatalogue($cache, $cachedProvider, new PriceResolver($cachedProvider)))
+            ->refresh('EUR');
+        /** @var array<string, mixed> $cached */
+        $cached = $cache->get('catalogue-eur');
+        $cached['refreshedAt'] = time() - 86_401;
+        $cache->set('catalogue-eur', $cached);
+
+        $freshProvider = new FakePriceProvider(pages: [
+            'first' => new PriceListResult([self::record('price_current', 'Current', amount: 2400)], false),
+        ]);
+        $catalogue = new PriceCatalogue($cache, $freshProvider, new PriceResolver($freshProvider));
+        $result = $catalogue->load('EUR');
+
+        $this->assertSame([null], $freshProvider->listCursors);
+        $this->assertSame(2400, $result['items'][0]->unitPrice()->minorAmount());
+    }
+
+    public function testLoadingAnExpiredCatalogueRespectsTheFailureCooldown(): void
+    {
+        $cache = new MemoryCache();
+        $provider = new FakePriceProvider(pages: [
+            'first' => new PriceListResult([self::record('price_cached', 'Cached')], false),
+        ]);
+        $catalogue = new PriceCatalogue($cache, $provider, new PriceResolver($provider));
+        $catalogue->refresh('EUR');
+        /** @var array<string, mixed> $cached */
+        $cached = $cache->get('catalogue-eur');
+        $cached['refreshedAt'] = time() - 86_401;
+        $cached['failedAt'] = time();
+        $cached['error'] = 'prices.refresh_failed';
+        $cache->set('catalogue-eur', $cached);
+
+        $provider->listCursors = [];
+        $result = $catalogue->load('EUR');
+
+        $this->assertSame([], $provider->listCursors);
+        $this->assertSame('price_cached', $result['items'][0]->priceId());
+        $this->assertSame('prices.refresh_failed', $result['error']);
+    }
+
     public function testFailedRefreshPreservesAndMarksTheLastGoodCatalogue(): void
     {
         $record = self::record('price_cached', 'Cached');
