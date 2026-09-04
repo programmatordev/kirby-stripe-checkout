@@ -95,7 +95,6 @@ return [
     'programmatordev.stripe-checkout.prices.configurationInvalid' => 'Complete the store currency and Stripe server-key configuration before loading Prices.',
     'programmatordev.stripe-checkout.prices.selectedUnavailable' => 'This saved Price is not in the current catalogue. It has been preserved; refresh or select another Price.',
     'programmatordev.stripe-checkout.prices.savedReference' => 'Saved Stripe Price',
-    'programmatordev.stripe-checkout.prices.active' => 'Active',
     'programmatordev.stripe-checkout.prices.taxBehavior.exclusive' => 'Tax excluded',
     'programmatordev.stripe-checkout.prices.taxBehavior.inclusive' => 'Tax included',
     'programmatordev.stripe-checkout.prices.taxBehavior.unspecified' => 'Default tax behavior',

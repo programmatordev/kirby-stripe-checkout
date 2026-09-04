@@ -95,7 +95,6 @@ return [
     'programmatordev.stripe-checkout.prices.configurationInvalid' => 'Configure a moeda da loja e a chave de servidor do Stripe antes de carregar os Preços.',
     'programmatordev.stripe-checkout.prices.selectedUnavailable' => 'Este Preço guardado não está no catálogo atual. Foi preservado; atualize o catálogo ou selecione outro Preço.',
     'programmatordev.stripe-checkout.prices.savedReference' => 'Preço do Stripe guardado',
-    'programmatordev.stripe-checkout.prices.active' => 'Ativo',
     'programmatordev.stripe-checkout.prices.taxBehavior.exclusive' => 'Imposto não incluído',
     'programmatordev.stripe-checkout.prices.taxBehavior.inclusive' => 'Imposto incluído',
     'programmatordev.stripe-checkout.prices.taxBehavior.unspecified' => 'Comportamento fiscal predefinido',

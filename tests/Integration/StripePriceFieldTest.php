@@ -18,13 +18,17 @@ final class StripePriceFieldTest extends KirbyTestCase
         $page = $this->restartWithStripePriceField();
         $this->seedCatalogue();
         $field = Form::for($page)->fields()->field('price');
-        /** @var array{value: string, selected: array{text: string}, catalogue: array{status: string}} $props */
+        /** @var array{value: string, selected: array{info: string, text: string}, catalogue: array{status: string}} $props */
         $props = $field->toArray();
 
         $this->assertInstanceOf(StripePriceField::class, $field);
         $this->assertSame('price_canvas', $field->toStoredValue());
         $this->assertSame('price_canvas', $props['value']);
         $this->assertSame('Canvas bag', $props['selected']['text']);
+        $this->assertSame(
+            'Standard · 16.00 EUR · Tax excluded · price_canvas',
+            $props['selected']['info'],
+        );
         $this->assertSame('ready', $props['catalogue']['status']);
     }
 
@@ -107,7 +111,7 @@ final class StripePriceFieldTest extends KirbyTestCase
         $this->assertSame('https://example.test/canvas.jpg', $products['data'][0]['image']['src']);
         $this->assertSame('pattern', $products['data'][1]['image']['back']);
         $this->assertSame(2, $prices['pagination']['total']);
-        $this->assertSame('Standard · €16.00', $prices['data'][0]['text']);
+        $this->assertSame('Standard · 16.00 EUR', $prices['data'][0]['text']);
         $this->assertSame('https://example.test/canvas.jpg', $prices['data'][0]['image']['src']);
         $this->assertSame('Canvas bag', $prices['data'][0]['selected']['text']);
     }
@@ -126,7 +130,10 @@ final class StripePriceFieldTest extends KirbyTestCase
         $this->assertSame(1, $response['pagination']['total']);
         $this->assertSame('price_canvas', $response['data'][0]['id']);
         $this->assertSame('Canvas bag', $response['data'][0]['text']);
-        $this->assertStringContainsString('price_canvas', $response['data'][0]['info']);
+        $this->assertSame(
+            'Standard · 16.00 EUR · Tax excluded · price_canvas',
+            $response['data'][0]['info'],
+        );
     }
 
     public function testOptionsFieldReusesTheSameCatalogueEndpointForVariantPrices(): void

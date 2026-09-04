@@ -9,7 +9,6 @@ use Kirby\Cms\App;
 use Kirby\Exception\InvalidArgumentException;
 use Kirby\Form\FieldClass;
 use Kirby\Toolkit\I18n;
-use ProgrammatorDev\StripeCheckout\Money\MoneyFormatter;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
@@ -249,7 +248,7 @@ final class StripePriceField extends FieldClass
         return [
             'catalogue' => self::status($result),
             'data' => array_map(
-                static fn(ResolvedPrice $price): array => self::item($price, $kirby),
+                static fn(ResolvedPrice $price): array => self::item($price),
                 $result['items'],
             ),
             'pagination' => [
@@ -286,7 +285,7 @@ final class StripePriceField extends FieldClass
                     && self::priceMatches($price, $query),
             ));
             $data = array_map(
-                static fn(ResolvedPrice $price): array => self::pickerPriceItem($price, $kirby),
+                static fn(ResolvedPrice $price): array => self::pickerPriceItem($price),
                 $prices,
             );
         } else {
@@ -332,7 +331,7 @@ final class StripePriceField extends FieldClass
 
         foreach ($state['items'] as $price) {
             if ($price->priceId() === $priceId) {
-                $data[] = self::item($price, $kirby);
+                $data[] = self::item($price);
                 break;
             }
         }
@@ -355,7 +354,7 @@ final class StripePriceField extends FieldClass
 
         foreach ($items as $item) {
             if ($item->priceId() === $value) {
-                return self::item($item, $kirby);
+                return self::item($item);
             }
         }
 
@@ -380,16 +379,11 @@ final class StripePriceField extends FieldClass
     }
 
     /** @return array<string, mixed> */
-    private static function item(ResolvedPrice $price, App $kirby): array
+    private static function item(ResolvedPrice $price): array
     {
-        $amount = (new MoneyFormatter($kirby))->format(
-            (new StripeCurrencyRegistry())->toMoney($price->unitPrice()),
-        );
         $details = array_filter([
             $price->nickname(),
-            $amount,
-            strtoupper($price->unitPrice()->currency()),
-            self::translated('programmatordev.stripe-checkout.prices.active'),
+            self::formattedAmount($price),
             self::translated(
                 'programmatordev.stripe-checkout.prices.taxBehavior.' . $price->taxBehavior(),
             ),
@@ -438,26 +432,30 @@ final class StripePriceField extends FieldClass
     }
 
     /** @return array<string, mixed> */
-    private static function pickerPriceItem(ResolvedPrice $price, App $kirby): array
+    private static function pickerPriceItem(ResolvedPrice $price): array
     {
-        $amount = (new MoneyFormatter($kirby))->format(
-            (new StripeCurrencyRegistry())->toMoney($price->unitPrice()),
-        );
+        $amount = self::formattedAmount($price);
         $nickname = $price->nickname();
 
         return [
             'id' => $price->priceId(),
             'image' => self::itemImage($price->images()[0] ?? null, 'money'),
             'info' => implode(' · ', [
-                strtoupper($price->unitPrice()->currency()),
                 self::translated(
                     'programmatordev.stripe-checkout.prices.taxBehavior.' . $price->taxBehavior(),
                 ),
                 $price->priceId(),
             ]),
-            'selected' => self::item($price, $kirby),
+            'selected' => self::item($price),
             'text' => $nickname === null ? $amount : $nickname . ' · ' . $amount,
         ];
+    }
+
+    private static function formattedAmount(ResolvedPrice $price): string
+    {
+        $money = (new StripeCurrencyRegistry())->toMoney($price->unitPrice());
+
+        return $money->getAmount()->toString() . ' ' . $money->getCurrency()->getCurrencyCode();
     }
 
     /** @return array<string, string> */
