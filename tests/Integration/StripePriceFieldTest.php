@@ -39,6 +39,20 @@ final class StripePriceFieldTest extends KirbyTestCase
         $this->assertTrue($props['selected']['unavailable']);
     }
 
+    public function testInactiveSourcePreservesTheValueWithoutLoadingTheCatalogue(): void
+    {
+        $page = $this->restartWithStripePriceField(sourceInactive: true);
+        $field = Form::for($page)->fields()->field('price');
+        /** @var array{disabled: bool, sourceInactive: bool, selected: array{id: string, unavailable: bool}, catalogue: array{status: string}} $props */
+        $props = $field->toArray();
+
+        $this->assertTrue($props['disabled']);
+        $this->assertTrue($props['sourceInactive']);
+        $this->assertSame('price_canvas', $props['selected']['id']);
+        $this->assertFalse($props['selected']['unavailable']);
+        $this->assertSame('empty', $props['catalogue']['status']);
+    }
+
     public function testFieldApiSearchesCachedPricesWithoutARequestToStripe(): void
     {
         $this->restartWithStripePriceField();
@@ -104,8 +118,11 @@ final class StripePriceFieldTest extends KirbyTestCase
         $field->fill('not-a-price')->toStoredValue();
     }
 
-    private function restartWithStripePriceField(?bool $pricesRead = null): \Kirby\Cms\Page
-    {
+    private function restartWithStripePriceField(
+        ?bool $pricesRead = null,
+        bool $sourceInactive = false,
+    ): \Kirby\Cms\Page {
+        $template = $sourceInactive ? 'inactive-price-product' : 'price-product';
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start(
             options: [
@@ -121,12 +138,14 @@ final class StripePriceFieldTest extends KirbyTestCase
                     ],
                 ],
             ],
-            beforeApp: static function (TestWorkspace $workspace): void {
-                $workspace->writePageBlueprint('price-product', [
+            beforeApp: static function (TestWorkspace $workspace) use ($sourceInactive, $template): void {
+                $workspace->writePageBlueprint($template, [
                     'title' => 'Price product',
                     'fields' => [
                         'price' => [
                             'label' => 'Price',
+                            'disabled' => $sourceInactive,
+                            'sourceInactive' => $sourceInactive,
                             'type' => 'stripe-checkout-price',
                         ],
                         'variants' => [
@@ -157,7 +176,7 @@ final class StripePriceFieldTest extends KirbyTestCase
 
         return $this->kirby->site()->createChild([
             'slug' => 'product',
-            'template' => 'price-product',
+            'template' => $template,
             'content' => [
                 'title' => 'Product',
                 'price' => 'price_canvas',

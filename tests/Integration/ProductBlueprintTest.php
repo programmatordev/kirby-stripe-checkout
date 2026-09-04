@@ -33,10 +33,10 @@ final class ProductBlueprintTest extends KirbyTestCase
             'stripe-checkout-options',
             $options['type'] ?? null,
         );
-        $this->assertSame(
-            'hidden',
-            ProductBlueprint::stripePrice($this->kirby)['type'] ?? null,
-        );
+        $stripePrice = ProductBlueprint::stripePrice($this->kirby);
+        $this->assertSame('stripe-checkout-price', $stripePrice['type'] ?? null);
+        $this->assertTrue($stripePrice['disabled'] ?? false);
+        $this->assertTrue($stripePrice['sourceInactive'] ?? false);
     }
 
     public function testOnlyTheConfiguredPriceSourceIsEditable(): void
@@ -51,11 +51,13 @@ final class ProductBlueprintTest extends KirbyTestCase
             ],
         ]);
 
-        $this->assertSame('hidden', ProductBlueprint::price($this->kirby)['type'] ?? null);
-        $this->assertSame(
-            'stripe-checkout-price',
-            ProductBlueprint::stripePrice($this->kirby)['type'] ?? null,
-        );
+        $price = ProductBlueprint::price($this->kirby);
+        $stripePrice = ProductBlueprint::stripePrice($this->kirby);
+
+        $this->assertSame('text', $price['type'] ?? null);
+        $this->assertTrue($price['disabled'] ?? false);
+        $this->assertSame('stripe-checkout-price', $stripePrice['type'] ?? null);
+        $this->assertArrayNotHasKey('disabled', $stripePrice);
     }
 
     public function testOnlyTheActivePriceFieldShowsAnIncompleteConfigurationWarning(): void
@@ -66,7 +68,9 @@ final class ProductBlueprintTest extends KirbyTestCase
             ],
         ]);
 
-        $this->assertSame('hidden', ProductBlueprint::price($this->kirby)['type'] ?? null);
+        $price = ProductBlueprint::price($this->kirby);
+        $this->assertSame('text', $price['type'] ?? null);
+        $this->assertTrue($price['disabled'] ?? false);
         $stripePrice = ProductBlueprint::stripePrice($this->kirby);
         $this->assertSame('info', $stripePrice['type'] ?? null);
         $this->assertSame('warning', $stripePrice['theme'] ?? null);
@@ -79,7 +83,9 @@ final class ProductBlueprintTest extends KirbyTestCase
         $this->assertSame('files', ProductBlueprint::images($this->kirby)['type'] ?? null);
         $this->assertSame('text', ProductBlueprint::sku($this->kirby)['type'] ?? null);
         $this->assertSame('select', ProductBlueprint::requiresShipping($this->kirby)['type'] ?? null);
-        $this->assertSame('hidden', ProductBlueprint::stripePrice($this->kirby)['type'] ?? null);
+        $stripePrice = ProductBlueprint::stripePrice($this->kirby);
+        $this->assertSame('stripe-checkout-price', $stripePrice['type'] ?? null);
+        $this->assertTrue($stripePrice['disabled'] ?? false);
     }
 
     public function testIncompleteSettingsOnlyReplaceDependentFieldsWithAWarning(): void

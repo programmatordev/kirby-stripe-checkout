@@ -37,7 +37,7 @@ Each blueprint defines one field and can be placed in any tab, section, or colum
 
 The complete reusable set is `name`, `price`, `stripe-price`, `description`, `images`, `sku`, `requires-shipping`, and `options`, all below `fields/stripe-checkout/`. The Page title is the default product name. If a separate name field is needed, extend `fields/stripe-checkout/name` under the chosen handle and map `products.fields.name` to it.
 
-Including both price fields lets the store switch its configured price source without changing the blueprint. Only the active source is shown in the Panel; Kirby preserves the inactive field value. Stores that will never switch can include only the relevant field.
+Including both price fields lets the store switch its configured price source without changing the blueprint. Both fields remain visible in the Panel, but only the active source is editable. The inactive value is preserved and ignored. Stores that will never switch can include only the relevant field.
 
 Prices remain exact decimal strings in content. A stored value such as `16` is rendered as `€16.00` for an English EUR context, while a zero-decimal currency uses no decimal places. See [Money and currency](money.md).
 

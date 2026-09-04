@@ -23,6 +23,16 @@ use ProgrammatorDev\StripeCheckout\Stripe\Price\ResolvedPrice;
  */
 final class StripePriceField extends FieldClass
 {
+    private readonly bool $sourceInactive;
+
+    /** @param array<string, mixed> $params */
+    public function __construct(array $params = [])
+    {
+        parent::__construct($params);
+
+        $this->sourceInactive = ($params['sourceInactive'] ?? false) === true;
+    }
+
     public function emptyValue(): string
     {
         return '';
@@ -40,6 +50,23 @@ final class StripePriceField extends FieldClass
         $props = parent::props();
         $value = $this->toFormValue();
 
+        if ($this->sourceInactive === true) {
+            return [
+                ...$props,
+                'catalogue' => [
+                    'error' => null,
+                    'failedAt' => null,
+                    'refreshedAt' => null,
+                    'status' => 'empty',
+                ],
+                'currency' => null,
+                'disabled' => true,
+                'selected' => self::fallbackSelected($value, false),
+                'sourceInactive' => true,
+                'value' => $value,
+            ];
+        }
+
         if (PluginPermissions::allows($this->kirby(), 'prices.read') === false) {
             return [
                 ...$props,
@@ -52,6 +79,7 @@ final class StripePriceField extends FieldClass
                 'currency' => null,
                 'disabled' => true,
                 'selected' => self::fallbackSelected($value),
+                'sourceInactive' => false,
                 'value' => $value,
             ];
         }
@@ -73,6 +101,7 @@ final class StripePriceField extends FieldClass
                 'catalogue' => self::status($state),
                 'currency' => $currency,
                 'selected' => $selected,
+                'sourceInactive' => false,
                 'value' => $value,
             ];
         } catch (\Throwable) {
@@ -86,6 +115,7 @@ final class StripePriceField extends FieldClass
                 ],
                 'currency' => null,
                 'selected' => self::fallbackSelected($value),
+                'sourceInactive' => false,
                 'value' => $value,
             ];
         }
@@ -236,7 +266,7 @@ final class StripePriceField extends FieldClass
     }
 
     /** @return array<string, mixed>|null */
-    private static function fallbackSelected(string $value): ?array
+    private static function fallbackSelected(string $value, bool $unavailable = true): ?array
     {
         if ($value === '') {
             return null;
@@ -244,11 +274,11 @@ final class StripePriceField extends FieldClass
 
         return [
             'id' => $value,
-            'icon' => 'alert',
+            'icon' => $unavailable ? 'alert' : 'money',
             'info' => $value,
             'text' => self::translated('programmatordev.stripe-checkout.prices.savedReference'),
-            'theme' => 'warning',
-            'unavailable' => true,
+            ...($unavailable ? ['theme' => 'warning'] : []),
+            'unavailable' => $unavailable,
         ];
     }
 

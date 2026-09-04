@@ -50,9 +50,7 @@
 				:icon="disabled ? 'lock' : 'money'"
 				@click="open"
 			>
-				{{ $t(disabled
-					? "programmatordev.stripe-checkout.prices.denied"
-					: "programmatordev.stripe-checkout.prices.emptySelection") }}
+				{{ emptyText }}
 			</k-empty>
 		</k-input-validator>
 
@@ -86,6 +84,7 @@ export default {
 		name: String,
 		required: Boolean,
 		selected: Object,
+		sourceInactive: Boolean,
 		type: {
 			type: String,
 			default: "stripe-checkout-price"
@@ -108,7 +107,20 @@ export default {
 		apiEndpoint() {
 			return this.endpoint ?? this.endpoints.field;
 		},
+		emptyText() {
+			if (this.sourceInactive) {
+				return this.$t("programmatordev.stripe-checkout.prices.emptyInactive");
+			}
+
+			return this.$t(this.disabled
+				? "programmatordev.stripe-checkout.prices.denied"
+				: "programmatordev.stripe-checkout.prices.emptySelection");
+		},
 		statusText() {
+			if (this.sourceInactive) {
+				return null;
+			}
+
 			if (this.localCatalogue.status === "stale") {
 				return this.$t("programmatordev.stripe-checkout.prices.stale");
 			}
@@ -175,11 +187,11 @@ export default {
 		fallback(value) {
 			return value ? {
 				id: value,
-				icon: "alert",
+				icon: this.sourceInactive ? "money" : "alert",
 				info: value,
 				text: this.$t("programmatordev.stripe-checkout.prices.savedReference"),
-				theme: "warning",
-				unavailable: true
+				theme: this.sourceInactive ? undefined : "warning",
+				unavailable: this.sourceInactive === false
 			} : null;
 		},
 		open() {

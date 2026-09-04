@@ -35,11 +35,19 @@ final class ProductBlueprint
             return self::configurationWarning();
         }
 
-        if ($settings->priceSource() !== PriceSource::Kirby) {
-            return self::inactivePriceField();
-        }
-
         $currency = $settings->currency();
+
+        if ($settings->priceSource() !== PriceSource::Kirby) {
+            return [
+                'label' => 'programmatordev.stripe-checkout.product.price.label',
+                'help' => 'programmatordev.stripe-checkout.product.price.help',
+                'after' => $currency,
+                'disabled' => true,
+                'pattern' => '[0-9]+(?:\.[0-9]+)?',
+                'translate' => false,
+                'type' => 'text',
+            ];
+        }
 
         if ($currency === null) {
             return self::configurationWarning();
@@ -65,7 +73,14 @@ final class ProductBlueprint
         }
 
         if ($settings->priceSource() !== PriceSource::Stripe) {
-            return self::inactivePriceField();
+            return [
+                'label' => 'programmatordev.stripe-checkout.product.stripePrice.label',
+                'help' => 'programmatordev.stripe-checkout.product.stripePrice.help',
+                'disabled' => true,
+                'sourceInactive' => true,
+                'translate' => false,
+                'type' => 'stripe-checkout-price',
+            ];
         }
 
         if ($settings->currency() === null) {
@@ -162,17 +177,6 @@ final class ProductBlueprint
             'text' => 'programmatordev.stripe-checkout.product.configuration.help',
             'theme' => 'warning',
             'type' => 'info',
-        ];
-    }
-
-    /** @return array<string, mixed> */
-    private static function inactivePriceField(): array
-    {
-        // Both source fields can stay in one product blueprint. Kirby keeps the
-        // inactive value in content while only the configured source is edited.
-        return [
-            'translate' => false,
-            'type' => 'hidden',
         ];
     }
 }

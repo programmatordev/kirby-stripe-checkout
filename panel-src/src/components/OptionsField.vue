@@ -650,25 +650,25 @@ export default {
 				}
 			};
 
-			if (this.priceSource === "kirby") {
-				fields.price = {
-					after: this.currency,
-					label: this.$t("programmatordev.stripe-checkout.options.price"),
-					name: "price",
-					pattern: "[0-9]+(?:\\.[0-9]+)?",
-					placeholder: this.$t("programmatordev.stripe-checkout.options.price.inherit"),
-					type: "text"
-				};
-			} else {
-				fields.stripePriceId = {
-					disabled: this.pricesReadable === false,
-					endpoint: `${this.endpoints.field}/prices`,
-					label: this.$t("programmatordev.stripe-checkout.options.price"),
-					name: "stripePriceId",
-					placeholder: this.$t("programmatordev.stripe-checkout.options.price.inherit"),
-					type: "stripe-checkout-price"
-				};
-			}
+			fields.price = {
+				after: this.currency,
+				disabled: this.priceSource !== "kirby",
+				label: this.$t("programmatordev.stripe-checkout.options.price.kirbyLabel"),
+				name: "price",
+				pattern: "[0-9]+(?:\\.[0-9]+)?",
+				placeholder: this.$t("programmatordev.stripe-checkout.options.price.inherit"),
+				type: "text"
+			};
+
+			fields.stripePriceId = {
+				disabled: this.priceSource !== "stripe" || this.pricesReadable === false,
+				endpoint: `${this.endpoints.field}/prices`,
+				label: this.$t("programmatordev.stripe-checkout.options.price.stripeLabel"),
+				name: "stripePriceId",
+				placeholder: this.$t("programmatordev.stripe-checkout.options.price.inherit"),
+				sourceInactive: this.priceSource !== "stripe",
+				type: "stripe-checkout-price"
+			};
 
 			fields.requiresShipping = {
 				empty: false,
