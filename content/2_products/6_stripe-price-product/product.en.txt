@@ -1,0 +1,92 @@
+Title: Stripe Price product
+
+----
+
+Summary: A fixture that preserves a Stripe Price reference when the store changes price source.
+
+----
+
+Stripecheckoutpriceid: price_fixtureStandard
+
+----
+
+Stripecheckoutdescription:
+
+----
+
+Stripecheckoutimages:
+
+----
+
+Stripecheckoutsku:
+
+----
+
+Stripecheckoutrequiresshipping: no
+
+----
+
+Stripecheckoutoptions:
+
+options:
+  -
+    id: mdtva5plu1k3tzhz
+    label: Size
+    values:
+      -
+        id: pmp2lj1j9y4p3qdd
+        label: XS
+      -
+        id: g10r5zrm12mk0tzv
+        label: S
+      -
+        id: ogzre23otk54a4rj
+        label: M
+      -
+        id: x2639p51ym8bdipi
+        label: L
+variants:
+  -
+    id: 8bwvfkbr41ez2hyz
+    selectedOptions:
+      mdtva5plu1k3tzhz: pmp2lj1j9y4p3qdd
+    enabled: true
+    sku: null
+    price: null
+    stripePriceId: null
+    requiresShipping: inherit
+  -
+    id: z8s8584fqs4nwr67
+    selectedOptions:
+      mdtva5plu1k3tzhz: g10r5zrm12mk0tzv
+    enabled: true
+    sku: null
+    price: null
+    stripePriceId: null
+    requiresShipping: inherit
+  -
+    id: 0biql57eoskz5pm7
+    selectedOptions:
+      mdtva5plu1k3tzhz: ogzre23otk54a4rj
+    enabled: true
+    sku: null
+    price: null
+    stripePriceId: null
+    requiresShipping: inherit
+  -
+    id: 6xn0ikcva3m5mzrb
+    selectedOptions:
+      mdtva5plu1k3tzhz: x2639p51ym8bdipi
+    enabled: true
+    sku: null
+    price: null
+    stripePriceId: null
+    requiresShipping: inherit
+
+----
+
+Developmentfixture: true
+
+----
+
+Uuid: devStripePrice001

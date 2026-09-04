@@ -14,6 +14,7 @@ use ProgrammatorDev\StripeCheckout\Kirby\ProductBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
+use ProgrammatorDev\StripeCheckout\Kirby\StripePriceField;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
@@ -127,7 +128,7 @@ try {
         ? ($blueprints['pages/stripe-checkout'] ?? null)
         : null;
 
-    if (($extensions['options'] ?? null) !== []) {
+    if (($extensions['options'] ?? null) !== ['cache' => ['prices' => true]]) {
         throw new RuntimeException('The package registered an unexpected runtime extension.');
     }
 
@@ -155,6 +156,7 @@ try {
     if (
         is_array($fields) === false
         || ($fields['stripe-checkout-options'] ?? null) !== OptionsField::class
+        || ($fields['stripe-checkout-price'] ?? null) !== StripePriceField::class
     ) {
         throw new RuntimeException('The package did not register its variant field.');
     }
@@ -194,6 +196,7 @@ try {
             'settings.read' => false,
             'settings.update' => false,
             'diagnostics.read' => false,
+            'prices.read' => false,
         ]
     ) {
         throw new RuntimeException('The package did not register its Panel permissions.');

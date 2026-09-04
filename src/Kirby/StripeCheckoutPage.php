@@ -91,7 +91,7 @@ final class StripeCheckoutPage extends Page
         unset($input['lock']);
 
         $this->assertProtectedFieldsRemainUnchanged($input);
-        $this->assertOnlySettingsFieldsAreUpdated($input);
+        $this->assertOnlySettingsFieldsAreUpdated($input, $languageCode);
 
         $settingInput = array_intersect_key($input, self::SETTING_FIELDS);
         $defaultLanguageInput = array_intersect_key($input, self::DEFAULT_LANGUAGE_FIELDS);
@@ -216,17 +216,23 @@ final class StripeCheckoutPage extends Page
     }
 
     /** @param array<string, mixed> $input */
-    private function assertOnlySettingsFieldsAreUpdated(array $input): void
+    private function assertOnlySettingsFieldsAreUpdated(array $input, ?string $languageCode): void
     {
         $allowed = array_fill_keys(
             array_map('strtolower', array_keys($this->blueprint()->fields())),
             true,
         );
+        $stored = $this->version('latest')
+            ->content($languageCode ?? 'default')
+            ->data();
 
-        foreach (array_keys($input) as $field) {
+        foreach ($input as $field => $value) {
             if (
                 isset($allowed[$field]) === false
                 && in_array($field, self::STRUCTURAL_FIELDS, true) === false
+                // Kirby publishes the complete changes version. Preserve
+                // unknown legacy fields only when the save does not alter them.
+                && (array_key_exists($field, $stored) === false || $stored[$field] !== $value)
             ) {
                 throw new PermissionException(
                     message: 'Only plugin-owned Stripe Checkout settings can be updated.',

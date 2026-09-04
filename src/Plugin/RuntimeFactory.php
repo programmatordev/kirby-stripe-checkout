@@ -24,7 +24,12 @@ use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
 use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogue;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceProviderInterface;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceResolver;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\StripeApiPriceProvider;
 use ProgrammatorDev\StripeCheckout\Translation\LocaleResolver;
+use Stripe\StripeClient;
 
 /**
  * Builds and owns the service graph for one public plugin operation.
@@ -67,6 +72,31 @@ final class RuntimeFactory
     public function productOptionsFromField(Field $field): ProductOptions
     {
         return $this->productOptionsFactory()->forField($field);
+    }
+
+    public function stripePriceCatalogue(): PriceCatalogue
+    {
+        $provider = $this->configuredStripePriceProvider();
+
+        return new PriceCatalogue(
+            $this->kirby->cache('programmatordev.stripe-checkout.prices'),
+            $provider,
+            $provider === null ? null : new PriceResolver($provider),
+        );
+    }
+
+    public function stripePriceResolver(): PriceResolver
+    {
+        $provider = $this->configuredStripePriceProvider();
+
+        if ($provider === null) {
+            throw new ConfigurationException(
+                'configuration.credential_missing',
+                'stripe.secretKey',
+            );
+        }
+
+        return new PriceResolver($provider);
     }
 
     public function configurationReport(): ConfigurationReport
@@ -132,5 +162,17 @@ final class RuntimeFactory
     private function productOptionsFactory(): ProductOptionsFactory
     {
         return new ProductOptionsFactory($this->products(), $this->productContext());
+    }
+
+    private function configuredStripePriceProvider(): ?PriceProviderInterface
+    {
+        $stripe = $this->configurationReport()
+            ->configurationOrFail()
+            ->stripe();
+        $secretKey = $stripe->secretKey();
+
+        return $secretKey === null
+            ? null
+            : new StripeApiPriceProvider(new StripeClient($secretKey));
     }
 }

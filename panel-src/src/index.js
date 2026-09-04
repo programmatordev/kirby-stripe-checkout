@@ -2,6 +2,7 @@ import OptionsField from "./components/OptionsField.vue";
 import OptionsDrawer from "./components/OptionsDrawer.vue";
 import OptionTranslationValuesField from "./components/OptionTranslationValuesField.vue";
 import VariantValuePreview from "./components/VariantValuePreview.vue";
+import StripePriceField from "./components/StripePriceField.vue";
 
 panel.plugin("programmatordev/stripe-checkout", {
 	components: {
@@ -10,6 +11,7 @@ panel.plugin("programmatordev/stripe-checkout", {
 	},
 	fields: {
 		"stripe-checkout-option-translation-values": OptionTranslationValuesField,
-		"stripe-checkout-options": OptionsField
+		"stripe-checkout-options": OptionsField,
+		"stripe-checkout-price": StripePriceField
 	}
 });

@@ -278,6 +278,32 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $this->assertFalse($page->version('changes')->exists('current'));
     }
 
+    public function testCompletePanelPayloadPreservesAnUnchangedLegacyField(): void
+    {
+        $this->restartWithDraftPage(StripeCheckoutPage::TEMPLATE, [
+            'currency' => 'EUR',
+            'defaultRequiresShipping' => 'no',
+            'priceSource' => PriceSource::Kirby->value,
+            'stripeCheckout' => Yaml::encode(self::metadata()),
+            'title' => 'Stripe Checkout',
+            'variantPresets' => '',
+        ]);
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
+
+        $page = $page->update([
+            'currency' => 'EUR',
+            'defaultRequiresShipping' => 'no',
+            'priceSource' => PriceSource::Stripe->value,
+            'stripeCheckout' => $this->fieldValue($page, 'stripeCheckout'),
+            'title' => $this->fieldValue($page, 'title'),
+            'uuid' => $this->fieldValue($page, 'uuid'),
+            'variantPresets' => '',
+        ]);
+
+        $this->assertSame(PriceSource::Stripe->value, $this->fieldValue($page, 'priceSource'));
+        $this->assertSame('', $this->fieldValue($page, 'variantPresets'));
+    }
+
     public function testModelRejectsUnknownFields(): void
     {
         $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
@@ -286,6 +312,21 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $this->expectExceptionMessage('Only plugin-owned');
 
         $page->update(['projectReference' => 'store-a']);
+    }
+
+    public function testModelRejectsChangesToAnExistingUnknownField(): void
+    {
+        $this->restartWithDraftPage(StripeCheckoutPage::TEMPLATE, [
+            'projectReference' => 'store-a',
+            'stripeCheckout' => Yaml::encode(self::metadata()),
+            'title' => 'Stripe Checkout',
+        ]);
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
+
+        $this->expectException(PermissionException::class);
+        $this->expectExceptionMessage('Only plugin-owned');
+
+        $page->update(['projectReference' => 'store-b']);
     }
 
     public function testModelRejectsSecrets(): void

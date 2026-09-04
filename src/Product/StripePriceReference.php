@@ -6,7 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Product;
 
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 
-/** Identifies a Stripe Price that still requires authoritative hydration. */
+/** Identifies a Stripe Price that still requires authoritative resolution. */
 final readonly class StripePriceReference
 {
     public function __construct(private string $priceId)

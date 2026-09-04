@@ -243,7 +243,7 @@ final class ProductResolverTest extends KirbyTestCase
         $this->stripeCheckout()->resolveProduct(new ProductRequest($draft->id()));
     }
 
-    public function testStripeSourceReturnsAnUnhydratedPriceReferenceForTheNextBatch(): void
+    public function testStripeSourceReturnsAReferenceForFreshAuthoritativeResolution(): void
     {
         $this->restart([
             self::PREFIX => [

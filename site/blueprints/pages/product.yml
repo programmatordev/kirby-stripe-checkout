@@ -13,6 +13,8 @@ columns:
         required: true
       stripeCheckoutPrice:
         extends: fields/stripe-checkout/price
+      stripeCheckoutPriceId:
+        extends: fields/stripe-checkout/stripe-price
       stripeCheckoutDescription:
         extends: fields/stripe-checkout/description
       stripeCheckoutImages:

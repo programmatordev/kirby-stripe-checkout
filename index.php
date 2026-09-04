@@ -11,6 +11,7 @@ use ProgrammatorDev\StripeCheckout\Kirby\ProductBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
+use ProgrammatorDev\StripeCheckout\Kirby\StripePriceField;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
@@ -21,9 +22,13 @@ use ProgrammatorDev\StripeCheckout\Translation\Registration;
 App::plugin(
     name: 'programmatordev/stripe-checkout',
     extends: [
-        // Business defaults stay in the resolver so explicit project values
-        // remain distinguishable from plugin defaults.
-        'options' => [],
+        // Business defaults stay in the resolver. This only enables Kirby's
+        // native cache for the read-only Stripe Price catalogue.
+        'options' => [
+            'cache' => [
+                'prices' => true,
+            ],
+        ],
         'blueprints' => [
             'pages/stripe-checkout' => [SettingsBlueprint::class, 'load'],
             'fields/stripe-checkout/name' => [ProductBlueprint::class, 'name'],
@@ -40,6 +45,7 @@ App::plugin(
         ],
         'fields' => [
             'stripe-checkout-options' => OptionsField::class,
+            'stripe-checkout-price' => StripePriceField::class,
         ],
         'fieldMethods' => [
             'toProductOptions' => static function (Field $field): ProductOptions {
@@ -57,6 +63,7 @@ App::plugin(
             'settings.read' => false,
             'settings.update' => false,
             'diagnostics.read' => false,
+            'prices.read' => false,
         ],
         'areas' => [
             'stripe-checkout' => [StripeCheckoutArea::class, 'definition'],

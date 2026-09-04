@@ -33,6 +33,43 @@ final class ProductBlueprintTest extends KirbyTestCase
             'stripe-checkout-options',
             $options['type'] ?? null,
         );
+        $this->assertSame(
+            'hidden',
+            ProductBlueprint::stripePrice($this->kirby)['type'] ?? null,
+        );
+    }
+
+    public function testOnlyTheConfiguredPriceSourceIsEditable(): void
+    {
+        $this->restart([
+            self::PREFIX => [
+                'settings' => [
+                    'currency' => 'EUR',
+                    'defaultRequiresShipping' => false,
+                    'priceSource' => 'stripe',
+                ],
+            ],
+        ]);
+
+        $this->assertSame('hidden', ProductBlueprint::price($this->kirby)['type'] ?? null);
+        $this->assertSame(
+            'stripe-checkout-price',
+            ProductBlueprint::stripePrice($this->kirby)['type'] ?? null,
+        );
+    }
+
+    public function testOnlyTheActivePriceFieldShowsAnIncompleteConfigurationWarning(): void
+    {
+        $this->restart([
+            self::PREFIX => [
+                'settings' => ['priceSource' => 'stripe'],
+            ],
+        ]);
+
+        $this->assertSame('hidden', ProductBlueprint::price($this->kirby)['type'] ?? null);
+        $stripePrice = ProductBlueprint::stripePrice($this->kirby);
+        $this->assertSame('info', $stripePrice['type'] ?? null);
+        $this->assertSame('warning', $stripePrice['theme'] ?? null);
     }
 
     public function testProductFieldsAreIndependentBlueprints(): void
@@ -42,7 +79,7 @@ final class ProductBlueprintTest extends KirbyTestCase
         $this->assertSame('files', ProductBlueprint::images($this->kirby)['type'] ?? null);
         $this->assertSame('text', ProductBlueprint::sku($this->kirby)['type'] ?? null);
         $this->assertSame('select', ProductBlueprint::requiresShipping($this->kirby)['type'] ?? null);
-        $this->assertSame('info', ProductBlueprint::stripePrice($this->kirby)['type'] ?? null);
+        $this->assertSame('hidden', ProductBlueprint::stripePrice($this->kirby)['type'] ?? null);
     }
 
     public function testIncompleteSettingsOnlyReplaceDependentFieldsWithAWarning(): void

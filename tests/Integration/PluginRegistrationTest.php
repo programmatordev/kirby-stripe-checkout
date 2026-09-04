@@ -10,6 +10,7 @@ use ProgrammatorDev\StripeCheckout\Kirby\OptionsField;
 use ProgrammatorDev\StripeCheckout\Kirby\ProductBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
+use ProgrammatorDev\StripeCheckout\Kirby\StripePriceField;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
@@ -43,7 +44,7 @@ final class PluginRegistrationTest extends KirbyTestCase
         $areas = $extensions['areas'] ?? null;
         $translations = $extensions['translations'] ?? null;
 
-        $this->assertSame([], $extensions['options']);
+        $this->assertSame(['cache' => ['prices' => true]], $extensions['options']);
         $this->assertIsArray($blueprints);
         $this->assertSame(
             [SettingsBlueprint::class, 'load'],
@@ -67,6 +68,7 @@ final class PluginRegistrationTest extends KirbyTestCase
         $this->assertSame(StripeCheckoutPage::class, $pageModels['stripe-checkout']);
         $this->assertIsArray($fields);
         $this->assertSame(OptionsField::class, $fields['stripe-checkout-options']);
+        $this->assertSame(StripePriceField::class, $fields['stripe-checkout-price']);
         $this->assertIsArray($fieldMethods);
         $this->assertSame(['toProductOptions'], array_keys($fieldMethods));
         $this->assertIsCallable($fieldMethods['toProductOptions']);
@@ -82,10 +84,14 @@ final class PluginRegistrationTest extends KirbyTestCase
             'settings.read' => false,
             'settings.update' => false,
             'diagnostics.read' => false,
+            'prices.read' => false,
         ], $extensions['permissions']);
         $this->assertIsArray($translations);
         $this->assertSame(['en', 'pt_PT'], array_keys($translations));
-        $this->assertSame([], $this->kirby->option('programmatordev.stripe-checkout'));
+        $this->assertSame(
+            ['cache' => ['prices' => true]],
+            $this->kirby->option('programmatordev.stripe-checkout'),
+        );
     }
 
     public function testDoesNotExposeTheLegacyGlobalHelpers(): void

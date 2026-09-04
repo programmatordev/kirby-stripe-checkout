@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Kirby;
 
 use Kirby\Cms\App;
+use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 
@@ -29,8 +30,18 @@ final class ProductBlueprint
     public static function price(App $kirby): array
     {
         try {
-            $currency = self::currency($kirby);
+            $settings = (new RuntimeFactory($kirby))->settings();
         } catch (ConfigurationException) {
+            return self::configurationWarning();
+        }
+
+        if ($settings->priceSource() !== PriceSource::Kirby) {
+            return self::inactivePriceField();
+        }
+
+        $currency = $settings->currency();
+
+        if ($currency === null) {
             return self::configurationWarning();
         }
 
@@ -48,18 +59,24 @@ final class ProductBlueprint
     public static function stripePrice(App $kirby): array
     {
         try {
-            self::currency($kirby);
+            $settings = (new RuntimeFactory($kirby))->settings();
         } catch (ConfigurationException) {
             return self::configurationWarning();
         }
 
-        // Raw Price IDs are not exposed as normal Panel input. A searchable
-        // Stripe Price selector will replace this informational state.
+        if ($settings->priceSource() !== PriceSource::Stripe) {
+            return self::inactivePriceField();
+        }
+
+        if ($settings->currency() === null) {
+            return self::configurationWarning();
+        }
+
         return [
-            'label' => 'programmatordev.stripe-checkout.product.price.label',
-            'text' => 'programmatordev.stripe-checkout.product.stripePrice.pending',
-            'theme' => 'info',
-            'type' => 'info',
+            'label' => 'programmatordev.stripe-checkout.product.stripePrice.label',
+            'help' => 'programmatordev.stripe-checkout.product.stripePrice.help',
+            'translate' => false,
+            'type' => 'stripe-checkout-price',
         ];
     }
 
@@ -148,14 +165,14 @@ final class ProductBlueprint
         ];
     }
 
-    private static function currency(App $kirby): string
+    /** @return array<string, mixed> */
+    private static function inactivePriceField(): array
     {
-        $currency = (new RuntimeFactory($kirby))->settings()->currency();
-
-        if ($currency === null) {
-            throw new ConfigurationException('configuration.required', 'settings.currency');
-        }
-
-        return $currency;
+        // Both source fields can stay in one product blueprint. Kirby keeps the
+        // inactive value in content while only the configured source is edited.
+        return [
+            'translate' => false,
+            'type' => 'hidden',
+        ];
     }
 }

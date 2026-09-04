@@ -1,6 +1,6 @@
 # Documentation
 
-Kirby Stripe Checkout is under active development and is not ready for production use. The current package provides its configuration foundation, exact money formatting, Kirby product resolution and variants, native Panel area, and local diagnostics. Checkout, carts, orders, and webhooks are not implemented yet.
+Kirby Stripe Checkout is under active development and is not ready for production use. The current package provides its configuration foundation, exact money formatting, Kirby and Stripe Price product resolution, variants, native Panel area, and local diagnostics. Checkout, carts, orders, and webhooks are not implemented yet.
 
 ## Current guides
 

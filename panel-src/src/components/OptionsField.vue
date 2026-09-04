@@ -140,6 +140,10 @@ export default {
 		presets: {
 			type: Array,
 			default: () => []
+		},
+		pricesReadable: {
+			type: Boolean,
+			default: false
 		}
 	},
 	data() {
@@ -657,10 +661,12 @@ export default {
 				};
 			} else {
 				fields.stripePriceId = {
+					disabled: this.pricesReadable === false,
+					endpoint: `${this.endpoints.field}/prices`,
 					label: this.$t("programmatordev.stripe-checkout.options.price"),
 					name: "stripePriceId",
 					placeholder: this.$t("programmatordev.stripe-checkout.options.price.inherit"),
-					type: "text"
+					type: "stripe-checkout-price"
 				};
 			}
 

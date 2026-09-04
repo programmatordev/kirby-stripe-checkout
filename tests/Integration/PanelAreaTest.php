@@ -29,11 +29,13 @@ final class PanelAreaTest extends KirbyTestCase
             'settings.read' => false,
             'settings.update' => false,
             'diagnostics.read' => false,
+            'prices.read' => false,
         ], $defaults);
         $this->assertNotNull($admin);
         $this->assertTrue($admin->for(PluginPermissions::CATEGORY, 'settings.read'));
         $this->assertTrue($admin->for(PluginPermissions::CATEGORY, 'settings.update'));
         $this->assertTrue($admin->for(PluginPermissions::CATEGORY, 'diagnostics.read'));
+        $this->assertTrue($admin->for(PluginPermissions::CATEGORY, 'prices.read'));
     }
 
     public function testMenuUsesReadPermissionsWithoutChangingAreaAccess(): void

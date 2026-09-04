@@ -56,6 +56,10 @@ final class OptionExtractor
         }
 
         /** @var array<string, mixed> $root */
+        // Kirby owns this plugin cache option; it is infrastructure rather than
+        // part of the validated commerce configuration tree.
+        unset($root['cache']);
+
         $normalizedDottedValues = [];
 
         // Kirby can fold a fully dotted project option into the plugin root

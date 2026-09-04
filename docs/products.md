@@ -2,7 +2,7 @@
 
 The plugin can resolve published Kirby pages into trusted product snapshots. It does not require a particular product template or parent page.
 
-Kirby is the default source for names, prices, images, SKUs, shipping behavior, and variants. Stripe Price selection and authoritative Stripe Price hydration are not ready for normal Panel use yet.
+Kirby is the default source for names, prices, images, SKUs, shipping behavior, and variants. A store can instead use read-only Stripe Prices while keeping product Pages and project-owned SKUs in Kirby.
 
 ## Minimum product fields
 
@@ -19,6 +19,8 @@ title: Product
 fields:
   stripeCheckoutPrice:
     extends: fields/stripe-checkout/price
+  stripeCheckoutPriceId:
+    extends: fields/stripe-checkout/stripe-price
   stripeCheckoutDescription:
     extends: fields/stripe-checkout/description
   stripeCheckoutImages:
@@ -33,7 +35,9 @@ fields:
 
 Each blueprint defines one field and can be placed in any tab, section, or column. The field handle is chosen by the developer; the namespaced handles above match the plugin's default mapping. Omit fields the store does not use. The plugin does not add a product currency because every product uses the configured store currency.
 
-The complete reusable set is `name`, `price`, `stripe-price`, `description`, `images`, `sku`, `requires-shipping`, and `options`, all below `fields/stripe-checkout/`. The Page title is the default product name. If a separate name field is needed, extend `fields/stripe-checkout/name` under the chosen handle and map `products.fields.name` to it. `stripe-price` is reserved for the searchable Stripe Price selector, which is not implemented yet.
+The complete reusable set is `name`, `price`, `stripe-price`, `description`, `images`, `sku`, `requires-shipping`, and `options`, all below `fields/stripe-checkout/`. The Page title is the default product name. If a separate name field is needed, extend `fields/stripe-checkout/name` under the chosen handle and map `products.fields.name` to it.
+
+Including both price fields lets the store switch its configured price source without changing the blueprint. Only the active source is shown in the Panel; Kirby preserves the inactive field value. Stores that will never switch can include only the relevant field.
 
 Prices remain exact decimal strings in content. A stored value such as `16` is rendered as `€16.00` for an English EUR context, while a zero-decimal currency uses no decimal places. See [Money and currency](money.md).
 
@@ -70,7 +74,7 @@ The available mappings and defaults are:
 | `images` | `stripeCheckoutImages` | One field, an ordered list, or `null`. |
 | `sku` | `stripeCheckoutSku` | Optional simple-product SKU. |
 | `price` | `stripeCheckoutPrice` | Exact default price in Kirby price mode. |
-| `stripePriceId` | `stripeCheckoutPriceId` | Reserved for Stripe Price mode. |
+| `stripePriceId` | `stripeCheckoutPriceId` | Selected Stripe Price in Stripe price mode. |
 | `requiresShipping` | `stripeCheckoutRequiresShipping` | `inherit`, `yes`, or `no`. |
 | `options` | `stripeCheckoutOptions` | Product options and generated variants. |
 
@@ -86,6 +90,8 @@ Each generated variant has a stable internal ID and can define:
 - its own SKU;
 - a price override;
 - a shipping override.
+
+In Stripe price mode, the variant price control uses the same searchable Stripe Price selector as the product default. It never asks an editor to paste a raw Price ID.
 
 An empty variant price inherits the product price. `inherit` shipping first uses the product override and then the store default. A variant SKU does not inherit the simple-product SKU.
 
@@ -208,7 +214,23 @@ $product = $site->stripeCheckout()->resolveProduct($request);
 
 The default resolver accepts the same useful Page locator forms as Kirby, rejects drafts and missing pages, validates the complete request, and normalizes the result to the Page's canonical `page://...` UUID. The returned `ResolvedProduct` is an immutable snapshot containing the exact price, effective shipping boolean, localized option names, optional SKU and images, and matched variant ID.
 
-Resolution is read-only. It does not change stock, create an order, create a Checkout Session, or contact Stripe.
+Resolution is read-only. It does not change stock, create an order, create a Checkout Session, or contact Stripe. In Stripe price mode it returns a validated `StripePriceReference`; the internal charging path retrieves that Price and its Product freshly before the reference can become an effective line.
+
+## Stripe Price mode
+
+Set the store price source to Stripe, choose the store currency, and configure a Stripe server key that can read Prices and Products. The `stripe-checkout-price` field then opens a searchable, single-value picker containing eligible active one-time Prices in that currency.
+
+The picker shows the Stripe Product name, optional Price nickname, localized amount, currency, and tax behavior. It stores only the scalar `price_...` ID. The catalogue is a Kirby-native, read-only cache for Panel convenience:
+
+- the first authorized lookup fills an empty catalogue;
+- the refresh button retrieves every Stripe result page;
+- searching and pagination then use the local catalogue;
+- a failed refresh keeps the last successful catalogue and marks it as stale;
+- a saved ID is shown and preserved even if the catalogue is unavailable or that Price is no longer eligible.
+
+The cache is never charging authority. Before later order creation, the selected Price and associated Product are retrieved freshly and revalidated. Supported Prices must be active, fixed, per-unit, one-time Prices whose default currency exactly matches the store currency and whose Product is active and named. Recurring, tiered, customer-chosen, fractional-provider-unit, quantity-transformed, or otherwise ambiguous Prices are rejected. Extra `currency_options` are ignored.
+
+Stripe supplies the authoritative Product name, description, images, amount, currency, and tax facts in this mode. Kirby's local SKU and selected option labels remain project-owned snapshots; local Product presentation fields are not merged into Stripe Product data.
 
 ## Custom product resolver
 
@@ -255,4 +277,4 @@ A custom resolver replaces the Kirby Page resolver. The plugin still checks that
 
 ## Current boundary
 
-Product resolution is available, but the cart, Checkout Session, order, and webhook layers are not implemented yet. Stripe Price mode can carry a validated `price_...` reference internally, but its searchable Panel selector, cached catalogue, and fresh authoritative hydration are not implemented yet.
+Kirby and Stripe Price product resolution are available, but the cart, Checkout Session, order, and webhook layers are not implemented yet.

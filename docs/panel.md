@@ -17,12 +17,16 @@ Admins receive all plugin permissions. Custom roles opt in explicitly:
 ```yaml
 permissions:
   access:
+    panel: true
     stripe-checkout: true
   programmatordev.stripe-checkout:
     settings.read: true
     settings.update: true
     diagnostics.read: true
+    prices.read: true
 ```
+
+`prices.read` allows a role to search and explicitly refresh the read-only Stripe Price catalogue from product fields. Page-update permission still controls whether the selected scalar Price ID can be saved.
 
 ## Panel menu
 

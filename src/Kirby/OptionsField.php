@@ -65,9 +65,16 @@ final class OptionsField extends FieldClass
             'currency' => $this->currency,
             'presets' => $this->presets,
             'priceSource' => $this->priceSource,
+            'pricesReadable' => PluginPermissions::allows($this->kirby(), 'prices.read'),
             'serverTechnicalLocked' => $this->technicalLocked(),
             'value' => $this->toFormValue(),
         ];
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function routes(): array
+    {
+        return StripePriceField::catalogueRoutes('prices');
     }
 
     /** @return array<string, mixed> */
