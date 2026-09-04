@@ -68,7 +68,7 @@ final class StripeApiPriceProvider implements PriceProviderInterface
             nickname: $price->nickname,
             hasRecurring: $price->recurring !== null,
             taxBehavior: $price->tax_behavior,
-            hasTiers: $price->tiers !== null,
+            hasTiers: isset($price->tiers),
             tiersMode: $price->tiers_mode,
             hasQuantityTransform: $price->transform_quantity !== null,
             type: $price->type,

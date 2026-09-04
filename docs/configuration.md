@@ -29,13 +29,14 @@ Credentials are optional until an implemented operation requires them. The gener
 
 ## Environment-specific credentials
 
-Keep secret and webhook keys in environment or deployment configuration and never commit them. Kirby 5 automatically loads `site/config/env.php` after regular and host-specific configuration, so an uncommitted deployment file can override only the credentials:
+Keep secret and webhook keys in environment or deployment configuration and never commit them. Kirby 5 automatically loads `site/config/env.php` after regular and host-specific configuration, so it can map deployment variables without placing credentials in PHP files:
 
 ```php
 <?php
 
 return [
     'programmatordev.stripe-checkout.stripe.secretKey' => getenv('KIRBY_STRIPE_CHECKOUT_SECRET_KEY') ?: null,
+    'programmatordev.stripe-checkout.stripe.publishableKey' => getenv('KIRBY_STRIPE_CHECKOUT_PUBLISHABLE_KEY') ?: null,
     'programmatordev.stripe-checkout.stripe.webhookSecret' => getenv('KIRBY_STRIPE_CHECKOUT_WEBHOOK_SECRET') ?: null,
 ];
 ```

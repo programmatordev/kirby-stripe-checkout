@@ -26,6 +26,18 @@ Run `ddev describe` to see the local URL. Open that URL for the fixture storefro
 
 Never commit Stripe credentials, customer information, local accounts, sessions, caches, or generated store data.
 
+## Stripe-assisted checks
+
+The bundled development site maps Stripe credentials from DDEV environment variables. Copy `.ddev/.env.web.example` to `.ddev/.env.web.local`, add test-mode values, and restart DDEV:
+
+```bash
+ddev restart
+```
+
+The local file is ignored by Git and the complete `.ddev` and `site` directories are excluded from the Composer package. Only `KIRBY_STRIPE_CHECKOUT_SECRET_KEY` is needed to exercise the currently implemented Stripe Price catalogue and resolver. The publishable key and webhook signing secret are reserved for Checkout and webhook work.
+
+Authenticate the operating-system Stripe CLI separately with `stripe login` when a check needs test resources or webhook forwarding. Never run repository checks against live-mode credentials or make Stripe-assisted checks part of the default offline suite.
+
 ## Checks
 
 Run the standard checks through DDEV:
