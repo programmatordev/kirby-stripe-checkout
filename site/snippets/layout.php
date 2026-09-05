@@ -1,137 +1,70 @@
 <?php
 
 /** @var Kirby\Cms\App $kirby */
+/** @var Kirby\Cms\Page $page */
 /** @var Kirby\Cms\Site $site */
 /** @var Kirby\Template\Slots $slots */
 /** @var Kirby\Content\Field|string|null $title */
 
-$documentTitle = isset($title) ? $title . ' · ' . $site->title() : $site->title();
+$documentTitle = isset($title) ? $title . ' · Test store' : 'Test store';
 $languageCode = $kirby->language()?->code() ?? 'en';
+$cart = $site->stripeCheckout()->cart();
+$settings = $site->stripeCheckout()->settings();
 ?>
 <!doctype html>
-<html lang="<?= esc($languageCode) ?>">
+<html lang="<?= esc($languageCode, 'attr') ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= esc($documentTitle) ?></title>
-    <style>
-        :root {
-            color-scheme: light dark;
-            font-family: ui-sans-serif, system-ui, sans-serif;
-            line-height: 1.5;
-        }
-
-        body {
-            margin: 0;
-        }
-
-        header,
-        main,
-        footer {
-            margin-inline: auto;
-            max-width: 70rem;
-            padding: 1.25rem;
-        }
-
-        header {
-            align-items: center;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 1rem;
-            justify-content: space-between;
-        }
-
-        nav {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 1rem;
-        }
-
-        a {
-            color: inherit;
-        }
-
-        .grid {
-            display: grid;
-            gap: 1rem;
-            grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-        }
-
-        .card {
-            border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
-            border-radius: .75rem;
-            padding: 1rem;
-        }
-
-        .eyebrow {
-            font-size: .75rem;
-            font-weight: 700;
-            letter-spacing: .08em;
-            text-transform: uppercase;
-        }
-
-        code {
-            overflow-wrap: anywhere;
-        }
-
-        .variant-prototype {
-            display: grid;
-            gap: 1rem;
-            margin-block: 2rem;
-            max-width: 30rem;
-        }
-
-        .variant-prototype label {
-            display: grid;
-            gap: .25rem;
-        }
-
-        .variant-prototype select {
-            font: inherit;
-            padding: .5rem;
-        }
-
-        footer {
-            opacity: .7;
-        }
-
-        .cart-item {
-            border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent);
-            padding-block: 1rem;
-        }
-
-        .cart-item form {
-            display: inline-flex;
-            flex-wrap: wrap;
-            gap: .5rem;
-            margin-block: .5rem;
-        }
-
-        input[type="number"] {
-            max-width: 6rem;
-        }
-    </style>
+    <?php snippet('storefront-styles') ?>
 </head>
 <body>
-    <header>
-        <strong><a href="<?= esc($site->url()) ?>"><?= esc($site->title()) ?></a></strong>
-        <nav aria-label="Development site">
-            <?php foreach ($site->children()->listed() as $navigationPage): ?>
-                <a href="<?= esc($navigationPage->url()) ?>"><?= esc($navigationPage->title()) ?></a>
+    <a class="skip-link" href="#content">Skip to content</a>
+    <header class="site-header">
+        <a class="brand" href="<?= esc($site->url(), 'attr') ?>">Test store<span>Kirby × Stripe Checkout</span></a>
+        <nav aria-label="Store navigation">
+            <a href="<?= esc($site->find('products')?->url(), 'attr') ?>">Products</a>
+            <?php if ($cart !== null): ?><a href="#cart" data-open-cart>Cart</a><?php endif ?>
+            <details class="test-menu">
+                <summary>Test pages</summary>
+                <div>
+                    <?php foreach (['checkout-hosted', 'checkout-embedded', 'checkout-success', 'checkout-cancel', 'checkout-return'] as $id): ?>
+                        <?php if ($testPage = $site->find($id)): ?>
+                            <a href="<?= esc($testPage->url(), 'attr') ?>"><?= esc($testPage->title()) ?></a>
+                        <?php endif ?>
+                    <?php endforeach ?>
+                </div>
+            </details>
+            <a href="<?= esc($kirby->url('panel'), 'attr') ?>">Panel ↗</a>
+        </nav>
+        <nav class="languages" aria-label="Language">
+            <?php foreach ($kirby->languages() as $language): ?>
+                <a href="<?= esc($page->url($language->code()), 'attr') ?>" lang="<?= esc($language->code(), 'attr') ?>" <?= $language->code() === $languageCode ? 'aria-current="true"' : '' ?>><?= esc(strtoupper($language->code())) ?></a>
             <?php endforeach ?>
-            <a href="<?= esc($site->url() . '/panel') ?>">Panel</a>
         </nav>
     </header>
-    <main>
-        <?= $slots->content() ?>
-        <?php if ($cart = $site->stripeCheckout()->cart()): ?>
-            <?php snippet('cart', ['cart' => $cart]) ?>
-            <p data-cart-feedback role="status" aria-live="polite"></p>
+    <div class="store-context">
+        <span><span class="status-dot" aria-hidden="true"></span> Development store · No payments</span>
+        <span><?= esc(ucfirst($settings->priceSource()->value)) ?> prices · <?= esc($settings->currency() ?? 'Currency not set') ?></span>
+    </div>
+    <div class="store-layout <?= $cart === null ? 'without-cart' : '' ?>">
+        <main id="content" tabindex="-1"><?= $slots->content() ?></main>
+        <?php if ($cart !== null): ?>
+            <aside id="cart" class="cart-sidebar" aria-label="Shopping cart">
+                <?php snippet('cart', ['cart' => $cart, 'site' => $site]) ?>
+                <div class="cart-feedback">
+                    <p data-cart-feedback role="status" aria-live="polite" aria-atomic="true"></p>
+                    <button class="text-button" type="button" data-cart-refresh>Refresh cart</button>
+                </div>
+            </aside>
             <?php snippet('cart-script') ?>
         <?php endif ?>
-    </main>
-    <footer>
-        Development fixture for Kirby Stripe Checkout. Cart interactions are available; Checkout submission is not yet implemented.
+    </div>
+    <footer class="site-footer">
+        <span>A small store for testing products, options and your cart.</span>
+        <span>Checkout is not available yet.</span>
     </footer>
+    <noscript><p class="notice">Cart controls need JavaScript in this development storefront.</p></noscript>
 </body>
 </html>
