@@ -4,16 +4,20 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Product\Internal;
 
+use Closure;
 use Kirby\Cms\Page;
 use Kirby\Content\Content;
 use Kirby\Content\Field;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
+use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
 use ProgrammatorDev\StripeCheckout\Product\ProductOption;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptionValue;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductVariant;
+use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\ResolvedPrice;
 use Throwable;
 
 /**
@@ -23,11 +27,13 @@ use Throwable;
  */
 final class ProductOptionsFactory
 {
+    /** @param null|Closure(StripePriceReference): ResolvedPrice $stripePriceResolver */
     public function __construct(
         private readonly ProductConfiguration $configuration,
         private readonly ProductResolutionContext $context,
         private readonly VariantSchema $schema = new VariantSchema(),
         private readonly ProductCommerceResolver $commerce = new ProductCommerceResolver(),
+        private readonly ?Closure $stripePriceResolver = null,
     ) {}
 
     public function forPage(Page $page, string $field): ProductOptions
@@ -86,24 +92,48 @@ final class ProductOptionsFactory
             ),
             $localized['options'],
         );
+        $resolvedStripePrices = [];
         $variants = array_map(
-            fn(array $variant): ProductVariant => new ProductVariant(
-                $variant['id'],
-                $variant['selectedOptions'],
-                $variant['enabled'],
-                $this->commerce->price($technicalContent, $fields, $variant, $this->context),
-                $this->commerce->requiresShipping(
+            function (array $variant) use (&$resolvedStripePrices, $technicalContent, $fields): ProductVariant {
+                $price = $this->commerce->price(
                     $technicalContent,
                     $fields,
                     $variant,
                     $this->context,
-                ),
-                sku: $variant['sku'],
-            ),
+                );
+
+                if ($price instanceof StripePriceReference) {
+                    $price = $resolvedStripePrices[$price->priceId()]
+                        ??= $this->resolveStripePrice($price);
+                }
+
+                return new ProductVariant(
+                    $variant['id'],
+                    $variant['selectedOptions'],
+                    $variant['enabled'],
+                    $price,
+                    $this->commerce->requiresShipping(
+                        $technicalContent,
+                        $fields,
+                        $variant,
+                        $this->context,
+                    ),
+                    sku: $variant['sku'],
+                );
+            },
             $localized['variants'],
         );
 
         return new ProductOptions($options, $variants);
+    }
+
+    private function resolveStripePrice(StripePriceReference $reference): ResolvedPrice
+    {
+        if ($this->stripePriceResolver === null) {
+            throw new InvalidProductException('product.stripe_price_unavailable');
+        }
+
+        return ($this->stripePriceResolver)($reference);
     }
 
     private function technicalContentValue(Page $page, string $field): mixed

@@ -128,7 +128,7 @@ final readonly class ProductOptions
     /**
      * @return array{
      *   options: list<array{id: string, name: string, values: list<array{id: string, name: string}>}>,
-     *   variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: array{source: 'kirby', amount: string, currency: string}|array{source: 'stripe', priceId: string}, requiresShipping: bool}>
+     *   variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?array{amount: string, currency: string}, stripePrice: ?array{priceId: string, productId: string, name: string, price: array{amount: string, currency: string}, taxBehavior: string, description: ?string, images: list<string>, nickname: ?string, taxCode: ?string}, requiresShipping: bool}>
      * }
      */
     public function toArray(): array

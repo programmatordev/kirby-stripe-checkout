@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Unit\Product;
 use Brick\Money\Money;
 use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
+use ProgrammatorDev\StripeCheckout\Money\MoneySnapshot;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
 use ProgrammatorDev\StripeCheckout\Product\ProductOption;
@@ -17,6 +18,7 @@ use ProgrammatorDev\StripeCheckout\Product\ProductVariant;
 use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\ResolvedPrice;
 
 final class ProductValuesTest extends TestCase
 {
@@ -128,14 +130,15 @@ final class ProductValuesTest extends TestCase
         $variantPrice = $variant->price();
 
         $this->assertSame('SHIRT-S', $variant->sku());
-        $this->assertInstanceOf(InlinePrice::class, $variantPrice);
-        $this->assertSame('19.95', $variantPrice->unitPrice()->getAmount()->toString());
+        $this->assertInstanceOf(Money::class, $variantPrice);
+        $this->assertSame('19.95', $variantPrice->getAmount()->toString());
+        $this->assertNull($variant->stripePrice());
         $this->assertTrue($variant->requiresShipping());
         $this->assertSame([
-            'source' => 'kirby',
             'amount' => '19.95',
             'currency' => 'EUR',
         ], $view->toArray()['variants'][0]['price']);
+        $this->assertNull($view->toArray()['variants'][0]['stripePrice']);
     }
 
     public function testProductVariantExposesAnEffectiveStripePrice(): void
@@ -144,17 +147,36 @@ final class ProductValuesTest extends TestCase
             'smallVariant001',
             ['sizeOption' => 'smallValue'],
             true,
-            new StripePriceReference('price_fixture'),
+            new ResolvedPrice(
+                'price_fixture',
+                'prod_fixture',
+                'T-shirt',
+                new MoneySnapshot('EUR', 1995),
+                'exclusive',
+            ),
             false,
         );
         $price = $variant->price();
+        $stripePrice = $variant->stripePrice();
 
-        $this->assertInstanceOf(StripePriceReference::class, $price);
-        $this->assertSame('price_fixture', $price->priceId());
+        $this->assertNull($price);
+        $this->assertInstanceOf(ResolvedPrice::class, $stripePrice);
+        $this->assertSame('price_fixture', $stripePrice->priceId());
+        $this->assertNull($variant->toArray()['price']);
         $this->assertSame([
-            'source' => 'stripe',
             'priceId' => 'price_fixture',
-        ], $variant->toArray()['price']);
+            'productId' => 'prod_fixture',
+            'name' => 'T-shirt',
+            'price' => [
+                'amount' => '19.95',
+                'currency' => 'EUR',
+            ],
+            'taxBehavior' => 'exclusive',
+            'description' => null,
+            'images' => [],
+            'nickname' => null,
+            'taxCode' => null,
+        ], $variant->toArray()['stripePrice']);
     }
 
     public function testProductOptionsRejectVariantsOutsideTheirOptions(): void

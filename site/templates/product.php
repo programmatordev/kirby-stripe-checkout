@@ -1,6 +1,7 @@
 <?php
 
 use Kirby\Data\Json;
+use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 
 /** @var Kirby\Cms\Page $page */
 /** @var Kirby\Cms\Site $site */
@@ -10,10 +11,22 @@ $settings = $stripeCheckout->settings();
 $currency = $settings->currency();
 $productOptions = $page->options()->toProductOptions();
 $optionsData = $productOptions->toArray();
-$price = $page->price()->value();
-$formattedPrice = $currency === null
-    ? $price
-    : $stripeCheckout->formatMoney($price, $currency);
+$formattedPrice = null;
+
+if ($settings->priceSource() === PriceSource::Stripe) {
+    $stripePrice = $page->stripePrice()->toProductStripePrice();
+    $formattedPrice = $stripePrice === null
+        ? null
+        : $stripeCheckout->formatMoney($stripePrice->price());
+} else {
+    $price = $page->price()->value();
+
+    if ($price !== null && $price !== '') {
+        $formattedPrice = $currency === null
+            ? $price
+            : $stripeCheckout->formatMoney($price, $currency);
+    }
+}
 
 snippet('layout', ['title' => $page->title()], slots: true);
 ?>
@@ -22,7 +35,9 @@ snippet('layout', ['title' => $page->title()], slots: true);
     <p class="eyebrow"><?= $page->requiresShipping()->value() === 'yes' ? 'Physical product' : 'Digital or service product' ?></p>
     <h1><?= esc($page->title()) ?></h1>
     <p><?= esc($page->description()) ?></p>
-    <p><strong><?= esc($formattedPrice) ?></strong></p>
+    <?php if ($formattedPrice !== null): ?>
+        <p><strong><?= esc($formattedPrice) ?></strong></p>
+    <?php endif ?>
 
     <?php if ($optionsData['options'] !== []): ?>
         <form
@@ -70,9 +85,8 @@ snippet('layout', ['title' => $page->title()], slots: true);
                         return;
                     }
 
-                    const price = variant.price.source === 'kirby'
-                        ? `${variant.price.amount} ${variant.price.currency}`
-                        : 'Stripe-managed price';
+                    const priceData = variant.price ?? variant.stripePrice?.price;
+                    const price = `${priceData.amount} ${priceData.currency}`;
                     const details = [
                         'Available combination',
                         price,

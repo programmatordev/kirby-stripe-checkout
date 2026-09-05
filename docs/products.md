@@ -126,11 +126,12 @@ $variant = $view->matchVariant([
 if ($variant !== null) {
     $variant->sku();
     $variant->price();
+    $variant->stripePrice();
     $variant->requiresShipping();
 }
 ```
 
-`price()` and `requiresShipping()` contain the effective values after applying the product and store fallbacks. Kirby prices are returned as `InlinePrice`; Stripe-owned prices are returned as `StripePriceReference`. The variant SKU remains `null` when it is not configured because it does not inherit the simple-product SKU.
+`price()`, `stripePrice()`, and `requiresShipping()` contain the effective values after applying the product and store fallbacks. In Kirby price mode, `price()` returns an exact Brick `Money` and `stripePrice()` returns `null`. In Stripe price mode, `price()` returns `null` and `stripePrice()` returns the cached validated `ResolvedPrice`. The variant SKU remains `null` when it is not configured because it does not inherit the simple-product SKU.
 
 Use the mapped field handle when it differs from the default:
 
@@ -184,7 +185,8 @@ const variant = variants.find(candidate =>
 );
 
 if (variant) {
-    console.log(variant.price, variant.sku, variant.requiresShipping);
+    const price = variant.price ?? variant.stripePrice.price;
+    console.log(price, variant.sku, variant.requiresShipping);
 }
 </script>
 ```
@@ -249,6 +251,19 @@ if ($stripePrice !== null) {
 ```
 
 Use the mapped field handle when it differs from `stripePrice`. An empty field returns `null`. A malformed ID or a Price that is no longer present in the eligible catalogue raises an `InvalidProductException` instead of returning incomplete data.
+
+Generated variants are already converted storefront values. In Stripe mode, `stripePrice()` returns the cached `ResolvedPrice` directly:
+
+```php
+$variant = $page->options()->toProductOptions()->matchVariant($selectedOptions);
+$stripePrice = $variant?->stripePrice();
+
+if ($stripePrice !== null) {
+    echo esc($site->stripeCheckout()->formatMoney($stripePrice->price()));
+}
+```
+
+In Kirby mode, the same variant instead exposes an exact Brick `Money` through `price()` and returns `null` from `stripePrice()`. Exactly one price-source accessor is populated. The Panel may preserve inactive-source values, but they are not exposed as effective storefront data.
 
 This converter uses the same automatically refreshed catalogue as the Panel picker, so it is suitable for storefront display without contacting Stripe on every request. It is not charging authority: Checkout retrieves and validates the Price and Product freshly before creating the Session.
 

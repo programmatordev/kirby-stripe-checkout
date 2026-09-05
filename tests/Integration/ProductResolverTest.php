@@ -145,14 +145,16 @@ final class ProductResolverTest extends KirbyTestCase
         $largeVariant = $view->variants()[1];
 
         $smallPrice = $smallVariant->price();
-        $this->assertInstanceOf(InlinePrice::class, $smallPrice);
-        $this->assertSame('20.00', $smallPrice->unitPrice()->getAmount()->toString());
+        $this->assertInstanceOf(\Brick\Money\Money::class, $smallPrice);
+        $this->assertSame('20.00', $smallPrice->getAmount()->toString());
+        $this->assertNull($smallVariant->stripePrice());
         $this->assertFalse($smallVariant->requiresShipping());
 
         $this->assertSame('SHIRT-L', $largeVariant->sku());
         $variantPrice = $largeVariant->price();
-        $this->assertInstanceOf(InlinePrice::class, $variantPrice);
-        $this->assertSame('24.00', $variantPrice->unitPrice()->getAmount()->toString());
+        $this->assertInstanceOf(\Brick\Money\Money::class, $variantPrice);
+        $this->assertSame('24.00', $variantPrice->getAmount()->toString());
+        $this->assertNull($largeVariant->stripePrice());
         $this->assertTrue($largeVariant->requiresShipping());
         $this->assertSame(
             'largeVariant001',

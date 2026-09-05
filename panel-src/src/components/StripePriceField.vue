@@ -99,8 +99,7 @@ export default {
 		const hydrating = Boolean(
 			this.value &&
 			!this.selected &&
-			!this.sourceInactive &&
-			!this.disabled &&
+			(this.disabled === false || this.sourceInactive) &&
 			(this.endpoint ?? this.endpoints.field)
 		);
 
@@ -210,7 +209,7 @@ export default {
 				return;
 			}
 
-			if (this.sourceInactive || this.disabled || !this.apiEndpoint) {
+			if ((this.disabled && this.sourceInactive === false) || !this.apiEndpoint) {
 				this.hydrating = false;
 				this.localSelected = this.fallback(value);
 				return;

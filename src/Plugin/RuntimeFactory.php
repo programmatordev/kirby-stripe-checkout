@@ -89,7 +89,14 @@ final class RuntimeFactory
             throw new InvalidProductException('product.stripe_price_invalid');
         }
 
-        $reference = new StripePriceReference($value);
+        return $this->productStripePrice($value);
+    }
+
+    public function productStripePrice(StripePriceReference|string $reference): ResolvedPrice
+    {
+        $reference = is_string($reference)
+            ? new StripePriceReference($reference)
+            : $reference;
         $currency = $this->settings()->currency();
 
         if ($currency === null) {
@@ -190,7 +197,11 @@ final class RuntimeFactory
 
     private function productOptionsFactory(): ProductOptionsFactory
     {
-        return new ProductOptionsFactory($this->products(), $this->productContext());
+        return new ProductOptionsFactory(
+            $this->products(),
+            $this->productContext(),
+            stripePriceResolver: fn(StripePriceReference $reference): ResolvedPrice => $this->productStripePrice($reference),
+        );
     }
 
     private function configuredStripePriceProvider(): ?PriceProviderInterface

@@ -8,6 +8,7 @@ use Kirby\Exception\PermissionException;
 use Kirby\Form\Form;
 use ProgrammatorDev\StripeCheckout\Kirby\StripePriceField;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
+use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\ResolvedPrice;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
@@ -40,6 +41,50 @@ final class StripePriceFieldTest extends KirbyTestCase
         $price = $page->price()->toProductStripePrice();
 
         $this->assertNull($price);
+    }
+
+    public function testProductOptionsExposeResolvedStripePricesExclusively(): void
+    {
+        $page = $this->restartWithStripePriceField()->update([
+            'variants' => [
+                'options' => [[
+                    'id' => 'sizeOption000001',
+                    'label' => 'Size',
+                    'values' => [[
+                        'id' => 'smallValue00001',
+                        'label' => 'Small',
+                    ]],
+                ]],
+                'variants' => [[
+                    'id' => 'smallVariant001',
+                    'selectedOptions' => [
+                        'sizeOption000001' => 'smallValue00001',
+                    ],
+                    'enabled' => true,
+                    'sku' => 'BAG-S',
+                    'price' => null,
+                    'stripePriceId' => 'price_canvas',
+                    'requiresShipping' => 'no',
+                ]],
+            ],
+        ]);
+        $this->seedCatalogue();
+
+        /** @var ProductOptions $options */
+        /** @phpstan-ignore-next-line method.nonObject, method.notFound */
+        $options = $page->variants()->toProductOptions();
+        $variant = $options->variants()[0];
+        $stripePrice = $variant->stripePrice();
+
+        $this->assertNull($variant->price());
+        $this->assertInstanceOf(ResolvedPrice::class, $stripePrice);
+        $this->assertSame('price_canvas', $stripePrice->priceId());
+        $this->assertSame('16.00', $stripePrice->price()->getAmount()->toString());
+        $this->assertNull($variant->toArray()['price']);
+        $this->assertSame(
+            '16.00',
+            $variant->toArray()['stripePrice']['price']['amount'] ?? null,
+        );
     }
 
     public function testUnavailableStoredPriceCannotBeConverted(): void
@@ -85,7 +130,23 @@ final class StripePriceFieldTest extends KirbyTestCase
         $this->assertTrue($props['selected']['unavailable']);
     }
 
-    public function testInactiveSourcePreservesTheValueWithoutLoadingTheCatalogue(): void
+    public function testInactiveSourceHydratesTheValueFromTheExistingCatalogue(): void
+    {
+        $page = $this->restartWithStripePriceField(sourceInactive: true);
+        $this->seedCatalogue();
+        $field = Form::for($page)->fields()->field('price');
+        /** @var array{disabled: bool, sourceInactive: bool, selected: array{id: string, info: string, text: string}, catalogue: array{status: string}} $props */
+        $props = $field->toArray();
+
+        $this->assertTrue($props['disabled']);
+        $this->assertTrue($props['sourceInactive']);
+        $this->assertSame('price_canvas', $props['selected']['id']);
+        $this->assertSame('Canvas bag · Standard', $props['selected']['text']);
+        $this->assertSame('16.00 EUR', $props['selected']['info']);
+        $this->assertSame('ready', $props['catalogue']['status']);
+    }
+
+    public function testInactiveSourcePreservesTheValueWhenTheCatalogueIsEmpty(): void
     {
         $page = $this->restartWithStripePriceField(sourceInactive: true);
         $field = Form::for($page)->fields()->field('price');

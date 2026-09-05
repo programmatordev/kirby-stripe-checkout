@@ -51,23 +51,6 @@ final class StripePriceField extends FieldClass
         $props = parent::props();
         $value = $this->toFormValue();
 
-        if ($this->sourceInactive === true) {
-            return [
-                ...$props,
-                'catalogue' => [
-                    'error' => null,
-                    'failedAt' => null,
-                    'refreshedAt' => null,
-                    'status' => 'empty',
-                ],
-                'currency' => null,
-                'disabled' => true,
-                'selected' => self::fallbackSelected($value, false),
-                'sourceInactive' => true,
-                'value' => $value,
-            ];
-        }
-
         if (PluginPermissions::allows($this->kirby(), 'prices.read') === false) {
             return [
                 ...$props,
@@ -80,7 +63,7 @@ final class StripePriceField extends FieldClass
                 'currency' => null,
                 'disabled' => true,
                 'selected' => self::fallbackSelected($value),
-                'sourceInactive' => false,
+                'sourceInactive' => $this->sourceInactive,
                 'value' => $value,
             ];
         }
@@ -95,14 +78,18 @@ final class StripePriceField extends FieldClass
             }
 
             $state = $runtime->stripePriceCatalogue()->current($currency);
-            $selected = $this->selected($state['items'], $value);
+            $selected = $this->selected(
+                $state['items'],
+                $value,
+                $this->sourceInactive === false,
+            );
 
             return [
                 ...$props,
                 'catalogue' => self::status($state),
                 'currency' => $currency,
                 'selected' => $selected,
-                'sourceInactive' => false,
+                'sourceInactive' => $this->sourceInactive,
                 'value' => $value,
             ];
         } catch (\Throwable) {
@@ -115,8 +102,8 @@ final class StripePriceField extends FieldClass
                     'status' => 'error',
                 ],
                 'currency' => null,
-                'selected' => self::fallbackSelected($value),
-                'sourceInactive' => false,
+                'selected' => self::fallbackSelected($value, $this->sourceInactive === false),
+                'sourceInactive' => $this->sourceInactive,
                 'value' => $value,
             ];
         }
@@ -350,7 +337,7 @@ final class StripePriceField extends FieldClass
      * @param list<ResolvedPrice> $items
      * @return array<string, mixed>|null
      */
-    private function selected(array $items, string $value): ?array
+    private function selected(array $items, string $value, bool $unavailable = true): ?array
     {
         if ($value === '') {
             return null;
@@ -362,7 +349,7 @@ final class StripePriceField extends FieldClass
             }
         }
 
-        return self::fallbackSelected($value);
+        return self::fallbackSelected($value, $unavailable);
     }
 
     /** @return array<string, mixed>|null */

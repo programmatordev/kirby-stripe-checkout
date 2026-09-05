@@ -6,7 +6,11 @@ Description: A fixture that preserves a Stripe Price reference when the store ch
 
 ----
 
-Stripeprice: price_fixtureStandard
+Price: 25
+
+----
+
+Stripeprice: price_1UC0dVCHaQ3jXxl7OyUHCE8y
 
 ----
 
