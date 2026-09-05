@@ -38,6 +38,7 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $this->assertSame($page->id(), $initializedAgain->id());
         $this->assertSame('Stripe Checkout', $page->title()->value());
         $this->assertSame(PriceSource::Kirby->value, $this->fieldValue($page, 'priceSource'));
+
         // Kirby creates empty Field objects for required settings without a
         // safe deterministic default; their values must remain unconfigured.
         foreach (['currency', 'defaultRequiresShipping'] as $field) {
@@ -47,6 +48,7 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
                 true,
             ));
         }
+
         $this->assertSame([
             'owner' => StripeCheckoutPage::OWNER,
             'schemaVersion' => StripeCheckoutPage::SCHEMA_VERSION,

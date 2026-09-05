@@ -54,6 +54,8 @@ ddev npm run build
 
 Run every code-quality check with `ddev composer check`. Use `ddev composer format` to apply the configured PHP style before rerunning the checks.
 
+Control blocks use blank lines before and after, except at enclosing block boundaries and between continuations such as `else` or `catch`. The built-in before-statement rule and a small custom fixer under `tools/PhpCsFixer` enforce this for braced PHP control structures. The custom fixer is tested, development-only, and excluded from the Composer package; closures and `match` expressions are not control statements for this rule.
+
 Generate a local coverage report only when reviewing test completeness:
 
 ```bash
@@ -90,6 +92,16 @@ ddev php vendor/bin/phpunit --order-by=random
 ```
 
 ## Development data
+
+### Cart checks
+
+The development product pages have add-to-cart forms. The shared storefront layout shows the cart and its quantity, remove and clear controls on every page when enabled. They use the real plugin routes with a project-owned HTML renderer in `site/config/config.php`. These templates, snippets and their small JavaScript example are excluded from the Composer package. The hosted/embedded fixture pages show cartless selection input without submitting Checkout or mutating the cart.
+
+For offline manual checks, use Kirby as the price source with EUR configured and the committed physical/digital/option fixtures. Test adding twice, changing quantity, selecting another variant, removing and clearing. Open two tabs and confirm that a stale update reports a conflict with the current cart rather than overwriting it. Switch to `/pt/cart` to verify the same selections and translated errors. An incognito browser should have an independent cart.
+
+`tests/Integration/CartRoutesTest.php` covers route/PHP parity, native CSRF, strict bodies, language routing, session isolation/login/logout, protected fields, revision conflicts, Stripe failures through offline fakes, JSON/HTML negotiation and rendering failures after writes. Stripe-source manual checks use fresh Stripe Price lookups and therefore require explicit test-account access; they are not part of offline curl verification.
+
+### Fixture content
 
 Commit only deterministic fixture content. The development site is multilingual, so default-language fixtures use Kirby's `.en.txt` naming and translated overlays use their language code. Local runtime data belongs in the ignored paths defined by `.gitignore`.
 

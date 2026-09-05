@@ -37,6 +37,7 @@ final class CartMutatorTest extends TestCase
         $this->store = new InMemoryCartStore(new CartSnapshot('cart-id', 'revision-0', [], 100, 100));
         $this->selections = new SelectionCanonicalizer(function (ProductRequest $request): ResolvedProduct {
             $this->resolutions++;
+
             if ($this->available === false || ($this->maximum !== null && $request->quantity() > $this->maximum)) {
                 throw new ProductUnavailableException();
             }
@@ -47,6 +48,7 @@ final class CartMutatorTest extends TestCase
                 $request->selectedOptions(),
             );
             $options = [];
+
             foreach ($request->selectedOptions() as $option => $value) {
                 $options[] = new SelectedOption($option, $option, $value, $value);
             }
@@ -138,6 +140,7 @@ final class CartMutatorTest extends TestCase
             } catch (CheckoutInputException $error) {
                 $this->assertSame('selection.invalid', $error->errorCode());
             }
+
             $this->assertSame($added, $this->store->read());
             $this->assertSame($calls, $this->resolutions);
         }
@@ -189,6 +192,7 @@ final class CartMutatorTest extends TestCase
     {
         $added = $this->cart->add(new ProductRequest('shirt'));
         $this->assertRejectedWithoutWrite(fn() => $this->cart->update($added->entries()[0]->id(), 0, $added->revision()), CheckoutInputException::class);
+
         foreach (['remove', 'update'] as $operation) {
             try {
                 $operation === 'remove'
@@ -200,6 +204,7 @@ final class CartMutatorTest extends TestCase
                 $this->assertNull($error->current());
             }
         }
+
         $this->available = false;
         $this->assertRejectedWithoutWrite(fn() => $this->cart->add(new ProductRequest('other')), ProductUnavailableException::class);
         $this->assertRejectedWithoutWrite(fn() => $this->cart->update($added->entries()[0]->id(), 2, $added->revision()), ProductUnavailableException::class);
@@ -210,6 +215,7 @@ final class CartMutatorTest extends TestCase
         for ($index = 0; $index < 100; $index++) {
             $this->cart->add(new ProductRequest('product-' . $index));
         }
+
         $merged = $this->cart->add(new ProductRequest('product-0'));
         $this->assertCount(100, $merged->entries());
         $this->assertSame(2, $merged->entries()[0]->request()->quantity());
@@ -220,6 +226,7 @@ final class CartMutatorTest extends TestCase
     {
         $added = $this->cart->add(new ProductRequest('shirt', PHP_INT_MAX));
         $this->assertSame(PHP_INT_MAX, $added->entries()[0]->request()->quantity());
+
         foreach (['shirt', 'other'] as $reference) {
             $this->assertRejectedWithoutWrite(fn() => $this->cart->add(new ProductRequest($reference)), CheckoutInputException::class);
         }
@@ -232,9 +239,11 @@ final class CartMutatorTest extends TestCase
             ['reference' => 'other'],
             ['reference' => 'page://shirt', 'quantity' => 3, 'selectedOptions' => ['colour' => 'blue', 'size' => 'large']],
         ];
+
         foreach ($inputs as $input) {
             $this->cart->add(SelectionData::parse($input));
         }
+
         $before = $this->store->read();
         $direct = $this->selections->direct($inputs);
 
@@ -249,12 +258,14 @@ final class CartMutatorTest extends TestCase
     private function assertRejectedWithoutWrite(Closure $operation, string $exception): void
     {
         $before = $this->store->read();
+
         try {
             $operation();
             $this->fail('Expected mutation rejection.');
         } catch (\Throwable $error) {
             $this->assertInstanceOf($exception, $error);
         }
+
         $this->assertSame($before, $this->store->read());
     }
 }

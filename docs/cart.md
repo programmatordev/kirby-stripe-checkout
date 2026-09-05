@@ -2,7 +2,7 @@
 
 The built-in cart works with Kirby's normal browser session. It needs no separate storage setup. Configure the store currency and product fields first; see [Configuration](configuration.md) and [Products](products.md).
 
-The PHP API is available now. Built-in cart HTTP routes and Checkout submission are not available yet.
+Use the PHP API below or the built-in [HTTP routes](cart-http.md) for browser interactions. Checkout submission is not available yet.
 
 ## Add and change items
 
@@ -153,4 +153,4 @@ To disable the built-in cart, configure this PHP-only option:
 ],
 ```
 
-Then `cart()` returns `null` without opening a session. This switch is not an editable Panel setting.
+Then `cart()` returns `null` without opening a session, and the built-in cart routes are not registered. This switch is not an editable Panel setting.

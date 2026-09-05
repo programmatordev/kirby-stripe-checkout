@@ -3,6 +3,16 @@
 declare(strict_types=1);
 
 return [
+    'programmatordev.stripe-checkout.cart.quantity_invalid' => 'A quantidade tem de ser um número inteiro positivo.',
+    'programmatordev.stripe-checkout.cart.line_limit_exceeded' => 'O carrinho não pode conter mais de 100 artigos diferentes.',
+    'programmatordev.stripe-checkout.cart.provider_unavailable' => 'A informação do produto está temporariamente indisponível. Tente novamente.',
+    'programmatordev.stripe-checkout.request.invalid_body' => 'Os dados enviados são inválidos.',
+    'programmatordev.stripe-checkout.request.csrf_invalid' => 'Não foi possível verificar a sessão. Atualize a página e tente novamente.',
+    'programmatordev.stripe-checkout.request.unsupported_media_type' => 'Envie dados em JSON ou de formulário.',
+    'programmatordev.stripe-checkout.selection.invalid' => 'Verifique o produto, as opções e a revisão do carrinho enviados.',
+    'programmatordev.stripe-checkout.selection.quantity_invalid' => 'A quantidade tem de ser um número inteiro positivo.',
+    'programmatordev.stripe-checkout.selection.line_limit_exceeded' => 'O carrinho não pode conter mais de 100 artigos diferentes.',
+    'programmatordev.stripe-checkout.product.resolution_unavailable' => 'A informação do produto está temporariamente indisponível. Tente novamente.',
     'programmatordev.stripe-checkout.cart.configuration_invalid' => 'As definições da loja precisam de atenção. Tente novamente mais tarde.',
     'programmatordev.stripe-checkout.cart.amount_invalid' => 'Este valor não pode ser usado. Reduza a quantidade.',
     'programmatordev.stripe-checkout.cart.product_unavailable' => 'Este produto ou as opções escolhidas já não estão disponíveis.',

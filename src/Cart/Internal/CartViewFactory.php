@@ -98,13 +98,25 @@ final class CartViewFactory
         $code = match (true) {
             $error instanceof ConfigurationException => 'cart.configuration_invalid',
             $error instanceof MoneyException => 'cart.amount_invalid',
+            $error instanceof ProductException && $error->errorCode() === 'product.stripe_price_unavailable' => 'cart.provider_unavailable',
             $error instanceof ProductException && $error->errorCode() === 'product.request_invalid' => 'cart.selection_invalid',
             $error instanceof ProductException => 'cart.product_unavailable',
-            $error instanceof CheckoutInputException => 'cart.selection_invalid',
+            $error instanceof CheckoutInputException => match ($error->errorCode()) {
+                'selection.quantity_invalid' => 'cart.quantity_invalid',
+                'selection.line_limit_exceeded' => 'cart.line_limit_exceeded',
+                default => 'cart.selection_invalid',
+            },
             $error instanceof CartMutationException && $error->errorCode() === 'cart.revision_conflict' => 'cart.revision_conflict',
             $error instanceof CartMutationException && $error->errorCode() === 'cart.item_not_found' => 'cart.item_not_found',
             default => 'cart.unavailable',
         };
+
+        return $this->translatedError($code, itemId: $itemId);
+    }
+
+    /** Only call with plugin-owned codes, never raw exception/provider messages. */
+    public function translatedError(string $code, ?string $field = null, ?string $itemId = null): CartError
+    {
 
         // Only plugin-owned codes cross this edge. Even a custom resolver's
         // exception code/message can contain arbitrary, sensitive provider data.
@@ -127,6 +139,6 @@ final class CartViewFactory
             }
         }
 
-        return new CartError($code, $message ?? Catalogue::bundled()['en'][$key], $itemId);
+        return new CartError($code, $message ?? Catalogue::bundled()['en'][$key], $itemId, $field);
     }
 }

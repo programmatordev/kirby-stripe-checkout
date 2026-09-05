@@ -47,15 +47,19 @@ final class SelectionDataTest extends TestCase
         foreach ([null, false, 'shirt', [], ['shirt'], new ProductRequest('shirt')] as $index => $input) {
             yield 'shape-' . $index => [$input, 'selection.invalid'];
         }
+
         foreach ([null, '', 123, ' shirt', "shirt\n", str_repeat('a', 2049)] as $index => $reference) {
             yield 'reference-' . $index => [['reference' => $reference], 'selection.invalid'];
         }
+
         foreach ([null, 0, -1, '1', '01', 1.0, true, [], (float) PHP_INT_MAX] as $index => $quantity) {
             yield 'quantity-' . $index => [['reference' => 'shirt', 'quantity' => $quantity], 'selection.quantity_invalid'];
         }
+
         foreach ([null, false, 'size', ['large'], ['size' => 1], ['size' => ''], ['' => 'large'], [str_repeat('a', 129) => 'large'], ['size' => str_repeat('a', 129)]] as $index => $options) {
             yield 'options-' . $index => [['reference' => 'shirt', 'selectedOptions' => $options], 'selection.invalid'];
         }
+
         foreach (['id', 'variantId', 'price', 'unitPrice', 'currency', 'stripePriceId', 'stripeProductId', 'sku', 'images', 'description', 'name', 'requiresShipping', 'shipping', 'taxBehavior', 'discounts', 'metadata', 'product'] as $field) {
             yield 'protected-' . $field => [['reference' => 'shirt', $field => 'forged'], 'selection.invalid'];
         }
@@ -65,12 +69,14 @@ final class SelectionDataTest extends TestCase
     {
         $calls = 0;
         $canonicalizer = $this->canonicalizer($calls);
+
         try {
             $canonicalizer->direct(array_fill(0, 101, ['reference' => 'shirt']));
             $this->fail('Expected line limit.');
         } catch (CheckoutInputException $error) {
             $this->assertSame('selection.line_limit_exceeded', $error->errorCode());
         }
+
         $this->assertSame(0, $calls);
         $merged = $canonicalizer->direct(array_fill(0, 100, ['reference' => 'shirt']));
         $this->assertCount(1, $merged);
@@ -84,12 +90,14 @@ final class SelectionDataTest extends TestCase
     public function testDirectInputValidatesTheWholeBodyBeforeResolution(mixed $input): void
     {
         $calls = 0;
+
         try {
             $this->canonicalizer($calls)->direct($input);
             $this->fail('Expected invalid direct input.');
         } catch (CheckoutInputException $error) {
             $this->assertSame('selection.invalid', $error->errorCode());
         }
+
         $this->assertSame(0, $calls);
     }
 

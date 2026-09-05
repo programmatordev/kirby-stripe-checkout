@@ -6,6 +6,7 @@ use Kirby\Cms\App;
 use Kirby\Cms\Page;
 use Kirby\Content\Field;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
+use ProgrammatorDev\StripeCheckout\Kirby\CartRoutes;
 use ProgrammatorDev\StripeCheckout\Kirby\OptionsField;
 use ProgrammatorDev\StripeCheckout\Kirby\ProductBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
@@ -69,6 +70,7 @@ App::plugin(
             },
         ],
         'translations' => Catalogue::bundled(),
+        'routes' => static fn(App $kirby): array => CartRoutes::definition($kirby),
         'permissions' => [
             'settings.read' => false,
             'settings.update' => false,

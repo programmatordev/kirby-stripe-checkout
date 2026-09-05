@@ -94,6 +94,22 @@ $languageCode = $kirby->language()?->code() ?? 'en';
         footer {
             opacity: .7;
         }
+
+        .cart-item {
+            border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+            padding-block: 1rem;
+        }
+
+        .cart-item form {
+            display: inline-flex;
+            flex-wrap: wrap;
+            gap: .5rem;
+            margin-block: .5rem;
+        }
+
+        input[type="number"] {
+            max-width: 6rem;
+        }
     </style>
 </head>
 <body>
@@ -108,9 +124,14 @@ $languageCode = $kirby->language()?->code() ?? 'en';
     </header>
     <main>
         <?= $slots->content() ?>
+        <?php if ($cart = $site->stripeCheckout()->cart()): ?>
+            <?php snippet('cart', ['cart' => $cart]) ?>
+            <p data-cart-feedback role="status" aria-live="polite"></p>
+            <?php snippet('cart-script') ?>
+        <?php endif ?>
     </main>
     <footer>
-        Development fixture for Kirby Stripe Checkout. No Checkout or Stripe request behavior is currently registered.
+        Development fixture for Kirby Stripe Checkout. Cart interactions are available; Checkout submission is not yet implemented.
     </footer>
 </body>
 </html>

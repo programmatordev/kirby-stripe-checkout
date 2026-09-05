@@ -18,6 +18,7 @@ final class OptionExtractor
 
     private const DOTTED_LEAVES = [
         'cart.enabled',
+        'cart.renderer',
         'products.fields.description',
         'products.fields.images',
         'products.fields.name',

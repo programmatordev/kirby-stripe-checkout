@@ -14,6 +14,8 @@
 /site/** export-ignore
 /tests export-ignore
 /tests/** export-ignore
+/tools export-ignore
+/tools/** export-ignore
 
 /.editorconfig export-ignore
 /.gitattributes export-ignore

@@ -258,6 +258,7 @@ final class CartApiTest extends KirbyTestCase
             } catch (CartException $error) {
                 $this->assertStringStartsWith('cart.', $error->errorCode());
             }
+
             $this->assertSame($revision, $this->cart()->revision());
         }
     }

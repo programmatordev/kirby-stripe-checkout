@@ -64,6 +64,7 @@ final class PluginRegistrationTest extends KirbyTestCase
         foreach ($productBlueprints as $name => $definition) {
             $this->assertSame($definition, $blueprints[$name] ?? null);
         }
+
         $this->assertIsArray($pageModels);
         $this->assertSame(StripeCheckoutPage::class, $pageModels['stripe-checkout']);
         $this->assertIsArray($fields);

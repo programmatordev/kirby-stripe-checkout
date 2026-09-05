@@ -3,6 +3,16 @@
 declare(strict_types=1);
 
 return [
+    'programmatordev.stripe-checkout.cart.quantity_invalid' => 'Quantity must be a positive whole number.',
+    'programmatordev.stripe-checkout.cart.line_limit_exceeded' => 'The cart cannot contain more than 100 different items.',
+    'programmatordev.stripe-checkout.cart.provider_unavailable' => 'Product information is temporarily unavailable. Please try again.',
+    'programmatordev.stripe-checkout.request.invalid_body' => 'The request body is invalid.',
+    'programmatordev.stripe-checkout.request.csrf_invalid' => 'Your session could not be verified. Refresh the page and try again.',
+    'programmatordev.stripe-checkout.request.unsupported_media_type' => 'Send JSON or form-encoded data.',
+    'programmatordev.stripe-checkout.selection.invalid' => 'Check the submitted product, options and cart revision.',
+    'programmatordev.stripe-checkout.selection.quantity_invalid' => 'Quantity must be a positive whole number.',
+    'programmatordev.stripe-checkout.selection.line_limit_exceeded' => 'The cart cannot contain more than 100 different items.',
+    'programmatordev.stripe-checkout.product.resolution_unavailable' => 'Product information is temporarily unavailable. Please try again.',
     'programmatordev.stripe-checkout.cart.configuration_invalid' => 'The store settings need attention. Please try again later.',
     'programmatordev.stripe-checkout.cart.amount_invalid' => 'This cart amount cannot be used. Please reduce the quantity.',
     'programmatordev.stripe-checkout.cart.product_unavailable' => 'This product or its selected options are no longer available.',

@@ -56,10 +56,12 @@ final readonly class ResolvedProduct
         $this->variantId = $variantId === null ? null : ProductData::identifier($variantId);
         $this->selectedOptions = $this->validateSelectedOptions($selectedOptions);
         $this->imageUrls = $this->validateImages($imageUrls);
+
         // Native presentation and URL-only consumers must agree on the first image.
         if ($this->image !== null && $this->image->url() !== ($this->imageUrls[0] ?? null)) {
             throw new InvalidProductException('product.images_invalid');
         }
+
         $this->metadata = $this->validateMetadata($metadata);
     }
 

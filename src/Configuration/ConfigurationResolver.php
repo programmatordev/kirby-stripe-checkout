@@ -77,6 +77,25 @@ final class ConfigurationResolver
      */
     public function cartEnabled(#[SensitiveParameter] array $options): bool
     {
+        return $this->resolveCart($this->cartOptions($options));
+    }
+
+    /** @param array<string, mixed> $options */
+    public function cartRenderer(#[SensitiveParameter] array $options): ?Closure
+    {
+        $cart = $this->cartOptions($options);
+        $this->resolveCart($cart);
+
+        /** @var Closure|null */
+        return $cart['renderer'] ?? null;
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     * @return array<string, mixed>
+     */
+    private function cartOptions(#[SensitiveParameter] array $options): array
+    {
         $root = $this->extractor->extract($options);
         $cart = array_key_exists('cart', $root) ? $root['cart'] : [];
 
@@ -85,7 +104,7 @@ final class ConfigurationResolver
         }
 
         /** @var array<string, mixed> $cart */
-        return $this->resolveCart($cart);
+        return $cart;
     }
 
     /**
@@ -123,7 +142,12 @@ final class ConfigurationResolver
     /** @param array<string, mixed> $cart */
     private function resolveCart(array $cart): bool
     {
-        $this->assertKnownKeys($cart, ['enabled'], 'cart');
+        $this->assertKnownKeys($cart, ['enabled', 'renderer'], 'cart');
+
+        if (isset($cart['renderer']) && $cart['renderer'] instanceof Closure === false) {
+            throw new ConfigurationException('configuration.type_invalid', 'cart.renderer');
+        }
+
         $enabled = array_key_exists('enabled', $cart) ? $cart['enabled'] : true;
 
         if (is_bool($enabled) === false) {

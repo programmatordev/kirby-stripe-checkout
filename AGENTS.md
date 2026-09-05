@@ -36,6 +36,7 @@
 - Add concise class documentation when a class's responsibility is not immediately clear. Add inline comments only for non-obvious constraints, decisions, or edge cases.
 - In templates and snippets, add PHPDoc types for implicit Kirby or passed variables only when those variables are used.
 - Use the project's PHP-CS-Fixer and PHPStan configuration as the source of truth for formatting and static analysis.
+- Separate complete control blocks from surrounding statements with blank lines, except at enclosing block boundaries. Keep `else`/`elseif`, `catch`/`finally`, and a do-while's trailing condition attached. PHP-CS-Fixer enforces this with its before-statement rule and the development-only after-control-structure fixer.
 - Add translatable labels and messages instead of hard-coded user-facing Panel text.
 
 ## Naming conventions

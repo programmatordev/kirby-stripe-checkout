@@ -12,6 +12,7 @@ $currency = $settings->currency();
 $productOptions = $page->options()->toProductOptions();
 $optionsData = $productOptions->toArray();
 $formattedPrice = null;
+$cart = $stripeCheckout->cart();
 
 if ($settings->priceSource() === PriceSource::Stripe) {
     $stripePrice = $page->stripePrice()->toProductStripePrice();
@@ -39,17 +40,23 @@ snippet('layout', ['title' => $page->title()], slots: true);
         <p><strong><?= esc($formattedPrice) ?></strong></p>
     <?php endif ?>
 
-    <?php if ($optionsData['options'] !== []): ?>
+    <?php if ($cart !== null): ?>
         <form
             class="variant-prototype"
             data-variants="<?= esc(Json::encode($optionsData['variants']), 'attr') ?>"
-            onsubmit="return false"
+            action="<?= esc($site->url() . '/stripe-checkout/cart/items', 'attr') ?>"
+            method="post"
+            data-cart-method="POST"
         >
+            <input type="hidden" name="csrf" value="<?= esc(csrf(), 'attr') ?>">
+            <input type="hidden" name="reference" value="<?= esc($page->id(), 'attr') ?>">
+            <?php if ($optionsData['options'] !== []): ?>
             <h2>Available options</h2>
+            <?php endif ?>
             <?php foreach ($optionsData['options'] as $option): ?>
                 <label>
                     <span><?= esc($option['name']) ?></span>
-                    <select name="stripeCheckoutSelectedOptions[<?= esc($option['id'], 'attr') ?>]">
+                    <select name="options[<?= esc($option['id'], 'attr') ?>]" data-option-id="<?= esc($option['id'], 'attr') ?>">
                         <?php foreach ($option['values'] as $value): ?>
                             <option value="<?= esc($value['id'], 'attr') ?>"><?= esc($value['name']) ?></option>
                         <?php endforeach ?>
@@ -57,17 +64,20 @@ snippet('layout', ['title' => $page->title()], slots: true);
                 </label>
             <?php endforeach ?>
             <p data-variant-status aria-live="polite"></p>
+            <label>Quantity <input type="number" name="quantity" min="1" step="1" value="1" required></label>
+            <button>Add to cart</button>
         </form>
         <script>
             (() => {
                 const form = document.currentScript.previousElementSibling;
                 const variants = JSON.parse(form.dataset.variants);
                 const status = form.querySelector('[data-variant-status]');
+                if (!form.querySelector('select')) return;
 
                 const resolve = () => {
                     const selectedOptions = Object.fromEntries(
                         [...form.querySelectorAll('select')].map(select => [
-                            select.name.match(/\[([^\]]+)\]/)[1],
+                            select.dataset.optionId,
                             select.value,
                         ]),
                     );
@@ -78,8 +88,8 @@ snippet('layout', ['title' => $page->title()], slots: true);
                         )
                     );
 
-                    // The browser resolves feedback only. A future cart endpoint
-                    // will rematch the submitted options against canonical data.
+                    // Browser feedback is advisory; the cart resolves options again.
+                    form.querySelector('button').disabled = !variant;
                     if (!variant) {
                         status.textContent = 'Unavailable combination';
                         return;
@@ -105,6 +115,7 @@ snippet('layout', ['title' => $page->title()], slots: true);
             })();
         </script>
     <?php endif ?>
+
 
     <p><code><?= esc($page->id()) ?></code></p>
 <?php endslot() ?>

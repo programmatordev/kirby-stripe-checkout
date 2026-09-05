@@ -10,4 +10,5 @@ parameters:
 		- index.php
 		- src
 		- tests
+		- tools/PhpCsFixer
 	reportUnmatchedIgnoredErrors: true

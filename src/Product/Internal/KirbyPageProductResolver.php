@@ -64,6 +64,7 @@ final class KirbyPageProductResolver implements ProductResolverInterface
             ? null
             : $this->localizedString($displayContent, $technicalContent, $fields['description']);
         $name = $this->localizedString($displayContent, $technicalContent, $fields['name']);
+
         if ($canonical['options'] === []) {
             $sku = $this->optionalString($this->field($technicalContent, $fields['sku'])->value());
         } elseif ($variant !== null) {

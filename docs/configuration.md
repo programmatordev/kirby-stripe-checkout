@@ -103,4 +103,4 @@ See [Money and currency](money.md) for exact amount syntax and localized formatt
 
 ## Built-in cart
 
-The session cart is enabled by default. Set the PHP-only `cart.enabled` option to `false` to disable it; `$site->stripeCheckout()->cart()` then returns `null` without opening a session. See [Cart](cart.md) for configuration and PHP usage.
+The session cart is enabled by default. Set the PHP-only `cart.enabled` option to `false` to disable it; `$site->stripeCheckout()->cart()` then returns `null` without opening a session and its routes are not registered. The optional PHP-only `cart.renderer` closure enables HTML fragments on those same routes. See [Cart](cart.md) for PHP usage and [Cart HTTP routes](cart-http.md) for requests and rendering.

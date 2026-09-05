@@ -112,6 +112,7 @@ final class KirbySessionCartStore implements CartStoreInterface
         }
 
         $entries = [];
+
         foreach ($payload['entries'] as $entry) {
             if (is_array($entry) === false || count($entry) !== 2 || is_string($entry['id'] ?? null) === false) {
                 throw new InvalidArgumentException('Invalid cart entry.');

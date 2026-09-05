@@ -36,6 +36,7 @@ final readonly class AttemptBinding
 
         if ($userUuid !== null) {
             ProductData::reference($userUuid);
+
             if (str_starts_with($userUuid, 'user://') === false || strlen($userUuid) <= 7) {
                 throw new InvalidArgumentException('An authenticated actor requires a Kirby User UUID.');
             }

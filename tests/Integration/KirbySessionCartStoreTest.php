@@ -46,6 +46,7 @@ final class KirbySessionCartStoreTest extends KirbyTestCase
         } catch (CartMutationException) {
             $this->assertSame(5, $second->read()->entries()[0]->request()->quantity());
         }
+
         $session->destroy();
     }
 
@@ -96,6 +97,7 @@ final class KirbySessionCartStoreTest extends KirbyTestCase
             $other = new KirbySessionCartStore($this->sessions()->get($token), Uuid::generate(...));
             $this->assertSame($initial->revision(), $other->read()->revision());
         }
+
         $session->destroy();
     }
 
@@ -157,13 +159,16 @@ final class KirbySessionCartStoreTest extends KirbyTestCase
         } finally {
             if (is_resource($process)) {
                 proc_terminate($process);
+
                 foreach ($pipes as $pipe) {
                     if (is_resource($pipe)) {
                         fclose($pipe);
                     }
                 }
+
                 proc_close($process);
             }
+
             $session->destroy();
         }
     }

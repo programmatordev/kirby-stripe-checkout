@@ -11,7 +11,7 @@ $products = $page->children()->listed()->filter(
 <?php slot('content') ?>
     <p class="eyebrow">Resolver inputs</p>
     <h1><?= esc($page->title()) ?></h1>
-    <p>These pages are deterministic development inputs. Their fields are fixture data, not currently registered plugin fields.</p>
+    <p>Development products for testing prices, options and cart interactions.</p>
 
     <div class="grid">
         <?php foreach ($products as $product): ?>
