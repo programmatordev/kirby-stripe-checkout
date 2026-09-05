@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Stripe\Price;
 
+use Brick\Money\Money;
 use ProgrammatorDev\StripeCheckout\Money\MoneySnapshot;
+use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 
 /**
- * Contains the authoritative, validated Price/Product facts used downstream.
- *
- * @internal
+ * Contains validated Stripe Price and Product facts for display and checkout.
  */
 final readonly class ResolvedPrice
 {
@@ -41,9 +41,9 @@ final readonly class ResolvedPrice
         return $this->name;
     }
 
-    public function unitPrice(): MoneySnapshot
+    public function price(): Money
     {
-        return $this->unitPrice;
+        return (new StripeCurrencyRegistry())->toMoney($this->unitPrice);
     }
 
     public function taxBehavior(): string

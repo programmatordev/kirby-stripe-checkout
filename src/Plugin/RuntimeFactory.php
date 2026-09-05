@@ -14,6 +14,7 @@ use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
+use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Internal\ClosureProductResolver;
 use ProgrammatorDev\StripeCheckout\Product\Internal\KirbyPageLocator;
 use ProgrammatorDev\StripeCheckout\Product\Internal\KirbyPageProductResolver;
@@ -24,9 +25,11 @@ use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
 use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
+use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogue;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceProviderInterface;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceResolver;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\ResolvedPrice;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\StripeApiPriceProvider;
 use ProgrammatorDev\StripeCheckout\Translation\LocaleResolver;
 use Stripe\StripeClient;
@@ -72,6 +75,32 @@ final class RuntimeFactory
     public function productOptionsFromField(Field $field): ProductOptions
     {
         return $this->productOptionsFactory()->forField($field);
+    }
+
+    public function productStripePriceFromField(Field $field): ?ResolvedPrice
+    {
+        $value = $field->value();
+
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_string($value) === false) {
+            throw new InvalidProductException('product.stripe_price_invalid');
+        }
+
+        $reference = new StripePriceReference($value);
+        $currency = $this->settings()->currency();
+
+        if ($currency === null) {
+            throw new ConfigurationException(
+                'configuration.required_missing',
+                'settings.currency',
+            );
+        }
+
+        return $this->stripePriceCatalogue()->find($reference->priceId(), $currency)
+            ?? throw new InvalidProductException('product.stripe_price_unavailable');
     }
 
     public function stripePriceCatalogue(): PriceCatalogue

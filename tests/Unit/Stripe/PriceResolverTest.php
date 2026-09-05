@@ -23,8 +23,8 @@ final class PriceResolverTest extends TestCase
         $this->assertSame('price_standard', $resolved->priceId());
         $this->assertSame('prod_standard', $resolved->productId());
         $this->assertSame('Canvas bag', $resolved->name());
-        $this->assertSame('EUR', $resolved->unitPrice()->currency());
-        $this->assertSame(1600, $resolved->unitPrice()->minorAmount());
+        $this->assertSame('16.00', $resolved->price()->getAmount()->toString());
+        $this->assertSame('EUR', $resolved->price()->getCurrency()->getCurrencyCode());
         $this->assertSame('exclusive', $resolved->taxBehavior());
         $this->assertSame('txcd_99999999', $resolved->taxCode());
     }
@@ -34,7 +34,7 @@ final class PriceResolverTest extends TestCase
         $record = self::record(unitAmount: null, unitAmountDecimal: '1600.000');
         $resolved = (new PriceResolver(new FakePriceProvider()))->resolveRecord($record, 'EUR');
 
-        $this->assertSame(1600, $resolved->unitPrice()->minorAmount());
+        $this->assertSame('16.00', $resolved->price()->getAmount()->toString());
     }
 
     #[DataProvider('ineligibleRecords')]

@@ -163,10 +163,11 @@ try {
 
     if (
         is_array($fieldMethods) === false
-        || array_keys($fieldMethods) !== ['toProductOptions']
+        || array_keys($fieldMethods) !== ['toProductOptions', 'toProductStripePrice']
         || is_callable($fieldMethods['toProductOptions']) === false
+        || is_callable($fieldMethods['toProductStripePrice']) === false
     ) {
-        throw new RuntimeException('The package did not register its product options converter.');
+        throw new RuntimeException('The package did not register its product field converters.');
     }
 
     if (

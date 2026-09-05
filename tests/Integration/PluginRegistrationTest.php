@@ -70,8 +70,12 @@ final class PluginRegistrationTest extends KirbyTestCase
         $this->assertSame(OptionsField::class, $fields['stripe-checkout-options']);
         $this->assertSame(StripePriceField::class, $fields['stripe-checkout-price']);
         $this->assertIsArray($fieldMethods);
-        $this->assertSame(['toProductOptions'], array_keys($fieldMethods));
+        $this->assertSame(
+            ['toProductOptions', 'toProductStripePrice'],
+            array_keys($fieldMethods),
+        );
         $this->assertIsCallable($fieldMethods['toProductOptions']);
+        $this->assertIsCallable($fieldMethods['toProductStripePrice']);
         $this->assertIsArray($siteMethods);
         $this->assertSame(['stripeCheckout'], array_keys($siteMethods));
         $this->assertIsCallable($siteMethods['stripeCheckout']);

@@ -54,6 +54,17 @@ final class PriceCatalogue
             : $state;
     }
 
+    public function find(string $priceId, string $currency): ?ResolvedPrice
+    {
+        foreach ($this->load($currency)['items'] as $price) {
+            if ($price->priceId() === $priceId) {
+                return $price;
+            }
+        }
+
+        return null;
+    }
+
     /**
      * @return array{items: list<ResolvedPrice>, refreshedAt: ?int, failedAt: ?int, error: ?string}
      */

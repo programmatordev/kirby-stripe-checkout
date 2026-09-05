@@ -7,12 +7,57 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 use Kirby\Exception\PermissionException;
 use Kirby\Form\Form;
 use ProgrammatorDev\StripeCheckout\Kirby\StripePriceField;
+use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\ResolvedPrice;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
 
 final class StripePriceFieldTest extends KirbyTestCase
 {
+    public function testFieldConvertsItsStoredIdToCachedProductStripePrice(): void
+    {
+        $page = $this->restartWithStripePriceField();
+        $this->seedCatalogue();
+
+        /** @phpstan-ignore-next-line method.nonObject, method.notFound */
+        $price = $page->price()->toProductStripePrice();
+
+        $this->assertInstanceOf(ResolvedPrice::class, $price);
+        $this->assertSame('price_canvas', $price->priceId());
+        $this->assertSame('prod_canvas', $price->productId());
+        $this->assertSame('Canvas bag', $price->name());
+        $this->assertSame('16.00', $price->price()->getAmount()->toString());
+        $this->assertSame('EUR', $price->price()->getCurrency()->getCurrencyCode());
+        $this->assertSame(['https://example.test/canvas.jpg'], $price->images());
+    }
+
+    public function testEmptyFieldConvertsToNull(): void
+    {
+        $page = $this->restartWithStripePriceField()->update(['price' => '']);
+
+        /** @phpstan-ignore-next-line method.nonObject, method.notFound */
+        $price = $page->price()->toProductStripePrice();
+
+        $this->assertNull($price);
+    }
+
+    public function testUnavailableStoredPriceCannotBeConverted(): void
+    {
+        $page = $this->restartWithStripePriceField()->update([
+            'price' => 'price_missing',
+        ]);
+        $this->seedCatalogue();
+
+        try {
+            /** @phpstan-ignore-next-line method.nonObject, method.notFound */
+            $page->price()->toProductStripePrice();
+            $this->fail('The unavailable Stripe Price was accepted.');
+        } catch (InvalidProductException $error) {
+            $this->assertSame('product.stripe_price_unavailable', $error->errorCode());
+        }
+    }
+
     public function testFieldStoresOneScalarPriceIdAndPreservesCachedSelectionDetails(): void
     {
         $page = $this->restartWithStripePriceField();

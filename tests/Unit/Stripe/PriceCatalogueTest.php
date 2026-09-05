@@ -70,6 +70,28 @@ final class PriceCatalogueTest extends TestCase
         $this->assertSame([null], $provider->listCursors);
     }
 
+    public function testFindReturnsOneCachedPriceByItsExactId(): void
+    {
+        $provider = new FakePriceProvider(pages: [
+            'first' => new PriceListResult([
+                self::record('price_first', 'First'),
+                self::record('price_second', 'Second'),
+            ], false),
+        ]);
+        $catalogue = new PriceCatalogue(
+            new MemoryCache(),
+            $provider,
+            new PriceResolver($provider),
+        );
+
+        $this->assertSame(
+            'price_second',
+            $catalogue->find('price_second', 'EUR')?->priceId(),
+        );
+        $this->assertNull($catalogue->find('price_missing', 'EUR'));
+        $this->assertSame([null], $provider->listCursors);
+    }
+
     public function testLoadingAnExpiredCatalogueRefreshesItOnDemand(): void
     {
         $cache = new MemoryCache();
@@ -90,7 +112,7 @@ final class PriceCatalogueTest extends TestCase
         $result = $catalogue->load('EUR');
 
         $this->assertSame([null], $freshProvider->listCursors);
-        $this->assertSame(2400, $result['items'][0]->unitPrice()->minorAmount());
+        $this->assertSame('24.00', $result['items'][0]->price()->getAmount()->toString());
     }
 
     public function testLoadingAnExpiredCatalogueRespectsTheFailureCooldown(): void
@@ -153,8 +175,8 @@ final class PriceCatalogueTest extends TestCase
         $listed = $catalogue->search('EUR')['items'][0];
         $resolved = $resolver->resolve('price_current', 'EUR');
 
-        $this->assertSame(1600, $listed->unitPrice()->minorAmount());
-        $this->assertSame(2400, $resolved->unitPrice()->minorAmount());
+        $this->assertSame('16.00', $listed->price()->getAmount()->toString());
+        $this->assertSame('24.00', $resolved->price()->getAmount()->toString());
         $this->assertSame(['price_current'], $provider->retrievedIds);
     }
 

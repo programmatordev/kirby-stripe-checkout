@@ -220,7 +220,37 @@ Resolution is read-only. It does not change stock, create an order, create a Che
 
 Set the store price source to Stripe, choose the store currency, and configure a Stripe server key that can read Prices and Products. The `stripe-checkout-price` field then opens a searchable, single-value picker containing eligible active one-time Prices in that currency.
 
-The picker lists Stripe Products first, with their first image and number of eligible Prices. Choose a Product to see its Prices, including the optional nickname, localized amount, currency, tax behavior, and full Price ID. The saved field keeps showing the Product and Price summary, including the Price ID, after the Page reloads, but stores only the scalar `price_...` ID.
+The picker lists Stripe Products first, with their first image and number of eligible Prices. Choose a Product to see its Prices, identified by the optional nickname, amount, and currency. The saved field keeps showing the Product and Price summary after the Page reloads, but stores only the scalar `price_...` ID.
+
+### Reading a Stripe Price
+
+Convert the configured field through Kirby's normal Field API when a template needs the cached Stripe Product and Price details:
+
+```php
+<?php
+
+/** @var Kirby\Cms\Page $page */
+/** @var Kirby\Cms\Site $site */
+
+$stripePrice = $page->stripePrice()->toProductStripePrice();
+
+if ($stripePrice !== null) {
+    echo esc($stripePrice->name());
+    echo esc($site->stripeCheckout()->formatMoney($stripePrice->price()));
+
+    $stripePrice->priceId();
+    $stripePrice->productId();
+    $stripePrice->description();
+    $stripePrice->images();
+    $stripePrice->nickname();
+    $stripePrice->taxBehavior();
+    $stripePrice->taxCode();
+}
+```
+
+Use the mapped field handle when it differs from `stripePrice`. An empty field returns `null`. A malformed ID or a Price that is no longer present in the eligible catalogue raises an `InvalidProductException` instead of returning incomplete data.
+
+This converter uses the same automatically refreshed catalogue as the Panel picker, so it is suitable for storefront display without contacting Stripe on every request. It is not charging authority: Checkout retrieves and validates the Price and Product freshly before creating the Session.
 
 The catalogue is a Kirby-native, read-only cache for Panel convenience:
 
@@ -232,7 +262,7 @@ The catalogue is a Kirby-native, read-only cache for Panel convenience:
 - a failed refresh keeps the last successful catalogue and marks it as stale;
 - a refresh immediately rehydrates the saved selection; if it is no longer eligible, its ID is preserved with a warning;
 - a saved selection is hydrated from the cache without contacting Stripe on every Page load;
-- a saved ID is shown and preserved even if the catalogue is unavailable or that Price is no longer eligible.
+- a saved ID is preserved even if the catalogue is unavailable or that Price is no longer eligible.
 
 The cache is never charging authority. Before later order creation, the selected Price and associated Product are retrieved freshly and revalidated. Supported Prices must be active, fixed, per-unit, one-time Prices whose default currency exactly matches the store currency and whose Product is active and named. Recurring, tiered, customer-chosen, fractional-provider-unit, quantity-transformed, or otherwise ambiguous Prices are rejected. Extra `currency_options` are ignored.
 

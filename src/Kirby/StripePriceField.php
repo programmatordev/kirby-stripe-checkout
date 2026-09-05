@@ -9,7 +9,6 @@ use Kirby\Cms\App;
 use Kirby\Exception\InvalidArgumentException;
 use Kirby\Form\FieldClass;
 use Kirby\Toolkit\I18n;
-use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
@@ -449,7 +448,7 @@ final class StripePriceField extends FieldClass
 
     private static function formattedAmount(ResolvedPrice $price): string
     {
-        $money = (new StripeCurrencyRegistry())->toMoney($price->unitPrice());
+        $money = $price->price();
 
         return $money->getAmount()->toString() . ' ' . $money->getCurrency()->getCurrencyCode();
     }
