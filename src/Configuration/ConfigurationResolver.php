@@ -19,7 +19,7 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
  */
 final class ConfigurationResolver
 {
-    private const ROOT_KEYS = ['products', 'settings', 'stripe', 'translations'];
+    private const ROOT_KEYS = ['cart', 'products', 'settings', 'stripe', 'translations'];
     private const PRODUCT_FIELD_KEYS = [
         'name',
         'description',
@@ -49,6 +49,7 @@ final class ConfigurationResolver
     ): ConfigurationReport {
         try {
             $root = $this->resolveRoot($this->extractor->extract($options));
+            $cartEnabled = $this->resolveCart($root['cart']);
             $products = $this->resolveProducts($root['products']);
             $stripe = $this->resolveStripe($root['stripe']);
             $settings = $this->resolveSettings($root['settings'], $pageSettings);
@@ -61,6 +62,7 @@ final class ConfigurationResolver
                 stripe: $stripe,
                 translations: $translations,
                 products: $products,
+                cartEnabled: $cartEnabled,
             ));
         } catch (ConfigurationException $error) {
             return ConfigurationReport::invalid($error);
@@ -68,8 +70,27 @@ final class ConfigurationResolver
     }
 
     /**
+     * Resolve the structural switch independently so broken product settings
+     * cannot prevent customers from removing stale selections.
+     *
+     * @param array<string, mixed> $options
+     */
+    public function cartEnabled(#[SensitiveParameter] array $options): bool
+    {
+        $root = $this->extractor->extract($options);
+        $cart = array_key_exists('cart', $root) ? $root['cart'] : [];
+
+        if (is_array($cart) === false) {
+            throw new ConfigurationException('configuration.type_invalid', 'cart');
+        }
+
+        /** @var array<string, mixed> $cart */
+        return $this->resolveCart($cart);
+    }
+
+    /**
      * @param array<string, mixed> $root
-     * @return array{products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>}
+     * @return array{cart: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>}
      */
     private function resolveRoot(#[SensitiveParameter] array $root): array
     {
@@ -83,18 +104,33 @@ final class ConfigurationResolver
 
         $resolver = new OptionsResolver();
         $resolver->setDefaults([
+            'cart' => [],
             'products' => [],
             'settings' => [],
             'stripe' => [],
             'translations' => [],
         ]);
         $resolver->setAllowedTypes('products', 'array');
+        $resolver->setAllowedTypes('cart', 'array');
         $resolver->setAllowedTypes('settings', 'array');
         $resolver->setAllowedTypes('stripe', 'array');
         $resolver->setAllowedTypes('translations', 'array');
 
-        /** @var array{products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>} */
+        /** @var array{cart: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>} */
         return $resolver->resolve($root);
+    }
+
+    /** @param array<string, mixed> $cart */
+    private function resolveCart(array $cart): bool
+    {
+        $this->assertKnownKeys($cart, ['enabled'], 'cart');
+        $enabled = array_key_exists('enabled', $cart) ? $cart['enabled'] : true;
+
+        if (is_bool($enabled) === false) {
+            throw new ConfigurationException('configuration.type_invalid', 'cart.enabled');
+        }
+
+        return $enabled;
     }
 
     /** @param array<string, mixed> $products */

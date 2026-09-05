@@ -300,6 +300,7 @@ final class ProductResolverTest extends KirbyTestCase
         $this->assertSame('Mapped product', $product->name());
         $this->assertNull($product->description());
         $this->assertSame([], $product->imageUrls());
+        $this->assertNull($product->image());
         $this->assertTrue($product->requiresShipping());
     }
 
@@ -329,6 +330,9 @@ final class ProductResolverTest extends KirbyTestCase
         $this->assertStringEndsWith('/image-1.jpg', $product->imageUrls()[0]);
         $this->assertStringEndsWith('/image-8.jpg', $product->imageUrls()[7]);
         $this->assertTrue($product->metadata()['imagesTruncated'] ?? false);
+        $this->assertNotNull($product->image());
+        $this->assertSame($references[0], $product->image()->uuid()->toString());
+        $this->assertSame($product->imageUrls()[0], $product->image()->url());
     }
 
     public function testCustomClosureResolverReplacesTheBuiltInPageResolver(): void

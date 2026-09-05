@@ -100,3 +100,7 @@ Page values override internal defaults. Explicit PHP values remain authoritative
 See [Panel and diagnostics](panel.md) for the protected Page, permissions, and configuration troubleshooting.
 
 See [Money and currency](money.md) for exact amount syntax and localized formatting.
+
+## Built-in cart
+
+The session cart is enabled by default. Set the PHP-only `cart.enabled` option to `false` to disable it; `$site->stripeCheckout()->cart()` then returns `null` without opening a session. See [Cart](cart.md) for configuration and PHP usage.

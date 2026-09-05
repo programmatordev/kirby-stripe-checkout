@@ -218,6 +218,10 @@ Quantity defaults to `1` and must be a positive integer. Zero does not mean remo
 
 The default resolver accepts the same useful Page locator forms as Kirby, rejects drafts and missing pages, validates the complete request, and normalizes the result to the Page's canonical `page://...` UUID. The returned `ResolvedProduct` is an immutable snapshot containing the exact price, effective shipping boolean, localized option names, optional SKU and images, and matched variant ID.
 
+`$product->image()` returns the first mapped Kirby File for crops, thumbs, and file metadata; cart items expose the same File through `$item->image()`. It returns `null` for missing images or external URL-only sources. `$product->imageUrls()` retains the resolved URLs in their existing order for Stripe and serialization boundaries, and for external-image fallback. Native File objects are not stored in the cart session.
+
+A custom resolver that already has a Kirby File can provide `image: $file` alongside `imageUrls`, whose first URL must match `$file->url()`. URL-only resolvers leave `image` unset; the plugin does not download external images or reconstruct Files from URLs.
+
 Resolution is read-only. It does not change stock, create an order, create a Checkout Session, or contact Stripe. In Stripe price mode it returns a validated `StripePriceReference`; the internal charging path retrieves that Price and its Product freshly before the reference can become an effective line.
 
 ## Stripe Price mode
@@ -330,4 +334,4 @@ A custom resolver replaces the Kirby Page resolver. The plugin still checks that
 
 ## Current boundary
 
-Kirby and Stripe Price product resolution are available, but the cart, Checkout Session, order, and webhook layers are not implemented yet.
+Kirby and Stripe Price product resolution and the [PHP cart API](cart.md) are available. Cart HTTP routes, Checkout Session creation, orders, and webhooks are not implemented yet.

@@ -3,6 +3,13 @@
 declare(strict_types=1);
 
 return [
+    'programmatordev.stripe-checkout.cart.configuration_invalid' => 'The store settings need attention. Please try again later.',
+    'programmatordev.stripe-checkout.cart.amount_invalid' => 'This cart amount cannot be used. Please reduce the quantity.',
+    'programmatordev.stripe-checkout.cart.product_unavailable' => 'This product or its selected options are no longer available.',
+    'programmatordev.stripe-checkout.cart.selection_invalid' => 'Check the product, options, and quantity and try again.',
+    'programmatordev.stripe-checkout.cart.revision_conflict' => 'Your cart has changed. Review it before trying again.',
+    'programmatordev.stripe-checkout.cart.item_not_found' => 'This item is no longer in your cart.',
+    'programmatordev.stripe-checkout.cart.unavailable' => 'The cart could not be updated. Please try again.',
     'programmatordev.stripe-checkout.area.label' => 'Stripe Checkout',
     'programmatordev.stripe-checkout.overview.description' => 'Configure the store and check whether the local integration is ready.',
     'programmatordev.stripe-checkout.tabs.overview' => 'Overview',

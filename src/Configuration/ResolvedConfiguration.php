@@ -19,11 +19,17 @@ final class ResolvedConfiguration
         private readonly StripeConfiguration $stripe,
         private readonly array $translations,
         private readonly ProductConfiguration $products,
+        private readonly bool $cartEnabled = true,
     ) {}
 
     public function settings(): Settings
     {
         return $this->settings;
+    }
+
+    public function cartEnabled(): bool
+    {
+        return $this->cartEnabled;
     }
 
     public function stripe(): StripeConfiguration

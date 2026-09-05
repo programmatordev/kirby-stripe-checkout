@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Test\Unit\Product;
 
 use Brick\Money\Money;
+use Kirby\Cms\File;
 use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Money\MoneySnapshot;
@@ -75,6 +76,24 @@ final class ProductValuesTest extends TestCase
         $this->assertSame('largeVariant0001', $product->variantId());
         $this->assertSame('SHIRT-L', $product->sku());
         $this->assertSame(['https://example.test/shirt.jpg'], $product->imageUrls());
+        $this->assertNull($product->image());
+    }
+
+    public function testResolvedProductRejectsAFileThatDoesNotMatchItsFirstImageUrl(): void
+    {
+        $image = $this->createStub(File::class);
+        $image->method('url')->willReturn('https://example.test/other.jpg');
+        $this->expectException(InvalidProductException::class);
+        $this->expectExceptionMessage('product.images_invalid');
+
+        new ResolvedProduct(
+            request: new ProductRequest('products/shirt'),
+            name: 'Shirt',
+            requiresShipping: false,
+            price: new InlinePrice(Money::of('16.00', 'EUR')),
+            imageUrls: ['https://example.test/first.jpg'],
+            image: $image,
+        );
     }
 
     public function testResolvedProductRejectsSelectedOptionsThatDoNotMatchTheRequest(): void

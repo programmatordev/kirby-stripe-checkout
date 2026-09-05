@@ -6,7 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Cart\Internal;
 
 use RuntimeException;
 
-/** @internal Carries current state on conflicts for the later safe Cart response. */
+/** @internal Carries current state on conflicts for the safe Cart response. */
 final class CartMutationException extends RuntimeException
 {
     public function __construct(

@@ -8,6 +8,12 @@ use Closure;
 use Kirby\Cms\App;
 use Kirby\Cms\Page;
 use Kirby\Content\Field;
+use Kirby\Uuid\Uuid;
+use ProgrammatorDev\StripeCheckout\Cart\Cart;
+use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutator;
+use ProgrammatorDev\StripeCheckout\Cart\Internal\CartViewFactory;
+use ProgrammatorDev\StripeCheckout\Cart\Internal\KirbySessionCartStore;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionCanonicalizer;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationReport;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
@@ -52,6 +58,40 @@ final class RuntimeFactory
         return $this->configurationReport()
             ->configurationOrFail()
             ->settings();
+    }
+
+    public function cart(): ?Cart
+    {
+        /** @var array<string, mixed> $options */
+        $options = $this->kirby->options();
+
+        if ((new ConfigurationResolver())->cartEnabled($options) === false) {
+            return null;
+        }
+
+        $store = new KirbySessionCartStore($this->kirby->session(), Uuid::generate(...));
+        $selections = new SelectionCanonicalizer(function (ProductRequest $request): ResolvedProduct {
+            // Rebuild context after login/language changes, even when a project
+            // keeps the same Cart object for several operations in one request.
+            $runtime = new self($this->kirby);
+            $product = $runtime->resolveProduct($request);
+
+            if ($product->price() instanceof StripePriceReference) {
+                $currency = $runtime->settings()->currency();
+
+                if ($currency === null) {
+                    throw new ConfigurationException('configuration.required_missing', 'settings.currency');
+                }
+
+                // A syntactically valid ID is not proof the current Price is usable.
+                $runtime->stripePriceResolver()->resolve($product->price(), $currency);
+            }
+
+            return $product;
+        });
+        $mutator = new CartMutator($store, $selections, Uuid::generate(...));
+
+        return (new CartViewFactory($this->kirby))->create($store->read(), $mutator);
     }
 
     public function resolveProduct(ProductRequest $request): ResolvedProduct

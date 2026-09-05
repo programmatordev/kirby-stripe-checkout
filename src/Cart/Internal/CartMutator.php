@@ -113,6 +113,20 @@ final class CartMutator
         });
     }
 
+    /** Clears only the exact originating cart; later verified Checkout bindings call this. */
+    public function clearIfMatches(string $cartId, string $revision): CartSnapshot
+    {
+        return $this->store->mutate(function (CartSnapshot $current) use ($cartId, $revision): CartSnapshot {
+            if ($current->id() !== $cartId || $current->revision() !== $revision) {
+                return $current;
+            }
+
+            return $current->entries() === [] && $current->destinationCountry() === null
+                ? $current
+                : $this->changed($current, [], clearDestination: true);
+        });
+    }
+
     private function requireRevision(CartSnapshot $current, string $revision): void
     {
         if ($revision === '') {

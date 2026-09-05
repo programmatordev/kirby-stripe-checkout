@@ -8,6 +8,7 @@ use Brick\Money\Currency;
 use Brick\Money\Money;
 use Kirby\Cms\App;
 use Kirby\Cms\Page;
+use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Money\MoneyFormatter;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
@@ -33,6 +34,11 @@ final class StripeCheckout
     public function settings(): Settings
     {
         return (new RuntimeFactory($this->kirby))->settings();
+    }
+
+    public function cart(): ?Cart
+    {
+        return (new RuntimeFactory($this->kirby))->cart();
     }
 
     public function formatMoney(

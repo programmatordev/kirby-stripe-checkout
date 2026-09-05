@@ -55,7 +55,7 @@ final class KirbyPageProductResolver implements ProductResolverInterface
         $price = $this->commerce->price($technicalContent, $fields, $variant, $context);
         $shipping = $this->commerce->requiresShipping($technicalContent, $fields, $variant, $context);
         $selectedOptions = $this->selectedOptions($localized['options'], $request->selectedOptions());
-        [$images, $imagesTruncated] = $this->images(
+        [$images, $image, $imagesTruncated] = $this->images(
             $displayContent,
             $technicalContent,
             $fields['images'],
@@ -87,6 +87,7 @@ final class KirbyPageProductResolver implements ProductResolverInterface
             sku: $sku,
             metadata: $imagesTruncated ? ['imagesTruncated' => true] : [],
             variantId: $variant['id'] ?? null,
+            image: $image,
         );
     }
 
@@ -183,11 +184,12 @@ final class KirbyPageProductResolver implements ProductResolverInterface
 
     /**
      * @param list<string> $fields
-     * @return array{list<string>, bool}
+     * @return array{list<string>, ?File, bool}
      */
     private function images(Content $display, Content $technical, array $fields): array
     {
         $urls = [];
+        $image = null;
 
         foreach ($fields as $field) {
             $files = $this->files($display, $field);
@@ -201,13 +203,16 @@ final class KirbyPageProductResolver implements ProductResolverInterface
 
                 if (preg_match('#^https?://#', $url) === 1) {
                     $urls[$url] = true;
+                    // Keep the original File for templates; never reconstruct
+                    // a local file from a URL supplied by a remote catalogue.
+                    $image ??= $file;
                 }
             }
         }
 
         $all = array_keys($urls);
 
-        return [array_slice($all, 0, 8), count($all) > 8];
+        return [array_slice($all, 0, 8), $image, count($all) > 8];
     }
 
     /** @return Files<File> */

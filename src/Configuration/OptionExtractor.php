@@ -17,6 +17,7 @@ final class OptionExtractor
     private const PREFIX = 'programmatordev.stripe-checkout';
 
     private const DOTTED_LEAVES = [
+        'cart.enabled',
         'products.fields.description',
         'products.fields.images',
         'products.fields.name',
@@ -119,7 +120,7 @@ final class OptionExtractor
         $paths = [];
 
         foreach ($root as $section => $value) {
-            if (($section === 'settings' || $section === 'stripe') && is_array($value)) {
+            if (in_array($section, ['cart', 'settings', 'stripe'], true) && is_array($value)) {
                 foreach (array_keys($value) as $leaf) {
                     $paths[$section . '.' . (string) $leaf] = true;
                 }

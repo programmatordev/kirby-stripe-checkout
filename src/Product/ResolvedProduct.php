@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Product;
 
+use Kirby\Cms\File;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
 
 /**
- * Contains the trusted product snapshot produced by one resolver operation.
+ * Contains trusted product facts and optional request-scoped Kirby image access.
+ * Native File objects are presentation handles, never persisted commerce data.
  */
 final readonly class ResolvedProduct
 {
@@ -46,6 +48,7 @@ final readonly class ResolvedProduct
         ?string $sku = null,
         array $metadata = [],
         ?string $variantId = null,
+        private ?File $image = null,
     ) {
         $this->name = ProductData::name($name);
         $this->description = ProductData::optionalString($description, 5000);
@@ -53,6 +56,10 @@ final readonly class ResolvedProduct
         $this->variantId = $variantId === null ? null : ProductData::identifier($variantId);
         $this->selectedOptions = $this->validateSelectedOptions($selectedOptions);
         $this->imageUrls = $this->validateImages($imageUrls);
+        // Native presentation and URL-only consumers must agree on the first image.
+        if ($this->image !== null && $this->image->url() !== ($this->imageUrls[0] ?? null)) {
+            throw new InvalidProductException('product.images_invalid');
+        }
         $this->metadata = $this->validateMetadata($metadata);
     }
 
@@ -90,6 +97,12 @@ final readonly class ResolvedProduct
     public function description(): ?string
     {
         return $this->description;
+    }
+
+    /** The original first image for Kirby transforms; external URLs have no File. */
+    public function image(): ?File
+    {
+        return $this->image;
     }
 
     /** @return list<string> */
