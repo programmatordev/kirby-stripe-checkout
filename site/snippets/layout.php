@@ -53,6 +53,7 @@ $settings = $site->stripeCheckout()->settings();
         <?php if ($cart !== null): ?>
             <aside id="cart" class="cart-sidebar" aria-label="Shopping cart">
                 <?php snippet('cart', ['cart' => $cart, 'site' => $site]) ?>
+                <?php // Keep the live region outside the replaced fragment so announcements remain reliable. ?>
                 <div class="cart-feedback">
                     <p data-cart-feedback role="status" aria-live="polite" aria-atomic="true"></p>
                     <button class="text-button" type="button" data-cart-refresh>Refresh cart</button>

@@ -100,6 +100,8 @@ final class CartRequestParser
             ];
         }
 
+        // Require the version the browser saw; substituting the current server
+        // revision would silently authorize writes from stale forms or tabs.
         if (is_string($body['revision'] ?? null) === false || $body['revision'] === '' || strlen($body['revision']) > 128) {
             throw new CheckoutInputException('selection.invalid');
         }

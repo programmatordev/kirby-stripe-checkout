@@ -92,6 +92,8 @@ final class KirbySessionCartStore implements CartStoreInterface
         return $empty;
     }
 
+    // Validate stored selections without resolving products: a deleted product or
+    // provider outage must not be mistaken for corruption and erase the cart.
     private function decode(mixed $payload): CartSnapshot
     {
         if (

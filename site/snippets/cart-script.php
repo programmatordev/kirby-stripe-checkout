@@ -22,6 +22,8 @@
             if (busy) return;
             const previous = cartView();
             const method = form?.dataset.cartMethod ?? 'GET';
+            // Capture CSRF and the displayed revision before disabling fields;
+            // FormData excludes controls inside a disabled fieldset.
             const body = form ? new URLSearchParams(new FormData(form)) : undefined;
             const active = document.activeElement;
             const restoreCartFocus = previous.contains(active);
@@ -55,6 +57,8 @@
                 if (!next) throw new Error('No cart fragment');
 
                 next.open = previous.open || method === 'POST' || !response.ok;
+                // Replace error fragments too: a 409 carries the current cart
+                // and fresh revision inputs, but must never trigger a write retry.
                 previous.replaceWith(next);
                 feedback.textContent = response.ok
                     ? ({ POST: 'Added to cart.', PATCH: 'Quantity updated.', DELETE: 'Cart updated.', GET: 'Cart refreshed.' }[method])
@@ -63,6 +67,8 @@
                         : 'Could not update the cart. Review the message above.';
 
                 if (restoreCartFocus) {
+                    // Replacement removes the focused element. If its item was
+                    // deleted, return focus to the cart summary instead.
                     const replacementForm = [...next.querySelectorAll('form')].find(candidate =>
                         candidate.action === action && candidate.dataset.cartMethod === method);
                     const target = active?.name
@@ -87,6 +93,7 @@
             }
         };
 
+        // Delegation also handles forms introduced by later cart fragments.
         document.addEventListener('submit', event => {
             const form = event.target.closest('form[data-cart-method]');
             if (!form) return;

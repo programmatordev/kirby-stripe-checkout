@@ -55,6 +55,7 @@ final class SelectionData
         ];
     }
 
+    /** Quantity is deliberately excluded: matching selections share one cart line. */
     public static function equivalent(ProductRequest $left, ProductRequest $right): bool
     {
         return $left->reference() === $right->reference()

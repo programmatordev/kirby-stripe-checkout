@@ -13,6 +13,8 @@ use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
 
 /**
  * Compares the actor and canonical source/context bound to an already matched token.
+ * Actor identity belongs to the attempt, not the cart: changing users preserves
+ * selections but must not allow reuse of another actor's attempt binding.
  *
  * @internal No attempt lookup, persistence, or Session reuse happens here.
  */

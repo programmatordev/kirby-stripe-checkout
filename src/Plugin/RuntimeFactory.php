@@ -65,6 +65,7 @@ final class RuntimeFactory
         /** @var array<string, mixed> $options */
         $options = $this->kirby->options();
 
+        // Disabled carts must not open a browser session just to return null.
         if ((new ConfigurationResolver())->cartEnabled($options) === false) {
             return null;
         }

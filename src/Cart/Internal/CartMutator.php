@@ -44,6 +44,8 @@ final class CartMutator
     {
         // Add is relative to the latest quantity, so it needs no caller revision.
         return $this->store->mutate(function (CartSnapshot $current) use ($request): CartSnapshot {
+            // Resolve aliases before comparing so page IDs and UUIDs can merge
+            // into the same line when they identify the same product/options.
             $request = $this->selections->resolve($request);
             $entries = $current->entries();
 
@@ -157,6 +159,7 @@ final class CartMutator
             ($this->newRevision)(),
             $entries,
             $current->createdAt(),
+            // Clock adjustments must not move the stored update time backwards.
             max($current->updatedAt(), ($this->clock)()),
             $clearDestination ? null : $current->destinationCountry(),
         );

@@ -18,12 +18,16 @@ try {
     $options = $productOptions->options();
     $initialOptions = [];
 
+    // Match the selects' first values so the initial HTML already shows the
+    // selected variant's price, rather than flashing the base product price.
     foreach ($options as $option) {
         $initialOptions[$option->id()] = $option->values()[0]->id();
     }
 
     $initialVariant = $productOptions->matchVariant($initialOptions);
 
+    // Send presentation data only. PHP formats exact amounts for the active
+    // language; JavaScript never calculates money or submits these prices.
     foreach ($productOptions->variants() as $variant) {
         $money = $variant->price() ?? $variant->stripePrice()?->price();
         $variants[] = [

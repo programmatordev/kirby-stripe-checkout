@@ -25,6 +25,8 @@ $mutator = new CartMutator($store, new SelectionCanonicalizer(static fn(ProductR
     new StripePriceReference('price_fixture'),
 )), static fn(): string => bin2hex(random_bytes(8)));
 $session->commit();
+// Signal initialization separately; the parent sends "go" while holding the
+// session lock, so this add must wait and then reload the parent's committed state.
 fwrite(STDOUT, "ready\n");
 fgets(STDIN);
 $result = $mutator->add(new ProductRequest('shirt', 3));

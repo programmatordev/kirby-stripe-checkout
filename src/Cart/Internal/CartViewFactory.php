@@ -81,6 +81,8 @@ final class CartViewFactory
             array_push($errors, ...$itemErrors);
         }
 
+        // Individually valid lines can still add up to an unsupported amount;
+        // validate the aggregate before exposing it as the cart subtotal.
         if ($subtotal !== null && $errors === []) {
             try {
                 (new StripeCurrencyRegistry())->fromMoney($subtotal);

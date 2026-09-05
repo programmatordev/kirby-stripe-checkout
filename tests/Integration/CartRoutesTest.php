@@ -455,6 +455,8 @@ final class CartRoutesTest extends KirbyTestCase
                 $_SERVER['HTTP_' . strtoupper(str_replace('-', '_', $key))] = $value;
             }
 
+            // Kirby caches environment headers; refresh that snapshot as well as
+            // the Request when simulating several HTTP requests in one PHP process.
             $environmentInfo->setValue($this->kirby->environment(), $_SERVER);
             // Dispatch through Kirby's real router, retaining one browser session.
             (new ReflectionProperty(App::class, 'request'))->setValue($this->kirby, new Request([

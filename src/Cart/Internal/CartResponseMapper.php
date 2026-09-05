@@ -82,6 +82,8 @@ final class CartResponseMapper
     /** @return array{amount: string, currency: string}|null */
     private static function money(?Money $money): ?array
     {
+        // Decimal strings preserve exact amounts and trailing currency decimals
+        // without forcing clients to parse them as floating-point numbers.
         return $money === null ? null : [
             'amount' => (string) $money->getAmount(),
             'currency' => $money->getCurrency()->getCurrencyCode(),

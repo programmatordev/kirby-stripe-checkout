@@ -17,7 +17,8 @@ interface CartStoreInterface
 
     /**
      * Reload current state under the store lock, invoke once, then commit on success.
-     * A thrown exception must leave the stored snapshot unchanged.
+     * A thrown exception must not persist the proposed selection change.
+     * Initialization or repair of missing/invalid stored state may still be committed.
      *
      * @param Closure(CartSnapshot): CartSnapshot $mutation
      */
