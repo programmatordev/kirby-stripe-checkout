@@ -2,11 +2,27 @@ Title: Free product
 
 ----
 
+Price: 0
+
+----
+
+Stripeprice: price_1UC0dSCHaQ3jXxl7tAXt5woD
+
+----
+
 Description: A zero-amount fixture for the no-payment-required order path.
 
 ----
 
-Price: 0
+Productimages:
+
+----
+
+Sku:
+
+----
+
+Requiresshipping:
 
 ----
 
@@ -18,10 +34,6 @@ variants: [ ]
 ----
 
 Developmentfixture: true
-
-----
-
-Requiresshipping: no
 
 ----
 

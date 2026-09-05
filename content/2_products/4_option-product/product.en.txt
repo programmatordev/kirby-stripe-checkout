@@ -10,6 +10,10 @@ Price: 18
 
 ----
 
+Stripeprice: price_1UC0dVCHaQ3jXxl7OyUHCE8y
+
+----
+
 Productimages:
 
 ----
@@ -54,7 +58,7 @@ variants:
     enabled: true
     sku: DIGITAL-PT
     price: "16"
-    stripePriceId: price_fixtureDigitalPt
+    stripePriceId: price_1UC0dNCHaQ3jXxl7DVkAgvm9
     requiresShipping: 'no'
   - 
     id: 55gogbpul6ctm0np
@@ -74,7 +78,7 @@ variants:
     enabled: true
     sku: PRINTED-PT
     price: "22.00"
-    stripePriceId: price_fixturePrintedPt
+    stripePriceId: price_1UC0dKCHaQ3jXxl70OEeZUMn
     requiresShipping: 'yes'
   - 
     id: or1frhkz1s9hxd0x
