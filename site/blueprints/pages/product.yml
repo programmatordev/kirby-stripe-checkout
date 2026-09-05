@@ -8,11 +8,9 @@ columns:
   main:
     width: 1/1
     fields:
-      summary:
-        type: textarea
-      stripeCheckoutPrice:
+      price:
         extends: fields/stripe-checkout/price
-      stripeCheckoutPriceId:
+      stripePrice:
         extends: fields/stripe-checkout/stripe-price
         width: 1/2
       nativePagePickerComparison:
@@ -25,15 +23,15 @@ columns:
         type: pages
         multiple: false
         width: 1/2
-      stripeCheckoutDescription:
+      description:
         extends: fields/stripe-checkout/description
-      stripeCheckoutImages:
+      productImages:
         extends: fields/stripe-checkout/images
-      stripeCheckoutSku:
+      sku:
         extends: fields/stripe-checkout/sku
-      stripeCheckoutRequiresShipping:
+      requiresShipping:
         extends: fields/stripe-checkout/requires-shipping
-      stripeCheckoutOptions:
+      options:
         extends: fields/stripe-checkout/options
       developmentFixture:
         type: hidden

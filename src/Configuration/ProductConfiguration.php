@@ -21,7 +21,7 @@ final readonly class ProductConfiguration
      *   images: list<string>,
      *   sku: string,
      *   price: string,
-     *   stripePriceId: string,
+     *   stripePrice: string,
      *   requiresShipping: string,
      *   options: string
      * } $fields
@@ -43,7 +43,7 @@ final readonly class ProductConfiguration
      *   images: list<string>,
      *   sku: string,
      *   price: string,
-     *   stripePriceId: string,
+     *   stripePrice: string,
      *   requiresShipping: string,
      *   options: string
      * }

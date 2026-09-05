@@ -269,8 +269,8 @@ try {
         'template' => 'default',
         'content' => [
             'title' => 'Consumer product',
-            'stripeCheckoutPrice' => '16',
-            'stripeCheckoutRequiresShipping' => 'inherit',
+            'price' => '16',
+            'requiresShipping' => 'inherit',
         ],
     ])->changeStatus('listed');
     $resolvedProduct = $stripeCheckout->resolveProduct(new ProductRequest($productPage->id()));

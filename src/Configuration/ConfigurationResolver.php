@@ -26,7 +26,7 @@ final class ConfigurationResolver
         'images',
         'sku',
         'price',
-        'stripePriceId',
+        'stripePrice',
         'requiresShipping',
         'options',
     ];
@@ -117,13 +117,13 @@ final class ConfigurationResolver
         $this->assertKnownKeys($fields, self::PRODUCT_FIELD_KEYS, 'products.fields');
         $fields = [
             'name' => 'title',
-            'description' => 'stripeCheckoutDescription',
-            'images' => ['stripeCheckoutImages'],
-            'sku' => 'stripeCheckoutSku',
-            'price' => 'stripeCheckoutPrice',
-            'stripePriceId' => 'stripeCheckoutPriceId',
-            'requiresShipping' => 'stripeCheckoutRequiresShipping',
-            'options' => 'stripeCheckoutOptions',
+            'description' => 'description',
+            'images' => ['productImages'],
+            'sku' => 'sku',
+            'price' => 'price',
+            'stripePrice' => 'stripePrice',
+            'requiresShipping' => 'requiresShipping',
+            'options' => 'options',
             ...$fields,
         ];
 
@@ -145,7 +145,7 @@ final class ConfigurationResolver
             }
         }
 
-        /** @var array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePriceId: string, requiresShipping: string, options: string} $fields */
+        /** @var array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePrice: string, requiresShipping: string, options: string} $fields */
         return new ProductConfiguration($resolver, $fields);
     }
 

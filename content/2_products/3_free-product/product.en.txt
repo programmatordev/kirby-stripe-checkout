@@ -2,15 +2,15 @@ Title: Free product
 
 ----
 
-Summary: A zero-amount fixture for the no-payment-required order path.
+Description: A zero-amount fixture for the no-payment-required order path.
 
 ----
 
-Stripecheckoutprice: 0
+Price: 0
 
 ----
 
-Stripecheckoutoptions:
+Options:
 
 options: [ ]
 variants: [ ]
@@ -21,7 +21,7 @@ Developmentfixture: true
 
 ----
 
-Stripecheckoutrequiresshipping: no
+Requiresshipping: no
 
 ----
 

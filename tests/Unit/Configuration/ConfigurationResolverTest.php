@@ -133,6 +133,7 @@ final class ConfigurationResolverTest extends TestCase
             self::PREFIX . '.products.fields.description' => null,
             self::PREFIX . '.products.fields.images' => ['thumbnail', 'gallery'],
             self::PREFIX . '.products.fields.price' => 'unitPrice',
+            self::PREFIX . '.products.fields.stripePrice' => 'paymentPrice',
         ])->configurationOrFail()->products();
 
         $this->assertSame($resolver, $products->resolver());
@@ -140,11 +141,11 @@ final class ConfigurationResolverTest extends TestCase
             'name' => 'productName',
             'description' => null,
             'images' => ['thumbnail', 'gallery'],
-            'sku' => 'stripeCheckoutSku',
+            'sku' => 'sku',
             'price' => 'unitPrice',
-            'stripePriceId' => 'stripeCheckoutPriceId',
-            'requiresShipping' => 'stripeCheckoutRequiresShipping',
-            'options' => 'stripeCheckoutOptions',
+            'stripePrice' => 'paymentPrice',
+            'requiresShipping' => 'requiresShipping',
+            'options' => 'options',
         ], $products->fields());
     }
 

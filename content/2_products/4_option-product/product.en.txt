@@ -2,31 +2,27 @@ Title: Option-bearing product
 
 ----
 
-Summary: A product with explicit selectable values for resolver and cart validation tests.
+Description: A product with explicit selectable values for resolver and cart validation tests.
 
 ----
 
-Stripecheckoutprice: 18
+Price: 18
 
 ----
 
-Stripecheckoutdescription: 
+Productimages:
 
 ----
 
-Stripecheckoutimages: 
+Sku:
 
 ----
 
-Stripecheckoutsku: 
+Requiresshipping: no
 
 ----
 
-Stripecheckoutrequiresshipping: no
-
-----
-
-Stripecheckoutoptions:
+Options:
 
 options:
   - 

@@ -2,11 +2,11 @@ Title: Produto com opções
 
 ----
 
-Summary: Um produto com valores selecionáveis para testar a resolução e validação do carrinho.
+Description: Um produto com valores selecionáveis para testar a resolução e validação do carrinho.
 
 ----
 
-Stripecheckoutoptions:
+Options:
 
 options:
   -

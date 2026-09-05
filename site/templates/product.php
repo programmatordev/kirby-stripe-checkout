@@ -8,9 +8,9 @@ use Kirby\Data\Json;
 $stripeCheckout = $site->stripeCheckout();
 $settings = $stripeCheckout->settings();
 $currency = $settings->currency();
-$productOptions = $stripeCheckout->productOptions($page);
+$productOptions = $page->options()->toProductOptions();
 $optionsData = $productOptions->toArray();
-$price = $page->stripeCheckoutPrice()->value();
+$price = $page->price()->value();
 $formattedPrice = $currency === null
     ? $price
     : $stripeCheckout->formatMoney($price, $currency);
@@ -19,9 +19,9 @@ snippet('layout', ['title' => $page->title()], slots: true);
 ?>
 
 <?php slot('content') ?>
-    <p class="eyebrow"><?= $page->stripeCheckoutRequiresShipping()->value() === 'yes' ? 'Physical product' : 'Digital or service product' ?></p>
+    <p class="eyebrow"><?= $page->requiresShipping()->value() === 'yes' ? 'Physical product' : 'Digital or service product' ?></p>
     <h1><?= esc($page->title()) ?></h1>
-    <p><?= esc($page->summary()) ?></p>
+    <p><?= esc($page->description()) ?></p>
     <p><strong><?= esc($formattedPrice) ?></strong></p>
 
     <?php if ($optionsData['options'] !== []): ?>

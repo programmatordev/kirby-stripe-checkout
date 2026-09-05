@@ -42,9 +42,9 @@ final class ProductResolverTest extends KirbyTestCase
     {
         $page = $this->publishedProduct('simple-product', [
             'title' => 'Simple product',
-            'stripeCheckoutPrice' => '16',
-            'stripeCheckoutRequiresShipping' => 'yes',
-            'stripeCheckoutSku' => 'SIMPLE-1',
+            'price' => '16',
+            'requiresShipping' => 'yes',
+            'sku' => 'SIMPLE-1',
         ]);
         $plugin = $this->stripeCheckout();
 
@@ -69,8 +69,8 @@ final class ProductResolverTest extends KirbyTestCase
             'template' => 'default',
             'content' => [
                 'title' => 'Unlisted product',
-                'stripeCheckoutPrice' => '8',
-                'stripeCheckoutRequiresShipping' => 'no',
+                'price' => '8',
+                'requiresShipping' => 'no',
             ],
         ])->changeStatus('unlisted');
 
@@ -100,13 +100,13 @@ final class ProductResolverTest extends KirbyTestCase
         );
         $page = $this->publishedProduct('shirt', [
             'title' => 'Shirt',
-            'stripeCheckoutPrice' => '20',
-            'stripeCheckoutRequiresShipping' => 'no',
-            'stripeCheckoutOptions' => self::variantFixture(),
+            'price' => '20',
+            'requiresShipping' => 'no',
+            'options' => self::variantFixture(),
         ]);
         $page = $page->update([
             'title' => 'Camisola',
-            'stripeCheckoutOptions' => [
+            'options' => [
                 'options' => [[
                     'id' => 'sizeOption000001',
                     'label' => 'Tamanho',
@@ -136,7 +136,7 @@ final class ProductResolverTest extends KirbyTestCase
 
         $view = $this->stripeCheckout()->productOptions($page);
         /** @phpstan-ignore-next-line method.notFound */
-        $fieldView = $page->stripeCheckoutOptions()->toProductOptions();
+        $fieldView = $page->options()->toProductOptions();
 
         $this->assertInstanceOf(ProductOptions::class, $fieldView);
         $this->assertSame('Tamanho', $view->options()[0]->name());
@@ -175,7 +175,7 @@ final class ProductResolverTest extends KirbyTestCase
         ]);
         $page = $this->publishedProduct('custom-options-field', [
             'title' => 'Custom options field',
-            'stripeCheckoutPrice' => '20',
+            'price' => '20',
             'variants' => self::variantFixture(),
         ]);
 
@@ -204,9 +204,9 @@ final class ProductResolverTest extends KirbyTestCase
     {
         $page = $this->publishedProduct('shirt', [
             'title' => 'Shirt',
-            'stripeCheckoutPrice' => '20',
-            'stripeCheckoutRequiresShipping' => 'no',
-            'stripeCheckoutOptions' => self::variantFixture(),
+            'price' => '20',
+            'requiresShipping' => 'no',
+            'options' => self::variantFixture(),
         ]);
 
         try {
@@ -234,8 +234,8 @@ final class ProductResolverTest extends KirbyTestCase
             'template' => 'default',
             'content' => [
                 'title' => 'Draft product',
-                'stripeCheckoutPrice' => '10',
-                'stripeCheckoutRequiresShipping' => 'no',
+                'price' => '10',
+                'requiresShipping' => 'no',
             ],
         ]);
 
@@ -256,8 +256,8 @@ final class ProductResolverTest extends KirbyTestCase
         ]);
         $page = $this->publishedProduct('stripe-product', [
             'title' => 'Stripe product',
-            'stripeCheckoutPriceId' => 'price_fixture',
-            'stripeCheckoutRequiresShipping' => 'no',
+            'stripePrice' => 'price_fixture',
+            'requiresShipping' => 'no',
         ]);
         $product = $this->stripeCheckout()->resolveProduct(new ProductRequest($page->id()));
 
@@ -303,8 +303,8 @@ final class ProductResolverTest extends KirbyTestCase
     {
         $page = $this->publishedProduct('image-product', [
             'title' => 'Image product',
-            'stripeCheckoutPrice' => '16',
-            'stripeCheckoutRequiresShipping' => 'no',
+            'price' => '16',
+            'requiresShipping' => 'no',
         ]);
         $references = [];
 
@@ -318,7 +318,7 @@ final class ProductResolverTest extends KirbyTestCase
             $references[] = $file->uuid()->toString();
         }
 
-        $page = $page->update(['stripeCheckoutImages' => Yaml::encode($references)]);
+        $page = $page->update(['productImages' => Yaml::encode($references)]);
         $product = $this->stripeCheckout()->resolveProduct(new ProductRequest($page->id()));
 
         $this->assertCount(8, $product->imageUrls());

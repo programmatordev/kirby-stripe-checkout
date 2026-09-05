@@ -9,7 +9,7 @@ Kirby is the default source for names, prices, images, SKUs, shipping behavior, 
 Configure the store currency and default shipping behavior first. A simple Kirby-priced product then needs only:
 
 - its normal Kirby page title;
-- an exact decimal `stripeCheckoutPrice` value.
+- an exact decimal `price` value.
 
 Add only the reusable fields that fit the product blueprint:
 
@@ -17,23 +17,23 @@ Add only the reusable fields that fit the product blueprint:
 title: Product
 
 fields:
-  stripeCheckoutPrice:
+  price:
     extends: fields/stripe-checkout/price
-  stripeCheckoutPriceId:
+  stripePrice:
     extends: fields/stripe-checkout/stripe-price
-  stripeCheckoutDescription:
+  description:
     extends: fields/stripe-checkout/description
-  stripeCheckoutImages:
+  productImages:
     extends: fields/stripe-checkout/images
-  stripeCheckoutSku:
+  sku:
     extends: fields/stripe-checkout/sku
-  stripeCheckoutRequiresShipping:
+  requiresShipping:
     extends: fields/stripe-checkout/requires-shipping
-  stripeCheckoutOptions:
+  options:
     extends: fields/stripe-checkout/options
 ```
 
-Each blueprint defines one field and can be placed in any tab, section, or column. The field handle is chosen by the developer; the namespaced handles above match the plugin's default mapping. Omit fields the store does not use. The plugin does not add a product currency because every product uses the configured store currency.
+Each blueprint defines one field and can be placed in any tab, section, or column. The field handle is chosen by the developer; the natural handles above match the plugin's default mapping. `productImages` deliberately avoids Kirby's existing `$page->images()` method. Omit fields the store does not use. The plugin does not add a product currency because every product uses the configured store currency.
 
 The complete reusable set is `name`, `price`, `stripe-price`, `description`, `images`, `sku`, `requires-shipping`, and `options`, all below `fields/stripe-checkout/`. The Page title is the default product name. If a separate name field is needed, extend `fields/stripe-checkout/name` under the chosen handle and map `products.fields.name` to it.
 
@@ -70,13 +70,13 @@ The available mappings and defaults are:
 | Role | Default field | Notes |
 | --- | --- | --- |
 | `name` | `title` | Required resolved product name. |
-| `description` | `stripeCheckoutDescription` | Optional; map it to `null` to disable it. |
-| `images` | `stripeCheckoutImages` | One field, an ordered list, or `null`. |
-| `sku` | `stripeCheckoutSku` | Optional simple-product SKU. |
-| `price` | `stripeCheckoutPrice` | Exact default price in Kirby price mode. |
-| `stripePriceId` | `stripeCheckoutPriceId` | Selected Stripe Price in Stripe price mode. |
-| `requiresShipping` | `stripeCheckoutRequiresShipping` | `inherit`, `yes`, or `no`. |
-| `options` | `stripeCheckoutOptions` | Product options and generated variants. |
+| `description` | `description` | Optional; map it to `null` to disable it. |
+| `images` | `productImages` | One field, an ordered list, or `null`. |
+| `sku` | `sku` | Optional simple-product SKU. |
+| `price` | `price` | Exact default price in Kirby price mode. |
+| `stripePrice` | `stripePrice` | Selected Stripe Price in Stripe price mode; stores its scalar ID. |
+| `requiresShipping` | `requiresShipping` | `inherit`, `yes`, or `no`. |
+| `options` | `options` | Product options and generated variants. |
 
 The image fields are read in order and duplicate URLs are removed. The first eight usable HTTP(S) images are exposed in the resolved snapshot because that is Stripe Checkout's limit. Extra selected images remain in Kirby; `metadata()['imagesTruncated']` reports that the projection was shortened.
 
@@ -112,7 +112,7 @@ Convert the configured options field with Kirby's normal field API. The result c
 
 /** @var Kirby\Cms\Page $page */
 
-$view = $page->stripeCheckoutOptions()->toProductOptions();
+$view = $page->options()->toProductOptions();
 
 foreach ($view->options() as $option) {
     echo esc($option->name());

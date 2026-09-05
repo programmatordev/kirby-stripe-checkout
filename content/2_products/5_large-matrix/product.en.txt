@@ -2,11 +2,11 @@ Title: Large variant matrix
 
 ----
 
-Summary: Ten colours and five sizes exercise a generated matrix of fifty variants.
+Description: Ten colours and five sizes exercise a generated matrix of fifty variants.
 
 ----
 
-Stripecheckoutprice: 22
+Price: 22
 
 ----
 
@@ -14,11 +14,11 @@ Developmentfixture: true
 
 ----
 
-Stripecheckoutrequiresshipping: yes
+Requiresshipping: yes
 
 ----
 
-Stripecheckoutoptions:
+Options:
 
 options:
   -

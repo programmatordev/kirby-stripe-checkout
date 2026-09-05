@@ -2,31 +2,27 @@ Title: Stripe Price product
 
 ----
 
-Summary: A fixture that preserves a Stripe Price reference when the store changes price source.
+Description: A fixture that preserves a Stripe Price reference when the store changes price source.
 
 ----
 
-Stripecheckoutpriceid: price_fixtureStandard
+Stripeprice: price_fixtureStandard
 
 ----
 
-Stripecheckoutdescription:
+Productimages:
 
 ----
 
-Stripecheckoutimages:
+Sku:
 
 ----
 
-Stripecheckoutsku:
+Requiresshipping: no
 
 ----
 
-Stripecheckoutrequiresshipping: no
-
-----
-
-Stripecheckoutoptions:
+Options:
 
 options:
   -

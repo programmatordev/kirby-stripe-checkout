@@ -2,11 +2,11 @@ Title: Physical product
 
 ----
 
-Summary: A paid product that requires an order-level shipping address and shipping option.
+Description: A paid product that requires an order-level shipping address and shipping option.
 
 ----
 
-Stripecheckoutprice: 29
+Price: 29
 
 ----
 
@@ -14,7 +14,7 @@ Developmentfixture: true
 
 ----
 
-Stripecheckoutrequiresshipping: yes
+Requiresshipping: yes
 
 ----
 
