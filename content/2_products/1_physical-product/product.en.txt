@@ -2,19 +2,38 @@ Title: Physical product
 
 ----
 
-Description: A paid product that requires an order-level shipping address and shipping option.
-
-----
-
 Price: 29
 
 ----
 
-Developmentfixture: true
+Stripeprice: price_1UC0dOCHaQ3jXxl70lG2UqE1
+
+----
+
+Description: A paid product that requires an order-level shipping address and shipping option.
+
+----
+
+Productimages:
+
+----
+
+Sku:
 
 ----
 
 Requiresshipping: yes
+
+----
+
+Options:
+
+options: [ ]
+variants: [ ]
+
+----
+
+Developmentfixture: true
 
 ----
 
