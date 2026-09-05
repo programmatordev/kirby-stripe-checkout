@@ -25,7 +25,7 @@ final readonly class ProductRequest
     ) {
         $this->reference = ProductData::reference($reference);
 
-        if ($this->quantity < 1 || $this->quantity > 999999 || count($selectedOptions) > 32) {
+        if ($this->quantity < 1 || count($selectedOptions) > 32) {
             throw new InvalidProductException('product.request_invalid');
         }
 

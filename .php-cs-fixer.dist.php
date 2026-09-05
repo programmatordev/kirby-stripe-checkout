@@ -21,6 +21,9 @@ return (new Config())
     ->setRules([
         '@PER-CS2x0' => true,
         'array_syntax' => ['syntax' => 'short'],
+        'class_attributes_separation' => [
+            'elements' => ['method' => 'one'],
+        ],
         'declare_strict_types' => true,
         'ordered_imports' => ['sort_algorithm' => 'alpha'],
         'single_quote' => true,
