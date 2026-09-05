@@ -15,11 +15,11 @@ use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use Throwable;
 
 /**
- * Enforces resolver invariants shared by built-in and custom resolvers.
+ * Enforces the invariants shared by built-in and custom product resolvers.
  *
  * @internal
  */
-final class ProductResolutionService
+final class GuardedProductResolver implements ProductResolverInterface
 {
     public function __construct(private readonly ProductResolverInterface $resolver) {}
 
@@ -39,6 +39,8 @@ final class ProductResolutionService
             throw new ProductPriceSourceMismatchException();
         }
 
+        // A resolver may canonicalize only the lookup reference; quantity and
+        // customer selections must remain exactly as submitted.
         if (
             $resolved->request()->quantity() !== $request->quantity()
             || $resolved->request()->selectedOptions() !== $request->selectedOptions()
@@ -46,6 +48,8 @@ final class ProductResolutionService
             throw new InvalidProductException('product.resolver_changed_request');
         }
 
+        // Stripe references are checked against the currency when they are
+        // retrieved fresh; inline values can be checked at this boundary.
         if (
             $resolved->price() instanceof InlinePrice
             && $resolved->price()->unitPrice()->getCurrency()->getCurrencyCode() !== $context->settings()->currency()

@@ -10,12 +10,14 @@ use Kirby\Data\Yaml;
 use Kirby\Filesystem\F;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductNotFoundException;
+use ProgrammatorDev\StripeCheckout\Product\Exception\ProductPriceSourceMismatchException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductUnavailableException;
 use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
+use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
@@ -358,7 +360,7 @@ final class ProductResolverTest extends KirbyTestCase
         $this->assertSame('catalogue:42', $product->request()->reference());
     }
 
-    public function testCustomResolverCannotChangeTheSelection(): void
+    public function testCustomResolverCannotChangeTheRequestedQuantity(): void
     {
         $this->restart([
             self::PREFIX => [
@@ -371,7 +373,7 @@ final class ProductResolverTest extends KirbyTestCase
                         request: new ProductRequest($request->reference(), 2),
                         name: 'Invalid product',
                         requiresShipping: false,
-                        price: new InlinePrice(\Brick\Money\Money::of('9.50', 'USD')),
+                        price: new InlinePrice(\Brick\Money\Money::of('9.50', 'EUR')),
                     ),
                 ],
             ],
@@ -382,6 +384,121 @@ final class ProductResolverTest extends KirbyTestCase
             $this->fail('Expected a resolver-mutated request to be rejected.');
         } catch (InvalidProductException $error) {
             $this->assertSame('product.resolver_changed_request', $error->errorCode());
+        }
+    }
+
+    public function testCustomResolverCannotChangeTheSelectedOptions(): void
+    {
+        $this->restart([
+            self::PREFIX => [
+                'settings' => [
+                    'currency' => 'EUR',
+                    'defaultRequiresShipping' => false,
+                ],
+                'products' => [
+                    'resolver' => static fn(ProductRequest $request): ResolvedProduct => new ResolvedProduct(
+                        request: new ProductRequest(
+                            $request->reference(),
+                            selectedOptions: ['sizeOption' => 'largeValue'],
+                        ),
+                        name: 'Invalid product',
+                        requiresShipping: false,
+                        price: new InlinePrice(\Brick\Money\Money::of('9.50', 'EUR')),
+                        selectedOptions: [new SelectedOption(
+                            'sizeOption',
+                            'Size',
+                            'largeValue',
+                            'Large',
+                        )],
+                        variantId: 'largeVariant',
+                    ),
+                ],
+            ],
+        ]);
+
+        try {
+            $this->stripeCheckout()->resolveProduct(new ProductRequest(
+                'catalogue:42',
+                selectedOptions: ['sizeOption' => 'smallValue'],
+            ));
+            $this->fail('Expected resolver-mutated options to be rejected.');
+        } catch (InvalidProductException $error) {
+            $this->assertSame('product.resolver_changed_request', $error->errorCode());
+        }
+    }
+
+    public function testCustomResolverMustMatchTheConfiguredPriceSource(): void
+    {
+        $this->restart([
+            self::PREFIX => [
+                'settings' => [
+                    'currency' => 'EUR',
+                    'defaultRequiresShipping' => false,
+                ],
+                'products' => [
+                    'resolver' => static fn(ProductRequest $request): ResolvedProduct => new ResolvedProduct(
+                        request: $request,
+                        name: 'Invalid product',
+                        requiresShipping: false,
+                        price: new StripePriceReference('price_fixture'),
+                    ),
+                ],
+            ],
+        ]);
+
+        $this->expectException(ProductPriceSourceMismatchException::class);
+        $this->stripeCheckout()->resolveProduct(new ProductRequest('catalogue:42'));
+    }
+
+    public function testCustomResolverMustUseTheConfiguredCurrency(): void
+    {
+        $this->restart([
+            self::PREFIX => [
+                'settings' => [
+                    'currency' => 'EUR',
+                    'defaultRequiresShipping' => false,
+                ],
+                'products' => [
+                    'resolver' => static fn(ProductRequest $request): ResolvedProduct => new ResolvedProduct(
+                        request: $request,
+                        name: 'Invalid product',
+                        requiresShipping: false,
+                        price: new InlinePrice(\Brick\Money\Money::of('9.50', 'USD')),
+                    ),
+                ],
+            ],
+        ]);
+
+        try {
+            $this->stripeCheckout()->resolveProduct(new ProductRequest('catalogue:42'));
+            $this->fail('Expected a mismatched resolver currency to be rejected.');
+        } catch (InvalidProductException $error) {
+            $this->assertSame('product.currency_mismatch', $error->errorCode());
+        }
+    }
+
+    public function testCustomResolverFailuresUseTheStableProductErrorContract(): void
+    {
+        $this->restart([
+            self::PREFIX => [
+                'settings' => [
+                    'currency' => 'EUR',
+                    'defaultRequiresShipping' => false,
+                ],
+                'products' => [
+                    'resolver' => static function (): ResolvedProduct {
+                        throw new \RuntimeException('External catalogue failed.');
+                    },
+                ],
+            ],
+        ]);
+
+        try {
+            $this->stripeCheckout()->resolveProduct(new ProductRequest('catalogue:42'));
+            $this->fail('Expected the resolver failure to be normalized.');
+        } catch (InvalidProductException $error) {
+            $this->assertSame('product.resolver_failed', $error->errorCode());
+            $this->assertInstanceOf(\RuntimeException::class, $error->getPrevious());
         }
     }
 

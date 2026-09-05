@@ -19,7 +19,7 @@ use ProgrammatorDev\StripeCheckout\Product\Internal\ClosureProductResolver;
 use ProgrammatorDev\StripeCheckout\Product\Internal\KirbyPageLocator;
 use ProgrammatorDev\StripeCheckout\Product\Internal\KirbyPageProductResolver;
 use ProgrammatorDev\StripeCheckout\Product\Internal\ProductOptionsFactory;
-use ProgrammatorDev\StripeCheckout\Product\Internal\ProductResolutionService;
+use ProgrammatorDev\StripeCheckout\Product\Internal\GuardedProductResolver;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
@@ -56,7 +56,7 @@ final class RuntimeFactory
 
     public function resolveProduct(ProductRequest $request): ResolvedProduct
     {
-        return (new ProductResolutionService($this->productResolver()))->resolve(
+        return (new GuardedProductResolver($this->productResolver()))->resolve(
             $request,
             $this->productContext(),
         );

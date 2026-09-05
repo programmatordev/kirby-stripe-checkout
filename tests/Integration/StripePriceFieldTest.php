@@ -182,7 +182,7 @@ final class StripePriceFieldTest extends KirbyTestCase
         $this->seedCatalogue([
             $this->priceItem(),
             $this->priceItem(
-                priceId: 'price_canvas_large',
+                priceId: 'price_canvaslarge',
                 nickname: 'Large',
                 minorAmount: 2400,
             ),

@@ -92,6 +92,31 @@ final class PriceCatalogueTest extends TestCase
         $this->assertSame([null], $provider->listCursors);
     }
 
+    public function testInvalidCachedDomainDataIsDiscarded(): void
+    {
+        $cache = new MemoryCache();
+        $cache->set('catalogue-eur', [
+            'items' => [[
+                'priceId' => 'price_cached',
+                'productId' => 'invalid-product-id',
+                'name' => 'Cached product',
+                'currency' => 'EUR',
+                'minorAmount' => 1600,
+                'taxBehavior' => 'exclusive',
+            ]],
+            'refreshedAt' => time(),
+            'failedAt' => null,
+            'error' => null,
+        ]);
+        $provider = new FakePriceProvider();
+        $catalogue = new PriceCatalogue($cache, $provider, new PriceResolver($provider));
+
+        $state = $catalogue->current('EUR');
+
+        $this->assertSame([], $state['items']);
+        $this->assertNull($state['refreshedAt']);
+    }
+
     public function testLoadingAnExpiredCatalogueRefreshesItOnDemand(): void
     {
         $cache = new MemoryCache();
@@ -136,6 +161,24 @@ final class PriceCatalogueTest extends TestCase
         $this->assertSame([], $provider->listCursors);
         $this->assertSame('price_cached', $result['items'][0]->priceId());
         $this->assertSame('prices.refresh_failed', $result['error']);
+    }
+
+    public function testLoadingAnEmptyFailedCatalogueRespectsTheFailureCooldown(): void
+    {
+        $provider = new FakePriceProvider();
+        $provider->failLists = true;
+        $catalogue = new PriceCatalogue(
+            new MemoryCache(),
+            $provider,
+            new PriceResolver($provider),
+        );
+
+        $first = $catalogue->load('EUR');
+        $second = $catalogue->load('EUR');
+
+        $this->assertSame([null], $provider->listCursors);
+        $this->assertSame('prices.refresh_failed', $first['error']);
+        $this->assertSame($first, $second);
     }
 
     public function testFailedRefreshPreservesAndMarksTheLastGoodCatalogue(): void

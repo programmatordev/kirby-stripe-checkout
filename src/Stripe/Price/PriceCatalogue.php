@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Stripe\Price;
 
 use Kirby\Cache\Cache;
 use ProgrammatorDev\StripeCheckout\Money\MoneySnapshot;
+use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use Throwable;
 
 /**
@@ -39,15 +40,15 @@ final class PriceCatalogue
     public function load(string $currency): array
     {
         $state = $this->current($currency);
-
-        if ($state['refreshedAt'] === null) {
-            return $this->refresh($currency);
-        }
-
         $now = time();
-        $expired = $state['refreshedAt'] <= $now - self::REFRESH_AFTER_SECONDS;
         $retryAllowed = $state['failedAt'] === null
             || $state['failedAt'] <= $now - self::FAILED_REFRESH_COOLDOWN_SECONDS;
+
+        if ($state['refreshedAt'] === null) {
+            return $retryAllowed ? $this->refresh($currency) : $state;
+        }
+
+        $expired = $state['refreshedAt'] <= $now - self::REFRESH_AFTER_SECONDS;
 
         return $expired && $retryAllowed
             ? $this->refresh($currency)
@@ -89,7 +90,7 @@ final class PriceCatalogue
                     try {
                         $item = $this->resolver->resolveRecord($record, $currency);
                         $items[$item->priceId()] = $item;
-                    } catch (Throwable) {
+                    } catch (InvalidProductException) {
                         // Ineligible Stripe resources are omitted from the selector.
                     }
                 }

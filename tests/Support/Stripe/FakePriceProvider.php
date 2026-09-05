@@ -9,6 +9,7 @@ use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceProviderInterface;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceRecord;
 use RuntimeException;
 
+/** Records deterministic Stripe Price reads for offline resolver tests. */
 final class FakePriceProvider implements PriceProviderInterface
 {
     /** @var list<?string> */

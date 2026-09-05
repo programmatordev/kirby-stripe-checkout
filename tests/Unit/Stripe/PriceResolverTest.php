@@ -65,6 +65,8 @@ final class PriceResolverTest extends TestCase
         yield 'inactive product' => [self::record(productActive: false)];
         yield 'invalid product id' => [self::record(productId: 'invalid')];
         yield 'missing product name' => [self::record(productName: null)];
+        yield 'invalid product name' => [self::record(productName: ' Canvas bag')];
+        yield 'invalid product image' => [self::record(productImages: ['ftp://example.com/bag.jpg'])];
         yield 'invalid tax behavior' => [self::record(taxBehavior: 'automatic')];
         yield 'currency mismatch' => [self::record(currency: 'usd')];
     }

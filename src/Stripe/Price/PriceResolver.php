@@ -67,7 +67,6 @@ final class PriceResolver
             || preg_match('/^prod_[A-Za-z0-9]{1,249}$/D', $productId) !== 1
             || $record->productActive === false
             || is_string($productName) === false
-            || $this->validString($productName, 500) === false
         ) {
             throw new InvalidProductException('product.stripe_product_ineligible');
         }
@@ -88,20 +87,16 @@ final class PriceResolver
 
         $taxBehavior = $record->taxBehavior ?? 'unspecified';
 
-        if (in_array($taxBehavior, ['exclusive', 'inclusive', 'unspecified'], true) === false) {
-            throw new InvalidProductException('product.stripe_price_ineligible');
-        }
-
         return new ResolvedPrice(
             priceId: $record->priceId,
             productId: $productId,
             name: $productName,
             unitPrice: $unitPrice,
             taxBehavior: $taxBehavior,
-            description: $this->optionalString($record->productDescription, 5000),
-            images: $this->images($record->productImages),
-            nickname: $this->optionalString($record->nickname, 500),
-            taxCode: $this->optionalString($record->productTaxCode, 500),
+            description: $record->productDescription,
+            images: $record->productImages,
+            nickname: $record->nickname,
+            taxCode: $record->productTaxCode,
         );
     }
 
@@ -134,47 +129,5 @@ final class PriceResolver
         } catch (Throwable $error) {
             throw new InvalidProductException('product.stripe_price_ineligible', $error);
         }
-    }
-
-    /**
-     * @param list<string> $images
-     * @return list<string>
-     */
-    private function images(array $images): array
-    {
-        $valid = [];
-
-        foreach ($images as $image) {
-            if (
-                $this->validString($image, 2048) === false
-                || in_array(parse_url($image, PHP_URL_SCHEME), ['http', 'https'], true) === false
-            ) {
-                throw new InvalidProductException('product.images_invalid');
-            }
-
-            $valid[$image] = true;
-        }
-
-        if (count($valid) > 8) {
-            throw new InvalidProductException('product.images_invalid');
-        }
-
-        return array_keys($valid);
-    }
-
-    private function optionalString(?string $value, int $maximum): ?string
-    {
-        return $value === null || $value === ''
-            ? null
-            : ($this->validString($value, $maximum) ? $value : throw new InvalidProductException());
-    }
-
-    private function validString(?string $value, int $maximum): bool
-    {
-        return is_string($value)
-            && $value !== ''
-            && trim($value) === $value
-            && strlen($value) <= $maximum
-            && preg_match('/[\x00-\x1F\x7F]/', $value) !== 1;
     }
 }
