@@ -60,7 +60,8 @@ final class RuntimeFactory
             ->settings();
     }
 
-    public function cart(): ?Cart
+    /** HTTP writes may defer presentation; public cart() reads remain eager. */
+    public function cart(bool $resolve = true): ?Cart
     {
         /** @var array<string, mixed> $options */
         $options = $this->kirby->options();
@@ -92,7 +93,7 @@ final class RuntimeFactory
         });
         $mutator = new CartMutator($store, $selections, Uuid::generate(...));
 
-        return (new CartViewFactory($this->kirby))->create($store->read(), $mutator);
+        return (new CartViewFactory($this->kirby))->create($store->read(), $mutator, $resolve);
     }
 
     public function resolveProduct(ProductRequest $request): ResolvedProduct

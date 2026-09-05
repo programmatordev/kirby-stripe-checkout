@@ -43,7 +43,7 @@ try {
     $optionsAvailable = false;
 }
 
-snippet('layout', ['title' => $page->title()], slots: true);
+snippet('layout', ['title' => $page->title(), 'cart' => $cart], slots: true);
 ?>
 <?php slot('content') ?>
     <a class="back-link" href="<?= esc($site->find('products')?->url(), 'attr') ?>">← All products</a>

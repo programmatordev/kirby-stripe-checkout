@@ -16,6 +16,7 @@ use ProgrammatorDev\StripeCheckout\Cart\Internal\CartEntry;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartSnapshot;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\KirbySessionCartStore;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
+use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
@@ -67,6 +68,50 @@ final class CartApiTest extends KirbyTestCase
         ]]);
         $this->assertFalse($report->isValid());
         $this->assertFalse($resolver->resolve(['programmatordev.stripe-checkout' => ['cart' => ['enabled' => 'false']]])->isValid());
+    }
+
+    public function testDeferredHttpPresentationResolvesOnFirstReadOnly(): void
+    {
+        $state = new class {
+            public int $calls = 0;
+        };
+        $this->restart(['programmatordev.stripe-checkout' => ['products' => [
+            'resolver' => static function (ProductRequest $request) use ($state): ResolvedProduct {
+                $state->calls++;
+
+                return new ResolvedProduct($request, 'Product', false, new InlinePrice(Money::of('10', 'EUR')));
+            },
+        ]]]);
+        $original = $this->cart()->add('product', 2);
+        $itemId = $original->items()[0]->id();
+        $state->calls = 0;
+        $this->cart();
+        $this->assertSame(1, $state->calls, 'The public cart() call still resolves immediately.');
+
+        foreach ([
+            [static fn(Cart $cart) => $cart->items()[0]->quantity(), 2],
+            [static fn(Cart $cart) => $cart->item($itemId)?->quantity(), 2],
+            [static fn(Cart $cart) => $cart->count(), 1],
+            [static fn(Cart $cart) => $cart->totalQuantity(), 2],
+            [static fn(Cart $cart) => $cart->currency()?->getCurrencyCode(), 'EUR'],
+            [static fn(Cart $cart) => (string) $cart->subtotal()?->getAmount(), '20.00'],
+            [static fn(Cart $cart) => $cart->isEmpty(), false],
+            [static fn(Cart $cart) => $cart->hasErrors(), false],
+            [static fn(Cart $cart) => $cart->errors(), []],
+        ] as [$read, $expected]) {
+            $state->calls = 0;
+            $cart = (new RuntimeFactory($this->kirby))->cart(resolve: false);
+            $this->assertNotNull($cart);
+            $this->assertSame($original->revision(), $cart->revision());
+            $this->assertNull($cart->destinationCountry());
+            $this->assertSame(0, $state->calls);
+            $this->assertSame($expected, $read($cart));
+            $this->assertSame(1, $state->calls);
+            $this->assertCount(1, $cart->items());
+            $this->assertFalse($cart->hasErrors());
+            $this->assertSame('20.00', (string) $cart->subtotal()?->getAmount());
+            $this->assertSame(1, $state->calls, 'Reading the same view must not repeat product resolution.');
+        }
     }
 
     public function testPhpMutationsMergeReferencesAndRefreshTheSameObject(): void

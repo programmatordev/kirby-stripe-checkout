@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Cart\Internal;
 use Closure;
 use InvalidArgumentException;
 use Kirby\Session\Session;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionCanonicalizer;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionData;
 use Throwable;
 
@@ -108,7 +109,7 @@ final class KirbySessionCartStore implements CartStoreInterface
             || ($payload['destinationCountry'] !== null && is_string($payload['destinationCountry']) === false)
             || is_array($payload['entries'] ?? null) === false
             || array_is_list($payload['entries']) === false
-            || count($payload['entries']) > 100
+            || count($payload['entries']) > SelectionCanonicalizer::MAX_ENTRIES
         ) {
             throw new InvalidArgumentException('Invalid cart payload.');
         }

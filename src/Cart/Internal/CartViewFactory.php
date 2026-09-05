@@ -28,8 +28,12 @@ final class CartViewFactory
 {
     public function __construct(private readonly App $kirby) {}
 
-    public function create(CartSnapshot $snapshot, CartMutator $mutator): Cart
+    public function create(CartSnapshot $snapshot, CartMutator $mutator, bool $resolve = true): Cart
     {
+        if ($resolve === false) {
+            return new Cart($snapshot, [], null, null, [], $mutator, $this, presentationResolved: false);
+        }
+
         $runtime = new RuntimeFactory($this->kirby);
         $currency = null;
         $subtotal = null;

@@ -15,6 +15,7 @@ use Kirby\Http\Response;
 use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Cart\CartOperation;
 use ProgrammatorDev\StripeCheckout\Cart\CartRenderContext;
+use ProgrammatorDev\StripeCheckout\Cart\Exception\CartException;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartResponseMapper;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
@@ -92,6 +93,96 @@ final class CartRoutesTest extends KirbyTestCase
         $this->assertSame(3, $this->cart()->totalQuantity());
         $response = $this->send('DELETE', '/items/foreign-id', ['revision' => $cart->revision()]);
         $this->assertSame(404, $response->code());
+    }
+
+    public function testWritesResolveOnlyTheMutationAndRemainingProducts(): void
+    {
+        $state = new class {
+            /** @var list<string> */
+            public array $calls = [];
+        };
+        $this->restart(['products' => ['resolver' => static function (ProductRequest $request) use ($state): ResolvedProduct {
+            $state->calls[] = $request->reference() . ':' . $request->quantity();
+
+            return new ResolvedProduct($request, 'Product', false, new InlinePrice(Money::of('10', 'EUR')));
+        }]]);
+        $response = $this->send('POST', '/items', ['reference' => 'a']);
+        $this->assertSame(200, $response->code());
+        $this->assertSame(['a:1', 'a:1'], $state->calls);
+
+        $state->calls = [];
+        $response = $this->send('POST', '/items', ['reference' => 'a']);
+        // Incoming and merged quantities still pass the resolver before the
+        // resulting line is resolved for presentation; no old view is built.
+        $this->assertSame(['a:1', 'a:2', 'a:2'], $state->calls);
+        $this->assertSame(2, $this->data($response, 'data.cart.totalQuantity'));
+        $itemId = $this->data($response, 'data.cart.items.0.id');
+        $this->assertIsString($itemId);
+
+        $state->calls = [];
+        $response = $this->send('POST', '/items', ['reference' => 'b']);
+        $this->assertSame(['b:1', 'a:2', 'b:1'], $state->calls);
+        $revision = $this->data($response, 'data.cart.revision');
+        $state->calls = [];
+        $response = $this->send('DELETE', '/items/' . $itemId, ['revision' => $revision]);
+        $this->assertSame(200, $response->code());
+        $this->assertSame(['b:1'], $state->calls);
+
+        $revision = $this->data($response, 'data.cart.revision');
+        $state->calls = [];
+        $response = $this->send('DELETE', body: ['revision' => $revision]);
+        $this->assertSame(200, $response->code());
+        $this->assertTrue($this->data($response, 'data.cart.empty'));
+        $this->assertSame([], $state->calls);
+    }
+
+    public function testPhpAndHttpAddValidationUseEquivalentErrorCategories(): void
+    {
+        $product = $this->product();
+        $cart = $this->cart();
+        $revision = $cart->revision();
+
+        foreach ([
+            [$product->id(), 0, [], 'quantity_invalid'],
+            [$product->id(), -1, [], 'quantity_invalid'],
+            ['', 1, [], 'invalid'],
+            [$product->id(), 1, ['size' => ''], 'invalid'],
+        ] as [$reference, $quantity, $options, $category]) {
+            try {
+                $cart->add($reference, $quantity, $options);
+                $this->fail('Expected invalid PHP input to be rejected.');
+            } catch (CartException $error) {
+                $this->assertSame($category === 'invalid' ? 'cart.selection_invalid' : 'cart.' . $category, $error->errorCode());
+            }
+
+            $response = $this->send('POST', '/items', [
+                'reference' => $reference, 'quantity' => $quantity, 'options' => (object) $options,
+            ]);
+            $this->assertSame(422, $response->code());
+            $this->assertSame('selection.' . $category, $this->data($response, 'error.code'));
+            $this->assertSame($revision, $this->cart()->revision());
+        }
+    }
+
+    public function testRejectedMutationsKeepTheCartInHtmlAndJsonResponses(): void
+    {
+        $this->restart(['cart' => ['renderer' => static function (?Cart $cart, CartRenderContext $context): string {
+            return '<div>' . $cart?->count() . ':' . $cart?->items()[0]->product()?->name()
+                . ':' . $cart?->revision() . ':' . $context->error()?->code() . '</div>';
+        }]]);
+        $cart = $this->cart()->add($this->product()->id());
+
+        foreach (['text/html', 'application/json'] as $type) {
+            $response = $this->send('POST', '/items', ['reference' => 'missing'], ['Accept' => $type]);
+            $this->assertSame(422, $response->code());
+
+            if ($type === 'text/html') {
+                $this->assertSame('<div>1:Shirt:' . $cart->revision() . ':product.unavailable</div>', $response->body());
+            } else {
+                $this->assertSame(1, $this->data($response, 'data.cart.count'));
+                $this->assertSame($cart->revision(), $this->data($response, 'data.cart.revision'));
+            }
+        }
     }
 
     public function testCsrfCannotComeFromQueryOrAnAmbiguousTransport(): void
@@ -354,9 +445,12 @@ final class CartRoutesTest extends KirbyTestCase
         ]);
         $state = new class {
             public bool $fail = false;
+            public int $requests = 0;
         };
         $client = $this->createMock(ClientInterface::class);
         $client->method('request')->willReturnCallback(static function () use ($state): array {
+            $state->requests++;
+
             if ($state->fail) {
                 throw new RuntimeException('PRIVATE STRIPE KEY');
             }
@@ -377,12 +471,17 @@ final class CartRoutesTest extends KirbyTestCase
         $this->assertSame(200, $response->code());
         $this->assertSame('32.00', $this->data($response, 'data.cart.subtotal.amount'));
         $this->assertStringNotContainsString('price_fixture', $response->body());
+        $revision = $this->data($response, 'data.cart.revision');
         $state->fail = true;
         $response = $this->send('POST', '/items', ['reference' => 'external']);
         $this->assertSame(503, $response->code());
         $this->assertSame('product.resolution_unavailable', $this->data($response, 'error.code'));
         $this->assertStringNotContainsString('PRIVATE', $response->body());
-        $this->assertSame(200, $this->send('DELETE', body: ['revision' => $this->cart()->revision()])->code());
+        $this->assertSame(1, $this->data($response, 'data.cart.count'));
+        $this->assertNull($this->data($response, 'data.cart.subtotal'));
+        $requests = $state->requests;
+        $this->assertSame(200, $this->send('DELETE', body: ['revision' => $revision])->code());
+        $this->assertSame($requests, $state->requests, 'Clearing must not contact Stripe, even during an outage.');
     }
 
     public function testDevelopmentSnippetCanRenderTheTypedContext(): void

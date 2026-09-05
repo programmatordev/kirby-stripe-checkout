@@ -12,7 +12,7 @@ use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutationException;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutator;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartSnapshot;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartViewFactory;
-use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionData;
 use Throwable;
 
 /**
@@ -36,12 +36,17 @@ final class Cart
         private array $errors,
         private readonly CartMutator $mutator,
         private readonly CartViewFactory $views,
+        private bool $presentationResolved = true,
     ) {}
 
     /** @param array<string, string> $options */
     public function add(string $reference, int $quantity = 1, array $options = []): self
     {
-        return $this->mutate(fn(): CartSnapshot => $this->mutator->add(new ProductRequest($reference, $quantity, $options)));
+        return $this->mutate(fn(): CartSnapshot => $this->mutator->add(SelectionData::parse([
+            'reference' => $reference,
+            'quantity' => $quantity,
+            'selectedOptions' => $options,
+        ])));
     }
 
     public function update(string $itemId, int $quantity, ?string $revision = null): self
@@ -62,12 +67,14 @@ final class Cart
     /** @return list<CartItem> */
     public function items(): array
     {
+        $this->resolvePresentation();
+
         return $this->items;
     }
 
     public function item(string $id): ?CartItem
     {
-        foreach ($this->items as $item) {
+        foreach ($this->items() as $item) {
             if ($item->id() === $id) {
                 return $item;
             }
@@ -88,37 +95,43 @@ final class Cart
 
     public function count(): int
     {
-        return count($this->items);
+        return count($this->items());
     }
 
     public function totalQuantity(): int
     {
-        return array_reduce($this->items, static fn(int $total, CartItem $item): int => $total + $item->quantity(), 0);
+        return array_reduce($this->items(), static fn(int $total, CartItem $item): int => $total + $item->quantity(), 0);
     }
 
     public function currency(): ?Currency
     {
+        $this->resolvePresentation();
+
         return $this->currency;
     }
 
     public function subtotal(): ?Money
     {
+        $this->resolvePresentation();
+
         return $this->subtotal;
     }
 
     public function isEmpty(): bool
     {
-        return $this->items === [];
+        return $this->items() === [];
     }
 
     public function hasErrors(): bool
     {
-        return $this->errors !== [];
+        return $this->errors() !== [];
     }
 
     /** @return list<CartError> */
     public function errors(): array
     {
+        $this->resolvePresentation();
+
         return $this->errors;
     }
 
@@ -138,12 +151,27 @@ final class Cart
             );
         }
 
+        $this->applyView($next);
+
+        return $this;
+    }
+
+    private function resolvePresentation(): void
+    {
+        // HTTP mutations start with selection state only. Resolve on a read or
+        // after the write, so clearing never needs the discarded products first.
+        if ($this->presentationResolved === false) {
+            $this->applyView($this->views->create($this->snapshot, $this->mutator));
+        }
+    }
+
+    private function applyView(self $next): void
+    {
         $this->snapshot = $next->snapshot;
         $this->items = $next->items;
         $this->currency = $next->currency;
         $this->subtotal = $next->subtotal;
         $this->errors = $next->errors;
-
-        return $this;
+        $this->presentationResolved = true;
     }
 }

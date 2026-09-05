@@ -4,6 +4,8 @@ The plugin registers cart routes automatically. Guests and signed-in visitors us
 
 These routes use the same operations as the [PHP cart API](cart.md). The browser sends references, quantities and chosen option IDs. It cannot choose prices, names, Stripe IDs, tax amounts or other product facts.
 
+Writes resolve the products needed for validation and the resulting cart, without first resolving the old cart for display. Clearing therefore does not contact Stripe; removing a line only resolves the remaining lines for the response.
+
 ## Routes
 
 Paths are relative to the current site's language URL. For example, a Portuguese site may use `/pt/stripe-checkout/cart`.
@@ -137,7 +139,7 @@ Product details include `name`, `description`, `images` (URLs), `sku`, `requires
 
 Amounts are decimal strings, for example `{"amount":"16.00","currency":"EUR"}`, never JSON numbers. An unresolved item has `null` product and amounts. Any unresolved line makes the cart subtotal `null`; valid lines remain readable. A successful GET can therefore have `hasErrors: true`.
 
-Failures contain `error.code` and a translated `error.message`, plus `field`, `itemId` or safe `details` when applicable. A revision conflict also includes `data.cart`. Do not assume every failure includes a cart.
+Failures contain `error.code` and a translated `error.message`, plus `field`, `itemId` or safe `details` when applicable. Rejected mutations retain the available cart in `data.cart`; a revision conflict supplies the newer cart. Errors before the cart can be read, such as invalid CSRF or malformed input, may omit it.
 
 | Status | Meaning / code |
 | --- | --- |
@@ -174,7 +176,7 @@ return [
 
 Request `Accept: text/html` on the same routes. The response body is the fragment itself, not HTML nested inside JSON. HTMX, Alpine AJAX or your own script can insert it into the page. No framework-specific headers are inferred. With no Accept header, or `*/*`, JSON is the default; explicit JSON never calls the renderer.
 
-The renderer receives the Cart when available, or `null` for errors before one can be read. `CartRenderContext` exposes only:
+The renderer receives the Cart when available, including after a rejected mutation, or `null` for errors before one can be read. Rejection does not erase the cart's controls; render them alongside the error. `CartRenderContext` exposes only:
 
 - `operation()`: `CartOperation::Read`, `Add`, `Update`, `Remove` or `Clear`;
 - `status()`: the HTTP status;

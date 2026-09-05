@@ -26,7 +26,7 @@ final class CartEndpoint
 
     public function respond(CartOperation $operation, ?string $itemId = null): Response
     {
-        $type = $this->representation();
+        $type = $this->responseType();
 
         if ($type === null) {
             return new Response('', code: 406, headers: self::HEADERS);
@@ -49,7 +49,7 @@ final class CartEndpoint
             }
 
             $input = $operation === CartOperation::Read ? [] : CartRequestParser::parse($this->kirby, $operation);
-            $cart = (new RuntimeFactory($this->kirby))->cart();
+            $cart = (new RuntimeFactory($this->kirby))->cart(resolve: $operation === CartOperation::Read);
 
             if ($cart === null) {
                 return new Response('', code: 404, headers: self::HEADERS);
@@ -64,7 +64,9 @@ final class CartEndpoint
             };
         } catch (CartException $failure) {
             $error = $this->httpError($failure->error());
-            $cart = $failure->cart();
+            // Conflicts supply newer state; other rejections retain the cart
+            // already read instead of replacing its controls with "unavailable".
+            $cart = $failure->cart() ?? $cart;
         } catch (CheckoutInputException $failure) {
             // Only our strict transport mapper can reach this catch directly.
             $error = $views->translatedError($failure->errorCode());
@@ -140,7 +142,7 @@ final class CartEndpoint
         }
     }
 
-    private function representation(): ?string
+    private function responseType(): ?string
     {
         $header = $this->kirby->request()->header('Accept', '*/*');
         $accept = is_string($header) ? $header : '';

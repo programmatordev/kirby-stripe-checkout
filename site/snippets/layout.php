@@ -5,10 +5,12 @@
 /** @var Kirby\Cms\Site $site */
 /** @var Kirby\Template\Slots $slots */
 /** @var Kirby\Content\Field|string|null $title */
+/** @var ProgrammatorDev\StripeCheckout\Cart\Cart|null $cart */
 
 $documentTitle = isset($title) ? $title . ' · Test store' : 'Test store';
 $languageCode = $kirby->language()?->code() ?? 'en';
-$cart = $site->stripeCheckout()->cart();
+// Product templates pass their existing view to avoid resolving every line twice.
+$cart ??= $site->stripeCheckout()->cart();
 $settings = $site->stripeCheckout()->settings();
 ?>
 <!doctype html>
