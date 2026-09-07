@@ -19,6 +19,8 @@ $kirby = new App([
     ],
 ]);
 $kirby->impersonate('kirby');
+// Boot first, then wait for the parent to hold the order lock. The attempted
+// transition must be checked against the parent's committed state, not this boot.
 fwrite(STDOUT, "ready\n");
 fgets(STDIN);
 

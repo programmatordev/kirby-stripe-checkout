@@ -39,6 +39,8 @@ App::plugin(
         'blueprints' => [
             'pages/stripe-checkout' => [SettingsBlueprint::class, 'load'],
             'pages/stripe-checkout-order' => [OrderBlueprint::class, 'load'],
+            // A site override needs a separate extension target; extending its
+            // own pages/stripe-checkout-order name would resolve back to itself.
             'programmatordev/stripe-checkout/pages/order' => [OrderBlueprint::class, 'load'],
             'pages/stripe-checkout-orders' => __DIR__ . '/blueprints/pages/stripe-checkout-orders.yml',
             'fields/stripe-checkout/name' => [ProductBlueprint::class, 'name'],

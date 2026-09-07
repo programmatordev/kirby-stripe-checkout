@@ -192,6 +192,8 @@ final class OrderPageStore
 
         try {
             $this->requireUuids();
+            // Order slugs are their native UUID IDs. Keep lookups inside the
+            // owned container instead of resolving arbitrary site-wide Pages.
             $page = $this->container()?->drafts()->find($id);
 
             if ($page instanceof Page === false) {
@@ -287,6 +289,8 @@ final class OrderPageStore
         $id = OrderSchema::CONTAINER . '/' . (new Uri($uuid))->host();
 
         return OrderWriteLock::run($this->kirby, $id, function () use ($id, $reduce): OrderPage {
+            // Reload after acquiring the lock: a writer may have committed
+            // while this request waited, changing which transitions are valid.
             $page = $this->requirePage($id);
             $before = $this->data($page);
             $candidate = $reduce($before);
@@ -308,6 +312,8 @@ final class OrderPageStore
             $this->validateTransition($before, $after);
             $content = $page->version('latest')->read('default') ?? [];
 
+            // Replace the whole canonical projection, including removed fields,
+            // while preserving unrelated custom content from the latest record.
             foreach (array_keys($content) as $field) {
                 if (OrderSchema::isReserved($field)) {
                     unset($content[$field]);
@@ -364,6 +370,8 @@ final class OrderPageStore
             }
         }
 
+        // These record the first observation; repeated evidence must not move
+        // their timestamps or erase the history of an earlier state.
         $observations = ['checkoutOpenedAt', 'creationUncertainAt', 'creationFailedAt', 'checkoutCompletedAt', 'checkoutExpiredAt', 'paidAt', 'paymentFailedAt'];
 
         foreach ($observations as $field) {

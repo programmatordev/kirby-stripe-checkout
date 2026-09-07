@@ -14,6 +14,8 @@ final class OrderPagePermissions extends PagePermissions
         $kirby = $this->model->kirby();
 
         return match ($action) {
+            // Only the internal impersonation identity may create records;
+            // an ordinary administrator must still use the controlled flow.
             'create' => $kirby->user()?->isKirby() === true,
             'read', 'access', 'list' => PluginPermissions::allows($kirby, 'orders.read'),
             'update' => $this->model instanceof OrderPage
