@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    'programmatordev.stripe-checkout.orders.errors.protectedFields' => 'Protected order fields cannot be changed.',
+    'programmatordev.stripe-checkout.orders.errors.manualCreation' => 'Orders cannot be created manually.',
+    'programmatordev.stripe-checkout.orders.errors.protectedStructure' => 'The order page structure cannot be changed.',
+    'programmatordev.stripe-checkout.orders.errors.directSave' => 'Use the supported order update operation.',
     'programmatordev.stripe-checkout.orders.title' => 'Orders',
     'programmatordev.stripe-checkout.orders.order' => 'Order',
     'programmatordev.stripe-checkout.orders.tabs.overview' => 'Overview',

@@ -6,15 +6,18 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Brick\Money\Money;
 use DateTimeImmutable;
+use Kirby\Api\Controller\Changes;
 use Kirby\Cms\App;
 use Kirby\Cms\Page;
 use Kirby\Cms\User;
+use Kirby\Content\LockedContentException;
 use Kirby\Exception\LogicException;
 use Kirby\Exception\NotFoundException;
 use Kirby\Exception\PermissionException;
 use Kirby\Filesystem\Dir;
 use Kirby\Filesystem\F;
 use Kirby\Form\Form;
+use Kirby\Toolkit\I18n;
 use Kirby\Uuid\Uri;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
@@ -423,6 +426,165 @@ final class OrderPageStoreTest extends KirbyTestCase
         $published = $store->requirePage($page->id());
         $this->assertSame($before, $store->data($published));
         $this->assertSame('Published note', $this->value($published, 'note'));
+    }
+
+    #[DataProvider('editingLanguages')]
+    public function testPanelCustomEditsSurviveCanonicalUpdates(?string $languageCode): void
+    {
+        if ($languageCode !== null) {
+            $this->environment->close();
+            $this->environment = KirbyTestEnvironment::start(languages: [
+                [
+                    'code' => 'en',
+                    'default' => true,
+                    'locale' => 'en_US',
+                    'name' => 'English',
+                ],
+                [
+                    'code' => 'pt',
+                    'locale' => 'pt_PT',
+                    'name' => 'Português',
+                ],
+            ]);
+            $this->kirby = $this->environment->app();
+            $this->kirby->setCurrentLanguage($languageCode);
+        }
+
+        $page = $this->createOrder();
+        $store = new OrderPageStore($this->kirby);
+        $input = [...Form::for($page)->toFormValues(), 'note' => 'Pending note'];
+        Changes::save($page, $input);
+        $updated = $store->update($page->uuid()->toString(), static fn(array $data): array => [
+            ...$data,
+            'checkoutStatus' => 'open',
+            'stripeCheckoutSessionId' => 'cs_test',
+            'checkoutOpenedAt' => $data['createdAt'],
+        ]);
+        $expected = $store->data($updated);
+
+        // A later Panel request still submits its original read-only values.
+        $fresh = $store->requirePage($page->id());
+        Changes::publish($fresh, $input);
+        $saved = $store->requirePage($page->id());
+        $this->assertSame($expected, $store->data($saved));
+        $this->assertSame('Pending note', $saved->content($languageCode ?? 'default')->data()['note'] ?? null);
+        $this->assertFalse($saved->version('changes')->exists($languageCode ?? 'default'));
+
+        if ($languageCode === 'pt') {
+            $translation = $saved->version('latest')->read('pt');
+            $this->assertIsArray($translation);
+            $this->assertArrayNotHasKey('checkoutstatus', $translation);
+            $this->assertArrayNotHasKey('uuid', $translation);
+        }
+    }
+
+    /** @return iterable<string, array{?string}> */
+    public static function editingLanguages(): iterable
+    {
+        yield 'single language' => [null];
+        yield 'default language' => ['en'];
+        yield 'translated custom fields' => ['pt'];
+    }
+
+    public function testNativeVersionPublishIgnoresProtectedChangesButDirectUpdatesRejectThem(): void
+    {
+        $page = $this->createOrder();
+        $store = new OrderPageStore($this->kirby);
+        $expected = $store->data($page);
+        $page->version('changes')->save([
+            ...($page->version('latest')->read('default') ?? []),
+            'paymentStatus' => 'paid',
+            'note' => 'Custom note',
+        ]);
+        $page->version('changes')->publish();
+        $saved = $store->requirePage($page->id());
+        $this->assertSame($expected, $store->data($saved));
+        $this->assertSame('Custom note', $this->value($saved, 'note'));
+
+        $this->expectException(PermissionException::class);
+        $saved->update(['paymentStatus' => 'paid']);
+    }
+
+    public function testCanonicalUpdatesInvalidatePageCacheOnlyWhenCommitted(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(options: [
+            'cache' => ['pages' => ['active' => true]],
+        ]);
+        $this->kirby = $this->environment->app();
+        $page = $this->createOrder();
+        $uuid = $page->uuid()->toString();
+        $store = new OrderPageStore($this->kirby);
+        $cache = $this->kirby->cache('pages');
+        $cache->set('order-summary', 'creating');
+        $this->assertSame('creating', $cache->get('order-summary'));
+        $store->update($uuid, static fn(array $data): array => $data);
+        $this->assertSame('creating', $cache->get('order-summary'));
+
+        try {
+            $store->update($uuid, static fn(array $data): array => [...$data, 'uuid' => 'changed']);
+            $this->fail('Expected immutable identity rejection.');
+        } catch (OrderDataException) {
+            $this->assertSame('creating', $cache->get('order-summary'));
+        }
+
+        $store->update($uuid, static fn(array $data): array => [
+            ...$data,
+            'checkoutStatus' => 'creation_uncertain',
+            'creationUncertainAt' => $data['createdAt'],
+        ]);
+        $this->assertNull($cache->get('order-summary'));
+    }
+
+    public function testOrderChangesRetainNativeEditorLocks(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(users: [
+            [
+                'id' => 'first-editor',
+                'email' => 'first@example.test',
+                'role' => 'admin',
+            ],
+            [
+                'id' => 'second-editor',
+                'email' => 'second@example.test',
+                'role' => 'admin',
+            ],
+        ], impersonate: 'first-editor');
+        $this->kirby = $this->environment->app();
+        $page = $this->createOrder();
+        Changes::save($page, ['note' => 'First editor']);
+        $this->assertSame('first-editor', $page->version('changes')->read()['lock'] ?? null);
+        $this->kirby->impersonate('second-editor');
+        $this->assertTrue($page->version('changes')->isLocked());
+        $this->expectException(LockedContentException::class);
+        Changes::publish($page, ['note' => 'Second editor']);
+    }
+
+    #[DataProvider('translatedPermissionActions')]
+    public function testOrderPermissionErrorsUseThePanelTranslation(string $action, string $suffix): void
+    {
+        $this->kirby->setCurrentTranslation('pt_PT');
+        $page = $this->createOrder();
+        $this->expectException(PermissionException::class);
+        $this->expectExceptionMessage(I18n::template('programmatordev.stripe-checkout.orders.errors.' . $suffix));
+
+        match ($action) {
+            'update' => $page->update(['paymentStatus' => 'paid']),
+            'createChild' => $page->createChild(['slug' => 'child']),
+            'copy' => $page->copy(),
+            'save' => $page->save(['note' => 'Bypass']),
+            default => $this->fail('Unknown action'),
+        };
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function translatedPermissionActions(): iterable
+    {
+        yield 'protected facts' => ['update', 'protectedFields'];
+        yield 'manual creation' => ['createChild', 'manualCreation'];
+        yield 'structure' => ['copy', 'protectedStructure'];
+        yield 'low-level save' => ['save', 'directSave'];
     }
 
     public function testNativeUuidConfigurationIsUsedForStoredOrders(): void

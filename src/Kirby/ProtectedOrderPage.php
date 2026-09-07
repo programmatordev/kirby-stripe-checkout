@@ -9,6 +9,7 @@ use Kirby\Cms\PagePermissions;
 use Kirby\Content\VersionId;
 use Kirby\Exception\NotFoundException;
 use Kirby\Exception\PermissionException;
+use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
 
 /**
@@ -42,21 +43,21 @@ abstract class ProtectedOrderPage extends Page
     {
         // Kirby checks the new child's permissions, not this parent's. A child
         // with a different template must not bypass the controlled order creator.
-        throw new PermissionException('Order Pages cannot be created manually.');
+        throw new PermissionException(message: I18n::template('programmatordev.stripe-checkout.orders.errors.manualCreation'));
     }
 
     /** @param array<string, mixed> $options */
     public function copy(array $options = []): static
     {
         // Low-level copy() does not run duplicate()'s permission checks.
-        throw new PermissionException('Order Page structure is protected.');
+        throw new PermissionException(message: I18n::template('programmatordev.stripe-checkout.orders.errors.protectedStructure'));
     }
 
     /** @param array<string, mixed>|null $data */
     public function save(?array $data = null, ?string $languageCode = null, bool $overwrite = false): static
     {
         // Low-level save() bypasses update() and its protected-field checks.
-        throw new PermissionException('Use the supported order update operation.');
+        throw new PermissionException(message: I18n::template('programmatordev.stripe-checkout.orders.errors.directSave'));
     }
 
     /** @param array<string, mixed> $data */

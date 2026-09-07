@@ -85,12 +85,12 @@ final class LocalDiagnostics
         try {
             $store = new OrderPageStore($this->kirby);
             $container = $store->container();
-            $valid = $store->orders()->count();
-            $invalid = ($container?->childrenAndDrafts()->count() ?? 0) - $valid;
+            $validCount = $store->orders()->count();
+            $invalidCount = ($container?->childrenAndDrafts()->count() ?? 0) - $validCount;
             $checks[] = $container === null
                 ? $this->check('orders', self::WARNING, 'orders.missing')
-                : ($invalid > 0
-                    ? $this->check('orders', self::FAIL, 'orders.invalidChildren', ['count' => (string) $invalid])
+                : ($invalidCount > 0
+                    ? $this->check('orders', self::FAIL, 'orders.invalidChildren', ['count' => (string) $invalidCount])
                     : $this->check('orders', self::PASS, 'orders.ready'));
         } catch (OrderStorageException|OrderQueryException $error) {
             $checks[] = $this->check('orders', self::FAIL, 'orders.invalid', ['code' => $error->errorCode()]);

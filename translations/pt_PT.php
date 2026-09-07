@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    'programmatordev.stripe-checkout.orders.errors.protectedFields' => 'Os campos protegidos da encomenda não podem ser alterados.',
+    'programmatordev.stripe-checkout.orders.errors.manualCreation' => 'As encomendas não podem ser criadas manualmente.',
+    'programmatordev.stripe-checkout.orders.errors.protectedStructure' => 'A estrutura da página da encomenda não pode ser alterada.',
+    'programmatordev.stripe-checkout.orders.errors.directSave' => 'Utilize a operação de atualização de encomendas suportada.',
     'programmatordev.stripe-checkout.orders.title' => 'Encomendas',
     'programmatordev.stripe-checkout.orders.order' => 'Encomenda',
     'programmatordev.stripe-checkout.orders.tabs.overview' => 'Resumo',

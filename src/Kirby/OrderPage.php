@@ -6,9 +6,12 @@ namespace ProgrammatorDev\StripeCheckout\Kirby;
 
 use Closure;
 use Kirby\Cms\ModelCommit;
+use Kirby\Content\Version;
+use Kirby\Content\VersionId;
 use Kirby\Data\Yaml;
 use Kirby\Exception\PermissionException;
 use Kirby\Form\Form;
+use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
@@ -17,6 +20,15 @@ use Throwable;
 /** @internal Ordinary Kirby fields with guarded custom-field edits and canonical storage. */
 final class OrderPage extends ProtectedOrderPage
 {
+    public function version(VersionId|string|null $versionId = null): Version
+    {
+        $version = parent::version($versionId);
+
+        return $version->id()->is('changes')
+            ? new OrderChangesVersion($this, $version->id())
+            : $version;
+    }
+
     /**
      * @param array<string, mixed>|null $input
      * @throws OrderStorageException
@@ -46,8 +58,8 @@ final class OrderPage extends ProtectedOrderPage
 
         // Keep native before/after hooks and Form conversion, but never write a
         // stale full form over canonical data or another custom-field edit.
-        $language = OrderData::string($arguments['languageCode'] ?? $this->kirby()->languageCode() ?? 'default');
-        $baseline = $this->version('latest')->read($language) ?? [];
+        $languageCode = OrderData::string($arguments['languageCode'] ?? $this->kirby()->languageCode() ?? 'default');
+        $baseline = $this->version('latest')->read($languageCode) ?? [];
 
         return (new ModelCommit($this, 'update'))->call($arguments, function (OrderPage $page, array $values, array $strings, ?string $languageCode) use ($baseline): OrderPage {
             // Read-only Object/Structure fields may have a display-only subset
@@ -77,6 +89,9 @@ final class OrderPage extends ProtectedOrderPage
     {
         $stored = $this->version('latest')->read('default') ?? [];
         $form = null;
+        $formValues = null;
+        $storedValues = null;
+        $snapshotFields = array_map(strtolower(...), OrderSchema::SNAPSHOTS);
         $customFields = [];
 
         foreach ($input as $field => $value) {
@@ -102,21 +117,20 @@ final class OrderPage extends ProtectedOrderPage
             // Accept unchanged display projections, then discard them: only
             // the store may write the complete canonical snapshots.
             $form ??= Form::for($this, language: 'default');
-            $display = $form->toFormValues();
+            $formValues ??= $form->toFormValues();
 
-            if (array_key_exists($field, $display) && $value === $display[$field]) {
+            if (array_key_exists($field, $formValues) && $value === $formValues[$field]) {
                 continue;
             }
 
-            $snapshots = array_map(strtolower(...), OrderSchema::SNAPSHOTS);
-
-            if (in_array($field, $snapshots, true)) {
+            if (in_array($field, $snapshotFields, true)) {
                 try {
                     $submitted = is_string($value) ? Yaml::decode($value) : $value;
+                    $storedValues ??= $form->toStoredValues();
 
                     if (
                         OrderData::normalize($submitted) === OrderData::normalize(Yaml::decode($current))
-                        || OrderData::normalize($submitted) === OrderData::normalize($form->toStoredValues()[$field] ?? null)
+                        || OrderData::normalize($submitted) === OrderData::normalize($storedValues[$field] ?? null)
                     ) {
                         continue;
                     }
@@ -124,7 +138,7 @@ final class OrderPage extends ProtectedOrderPage
                 }
             }
 
-            throw new PermissionException('Canonical order fields cannot be changed.');
+            throw new PermissionException(message: I18n::template('programmatordev.stripe-checkout.orders.errors.protectedFields'));
         }
 
         return $customFields;

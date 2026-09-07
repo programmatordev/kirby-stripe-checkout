@@ -120,7 +120,17 @@ final class OrderPageStore
         $options = $this->kirby->options();
         $formatter = (new ConfigurationResolver())->orderNumberFormatter($options);
         $uuid = Uuid::generate();
-        $context = new OrderCreationContext($uuid, (new OrderNumberFormatter($formatter))->format($uuid), $sourceType, $cartRevision, $userUuid, $languageCode, $uiMode, $currency, $lineItems);
+        $context = new OrderCreationContext(
+            uuid: $uuid,
+            orderNumber: (new OrderNumberFormatter($formatter))->format($uuid),
+            sourceType: $sourceType,
+            cartRevision: $cartRevision,
+            userUuid: $userUuid,
+            languageCode: $languageCode,
+            uiMode: $uiMode,
+            currency: $currency,
+            lineItems: $lineItems,
+        );
         $data = OrderSerializer::creation($context, $tokenHash, $requestFingerprint, $guestReference, new DateTimeImmutable());
 
         try {
@@ -185,7 +195,7 @@ final class OrderPageStore
     {
         try {
             OrderData::uuid($uuid);
-            $id = OrderData::text((new Uri($uuid))->host());
+            $slug = OrderData::text((new Uri($uuid))->host());
         } catch (Throwable) {
             return null;
         }
@@ -194,7 +204,7 @@ final class OrderPageStore
             $this->requireUuids();
             // Order slugs are their native UUID IDs. Keep lookups inside the
             // owned container instead of resolving arbitrary site-wide Pages.
-            $page = $this->container()?->drafts()->find($id);
+            $page = $this->container()?->drafts()->find($slug);
 
             if ($page instanceof Page === false) {
                 return null;
@@ -237,11 +247,11 @@ final class OrderPageStore
         return OrderData::uuid($user->uuid()->toString(), 'user');
     }
 
-    public function requirePage(string $id): OrderPage
+    public function requirePage(string $pageId): OrderPage
     {
         $this->requireUuids();
         $container = $this->container();
-        $page = $container?->drafts()->find($id);
+        $page = $container?->drafts()->find($pageId);
 
         if ($page instanceof OrderPage === false) {
             throw new OrderStorageException('persistence.order_unavailable');
@@ -286,12 +296,12 @@ final class OrderPageStore
     public function update(string $uuid, Closure $reduce): OrderPage
     {
         OrderData::uuid($uuid);
-        $id = OrderSchema::CONTAINER . '/' . (new Uri($uuid))->host();
+        $pageId = OrderSchema::CONTAINER . '/' . (new Uri($uuid))->host();
 
-        return OrderWriteLock::run($this->kirby, $id, function () use ($id, $reduce): OrderPage {
+        return OrderWriteLock::run($this->kirby, $pageId, function () use ($pageId, $reduce): OrderPage {
             // Reload after acquiring the lock: a writer may have committed
             // while this request waited, changing which transitions are valid.
-            $page = $this->requirePage($id);
+            $page = $this->requirePage($pageId);
             $before = $this->data($page);
             $candidate = $reduce($before);
 
@@ -327,22 +337,26 @@ final class OrderPageStore
                 throw new OrderStorageException('persistence.verify_failed');
             }
 
+            // Canonical writes bypass ModelCommit and its Page-update hooks,
+            // but rendered pages must still stop serving the previous state.
+            $this->kirby->cache('pages')->flush();
+
             return $updated;
         });
     }
 
     /** @param array<string, mixed> $fields */
-    public function updateCustomFields(string $id, array $fields, ?string $languageCode): OrderPage
+    public function updateCustomFields(string $pageId, array $fields, ?string $languageCode): OrderPage
     {
         $fields = OrderCustomFieldsValidator::validate($fields);
 
-        return OrderWriteLock::run($this->kirby, $id, function () use ($id, $fields, $languageCode): OrderPage {
-            $page = $this->requirePage($id);
+        return OrderWriteLock::run($this->kirby, $pageId, function () use ($pageId, $fields, $languageCode): OrderPage {
+            $page = $this->requirePage($pageId);
             $languageCode ??= $this->kirby->languageCode() ?? 'default';
             $content = $page->version('latest')->read($languageCode) ?? [];
             $this->persist($page, [...$content, ...$fields], $languageCode);
 
-            return $this->requirePage($id);
+            return $this->requirePage($pageId);
         });
     }
 
@@ -362,9 +376,9 @@ final class OrderPageStore
      */
     private function validateTransition(array $before, array $after): void
     {
-        $immutable = ['uuid', 'title', 'orderNumber', 'stripeCheckout', 'checkoutAttempt', 'userUuid', 'languageCode', 'currency', 'createdAt', 'initiatingLineItems'];
+        $immutableFields = ['uuid', 'title', 'orderNumber', 'stripeCheckout', 'checkoutAttempt', 'userUuid', 'languageCode', 'currency', 'createdAt', 'initiatingLineItems'];
 
-        foreach ($immutable as $field) {
+        foreach ($immutableFields as $field) {
             if (($before[$field] ?? null) !== ($after[$field] ?? null)) {
                 throw new OrderDataException();
             }
@@ -372,15 +386,15 @@ final class OrderPageStore
 
         // These record the first observation; repeated evidence must not move
         // their timestamps or erase the history of an earlier state.
-        $observations = ['checkoutOpenedAt', 'creationUncertainAt', 'creationFailedAt', 'checkoutCompletedAt', 'checkoutExpiredAt', 'paidAt', 'paymentFailedAt'];
+        $observationFields = ['checkoutOpenedAt', 'creationUncertainAt', 'creationFailedAt', 'checkoutCompletedAt', 'checkoutExpiredAt', 'paidAt', 'paymentFailedAt'];
 
-        foreach ($observations as $field) {
+        foreach ($observationFields as $field) {
             if (isset($before[$field]) && ($after[$field] ?? null) !== $before[$field]) {
                 throw new OrderDataException();
             }
         }
 
-        $allowed = match (CheckoutStatus::from(OrderData::string($before['checkoutStatus']))) {
+        $allowedCheckoutStatuses = match (CheckoutStatus::from(OrderData::string($before['checkoutStatus']))) {
             CheckoutStatus::Creating => ['creating', 'creation_uncertain', 'creation_failed', 'open', 'complete', 'expired'],
             CheckoutStatus::CreationUncertain => ['creation_uncertain', 'creation_failed', 'open', 'complete', 'expired'],
             CheckoutStatus::Open => ['open', 'complete', 'expired'],
@@ -388,8 +402,7 @@ final class OrderPageStore
         };
 
         if (
-            in_array($after['checkoutStatus'], $allowed, true) === false
-            || $after['updatedAt'] < $before['updatedAt']
+            in_array($after['checkoutStatus'], $allowedCheckoutStatuses, true) === false
             || isset($before['stripeCheckoutSessionId']) && ($after['stripeCheckoutSessionId'] ?? null) !== $before['stripeCheckoutSessionId']
             || in_array($before['paymentStatus'], ['paid', 'no_payment_required'], true) && $after['paymentStatus'] !== $before['paymentStatus']
             || $before['paymentStatus'] === 'failed' && in_array($after['paymentStatus'], ['failed', 'paid'], true) === false

@@ -53,6 +53,8 @@ if ($order !== null) {
 
 Panel roles require `orders.read` to view orders, and both `orders.read` and `orders.update` to edit custom fields. Both permissions are under `programmatordev.stripe-checkout` and disabled by default for non-admin roles. Canonical facts are stored only in the default language; custom fields can use Kirby translations. Payment changes are not ordinary custom-field edits and do not trigger generic Page update hooks.
 
+Unsaved Panel edits keep the latest protected order values. If the order state changes while someone is editing a note, saving the note preserves the newer state. Read-only values in Kirby's editing version are not treated as requested changes; explicit attempts to change protected fields through `$order->update()` are rejected. Kirby's normal editor locks still apply.
+
 ## Order number and initial custom fields
 
 The default visible number is `ORD-` plus the uppercase native Kirby UUID ID. The full ID is retained. An optional PHP formatter receives the full Page reference:
@@ -132,6 +134,6 @@ Known zero totals are explicit; final totals are absent before completion rather
 
 Recorded timestamps must agree with the order state and fall between creation and the last update. The Checkout expiration deadline may be in the future. Earlier observations, such as uncertainty before a Session opens, are retained; contradictory completion and expiration facts are rejected.
 
-Writes reload and validate the current record before persisting through Kirby's Page/content APIs. Failed or corrupt records are never replaced with empty orders. Custom fields survive canonical updates.
+Writes reload and validate the current record before persisting through Kirby's Page/content APIs. Failed or corrupt records are never replaced with empty orders. Custom fields survive canonical updates. Successful canonical changes also clear Kirby's page cache so cached output does not retain the old state; no-op updates leave the cache intact.
 
 The site needs writable content and `site/storage/stripe-checkout/order-locks`. Empty per-order lock files coordinate concurrent read/update/write operations, with a bounded two-second wait (`persistence.busy` on contention). These are not cache files: do not clear them while writers are running. They contain no order data. Multi-server installations must share this directory and content storage on a filesystem that supports reliable file locking.
