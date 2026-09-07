@@ -149,10 +149,7 @@ final class StripeCheckoutPageStore
             );
         }
 
-        if (
-            count($metadata) !== 2
-            || array_diff(array_keys($metadata), ['owner', 'schemaVersion']) !== []
-        ) {
+        if (array_diff(array_keys($metadata), ['owner', 'schemaVersion']) !== []) {
             throw new ConfigurationException(
                 'persistence.content_invalid',
                 'stripeCheckout',

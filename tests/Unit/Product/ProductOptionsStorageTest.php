@@ -54,6 +54,24 @@ final class ProductOptionsStorageTest extends TestCase
         );
     }
 
+    public function testRejectsUnknownSelectedOptionKeys(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('A variant contains an unknown selected option.');
+        (new VariantSchema())->canonical([
+            'options' => self::fixtureOptions(),
+            'variants' => [[
+                'id' => 'extraOptionVariant',
+                'selectedOptions' => [
+                    'colourOption' => 'redValue',
+                    'sizeOption' => 'smallValue',
+                    'unknownOption' => 'unknownValue',
+                ],
+                'enabled' => true,
+            ]],
+        ]);
+    }
+
     public function testPreservesStringZeroAsAVariantPrice(): void
     {
         $canonical = (new VariantSchema())->canonical([

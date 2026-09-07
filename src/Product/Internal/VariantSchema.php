@@ -249,7 +249,7 @@ final class VariantSchema
                 $normalizedOptions[$optionId] = $valueId;
             }
 
-            if (count($selectedOptions) !== count($normalizedOptions)) {
+            if (array_diff(array_keys($selectedOptions), array_keys($normalizedOptions)) !== []) {
                 throw new InvalidArgumentException('A variant contains an unknown selected option.');
             }
 

@@ -39,12 +39,15 @@ final class ProductData
 
     public static function requiredString(mixed $value, int $maximum): string
     {
+        // Reject unsafe Unicode at resolution, not only when the product is later
+        // frozen into an order. Keep the existing byte-based product limits.
         if (
             is_string($value) === false
             || $value === ''
             || trim($value) !== $value
             || strlen($value) > $maximum
-            || preg_match('/[\x00-\x1F\x7F]/', $value) === 1
+            || mb_check_encoding($value, 'UTF-8') === false
+            || preg_match('/[\p{Cc}\p{Zl}\p{Zp}]/u', $value) !== 0
         ) {
             throw new InvalidProductException();
         }

@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Unit\Product;
 
 use Brick\Money\Money;
 use Kirby\Cms\File;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Money\MoneySnapshot;
@@ -23,6 +24,29 @@ use ProgrammatorDev\StripeCheckout\Stripe\Price\ResolvedPrice;
 
 final class ProductValuesTest extends TestCase
 {
+    #[DataProvider('invalidSnapshotText')]
+    public function testProductNamesRejectTextThatCannotEnterAnOrderSnapshot(string $text): void
+    {
+        $this->expectException(InvalidProductException::class);
+        new ResolvedProduct(new ProductRequest('product'), $text, false, new InlinePrice(Money::of('16', 'EUR')));
+    }
+
+    #[DataProvider('invalidSnapshotText')]
+    public function testOptionLabelsRejectTextThatCannotEnterAnOrderSnapshot(string $text): void
+    {
+        $this->expectException(InvalidProductException::class);
+        new SelectedOption('size', 'Size', 'large', $text);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function invalidSnapshotText(): iterable
+    {
+        yield 'invalid UTF-8' => ["Invalid\xff"];
+        yield 'Unicode control' => ["First\u{0085}Second"];
+        yield 'line separator' => ["First\u{2028}Second"];
+        yield 'paragraph separator' => ["First\u{2029}Second"];
+    }
+
     public function testRequestNormalizesSelectedOptionOrderWithoutChangingTheInput(): void
     {
         $request = new ProductRequest(

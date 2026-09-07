@@ -99,7 +99,7 @@ final class KirbySessionCartStore implements CartStoreInterface
     {
         if (
             is_array($payload) === false
-            || count($payload) !== 7
+            || array_diff(array_keys($payload), ['schema', 'id', 'revision', 'createdAt', 'updatedAt', 'destinationCountry', 'entries']) !== []
             || ($payload['schema'] ?? null) !== 1
             || is_string($payload['id'] ?? null) === false
             || is_string($payload['revision'] ?? null) === false
@@ -117,10 +117,16 @@ final class KirbySessionCartStore implements CartStoreInterface
         $entries = [];
 
         foreach ($payload['entries'] as $entry) {
-            if (is_array($entry) === false || count($entry) !== 2 || is_string($entry['id'] ?? null) === false) {
+            if (
+                is_array($entry) === false
+                || array_diff(array_keys($entry), ['id', 'request']) !== []
+                || is_string($entry['id'] ?? null) === false
+            ) {
                 throw new InvalidArgumentException('Invalid cart entry.');
             }
 
+            // The shared parser rejects a missing request; only its optional
+            // quantity/options members may use defaults.
             $entries[] = new CartEntry($entry['id'], SelectionData::parse($entry['request'] ?? null));
         }
 

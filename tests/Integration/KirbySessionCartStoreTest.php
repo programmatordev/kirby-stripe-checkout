@@ -77,6 +77,12 @@ final class KirbySessionCartStoreTest extends KirbyTestCase
         yield 'protected fields' => [array_replace($base, ['entries' => [['id' => 'item', 'request' => ['reference' => 'shirt', 'price' => '1.00']]]])];
         yield 'string quantity' => [array_replace($base, ['entries' => [['id' => 'item', 'request' => ['reference' => 'shirt', 'quantity' => '1']]]])];
         $entry = ['id' => 'item', 'request' => ['reference' => 'shirt']];
+        $missingCountry = $base;
+        unset($missingCountry['destinationCountry']);
+        yield 'missing nullable country' => [$missingCountry];
+        yield 'unknown payload field' => [[...$base, 'unexpected' => null]];
+        yield 'unknown entry field' => [array_replace($base, ['entries' => [[...$entry, 'unexpected' => null]]])];
+        yield 'missing entry request' => [array_replace($base, ['entries' => [['id' => 'item']]])];
         yield 'duplicate entries' => [array_replace($base, ['entries' => [$entry, $entry]])];
     }
 
