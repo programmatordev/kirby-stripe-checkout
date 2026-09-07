@@ -19,7 +19,7 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
  */
 final class ConfigurationResolver
 {
-    private const ROOT_KEYS = ['cart', 'products', 'settings', 'stripe', 'translations'];
+    private const ROOT_KEYS = ['cart', 'orders', 'products', 'settings', 'stripe', 'translations'];
     private const PRODUCT_FIELD_KEYS = [
         'name',
         'description',
@@ -49,6 +49,7 @@ final class ConfigurationResolver
     ): ConfigurationReport {
         try {
             $root = $this->resolveRoot($this->extractor->extract($options));
+            $this->orderNumberFormatter($options);
             $cartEnabled = $this->resolveCart($root['cart']);
             $products = $this->resolveProducts($root['products']);
             $stripe = $this->resolveStripe($root['stripe']);
@@ -81,6 +82,26 @@ final class ConfigurationResolver
     }
 
     /** @param array<string, mixed> $options */
+    public function orderNumberFormatter(#[SensitiveParameter] array $options): ?Closure
+    {
+        $root = $this->extractor->extract($options);
+        $orders = array_key_exists('orders', $root) ? $root['orders'] : [];
+
+        if (is_array($orders) === false) {
+            throw new ConfigurationException('configuration.type_invalid', 'orders');
+        }
+
+        $this->assertKnownKeys($orders, ['numberFormatter'], 'orders');
+        $formatter = $orders['numberFormatter'] ?? null;
+
+        if ($formatter !== null && $formatter instanceof Closure === false) {
+            throw new ConfigurationException('configuration.type_invalid', 'orders.numberFormatter');
+        }
+
+        return $formatter;
+    }
+
+    /** @param array<string, mixed> $options */
     public function cartRenderer(#[SensitiveParameter] array $options): ?Closure
     {
         $cart = $this->cartOptions($options);
@@ -109,7 +130,7 @@ final class ConfigurationResolver
 
     /**
      * @param array<string, mixed> $root
-     * @return array{cart: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>}
+     * @return array{cart: array<string, mixed>, orders: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>}
      */
     private function resolveRoot(#[SensitiveParameter] array $root): array
     {
@@ -124,6 +145,7 @@ final class ConfigurationResolver
         $resolver = new OptionsResolver();
         $resolver->setDefaults([
             'cart' => [],
+            'orders' => [],
             'products' => [],
             'settings' => [],
             'stripe' => [],
@@ -131,11 +153,12 @@ final class ConfigurationResolver
         ]);
         $resolver->setAllowedTypes('products', 'array');
         $resolver->setAllowedTypes('cart', 'array');
+        $resolver->setAllowedTypes('orders', 'array');
         $resolver->setAllowedTypes('settings', 'array');
         $resolver->setAllowedTypes('stripe', 'array');
         $resolver->setAllowedTypes('translations', 'array');
 
-        /** @var array{cart: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>} */
+        /** @var array{cart: array<string, mixed>, orders: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>} */
         return $resolver->resolve($root);
     }
 

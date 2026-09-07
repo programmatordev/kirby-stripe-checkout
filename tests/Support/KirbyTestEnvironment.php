@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Support;
 
 use Closure;
 use Kirby\Cms\App;
+use Kirby\Cms\Blueprint;
 use Kirby\Data\Yaml;
 use Kirby\Filesystem\Dir;
 use Kirby\Filesystem\F;
@@ -57,6 +58,9 @@ final class KirbyTestEnvironment
 
         try {
             App::destroy();
+            // App::destroy() does not reset blueprint definitions shared across
+            // applications; each disposable site must load its own overrides.
+            Blueprint::$loaded = [];
             App::$enableWhoops = false;
 
             if ($roles !== null) {

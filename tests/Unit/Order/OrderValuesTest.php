@@ -563,18 +563,18 @@ final class OrderValuesTest extends TestCase
         }
     }
 
-    public function testDecoderIgnoresProjectFieldsButRejectsCanonicalAliases(): void
+    public function testDecoderIgnoresCustomFieldsButRejectsCanonicalAliases(): void
     {
         $data = $this->data();
         $fields = OrderSerializer::encode($data);
-        $fields['projectNote'] = 'Keep me';
+        $fields['customNote'] = 'Keep me';
         $this->assertSame($data, OrderSerializer::decode($fields, OrderSchema::TEMPLATE, 'Abc123def456GHI7'));
         $fields['UUID'] = 'other';
         $this->expectException(OrderDataException::class);
         OrderSerializer::decode($fields, OrderSchema::TEMPLATE, 'Abc123def456GHI7');
     }
 
-    public function testResourcesAreNotProjectData(): void
+    public function testResourcesAreNotCustomFieldData(): void
     {
         $resource = fopen('php://memory', 'r+');
 
@@ -611,7 +611,7 @@ final class OrderValuesTest extends TestCase
         }
     }
 
-    public function testProjectFieldsNormalizeNativeHandlesAndPreserveAllowedValues(): void
+    public function testCustomFieldsNormalizeNativeHandlesAndPreserveAllowedValues(): void
     {
         $fields = OrderCustomFieldsValidator::validate([
             'salesChannel' => 'website',
@@ -635,21 +635,21 @@ final class OrderValuesTest extends TestCase
                 OrderCustomFieldsValidator::validate([strtoupper($field) => null]);
                 $this->fail('Reserved field accepted: ' . $field);
             } catch (OrderDataException $error) {
-                $this->assertSame('order.project_fields_invalid', $error->errorCode());
+                $this->assertSame('order.custom_fields_invalid', $error->errorCode());
             }
         }
     }
 
-    #[DataProvider('invalidProjectFields')]
-    public function testRejectsUnstableOrReservedProjectFields(mixed $fields): void
+    #[DataProvider('invalidCustomFields')]
+    public function testRejectsUnstableOrReservedCustomFields(mixed $fields): void
     {
         $this->expectException(OrderDataException::class);
-        $this->expectExceptionMessage('order.project_fields_invalid');
+        $this->expectExceptionMessage('order.custom_fields_invalid');
         OrderCustomFieldsValidator::validate($fields);
     }
 
     /** @return iterable<string, array{mixed}> */
-    public static function invalidProjectFields(): iterable
+    public static function invalidCustomFields(): iterable
     {
         yield 'float' => [['data' => 1.1]];
         yield 'object' => [['data' => new stdClass()]];

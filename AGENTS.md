@@ -10,8 +10,8 @@
 
 ## Kirby conventions
 
-- Use Kirby-native features, storage, models, permissions, extension registries, and content APIs before introducing another dependency or persistence system.
-- Before adding infrastructure around a Kirby concern, inspect the supported Kirby version's public APIs and implementation. Add plugin-owned code only for a concrete, reproducible gap, document that gap, and keep the solution narrower than the Kirby behavior it complements. Prefer removing plugin code when Kirby already provides the required guarantee.
+- Use Kirby's existing core functionality whenever it meets the requirement instead of implementing a plugin-owned equivalent. This applies to features, storage, models, permissions, validation, extension registries, and content APIs, not just alternatives to external dependencies.
+- Before adding guards, wrappers, or infrastructure around a Kirby concern, inspect the supported Kirby version's public APIs and implementation, including what the relevant operation already enforces beyond the Panel UI. Add plugin-owned code only for a concrete, reproducible gap, document that gap, and keep the solution narrower than the Kirby behavior it complements. During reviews, identify and remove redundant plugin code when Kirby already provides the required guarantee.
 - Composer is the supported installation path. The root plugin bootstrap is canonical; the development-site loader must load it rather than duplicate it.
 - Follow Kirby's documented Panel design system. Compose custom interfaces from Kirby components, patterns, states, tokens, and accessibility behavior whenever possible.
 - Make Panel configuration understandable to non-developers. When PHP configuration overrides a Panel value, show that the value is locked and explain its source.

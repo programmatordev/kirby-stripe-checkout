@@ -30,6 +30,8 @@ final class PanelAreaTest extends KirbyTestCase
             'settings.update' => false,
             'diagnostics.read' => false,
             'prices.read' => false,
+            'orders.read' => false,
+            'orders.update' => false,
         ], $defaults);
         $this->assertNotNull($admin);
         $this->assertTrue($admin->for(PluginPermissions::CATEGORY, 'settings.read'));

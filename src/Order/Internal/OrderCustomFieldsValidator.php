@@ -45,7 +45,7 @@ final class OrderCustomFieldsValidator
 
             return $result;
         } catch (OrderDataException) {
-            throw new OrderDataException('order.project_fields_invalid');
+            throw new OrderDataException('order.custom_fields_invalid');
         }
     }
 }

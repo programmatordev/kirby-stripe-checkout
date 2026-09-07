@@ -8,11 +8,16 @@ use Kirby\Content\Field;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\CartRoutes;
 use ProgrammatorDev\StripeCheckout\Kirby\OptionsField;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderBlueprint;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
+use ProgrammatorDev\StripeCheckout\Kirby\OrdersPage;
 use ProgrammatorDev\StripeCheckout\Kirby\ProductBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\StripePriceField;
+use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
@@ -33,6 +38,9 @@ App::plugin(
         ],
         'blueprints' => [
             'pages/stripe-checkout' => [SettingsBlueprint::class, 'load'],
+            'pages/stripe-checkout-order' => [OrderBlueprint::class, 'load'],
+            'programmatordev/stripe-checkout/pages/order' => [OrderBlueprint::class, 'load'],
+            'pages/stripe-checkout-orders' => __DIR__ . '/blueprints/pages/stripe-checkout-orders.yml',
             'fields/stripe-checkout/name' => [ProductBlueprint::class, 'name'],
             'fields/stripe-checkout/price' => [ProductBlueprint::class, 'price'],
             'fields/stripe-checkout/stripe-price' => [ProductBlueprint::class, 'stripePrice'],
@@ -44,6 +52,8 @@ App::plugin(
         ],
         'pageModels' => [
             'stripe-checkout' => StripeCheckoutPage::class,
+            'stripe-checkout-order' => OrderPage::class,
+            'stripe-checkout-orders' => OrdersPage::class,
         ],
         'fields' => [
             'stripe-checkout-options' => OptionsField::class,
@@ -76,6 +86,8 @@ App::plugin(
             'settings.update' => false,
             'diagnostics.read' => false,
             'prices.read' => false,
+            'orders.read' => false,
+            'orders.update' => false,
         ],
         'areas' => [
             'stripe-checkout' => [StripeCheckoutArea::class, 'definition'],
@@ -94,6 +106,14 @@ App::plugin(
                 } catch (ConfigurationException) {
                     // Storage problems must remain recoverable through the
                     // Panel Settings error view and local diagnostics.
+                }
+
+                try {
+                    // @phpstan-ignore variable.undefined, argument.type
+                    (new OrderPageStore($this))->initialize();
+                } catch (OrderStorageException) {
+                    // Leave unowned/corrupt infrastructure untouched; queries
+                    // report unavailable storage rather than an empty store.
                 }
             },
         ],

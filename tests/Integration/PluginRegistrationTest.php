@@ -90,6 +90,8 @@ final class PluginRegistrationTest extends KirbyTestCase
             'settings.update' => false,
             'diagnostics.read' => false,
             'prices.read' => false,
+            'orders.read' => false,
+            'orders.update' => false,
         ], $extensions['permissions']);
         $this->assertIsArray($translations);
         $this->assertSame(['en', 'pt_PT'], array_keys($translations));

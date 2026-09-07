@@ -17,7 +17,7 @@ use ProgrammatorDev\StripeCheckout\Order\RefundStatus;
 use Throwable;
 
 /**
- * @internal Encodes the canonical projection, not Pages or project fields.
+ * @internal Encodes the canonical projection, not Pages or custom fields.
  * Provider snapshots acquire their own strict schemas with their owning features;
  * reserved names alone never permit arbitrary provider data into order content.
  */

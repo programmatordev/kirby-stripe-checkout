@@ -7,7 +7,10 @@ namespace ProgrammatorDev\StripeCheckout\Diagnostics;
 use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
+use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
+use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use Stripe\Stripe;
 
@@ -77,6 +80,20 @@ final class LocalDiagnostics
                 : $this->check('hubPage', self::PASS, 'hubPage.ready');
         } catch (ConfigurationException $error) {
             $checks[] = $this->failure('hubPage', $error, 'hubPage.invalid');
+        }
+
+        try {
+            $store = new OrderPageStore($this->kirby);
+            $container = $store->container();
+            $valid = $store->orders()->count();
+            $invalid = ($container?->childrenAndDrafts()->count() ?? 0) - $valid;
+            $checks[] = $container === null
+                ? $this->check('orders', self::WARNING, 'orders.missing')
+                : ($invalid > 0
+                    ? $this->check('orders', self::FAIL, 'orders.invalidChildren', ['count' => (string) $invalid])
+                    : $this->check('orders', self::PASS, 'orders.ready'));
+        } catch (OrderStorageException|OrderQueryException $error) {
+            $checks[] = $this->check('orders', self::FAIL, 'orders.invalid', ['code' => $error->errorCode()]);
         }
 
         return [

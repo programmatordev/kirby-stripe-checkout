@@ -20,6 +20,21 @@ final class ConfigurationResolverTest extends TestCase
 {
     private const PREFIX = 'programmatordev.stripe-checkout';
 
+    public function testOrderNumberFormatterSupportsDottedOptionsAndValidatesTheGroup(): void
+    {
+        $resolver = new ConfigurationResolver();
+        $formatter = static fn(string $uuid): string => 'CUSTOM';
+        $options = [self::PREFIX . '.orders.numberFormatter' => $formatter];
+        $this->assertSame($formatter, $resolver->orderNumberFormatter($options));
+        $this->assertTrue($resolver->resolve($options)->isValid());
+        $this->assertNull($resolver->orderNumberFormatter([]));
+        $invalid = [null, false, ['unknown' => true], ['numberFormatter' => 'trim']];
+
+        foreach ($invalid as $orders) {
+            $this->assertFalse($resolver->resolve([self::PREFIX => ['orders' => $orders]])->isValid());
+        }
+    }
+
     public function testResolvesTheInternalDefaultWithoutCredentials(): void
     {
         $configuration = $this->resolve([])->configurationOrFail();

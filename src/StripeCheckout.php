@@ -8,8 +8,11 @@ use Brick\Money\Currency;
 use Brick\Money\Money;
 use Kirby\Cms\App;
 use Kirby\Cms\Page;
+use Kirby\Cms\Pages;
+use Kirby\Cms\User;
 use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Money\MoneyFormatter;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
@@ -39,6 +42,28 @@ final class StripeCheckout
     public function cart(): ?Cart
     {
         return (new RuntimeFactory($this->kirby))->cart();
+    }
+
+    /** @return Pages<Page> */
+    public function orders(): Pages
+    {
+        return (new OrderPageStore($this->kirby))->orders();
+    }
+
+    public function order(string $uuid): ?Page
+    {
+        return (new OrderPageStore($this->kirby))->order($uuid);
+    }
+
+    /** @return Pages<Page> */
+    public function ordersFor(User $user): Pages
+    {
+        return (new OrderPageStore($this->kirby))->ordersFor($user);
+    }
+
+    public function orderFor(User $user, string $uuid): ?Page
+    {
+        return (new OrderPageStore($this->kirby))->orderFor($user, $uuid);
     }
 
     public function formatMoney(

@@ -47,3 +47,4 @@ Icon
 /site/config/env.php
 /site/logs/
 /site/sessions/
+/site/storage/stripe-checkout/

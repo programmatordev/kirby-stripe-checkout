@@ -24,9 +24,13 @@ permissions:
     settings.update: true
     diagnostics.read: true
     prices.read: true
+    orders.read: true
+    orders.update: true
 ```
 
 `prices.read` allows a role to search and explicitly refresh the read-only Stripe Price catalogue from product fields. Page-update permission still controls whether the selected scalar Price ID can be saved.
+
+`orders.read` permits viewing native order Pages. `orders.update` additionally permits editing project-owned fields; canonical payment/order fields remain protected. See [Orders](orders.md) for blueprint customization. The orders container is also initialized automatically; the main hub does not yet include an Orders tab.
 
 ## Panel menu
 
@@ -47,7 +51,7 @@ The area path is `stripe-checkout`. Its native blueprint tabs use `overview`, `s
 
 ## Local diagnostics
 
-The Diagnostics tab checks the PHP, Kirby, and Stripe SDK versions; configuration validity; credential presence and detectable test/live mode; store currency and default shipping configuration; and protected Page ownership. These checks are local and never make a Stripe API request.
+The Diagnostics tab checks the PHP, Kirby, and Stripe SDK versions; configuration validity; credential presence and detectable test/live mode; store currency and default shipping configuration; protected Page ownership; and invalid order records. These checks are local and never make a Stripe API request.
 
 Configuration errors expose a stable code and safe option path:
 
