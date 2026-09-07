@@ -338,9 +338,16 @@ final class OrderPageStore
                 throw new OrderDataException();
             }
 
-            // Stamp the commit before validating newly observed timestamps.
-            // Reducers need not advance updatedAt just to record an observation.
-            $candidate['updatedAt'] = max(OrderData::timestamp(new DateTimeImmutable()), $updatedAt);
+            $bookkeeping = ['lifecycleDeliveries' => true];
+            $orderChanged = OrderData::normalize(array_diff_key($before, $bookkeeping))
+                !== OrderData::normalize(array_diff_key($candidate, $bookkeeping));
+
+            // Hook attempts/results are not new order observations. Keep their
+            // timestamps in the ledger without aging the order or its page cache.
+            if ($orderChanged) {
+                $candidate['updatedAt'] = max(OrderData::timestamp(new DateTimeImmutable()), $updatedAt);
+            }
+
             $after = OrderSerializer::normalize($candidate);
             $this->validateTransition($before, $after);
             $content = $page->version('latest')->read('default') ?? [];
@@ -353,23 +360,23 @@ final class OrderPageStore
                 }
             }
 
-            /** @var list<array<string, mixed>> $entries */
-            $entries = $after['lifecycleDeliveries'] ?? [];
-            $revision = DeliveryLedger::nextRevision($entries);
-            $types = [];
+            if ($events !== []) {
+                /** @var list<array<string, mixed>> $entries */
+                $entries = $after['lifecycleDeliveries'] ?? [];
+                $revision = DeliveryLedger::nextRevision($entries);
+                $types = [];
 
-            foreach ($events as $type) {
-                if (in_array($type, [LifecycleEventType::OrderCreated, LifecycleEventType::OrderDeleted], true) || isset($types[$type->value])) {
-                    throw new OrderDataException();
+                foreach ($events as $type) {
+                    if (in_array($type, [LifecycleEventType::OrderCreated, LifecycleEventType::OrderDeleted], true) || isset($types[$type->value])) {
+                        throw new OrderDataException();
+                    }
+
+                    $types[$type->value] = true;
+                    $event = DeliveryLedger::event($after, $content, $type, $revision, $triggerType, $triggerId);
+                    $entries[] = DeliveryLedger::pending($event);
+                    $deliveryIds[] = $event->deliveryId();
                 }
 
-                $types[$type->value] = true;
-                $event = DeliveryLedger::event($after, $content, $type, $revision, $triggerType, $triggerId);
-                $entries[] = DeliveryLedger::pending($event);
-                $deliveryIds[] = $event->deliveryId();
-            }
-
-            if ($events !== []) {
                 $after['lifecycleDeliveries'] = $entries;
                 $after = OrderSerializer::normalize($after);
             }
@@ -381,9 +388,10 @@ final class OrderPageStore
                 throw new OrderStorageException('persistence.verify_failed');
             }
 
-            // Canonical writes bypass ModelCommit and its Page-update hooks,
-            // but rendered pages must still stop serving the previous state.
-            $this->kirby->cache('pages')->flush();
+            // Canonical writes bypass ModelCommit and its cache invalidation.
+            if ($orderChanged) {
+                $this->kirby->cache('pages')->flush();
+            }
 
             return $updated;
         });
@@ -400,7 +408,7 @@ final class OrderPageStore
     {
         OrderData::uuid($uuid);
         $pageId = OrderSchema::CONTAINER . '/' . (new Uri($uuid))->host();
-        $deleted = OrderWriteLock::run($this->kirby, $pageId, function () use ($pageId, $policy, $now): ?array {
+        $deletion = OrderWriteLock::run($this->kirby, $pageId, function () use ($pageId, $policy, $now): ?array {
             // An earlier cleanup candidate may since have been paid. Eligibility
             // must be checked again against the record protected by this lock.
             $page = $this->requirePage($pageId);
@@ -410,11 +418,11 @@ final class OrderPageStore
                 return null;
             }
 
-            $custom = array_filter($page->version('latest')->read('default') ?? [], static fn(string $field): bool => OrderSchema::isReserved($field) === false, ARRAY_FILTER_USE_KEY);
+            $customFields = array_filter($page->version('latest')->read('default') ?? [], static fn(string $field): bool => OrderSchema::isReserved($field) === false, ARRAY_FILTER_USE_KEY);
             /** @var list<array<string, mixed>> $entries */
             $entries = $data['lifecycleDeliveries'] ?? [];
             $data['updatedAt'] = OrderData::timestamp($now);
-            $event = DeliveryLedger::event($data, $custom, LifecycleEventType::OrderDeleted, DeliveryLedger::nextRevision($entries));
+            $event = DeliveryLedger::event($data, $customFields, LifecycleEventType::OrderDeleted, DeliveryLedger::nextRevision($entries));
 
             try {
                 $this->kirby->impersonate('kirby', fn(): bool => $page->deleteStoredOrder());
@@ -435,11 +443,11 @@ final class OrderPageStore
             return [$page, $event];
         });
 
-        if ($deleted === null) {
+        if ($deletion === null) {
             return false;
         }
 
-        (new OrderLifecycle($this->kirby))->deleted($deleted[0], $deleted[1]);
+        (new OrderLifecycle($this->kirby))->deleted($deletion[0], $deletion[1]);
 
         return true;
     }

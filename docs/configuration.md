@@ -72,6 +72,8 @@ Fully dotted Kirby option keys are accepted, but defining the same logical optio
 
 When PHP locks a setting, the Panel keeps the field visible, shows the effective value, and explains its configuration path. A previously stored Page value is preserved and becomes active again if the PHP value is removed. The same lock is enforced on the server.
 
+Normal Panel saves, including partial saves and pending edits, never copy PHP overrides into Page content. Direct Page/API attempts to change a locked setting are rejected.
+
 Unknown options, wrong types, unsupported values, duplicate definitions, blank credentials, and recognizable test/live key mismatches are rejected when plugin configuration is used. Invalid plugin configuration does not prevent unrelated Kirby pages from booting.
 
 ## Reading effective settings

@@ -141,6 +141,10 @@ Keep the argument names `order` and `lifecycleEvent`: Kirby supplies them by nam
 
 Failed listeners do not undo the order or its payment state. A protected `lifecycleDeliveries` field records pending, delivered or failed status, attempt count, safe error code and the original event. Diagnostics show pending/failed counts. A retry keeps the same delivery ID and snapshot, but receives the current Page. The internal retry primitive exists; there is no Panel retry action or automatic retry runner yet.
 
+Recording a hook attempt or result does not advance the order's `updatedAt` or invalidate the storefront page cache. Business-state changes still invalidate that cache.
+
+A failing native `page.create:after` hook does not make a verified, saved order appear uncreated. Failures before or during the native write still fail creation. Native hooks are not tracked for retries; use the plugin lifecycle hooks for effects that need that record.
+
 Kirby stops calling listeners when one throws. Retrying the whole hook can therefore call listeners that already succeeded. Make external effects idempotent using `deliveryId`, or enqueue `toArray()` into your own durable queue. A process can stop between an external effect and saving its outcome; exactly-once delivery is not promised.
 
 The controlled, single-order deletion primitive emits `programmatordev.stripe-checkout.order.deleted` with Kirby's final in-memory Page after deletion. A failed deletion hook **cannot be retried**: only the last sanitized outcome is retained, not the deleted customer's snapshot. Durable deletion integrations must enqueue successfully during the first invocation. No public deletion route or automatic cleanup runner is available yet.

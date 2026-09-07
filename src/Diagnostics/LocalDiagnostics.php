@@ -123,7 +123,7 @@ final class LocalDiagnostics
             $checks[] = $this->check('orders', self::FAIL, 'orders.invalid', ['code' => $error->errorCode()]);
         }
 
-        if ((new OrderLifecycle($this->kirby))->hasFailedDeletion()) {
+        if ((new OrderLifecycle($this->kirby))->hasFailedDeletionDelivery()) {
             $checks[] = $this->check('lifecycleDeletion', self::WARNING, 'lifecycleDeletion.failed');
         }
 

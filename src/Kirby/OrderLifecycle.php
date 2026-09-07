@@ -72,9 +72,9 @@ final class OrderLifecycle
                 $entries = $data['lifecycleDeliveries'] ?? [];
 
                 foreach ($entries as &$entry) {
-                    $event = OrderData::map($entry['event']);
+                    $eventData = OrderData::map($entry['event']);
 
-                    if ($event['deliveryId'] === $deliveryId) {
+                    if ($eventData['deliveryId'] === $deliveryId) {
                         // A successful concurrent attempt wins over a later
                         // failure. Native hook consumers still deduplicate effects.
                         if ($entry['status'] !== 'delivered') {
@@ -121,7 +121,7 @@ final class OrderLifecycle
         }
     }
 
-    public function hasFailedDeletion(): bool
+    public function hasFailedDeletionDelivery(): bool
     {
         $path = $this->deletionOutcomePath();
 

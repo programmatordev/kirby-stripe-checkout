@@ -9,6 +9,7 @@ use DateTimeImmutable;
 use Kirby\Cms\Page;
 use Kirby\Data\Data;
 use Kirby\Exception\PermissionException;
+use Kirby\Uuid\Uuid;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
@@ -19,6 +20,7 @@ use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEvent;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
+use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
@@ -32,6 +34,100 @@ use RuntimeException;
 
 final class OrderLifecycleTest extends KirbyTestCase
 {
+    public function testNativeAfterCreateFailureDoesNotHideTheCommittedOrder(): void
+    {
+        $observed = [];
+        $this->restart([
+            'page.create:after' => function (Page $page): void {
+                if ($page instanceof OrderPage) {
+                    throw new RuntimeException('Private native callback error');
+                }
+            },
+            'programmatordev.stripe-checkout.order.created' => function (LifecycleEvent $lifecycleEvent) use (&$observed): void {
+                $observed[] = $lifecycleEvent;
+            },
+        ]);
+        $page = $this->createOrder();
+        $this->assertCount(1, (new OrderPageStore($this->kirby))->orders());
+        $this->assertCount(1, $observed);
+        $this->assertSame($page->uuid()->toString(), $observed[0]->pageUuid());
+        $this->assertSame('delivered', $this->entries($page)[0]['status']);
+    }
+
+    public function testPostCommitRecoveryStillRejectsCorruptOrderContent(): void
+    {
+        $observed = false;
+        $this->restart([
+            'page.create:after' => function (Page $page): void {
+                if ($page instanceof OrderPage) {
+                    $page->version('latest')->update(['subtotal' => 'broken'], 'default');
+                    throw new RuntimeException('Private native callback error');
+                }
+            },
+            'programmatordev.stripe-checkout.order.created' => function () use (&$observed): void {
+                $observed = true;
+            },
+        ]);
+
+        try {
+            $this->createOrder();
+            $this->fail('Expected invalid stored content to be rejected.');
+        } catch (OrderStorageException $error) {
+            $this->assertSame('persistence.content_invalid', $error->errorCode());
+            $this->assertFalse($observed);
+        }
+    }
+
+    public function testCreationRecoveryNeverAdoptsACollidingOrder(): void
+    {
+        $page = $this->createOrder();
+        $store = new OrderPageStore($this->kirby);
+        $before = $store->data($page);
+        $generator = Uuid::$generator;
+        Uuid::$generator = static fn(): string => $page->uuid()->id();
+
+        try {
+            $this->createOrder();
+            $this->fail('Expected the collision to be rejected.');
+        } catch (OrderStorageException $error) {
+            $this->assertSame('persistence.write_failed', $error->errorCode());
+            $this->assertSame($before, $store->data($store->requirePage($page->id())));
+            $this->assertCount(1, $store->orders());
+        } finally {
+            Uuid::$generator = $generator;
+        }
+    }
+
+    public function testHookBookkeepingPreservesOrderTimeAndStorefrontCache(): void
+    {
+        $fail = true;
+        $this->restart([
+            'programmatordev.stripe-checkout.order.created' => function () use (&$fail): void {
+                /** @var bool $fail Changed between delivery attempts. */
+                if ($fail) {
+                    throw new RuntimeException('Retry later');
+                }
+            },
+        ], options: ['cache' => ['pages' => ['active' => true]]]);
+        $store = new OrderPageStore($this->kirby);
+        $page = $this->createOrder();
+        $before = $store->data($page);
+        $entry = $this->entries($page)[0];
+        $cache = $this->kirby->cache('pages');
+        $cache->set('order-summary', 'unchanged');
+        $fail = false;
+        $event = OrderData::map($entry['event']);
+        (new OrderLifecycle($this->kirby))->deliver($page->uuid()->toString(), OrderData::text($event['deliveryId']));
+        $page = $store->requirePage($page->id());
+        $after = $store->data($page);
+        $retried = $this->entries($page)[0];
+        $this->assertSame('unchanged', $cache->get('order-summary'));
+        $this->assertSame($before['updatedAt'], $after['updatedAt']);
+        $this->assertSame('delivered', $retried['status']);
+        $this->assertSame(2, $retried['attempts']);
+        $this->assertSame($entry['event'], $retried['event']);
+    }
+
     public function testCreationHookRunsAfterPersistenceWithoutImpersonationOrWriteLock(): void
     {
         $observed = [];
@@ -205,7 +301,7 @@ final class OrderLifecycleTest extends KirbyTestCase
         $this->assertSame('failed', $outcome['status']);
         $this->assertSame(['deliveryId', 'occurredAt', 'status', 'errorCode'], array_keys($outcome));
         $this->assertStringNotContainsString('Private', json_encode($outcome, JSON_THROW_ON_ERROR));
-        $this->assertTrue((new OrderLifecycle($this->kirby))->hasFailedDeletion());
+        $this->assertTrue((new OrderLifecycle($this->kirby))->hasFailedDeletionDelivery());
         $this->assertCount(0, $store->orders());
     }
 
@@ -304,11 +400,12 @@ final class OrderLifecycleTest extends KirbyTestCase
     /**
      * @param array<string, callable> $hooks
      * @param list<array<string, mixed>>|null $languages
+     * @param array<string, mixed> $options
      */
-    private function restart(array $hooks, ?array $languages = null): void
+    private function restart(array $hooks, ?array $languages = null, array $options = []): void
     {
         $this->environment->close();
-        $this->environment = KirbyTestEnvironment::start(hooks: $hooks, languages: $languages, impersonate: null);
+        $this->environment = KirbyTestEnvironment::start(options: $options, hooks: $hooks, languages: $languages, impersonate: null);
         $this->kirby = $this->environment->app();
     }
 

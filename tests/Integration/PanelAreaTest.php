@@ -258,14 +258,13 @@ final class PanelAreaTest extends KirbyTestCase
             ],
         ]);
 
+        $this->expectException(PermissionException::class);
+        $this->expectExceptionMessage('locked by PHP configuration');
         $this->kirby->api()->call(
             'pages/stripe-checkout',
             'PATCH',
             ['body' => ['priceSource' => 'stripe']],
         );
-        $page = (new StripeCheckoutPageStore($this->kirby))->page();
-        $this->assertNotNull($page);
-        $this->assertSame('kirby', $page->content()->toArray()['pricesource']);
     }
 
     public function testViewReportsAnExistingPageCollisionWithoutChangingIt(): void

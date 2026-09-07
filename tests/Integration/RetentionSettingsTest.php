@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Kirby\Api\Controller\Changes;
+use Kirby\Content\Version;
+use Kirby\Content\VersionId;
 use Kirby\Data\Yaml;
 use Kirby\Exception\PermissionException;
 use Kirby\Filesystem\F;
@@ -22,6 +24,99 @@ use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
 
 final class RetentionSettingsTest extends KirbyTestCase
 {
+    #[DataProvider('lockedSaveModes')]
+    public function testNativeSavesPreserveMissingAndStoredLockedValues(bool $fullPayload, bool $storedToggle, bool $multilang): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(options: [
+            'programmatordev.stripe-checkout.settings' => [
+                'priceSource' => 'stripe',
+                'currency' => 'USD',
+                'defaultRequiresShipping' => false,
+                'cleanupUnpaidOrders' => false,
+                'creationFailureRetentionDays' => 21,
+            ],
+        ], languages: $multilang ? [
+            [
+                'code' => 'en',
+                'name' => 'English',
+                'default' => true,
+            ],
+            [
+                'code' => 'pt',
+                'name' => 'Português',
+            ],
+        ] : null, beforeApp: static fn(TestWorkspace $workspace) => self::seedExistingSettings($workspace, [
+            'currency' => 'EUR',
+            'defaultRequiresShipping' => 'yes',
+            'cleanupCreationFailures' => 'true',
+            ...($storedToggle ? ['cleanupUnpaidOrders' => 'true'] : []),
+        ], $multilang));
+        $this->kirby = $this->environment->app();
+        $store = new StripeCheckoutPageStore($this->kirby);
+        $page = $store->initialize();
+        $input = $fullPayload ? $this->viewVersions()['changes'] : [];
+        Changes::publish($page, [...$input, 'cleanupcreationfailures' => false]);
+        $settings = $store->settings();
+        $this->assertFalse($settings->value('cleanupCreationFailures'));
+        $this->assertSame($storedToggle ? true : null, $settings->value('cleanupUnpaidOrders'));
+        $this->assertNull($settings->value('creationFailureRetentionDays'));
+        $this->assertSame('kirby', $settings->priceSource());
+        $this->assertSame('EUR', $settings->currency());
+        $this->assertTrue($settings->defaultRequiresShipping());
+        $this->assertFalse($store->page()?->version('changes')->exists());
+
+        if ($multilang) {
+            $this->kirby->setCurrentLanguage('pt');
+            $page = $store->page();
+            Changes::publish($page, ['cleanupunpaidorders' => true]);
+            $this->assertSame($storedToggle ? true : null, $store->settings()->value('cleanupUnpaidOrders'));
+            $this->assertArrayNotHasKey('cleanupunpaidorders', $store->page()->version('latest')->read('pt') ?? []);
+        }
+    }
+
+    /** @return iterable<string, array{bool, bool, bool}> */
+    public static function lockedSaveModes(): iterable
+    {
+        yield 'partial, missing toggle' => [false, false, false];
+        yield 'partial, stored toggle' => [false, true, false];
+        yield 'complete, missing toggle' => [true, false, false];
+        yield 'complete, stored toggle' => [true, true, false];
+        yield 'multilang partial, missing toggle' => [false, false, true];
+        yield 'multilang partial, stored toggle' => [false, true, true];
+        yield 'multilang complete, missing toggle' => [true, false, true];
+        yield 'multilang complete, stored toggle' => [true, true, true];
+    }
+
+    public function testPhpLocksReplaceStalePendingValuesWithoutLosingOtherEdits(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(options: [
+            'programmatordev.stripe-checkout.settings.cleanupUnpaidOrders' => false,
+        ]);
+        $this->kirby = $this->environment->app();
+        $store = new StripeCheckoutPageStore($this->kirby);
+        $page = $store->initialize();
+        $latest = $page->version('latest')->read('default') ?? [];
+        // Seed the raw native version as if an edit predated the PHP lock.
+        $rawChanges = new Version($page, VersionId::from('changes'));
+        $rawChanges->save([
+            ...$latest,
+            'cleanupunpaidorders' => 'false',
+            'currency' => 'EUR',
+            'defaultrequiresshipping' => 'no',
+            'unpaidorderretentiondays' => '45',
+        ]);
+        Changes::save($page, []);
+        $savedChanges = $rawChanges->read('default');
+        $this->assertNotNull($savedChanges);
+        $this->assertSame('true', $savedChanges['cleanupunpaidorders'] ?? null);
+        $this->assertSame('45', $savedChanges['unpaidorderretentiondays'] ?? null);
+        Changes::publish($page, []);
+        $this->assertTrue($store->settings()->value('cleanupUnpaidOrders'));
+        $this->assertSame(45, $store->settings()->value('unpaidOrderRetentionDays'));
+    }
+
     #[DataProvider('languageModes')]
     public function testExistingSettingsShowMissingDefaultsWithoutReinstallationOrWrites(bool $multilang): void
     {

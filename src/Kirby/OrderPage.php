@@ -72,6 +72,10 @@ final class OrderPage extends ProtectedOrderPage
     /** @param array<string, mixed> $arguments */
     protected function commit(string $action, array $arguments, Closure $callback): mixed
     {
+        if ($action === 'create') {
+            return $this->commitCreation($arguments, $callback);
+        }
+
         if ($action !== 'update') {
             return parent::commit($action, $arguments, $callback);
         }
@@ -99,6 +103,31 @@ final class OrderPage extends ProtectedOrderPage
 
             return (new OrderPageStore($this->kirby()))->updateCustomFields($page->id(), $changes, $languageCode);
         });
+    }
+
+    /** @param array<string, mixed> $arguments */
+    private function commitCreation(array $arguments, Closure $callback): mixed
+    {
+        $created = null;
+
+        try {
+            return parent::commit('create', $arguments, static function (...$arguments) use ($callback, &$created): mixed {
+                return $created = $callback(...$arguments);
+            });
+        } catch (Throwable $error) {
+            // Only recover after this invocation's native write completed.
+            // Collisions and failed writes do not produce a completed callback
+            // result. The store still reloads and verifies content before dispatch.
+            if ($created instanceof self === false) {
+                throw $error;
+            }
+
+            // ModelCommit normally flushes after its hook; an exception skips it.
+            $this->kirby()->cache('pages')->flush();
+            error_log('Stripe Checkout: lifecycle.creation_hook_failed');
+
+            return $created;
+        }
     }
 
     /**

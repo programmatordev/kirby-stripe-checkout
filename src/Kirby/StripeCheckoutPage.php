@@ -8,6 +8,8 @@ use Kirby\Cms\Page;
 use Kirby\Cms\PageBlueprint;
 use Kirby\Cms\Site;
 use Kirby\Content\Field;
+use Kirby\Content\Version;
+use Kirby\Content\VersionId;
 use Kirby\Exception\NotFoundException;
 use Kirby\Exception\PermissionException;
 use Kirby\Toolkit\I18n;
@@ -81,6 +83,15 @@ final class StripeCheckoutPage extends Page
         return $this->blueprint;
     }
 
+    public function version(VersionId|string|null $versionId = null): Version
+    {
+        $version = parent::version($versionId);
+
+        return $version->id()->is('changes') || $version->id()->is('latest')
+            ? new SettingsVersion($this, $version->id())
+            : $version;
+    }
+
     /** @param array<string, mixed>|null $input */
     public function update(
         ?array $input = null,
@@ -100,10 +111,7 @@ final class StripeCheckoutPage extends Page
         $settingInput = array_intersect_key($input, self::SETTING_FIELDS);
 
         if ($settingInput !== []) {
-            $input = [
-                ...array_diff_key($input, self::SETTING_FIELDS),
-                ...$this->editableSettingUpdates($settingInput),
-            ];
+            $this->assertSettingUpdates($settingInput);
         }
 
         $defaultLanguageInput = array_intersect_key($input, self::DEFAULT_LANGUAGE_FIELDS);
@@ -248,11 +256,8 @@ final class StripeCheckoutPage extends Page
         }
     }
 
-    /**
-     * @param array<string, mixed> $input
-     * @return array<string, mixed>
-     */
-    private function editableSettingUpdates(array $input): array
+    /** @param array<string, mixed> $input */
+    private function assertSettingUpdates(array $input): void
     {
         $storedValues = [];
         $candidateValues = [];
@@ -280,18 +285,12 @@ final class StripeCheckoutPage extends Page
                 continue;
             }
 
-            if ($candidate->value($name) !== $stored->value($name) && $candidate->value($name) !== $setting->value()) {
+            if ($candidate->value($name) !== $stored->value($name)) {
                 throw new PermissionException(
                     message: 'The Stripe Checkout setting is locked by PHP configuration.',
                 );
             }
-
-            // Native Panel saves echo displayed values, including disabled
-            // fields. Accept the PHP value without persisting it over its shadow.
-            unset($input[$field]);
         }
-
-        return $input;
     }
 
     private function structuralChangeDenied(): PermissionException
