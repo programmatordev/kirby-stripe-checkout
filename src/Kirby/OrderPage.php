@@ -20,6 +20,26 @@ use Throwable;
 /** @internal Ordinary Kirby fields with guarded custom-field edits and canonical storage. */
 final class OrderPage extends ProtectedOrderPage
 {
+    private bool $deletingStoredOrder = false;
+
+    /** @internal Used only by the store after reloading and checking eligibility. */
+    public function deleteStoredOrder(): bool
+    {
+        $this->deletingStoredOrder = true;
+
+        try {
+            return parent::delete();
+        } finally {
+            $this->deletingStoredOrder = false;
+        }
+    }
+
+    /** @internal Opens only the native deletion permission for this operation. */
+    public function isDeletingStoredOrder(): bool
+    {
+        return $this->deletingStoredOrder;
+    }
+
     public function version(VersionId|string|null $versionId = null): Version
     {
         $version = parent::version($versionId);

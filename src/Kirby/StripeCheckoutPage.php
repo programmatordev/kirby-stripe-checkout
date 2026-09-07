@@ -40,6 +40,10 @@ final class StripeCheckoutPage extends Page
         'pricesource' => 'priceSource',
         'currency' => 'currency',
         'defaultrequiresshipping' => 'defaultRequiresShipping',
+        'cleanupcreationfailures' => 'cleanupCreationFailures',
+        'creationfailureretentiondays' => 'creationFailureRetentionDays',
+        'cleanupunpaidorders' => 'cleanupUnpaidOrders',
+        'unpaidorderretentiondays' => 'unpaidOrderRetentionDays',
     ];
 
     private const DEFAULT_LANGUAGE_FIELDS = [
@@ -94,12 +98,15 @@ final class StripeCheckoutPage extends Page
         $this->assertOnlySettingsFieldsAreUpdated($input, $languageCode);
 
         $settingInput = array_intersect_key($input, self::SETTING_FIELDS);
-        $defaultLanguageInput = array_intersect_key($input, self::DEFAULT_LANGUAGE_FIELDS);
 
         if ($settingInput !== []) {
-            $this->assertSettingUpdates($settingInput);
+            $input = [
+                ...array_diff_key($input, self::SETTING_FIELDS),
+                ...$this->editableSettingUpdates($settingInput),
+            ];
         }
 
+        $defaultLanguageInput = array_intersect_key($input, self::DEFAULT_LANGUAGE_FIELDS);
         $defaultLanguageCode = $this->kirby()->defaultLanguage()?->code();
         $targetLanguageCode = $languageCode ?? $this->kirby()->languageCode();
 
@@ -241,25 +248,22 @@ final class StripeCheckoutPage extends Page
         }
     }
 
-    /** @param array<string, mixed> $input */
-    private function assertSettingUpdates(array $input): void
+    /**
+     * @param array<string, mixed> $input
+     * @return array<string, mixed>
+     */
+    private function editableSettingUpdates(array $input): array
     {
-        $stored = new PageSettings(
-            priceSource: $this->fieldValue('priceSource'),
-            currency: $this->fieldValue('currency'),
-            defaultRequiresShipping: $this->fieldValue('defaultRequiresShipping'),
-        );
-        $candidate = new PageSettings(
-            priceSource: array_key_exists('pricesource', $input)
-                ? $input['pricesource']
-                : $this->fieldValue('priceSource'),
-            currency: array_key_exists('currency', $input)
-                ? $input['currency']
-                : $this->fieldValue('currency'),
-            defaultRequiresShipping: array_key_exists('defaultrequiresshipping', $input)
-                ? $input['defaultrequiresshipping']
-                : $this->fieldValue('defaultRequiresShipping'),
-        );
+        $storedValues = [];
+        $candidateValues = [];
+
+        foreach (self::SETTING_FIELDS as $field => $name) {
+            $storedValues[$name] = $this->fieldValue($name);
+            $candidateValues[$name] = array_key_exists($field, $input) ? $input[$field] : $storedValues[$name];
+        }
+
+        $stored = new PageSettings(...$storedValues);
+        $candidate = new PageSettings(...$candidateValues);
 
         /** @var array<string, mixed> $options */
         $options = $this->kirby()->options();
@@ -272,15 +276,22 @@ final class StripeCheckoutPage extends Page
             $name = self::SETTING_FIELDS[$field];
             $setting = $settings->setting($name);
 
-            if (
-                $setting?->isLocked() === true
-                && $candidate->value($name) !== $stored->value($name)
-            ) {
+            if ($setting?->isLocked() !== true) {
+                continue;
+            }
+
+            if ($candidate->value($name) !== $stored->value($name) && $candidate->value($name) !== $setting->value()) {
                 throw new PermissionException(
                     message: 'The Stripe Checkout setting is locked by PHP configuration.',
                 );
             }
+
+            // Native Panel saves echo displayed values, including disabled
+            // fields. Accept the PHP value without persisting it over its shadow.
+            unset($input[$field]);
         }
+
+        return $input;
     }
 
     private function structuralChangeDenied(): PermissionException

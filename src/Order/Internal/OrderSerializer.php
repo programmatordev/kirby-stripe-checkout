@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Order\Internal;
 use DateTimeImmutable;
 use Kirby\Data\Yaml;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\DeliveryLedger;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\DisputeStatus;
@@ -236,7 +237,11 @@ final class OrderSerializer
 
             self::validateState($data, $checkoutStatus, $paymentStatus);
 
-            $deferredSnapshots = array_diff(OrderSchema::SNAPSHOTS, ['stripeCheckout', 'checkoutAttempt', 'initiatingLineItems']);
+            if (isset($data['lifecycleDeliveries'])) {
+                $data['lifecycleDeliveries'] = DeliveryLedger::normalize($data['lifecycleDeliveries'], $uuid);
+            }
+
+            $deferredSnapshots = array_diff(OrderSchema::SNAPSHOTS, ['stripeCheckout', 'checkoutAttempt', 'initiatingLineItems', 'lifecycleDeliveries']);
 
             foreach ($deferredSnapshots as $field) {
                 if (isset($data[$field]) && $data[$field] !== []) {

@@ -19,7 +19,7 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
  */
 final class ConfigurationResolver
 {
-    private const ROOT_KEYS = ['cart', 'orders', 'products', 'settings', 'stripe', 'translations'];
+    private const ROOT_KEYS = ['cart', 'housekeeping', 'orders', 'products', 'settings', 'stripe', 'translations'];
     private const PRODUCT_FIELD_KEYS = [
         'name',
         'description',
@@ -31,7 +31,7 @@ final class ConfigurationResolver
         'options',
     ];
     private const PRODUCT_KEYS = ['fields', 'resolver'];
-    private const SETTINGS_KEYS = ['priceSource', 'currency', 'defaultRequiresShipping'];
+    private const SETTINGS_KEYS = ['priceSource', 'currency', 'defaultRequiresShipping', 'cleanupCreationFailures', 'creationFailureRetentionDays', 'cleanupUnpaidOrders', 'unpaidOrderRetentionDays'];
     private const STRIPE_KEYS = ['publishableKey', 'secretKey', 'webhookSecret'];
 
     public function __construct(
@@ -50,6 +50,7 @@ final class ConfigurationResolver
         try {
             $root = $this->resolveRoot($this->extractor->extract($options));
             $this->orderNumberFormatter($options);
+            $housekeeping = $this->housekeeping($options);
             $cartEnabled = $this->resolveCart($root['cart']);
             $products = $this->resolveProducts($root['products']);
             $stripe = $this->resolveStripe($root['stripe']);
@@ -64,6 +65,7 @@ final class ConfigurationResolver
                 translations: $translations,
                 products: $products,
                 cartEnabled: $cartEnabled,
+                housekeeping: $housekeeping,
             ));
         } catch (ConfigurationException $error) {
             return ConfigurationReport::invalid($error);
@@ -79,6 +81,36 @@ final class ConfigurationResolver
     public function cartEnabled(#[SensitiveParameter] array $options): bool
     {
         return $this->resolveCart($this->cartOptions($options));
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     * @return array{intervalHours: int, batchSize: int}
+     */
+    public function housekeeping(#[SensitiveParameter] array $options): array
+    {
+        $root = $this->extractor->extract($options);
+        $values = array_key_exists('housekeeping', $root) ? $root['housekeeping'] : [];
+
+        if (is_array($values) === false) {
+            throw new ConfigurationException('configuration.type_invalid', 'housekeeping');
+        }
+
+        $this->assertKnownKeys($values, ['intervalHours', 'batchSize'], 'housekeeping');
+        $values = [...Defaults::HOUSEKEEPING, ...$values];
+
+        foreach ($values as $name => $value) {
+            if (is_int($value) === false) {
+                throw new ConfigurationException('configuration.type_invalid', 'housekeeping.' . $name);
+            }
+
+            if ($value < 1 || $name === 'batchSize' && $value > 100) {
+                throw new ConfigurationException('configuration.value_invalid', 'housekeeping.' . $name);
+            }
+        }
+
+        /** @var array{intervalHours: positive-int, batchSize: positive-int} $values */
+        return $values;
     }
 
     /** @param array<string, mixed> $options */
@@ -130,7 +162,7 @@ final class ConfigurationResolver
 
     /**
      * @param array<string, mixed> $root
-     * @return array{cart: array<string, mixed>, orders: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>}
+     * @return array{cart: array<string, mixed>, housekeeping: array<string, mixed>, orders: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>}
      */
     private function resolveRoot(#[SensitiveParameter] array $root): array
     {
@@ -145,6 +177,7 @@ final class ConfigurationResolver
         $resolver = new OptionsResolver();
         $resolver->setDefaults([
             'cart' => [],
+            'housekeeping' => [],
             'orders' => [],
             'products' => [],
             'settings' => [],
@@ -153,12 +186,13 @@ final class ConfigurationResolver
         ]);
         $resolver->setAllowedTypes('products', 'array');
         $resolver->setAllowedTypes('cart', 'array');
+        $resolver->setAllowedTypes('housekeeping', 'array');
         $resolver->setAllowedTypes('orders', 'array');
         $resolver->setAllowedTypes('settings', 'array');
         $resolver->setAllowedTypes('stripe', 'array');
         $resolver->setAllowedTypes('translations', 'array');
 
-        /** @var array{cart: array<string, mixed>, orders: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>} */
+        /** @var array{cart: array<string, mixed>, housekeeping: array<string, mixed>, orders: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>} */
         return $resolver->resolve($root);
     }
 
@@ -375,24 +409,31 @@ final class ConfigurationResolver
             PriceSource::Stripe->value,
         ]);
 
-        /** @var array{priceSource: string|null, currency: string|null, defaultRequiresShipping: bool|null} $resolved */
+        foreach (Defaults::RETENTION as $name => $default) {
+            $value = $settings[$name] ?? null;
+
+            if ($value !== null && (is_bool($default) ? is_bool($value) === false : is_int($value) === false)) {
+                throw new ConfigurationException('configuration.type_invalid', 'settings.' . $name);
+            }
+
+            if (is_int($value) && $value < 1) {
+                throw new ConfigurationException('configuration.value_invalid', 'settings.' . $name);
+            }
+
+            $resolver->setDefault($name, null);
+            $resolver->setAllowedTypes($name, ['null', is_bool($default) ? 'bool' : 'int']);
+        }
+
+        /** @var array<string, mixed> $resolved */
         $resolved = $resolver->resolve($settings);
 
-        return new Settings([
-            'priceSource' => $this->resolveSetting(
-                $resolved['priceSource'],
-                $pageSettings?->priceSource(),
-                PriceSource::Kirby->value,
-            ),
-            'currency' => $this->resolveSetting(
-                $resolved['currency'],
-                $pageSettings?->currency(),
-            ),
-            'defaultRequiresShipping' => $this->resolveSetting(
-                $resolved['defaultRequiresShipping'],
-                $pageSettings?->defaultRequiresShipping(),
-            ),
-        ]);
+        $effective = [];
+
+        foreach (Defaults::SETTINGS as $name => $default) {
+            $effective[$name] = $this->resolveSetting($resolved[$name], $pageSettings?->value($name), $default);
+        }
+
+        return new Settings($effective);
     }
 
     private function resolveSetting(

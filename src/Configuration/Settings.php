@@ -21,7 +21,7 @@ final class Settings
      */
     public function __construct(array $settings)
     {
-        if (array_keys($settings) !== ['priceSource', 'currency', 'defaultRequiresShipping']) {
+        if (array_keys($settings) !== array_keys(Defaults::SETTINGS)) {
             throw new LogicException('The public Settings view contains an unexpected schema.');
         }
 
@@ -64,6 +64,37 @@ final class Settings
     public function setting(string $path): ?Setting
     {
         return $this->settings[$path] ?? null;
+    }
+
+    public function cleanupCreationFailures(): bool
+    {
+        return $this->settings['cleanupCreationFailures']->value() === true;
+    }
+
+    public function creationFailureRetentionDays(): int
+    {
+        return $this->retentionDays('creationFailureRetentionDays');
+    }
+
+    public function cleanupUnpaidOrders(): bool
+    {
+        return $this->settings['cleanupUnpaidOrders']->value() === true;
+    }
+
+    public function unpaidOrderRetentionDays(): int
+    {
+        return $this->retentionDays('unpaidOrderRetentionDays');
+    }
+
+    private function retentionDays(string $name): int
+    {
+        $value = $this->settings[$name]->value();
+
+        if (is_int($value) === false || $value < 1) {
+            throw new LogicException('Resolved retention days must be a positive integer.');
+        }
+
+        return $value;
     }
 
     /** @return array<string, Setting> */

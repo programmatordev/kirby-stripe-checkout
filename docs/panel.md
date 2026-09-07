@@ -51,7 +51,7 @@ The area path is `stripe-checkout`. Its native blueprint tabs use `overview`, `s
 
 ## Local diagnostics
 
-The Diagnostics tab checks the PHP, Kirby, and Stripe SDK versions; configuration validity; credential presence and detectable test/live mode; store currency and default shipping configuration; protected Page ownership; and invalid order records. These checks are local and never make a Stripe API request.
+The Diagnostics tab checks the PHP, Kirby, and Stripe SDK versions; configuration validity; credential presence and detectable test/live mode; store currency and default shipping configuration; protected Page ownership; and invalid order records. It also shows retention/housekeeping configuration, pending and failed hook executions, and a warning if the last deleted-order hook failed. These refer to the plugin's local lifecycle hooks, not shipping or Stripe webhook deliveries. These checks are local and never make a Stripe API request or execute cleanup.
 
 Configuration errors expose a stable code and safe option path:
 

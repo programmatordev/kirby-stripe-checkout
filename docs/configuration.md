@@ -47,7 +47,8 @@ The Settings tab currently contains:
 
 - `priceSource`: `kirby` (the default) or `stripe`;
 - `currency`: one uppercase Stripe presentment currency, required before commerce features can run;
-- `defaultRequiresShipping`: the fallback used when a future product does not declare whether it needs shipping.
+- `defaultRequiresShipping`: the fallback used when a product does not declare whether it needs shipping;
+- [order retention preferences](#order-retention), with separate controls for failed attempts and unpaid orders.
 
 The protected Page is created with `kirby` as its saved price source, so a fresh installation does not require an initial save for that deterministic default. The plugin does not guess a currency or whether products are physical. It can boot with those two fields empty so the Panel and diagnostics remain available, but the Settings tab asks the operator to select both values.
 
@@ -97,9 +98,39 @@ Only safe, store-facing settings are available through this API. Credentials and
 
 Page values override internal defaults. Explicit PHP values remain authoritative and lock only their corresponding Page fields.
 
+When an update adds a setting with a default, existing Settings pages display that default automatically—no reinstall is needed. Opening the page does not write content or replace saved values or pending edits. Defaults are stored on a normal save; on multi-language sites, edit these store-wide settings in the default language. Required settings without a default still need your input.
+
 See [Panel and diagnostics](panel.md) for the protected Page, permissions, and configuration troubleshooting.
 
 See [Money and currency](money.md) for exact amount syntax and localized formatting.
+
+## Order retention
+
+The Settings tab provides four policy values. All follow the same Page/PHP precedence and individual lock behavior:
+
+| Setting / typed accessor | Default | Meaning |
+| --- | --- | --- |
+| `cleanupCreationFailures()` | `true` | Allow cleanup of definite creation failures without a Session. |
+| `creationFailureRetentionDays()` | `7` | Whole days to keep those attempts after failure. |
+| `cleanupUnpaidOrders()` | `true` | Allow cleanup of expired or completed-failed unpaid orders. |
+| `unpaidOrderRetentionDays()` | `30` | Whole days to keep those terminal unpaid orders. |
+
+For example, `$site->stripeCheckout()->settings()->unpaidOrderRetentionDays()` returns the effective number. The same names without parentheses are available through `setting()` and `all()`, and under `settings` in PHP configuration. PHP booleans must be actual booleans; day counts must be positive integers. `null` leaves the Page/default value in control. Use the category toggle to disable cleanup, not `0` days.
+
+Shortening a period can make existing records eligible for cleanup. Pending and paid orders are never automatically eligible. **Automatic cleanup is not running yet**; these settings currently define the tested eligibility policy.
+
+Request-load controls are separate, PHP-only values:
+
+```php
+'programmatordev.stripe-checkout' => [
+    'housekeeping' => [
+        'intervalHours' => 24,
+        'batchSize' => 25,
+    ],
+],
+```
+
+`intervalHours` is a positive integer; `batchSize` is an integer from 1 to 100. Both are shown read-only in Diagnostics, not exposed as merchant Settings or editable Page fields. They do not start a scheduler or cleanup process.
 
 ## Built-in cart
 

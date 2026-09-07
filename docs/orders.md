@@ -1,6 +1,6 @@
 # Orders
 
-Orders are stored as native Kirby draft Pages under the protected `stripe-checkout-orders` container, which is initialized automatically. The package includes guarded internal creation and updates, developer queries, and an extendable order blueprint. Checkout does not yet create orders automatically; Checkout Sessions, payment synchronization, lifecycle dispatch and cleanup are not implemented yet.
+Orders are stored as native Kirby draft Pages under the protected `stripe-checkout-orders` container, which is initialized automatically. The package includes guarded internal creation and updates, developer queries, local lifecycle hooks, and an extendable order blueprint. Checkout does not yet create orders automatically; Checkout Sessions, payment synchronization and automatic cleanup are not implemented yet.
 
 ## Query orders
 
@@ -118,13 +118,52 @@ Each line retains its name, selected `options`, SKU, images and shipping require
 
 The initiating snapshot contains no live product Page, File, cart, credentials or raw attempt token. Reading it does not re-fetch product information. Customer-facing text keeps the language used when the purchase began. A single-language site uses `null` for `languageCode`; a locale is not duplicated alongside it.
 
-## Lifecycle values
+## Lifecycle hooks
+
+Register normal Kirby hooks in `site/config/config.php`. The internal order creator emits `programmatordev.stripe-checkout.order.created` after verifying the saved order:
+
+```php
+'hooks' => [
+    'programmatordev.stripe-checkout.order.created' => function (
+        Kirby\Cms\Page $order,
+        ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEvent $lifecycleEvent,
+    ): void {
+        $number = $order->orderNumber()->value();
+        $deliveryId = $lifecycleEvent->deliveryId();
+        // Use these in your own integration; deduplicate effects by delivery ID.
+    },
+],
+```
+
+Keep the argument names `order` and `lifecycleEvent`: Kirby supplies them by name. Use a normal closure, not a `static` closure, because Kirby binds its application to hooks.
+
+`order` is freshly read before delivery; `lifecycleEvent` keeps the original event-time facts. Hooks run after the write, outside the order lock and internal impersonation. The initiating content language is active during the hook, then the caller's language is restored—even if a listener throws. If that language was removed from Kirby, its normal default-language fallback applies.
+
+Failed listeners do not undo the order or its payment state. A protected `lifecycleDeliveries` field records pending, delivered or failed status, attempt count, safe error code and the original event. Diagnostics show pending/failed counts. A retry keeps the same delivery ID and snapshot, but receives the current Page. The internal retry primitive exists; there is no Panel retry action or automatic retry runner yet.
+
+Kirby stops calling listeners when one throws. Retrying the whole hook can therefore call listeners that already succeeded. Make external effects idempotent using `deliveryId`, or enqueue `toArray()` into your own durable queue. A process can stop between an external effect and saving its outcome; exactly-once delivery is not promised.
+
+The controlled, single-order deletion primitive emits `programmatordev.stripe-checkout.order.deleted` with Kirby's final in-memory Page after deletion. A failed deletion hook **cannot be retried**: only the last sanitized outcome is retained, not the deleted customer's snapshot. Durable deletion integrations must enqueue successfully during the first invocation. No public deletion route or automatic cleanup runner is available yet.
+
+Session, payment, refund and dispute event types are defined, but their provider flows do not emit hooks yet.
+
+### Event values
 
 `Lifecycle\LifecycleEvent` describes a committed change. Its enum type, delivery ID, time, revision, order identity and states are separate from its immutable `orderSnapshot()`.
 
 `toArray()` produces plain JSON-safe data: enum cases become their string values, timestamps use UTC, and snapshots contain no PHP objects. A trigger type and ID can identify provider evidence; both are `null` when there is no provider event. The value does not itself dispatch hooks or perform retries.
 
+`revision()` identifies the event-bearing commit within the order's delivery ledger. Multiple events from the same commit share it; retries and custom-field edits do not increment it. The snapshot excludes the delivery ledger itself, avoiding nested copies of earlier snapshots.
+
 Snapshots can contain customer information and custom fields. Treat them as private order data, not general-purpose log payloads.
+
+## Retention policy
+
+The Settings tab contains cleanup preferences with defaults of **7 days for definitely failed creation attempts** and **30 days for terminal unpaid orders**. Both categories are enabled by default. These preferences prepare the policy; automatic cleanup is not running yet. See [retention configuration](configuration.md#order-retention).
+
+Only definitely failed creation without a Session, expired Checkout, or completed Checkout with a failed payment can become eligible. Completed failures are aged from the later of completion and payment failure. Still-creating, uncertain, open, pending, paid and no-payment-required orders are never eligible merely because they are old. Shortening a retention period can make existing records eligible.
+
+The internal deletion operation reloads and rechecks eligibility under the existing per-order write lock. Ordinary Page deletion remains forbidden, including for administrators. This is not a new public manual-order API.
 
 ## Internal content format
 
@@ -136,4 +175,4 @@ Recorded timestamps must agree with the order state and fall between creation an
 
 Writes reload and validate the current record before persisting through Kirby's Page/content APIs. Failed or corrupt records are never replaced with empty orders. Custom fields survive canonical updates. Successful canonical changes also clear Kirby's page cache so cached output does not retain the old state; no-op updates leave the cache intact.
 
-The site needs writable content and `site/storage/stripe-checkout/order-locks`. Empty per-order lock files coordinate concurrent read/update/write operations, with a bounded two-second wait (`persistence.busy` on contention). These are not cache files: do not clear them while writers are running. They contain no order data. Multi-server installations must share this directory and content storage on a filesystem that supports reliable file locking.
+The site needs writable content and `site/storage/stripe-checkout`. Empty files in its `order-locks` subdirectory coordinate concurrent read/update/write operations, with a bounded two-second wait (`persistence.busy` on contention). These are not cache files: do not clear them while writers are running. They contain no order data. The separate `lifecycle-last-deletion.json` keeps only a delivery ID, timestamp, status and safe error code for the last deleted-order notification. Multi-server installations must share this directory and content storage on a filesystem that supports reliable file locking.

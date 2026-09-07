@@ -20,6 +20,84 @@ final class ConfigurationResolverTest extends TestCase
 {
     private const PREFIX = 'programmatordev.stripe-checkout';
 
+    public function testRetentionDefaultsPageValuesAndPhpLocks(): void
+    {
+        $resolver = new ConfigurationResolver();
+        $defaults = $resolver->resolve([])->configurationOrFail()->settings();
+        $this->assertTrue($defaults->cleanupCreationFailures());
+        $this->assertSame(7, $defaults->creationFailureRetentionDays());
+        $this->assertTrue($defaults->cleanupUnpaidOrders());
+        $this->assertSame(30, $defaults->unpaidOrderRetentionDays());
+        $page = new PageSettings(cleanupCreationFailures: 'false', creationFailureRetentionDays: '14', cleanupUnpaidOrders: 'false', unpaidOrderRetentionDays: '60');
+        $settings = $resolver->resolve([
+            self::PREFIX . '.settings.cleanupCreationFailures' => true,
+            self::PREFIX . '.settings.unpaidOrderRetentionDays' => 90,
+        ], $page)->configurationOrFail()->settings();
+        $this->assertTrue($settings->cleanupCreationFailures());
+        $this->assertSame(14, $settings->creationFailureRetentionDays());
+        $this->assertFalse($settings->cleanupUnpaidOrders());
+        $this->assertSame(90, $settings->unpaidOrderRetentionDays());
+        $this->assertTrue($settings->setting('cleanupCreationFailures')?->isLocked());
+        $this->assertFalse($settings->setting('cleanupCreationFailures')->shadowedValue());
+        $this->assertSame(SettingSource::Page, $settings->setting('creationFailureRetentionDays')?->source());
+        $this->assertNull($settings->setting('housekeeping'));
+    }
+
+    public function testHousekeepingIsPhpOnlyAndValidatesIntegerBounds(): void
+    {
+        $resolver = new ConfigurationResolver();
+        $this->assertSame([
+            'intervalHours' => 24,
+            'batchSize' => 25,
+        ], $resolver->housekeeping([]));
+        $this->assertSame([
+            'intervalHours' => 12,
+            'batchSize' => 100,
+        ], $resolver->resolve([
+            self::PREFIX . '.housekeeping.intervalHours' => 12,
+            self::PREFIX . '.housekeeping.batchSize' => 100,
+        ])->configurationOrFail()->housekeeping());
+        $invalid = [
+            ['intervalHours' => '24'],
+            ['intervalHours' => null],
+            ['intervalHours' => 0],
+            ['batchSize' => 0],
+            ['batchSize' => 101],
+            ['batchSize' => 2.5],
+            ['batchSize' => true],
+            ['unknown' => 1],
+        ];
+
+        foreach ($invalid as $values) {
+            $this->assertFalse($resolver->resolve([self::PREFIX => ['housekeeping' => $values]])->isValid());
+        }
+
+        $this->assertFalse($resolver->resolve([
+            self::PREFIX => ['housekeeping' => ['batchSize' => 1]],
+            self::PREFIX . '.housekeeping.batchSize' => 2,
+        ])->isValid());
+    }
+
+    #[DataProvider('invalidRetentionSettings')]
+    public function testRejectsInvalidRetentionPhpValues(string $name, mixed $value): void
+    {
+        $report = $this->resolve([self::PREFIX => ['settings' => [$name => $value]]]);
+        $this->assertFalse($report->isValid());
+        $this->assertSame('settings.' . $name, $report->error()?->path());
+    }
+
+    /** @return iterable<array{string, mixed}> */
+    public static function invalidRetentionSettings(): iterable
+    {
+        yield ['cleanupCreationFailures', 'true'];
+        yield ['cleanupUnpaidOrders', 0];
+        yield ['creationFailureRetentionDays', 0];
+        yield ['creationFailureRetentionDays', -1];
+        yield ['creationFailureRetentionDays', '7'];
+        yield ['unpaidOrderRetentionDays', 2.5];
+        yield ['unpaidOrderRetentionDays', true];
+    }
+
     public function testOrderNumberFormatterSupportsDottedOptionsAndValidatesTheGroup(): void
     {
         $resolver = new ConfigurationResolver();
@@ -472,7 +550,7 @@ final class ConfigurationResolverTest extends TestCase
         ])->configurationOrFail()->settings();
 
         $this->assertSame(
-            ['priceSource', 'currency', 'defaultRequiresShipping'],
+            ['priceSource', 'currency', 'defaultRequiresShipping', 'cleanupCreationFailures', 'creationFailureRetentionDays', 'cleanupUnpaidOrders', 'unpaidOrderRetentionDays'],
             array_keys($settings->all()),
         );
         $this->assertNull($settings->setting('settings.priceSource'));

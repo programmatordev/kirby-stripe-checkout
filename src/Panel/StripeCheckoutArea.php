@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Panel;
 
 use Kirby\Cms\App;
 use Kirby\Exception\PermissionException;
+use Kirby\Form\Fields;
 use Kirby\Panel\Panel;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
@@ -107,18 +108,37 @@ final class StripeCheckoutArea
 
         /** @var array<string, \stdClass> $versions */
         $versions = $props['versions'];
+        $fields = Fields::for($page);
+        $latestContent = $page->version('latest')->content('current')->toArray();
+        $changes = $page->version('changes');
+        $changesContent = $changes->exists('current') ? $changes->content('current')->toArray() : null;
 
-        // Locked fields display their effective PHP value in the native editor;
-        // the Page model still rejects attempts to persist a different value.
+        // Project effective values only into the view. Opening Settings must
+        // neither backfill content nor erase an intentionally blank pending edit.
         foreach ($report->configurationOrFail()->settings()->all() as $name => $setting) {
-            if ($setting->isLocked() === false) {
+            $field = $fields->get(strtolower($name));
+
+            if ($field === null || $setting->value() === null) {
                 continue;
             }
 
-            foreach (['latest', 'changes'] as $version) {
-                if (isset($versions[$version])) {
-                    $versions[$version]->{strtolower($name)} = self::panelValue($setting->value());
-                }
+            $key = strtolower($name);
+            $value = $setting->value();
+
+            // This select uses yes/no option IDs; native toggles use booleans.
+            if ($name === 'defaultRequiresShipping' && is_bool($value)) {
+                $value = $value ? 'yes' : 'no';
+            }
+
+            $panelValue = $field->fill($value)->toFormValue();
+            $storedValue = $latestContent[$key] ?? null;
+
+            if (isset($versions['latest']) && ($setting->isLocked() || $storedValue === null || $storedValue === '')) {
+                $versions['latest']->{$key} = $panelValue;
+            }
+
+            if (isset($versions['changes']) && ($setting->isLocked() || array_key_exists($key, $changesContent ?? []) === false)) {
+                $versions['changes']->{$key} = $panelValue;
             }
         }
 
@@ -126,15 +146,6 @@ final class StripeCheckoutArea
         $view['props'] = $props;
 
         return $view;
-    }
-
-    private static function panelValue(mixed $value): mixed
-    {
-        return match ($value) {
-            true => 'yes',
-            false => 'no',
-            default => $value,
-        };
     }
 
     /** @return array<string, mixed> */

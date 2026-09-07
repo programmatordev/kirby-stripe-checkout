@@ -7,10 +7,12 @@ namespace ProgrammatorDev\StripeCheckout\Diagnostics;
 use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderLifecycle;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use Stripe\Stripe;
 
@@ -65,6 +67,15 @@ final class LocalDiagnostics
             $checks[] = $this->credential('publishableKey', $stripe->hasPublishableKey(), $stripe->publishableMode());
             $checks[] = $this->credential('webhookSecret', $stripe->hasWebhookSecret(), CredentialMode::Unknown);
             $settings = $resolved->settings();
+            $housekeeping = $resolved->housekeeping();
+            $checks[] = $this->check('housekeeping', self::PASS, 'housekeeping.configured', [
+                'intervalHours' => (string) $housekeeping['intervalHours'],
+                'batchSize' => (string) $housekeeping['batchSize'],
+            ]);
+            $checks[] = $this->check('retention', self::PASS, 'retention.configured', [
+                'creationDays' => (string) $settings->creationFailureRetentionDays(),
+                'unpaidDays' => (string) $settings->unpaidOrderRetentionDays(),
+            ]);
             $checks[] = $settings->currency() === null
                 ? $this->check('currency', self::WARNING, 'setting.missing')
                 : $this->check('currency', self::PASS, 'setting.ready');
@@ -85,15 +96,35 @@ final class LocalDiagnostics
         try {
             $store = new OrderPageStore($this->kirby);
             $container = $store->container();
-            $validCount = $store->orders()->count();
+            $orders = $store->orders();
+            $validCount = $orders->count();
             $invalidCount = ($container?->childrenAndDrafts()->count() ?? 0) - $validCount;
             $checks[] = $container === null
                 ? $this->check('orders', self::WARNING, 'orders.missing')
                 : ($invalidCount > 0
                     ? $this->check('orders', self::FAIL, 'orders.invalidChildren', ['count' => (string) $invalidCount])
                     : $this->check('orders', self::PASS, 'orders.ready'));
+            $pendingCount = 0;
+            $failedCount = 0;
+
+            foreach ($orders as $order) {
+                foreach (OrderData::list($store->data($order)['lifecycleDeliveries'] ?? []) as $entry) {
+                    $entry = OrderData::map($entry);
+                    $pendingCount += $entry['status'] === 'pending' ? 1 : 0;
+                    $failedCount += $entry['status'] === 'failed' ? 1 : 0;
+                }
+            }
+
+            $checks[] = $this->check('lifecycle', $pendingCount + $failedCount > 0 ? self::WARNING : self::PASS, 'lifecycle.summary', [
+                'pending' => (string) $pendingCount,
+                'failed' => (string) $failedCount,
+            ]);
         } catch (OrderStorageException|OrderQueryException $error) {
             $checks[] = $this->check('orders', self::FAIL, 'orders.invalid', ['code' => $error->errorCode()]);
+        }
+
+        if ((new OrderLifecycle($this->kirby))->hasFailedDeletion()) {
+            $checks[] = $this->check('lifecycleDeletion', self::WARNING, 'lifecycleDeletion.failed');
         }
 
         return [

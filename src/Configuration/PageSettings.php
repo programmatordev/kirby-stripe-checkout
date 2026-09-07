@@ -14,10 +14,17 @@ use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
  */
 final class PageSettings
 {
+    /** @var array<string, bool|int|null> */
+    private readonly array $retention;
+
     public function __construct(
         mixed $priceSource = null,
         mixed $currency = null,
         mixed $defaultRequiresShipping = null,
+        mixed $cleanupCreationFailures = null,
+        mixed $creationFailureRetentionDays = null,
+        mixed $cleanupUnpaidOrders = null,
+        mixed $unpaidOrderRetentionDays = null,
     ) {
         $priceSource = $priceSource === '' ? null : $priceSource;
 
@@ -64,6 +71,35 @@ final class PageSettings
         $this->priceSource = $priceSource;
         $this->currency = $currency;
         $this->defaultRequiresShipping = $defaultRequiresShipping;
+        $retention = compact('cleanupCreationFailures', 'creationFailureRetentionDays', 'cleanupUnpaidOrders', 'unpaidOrderRetentionDays');
+
+        foreach (Defaults::RETENTION as $name => $default) {
+            $value = $retention[$name];
+
+            if ($value === '' || $value === null) {
+                $retention[$name] = null;
+
+                continue;
+            }
+
+            // Kirby persists toggle/number fields as text. Normalize only that
+            // transport here; PHP options are checked without string coercion.
+            $value = is_bool($default)
+                ? match ($value) {
+                    true, 'true' => true,
+                    false, 'false' => false,
+                    default => null,
+                }
+            : filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+            if ($value === null || (is_int($default) && (is_int($value) === false || is_float($retention[$name]) || is_bool($retention[$name])))) {
+                throw new ConfigurationException('persistence.content_invalid', 'settings.' . $name);
+            }
+
+            $retention[$name] = $value;
+        }
+
+        $this->retention = $retention;
     }
 
     private readonly ?string $priceSource;
@@ -85,13 +121,13 @@ final class PageSettings
         return $this->defaultRequiresShipping;
     }
 
-    public function value(string $name): string|bool|null
+    public function value(string $name): string|bool|int|null
     {
         return match ($name) {
             'priceSource' => $this->priceSource(),
             'currency' => $this->currency(),
             'defaultRequiresShipping' => $this->defaultRequiresShipping(),
-            default => null,
+            default => $this->retention[$name] ?? null,
         };
     }
 }

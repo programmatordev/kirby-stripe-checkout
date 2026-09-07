@@ -129,12 +129,9 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $this->assertTrue($setting->hasShadowedValue());
         $this->assertSame(PriceSource::Kirby->value, $setting->shadowedValue());
 
-        $page->update(['priceSource' => PriceSource::Kirby->value]);
-
-        $this->expectException(PermissionException::class);
-        $this->expectExceptionMessage('locked by PHP configuration');
-
+        $page = $page->update(['priceSource' => PriceSource::Kirby->value]);
         $page->update(['priceSource' => PriceSource::Stripe->value]);
+        $this->assertSame(PriceSource::Kirby->value, $this->settings()->setting('priceSource')?->shadowedValue());
     }
 
     public function testTechnicalSettingsAreWrittenToTheDefaultLanguage(): void

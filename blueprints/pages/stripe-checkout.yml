@@ -32,8 +32,6 @@ tabs:
             label: programmatordev.stripe-checkout.settings.priceSource.label
             help: programmatordev.stripe-checkout.settings.priceSource.help
             type: select
-            # Kirby persists blueprint defaults when it creates the hub Page.
-            default: kirby
             required: true
             translate: false
             options:
@@ -61,6 +59,32 @@ tabs:
                 "*": programmatordev.stripe-checkout.settings.defaultRequiresShipping.yes
               "no":
                 "*": programmatordev.stripe-checkout.settings.defaultRequiresShipping.no
+          cleanupCreationFailures:
+            label: programmatordev.stripe-checkout.settings.cleanupCreationFailures.label
+            help: programmatordev.stripe-checkout.settings.cleanupCreationFailures.help
+            type: toggle
+            translate: false
+          creationFailureRetentionDays:
+            label: programmatordev.stripe-checkout.settings.creationFailureRetentionDays.label
+            help: programmatordev.stripe-checkout.settings.creationFailureRetentionDays.help
+            type: number
+            translate: false
+            required: true
+            min: 1
+            step: 1
+          cleanupUnpaidOrders:
+            label: programmatordev.stripe-checkout.settings.cleanupUnpaidOrders.label
+            help: programmatordev.stripe-checkout.settings.cleanupUnpaidOrders.help
+            type: toggle
+            translate: false
+          unpaidOrderRetentionDays:
+            label: programmatordev.stripe-checkout.settings.unpaidOrderRetentionDays.label
+            help: programmatordev.stripe-checkout.settings.unpaidOrderRetentionDays.help
+            type: number
+            translate: false
+            required: true
+            min: 1
+            step: 1
           optionPresets:
             label: programmatordev.stripe-checkout.settings.optionPresets.label
             help: programmatordev.stripe-checkout.settings.optionPresets.help

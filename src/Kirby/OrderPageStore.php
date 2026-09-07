@@ -16,6 +16,8 @@ use Kirby\Uuid\Uuid;
 use Kirby\Uuid\Uuids;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
+use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\DeliveryLedger;
+use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
@@ -26,6 +28,7 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
+use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use Throwable;
 
@@ -144,6 +147,16 @@ final class OrderPageStore
         }
 
         $container = $this->initialize();
+        // Persist the pending creation delivery in the same content write, so
+        // a process exit after creation does not lose the notification intent.
+        $defaults = Page::factory([
+            'parent' => $container,
+            'slug' => $uuid,
+            'template' => OrderSchema::TEMPLATE,
+        ])->createDefaultContent();
+        $fields = OrderCustomFieldsValidator::validate([...$defaults, ...$fields]);
+        $event = DeliveryLedger::event($data, $fields, LifecycleEventType::OrderCreated, 1);
+        $data['lifecycleDeliveries'] = [DeliveryLedger::pending($event)];
 
         try {
             $this->kirby->impersonate('kirby', fn(): Page => Page::create([
@@ -165,7 +178,9 @@ final class OrderPageStore
             throw new OrderStorageException('persistence.verify_failed');
         }
 
-        return $created;
+        (new OrderLifecycle($this->kirby))->deliver($created->uuid()->toString(), $event->deliveryId());
+
+        return $this->requirePage($created->id());
     }
 
     /** @return Pages<Page> */
@@ -292,13 +307,17 @@ final class OrderPageStore
         }
     }
 
-    /** @param Closure(array<string, mixed>): array<string, mixed> $reduce */
-    public function update(string $uuid, Closure $reduce): OrderPage
+    /**
+     * @param Closure(array<string, mixed>): array<string, mixed> $reduce
+     * @param list<LifecycleEventType> $events Events owned by the calling transition, not inferred from arbitrary field edits.
+     */
+    public function update(string $uuid, Closure $reduce, array $events = [], ?string $triggerType = null, ?string $triggerId = null): OrderPage
     {
         OrderData::uuid($uuid);
         $pageId = OrderSchema::CONTAINER . '/' . (new Uri($uuid))->host();
 
-        return OrderWriteLock::run($this->kirby, $pageId, function () use ($pageId, $reduce): OrderPage {
+        $deliveryIds = [];
+        $updated = OrderWriteLock::run($this->kirby, $pageId, function () use ($pageId, $reduce, $events, $triggerType, $triggerId, &$deliveryIds): OrderPage {
             // Reload after acquiring the lock: a writer may have committed
             // while this request waited, changing which transitions are valid.
             $page = $this->requirePage($pageId);
@@ -330,6 +349,27 @@ final class OrderPageStore
                 }
             }
 
+            /** @var list<array<string, mixed>> $entries */
+            $entries = $after['lifecycleDeliveries'] ?? [];
+            $revision = DeliveryLedger::nextRevision($entries);
+            $types = [];
+
+            foreach ($events as $type) {
+                if (in_array($type, [LifecycleEventType::OrderCreated, LifecycleEventType::OrderDeleted], true) || isset($types[$type->value])) {
+                    throw new OrderDataException();
+                }
+
+                $types[$type->value] = true;
+                $event = DeliveryLedger::event($after, $content, $type, $revision, $triggerType, $triggerId);
+                $entries[] = DeliveryLedger::pending($event);
+                $deliveryIds[] = $event->deliveryId();
+            }
+
+            if ($events !== []) {
+                $after['lifecycleDeliveries'] = $entries;
+                $after = OrderSerializer::normalize($after);
+            }
+
             $this->persist($page, [...$content, ...OrderSerializer::encode($after)], 'default');
             $updated = $this->requirePage($page->id());
 
@@ -343,6 +383,59 @@ final class OrderPageStore
 
             return $updated;
         });
+
+        foreach ($deliveryIds as $deliveryId) {
+            (new OrderLifecycle($this->kirby))->deliver($uuid, $deliveryId);
+        }
+
+        return $deliveryIds === [] ? $updated : $this->requirePage($pageId);
+    }
+
+    /** Internal single-order primitive; no scan, route or automatic execution. */
+    public function deleteEligible(string $uuid, RetentionPolicy $policy, DateTimeImmutable $now): bool
+    {
+        OrderData::uuid($uuid);
+        $pageId = OrderSchema::CONTAINER . '/' . (new Uri($uuid))->host();
+        $deleted = OrderWriteLock::run($this->kirby, $pageId, function () use ($pageId, $policy, $now): ?array {
+            $page = $this->requirePage($pageId);
+            $data = $this->data($page);
+
+            if ($policy->isEligible($data, $now) === false) {
+                return null;
+            }
+
+            $custom = array_filter($page->version('latest')->read('default') ?? [], static fn(string $field): bool => OrderSchema::isReserved($field) === false, ARRAY_FILTER_USE_KEY);
+            /** @var list<array<string, mixed>> $entries */
+            $entries = $data['lifecycleDeliveries'] ?? [];
+            $data['updatedAt'] = OrderData::timestamp($now);
+            $event = DeliveryLedger::event($data, $custom, LifecycleEventType::OrderDeleted, DeliveryLedger::nextRevision($entries));
+
+            try {
+                $this->kirby->impersonate('kirby', fn(): bool => $page->deleteStoredOrder());
+            } catch (Throwable) {
+                // A native after-hook can throw after deletion. Verify storage
+                // before deciding whether the committed deletion failed.
+                if ($this->container()?->drafts()->find($pageId) !== null) {
+                    throw new OrderStorageException('persistence.write_failed');
+                }
+            }
+
+            if ($this->container()?->drafts()->find($pageId) !== null) {
+                throw new OrderStorageException('persistence.verify_failed');
+            }
+
+            $this->kirby->cache('pages')->flush();
+
+            return [$page, $event];
+        });
+
+        if ($deleted === null) {
+            return false;
+        }
+
+        (new OrderLifecycle($this->kirby))->deleted($deleted[0], $deleted[1]);
+
+        return true;
     }
 
     /** @param array<string, mixed> $fields */
@@ -376,6 +469,12 @@ final class OrderPageStore
      */
     private function validateTransition(array $before, array $after): void
     {
+        /** @var list<array<string, mixed>> $previousDeliveries */
+        $previousDeliveries = $before['lifecycleDeliveries'] ?? [];
+        /** @var list<array<string, mixed>> $deliveries */
+        $deliveries = $after['lifecycleDeliveries'] ?? [];
+        DeliveryLedger::validateTransition($previousDeliveries, $deliveries);
+
         $immutableFields = ['uuid', 'title', 'orderNumber', 'stripeCheckout', 'checkoutAttempt', 'userUuid', 'languageCode', 'currency', 'createdAt', 'initiatingLineItems'];
 
         foreach ($immutableFields as $field) {

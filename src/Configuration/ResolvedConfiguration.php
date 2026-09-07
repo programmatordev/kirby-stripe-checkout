@@ -13,13 +13,15 @@ final class ResolvedConfiguration
 {
     /**
      * @param array<string, array<string, string>> $translations
+     * @param array{intervalHours: int, batchSize: int} $housekeeping
      */
     public function __construct(
         private readonly Settings $settings,
         private readonly StripeConfiguration $stripe,
         private readonly array $translations,
         private readonly ProductConfiguration $products,
-        private readonly bool $cartEnabled = true,
+        private readonly bool $cartEnabled,
+        private readonly array $housekeeping,
     ) {}
 
     public function settings(): Settings
@@ -30,6 +32,12 @@ final class ResolvedConfiguration
     public function cartEnabled(): bool
     {
         return $this->cartEnabled;
+    }
+
+    /** @return array{intervalHours: int, batchSize: int} */
+    public function housekeeping(): array
+    {
+        return $this->housekeeping;
     }
 
     public function stripe(): StripeConfiguration

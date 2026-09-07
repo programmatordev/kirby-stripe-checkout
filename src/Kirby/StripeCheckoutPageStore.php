@@ -91,6 +91,10 @@ final class StripeCheckoutPageStore
             priceSource: $this->fieldValue($page, 'priceSource'),
             currency: $this->fieldValue($page, 'currency'),
             defaultRequiresShipping: $this->fieldValue($page, 'defaultRequiresShipping'),
+            cleanupCreationFailures: $this->fieldValue($page, 'cleanupCreationFailures'),
+            creationFailureRetentionDays: $this->fieldValue($page, 'creationFailureRetentionDays'),
+            cleanupUnpaidOrders: $this->fieldValue($page, 'cleanupUnpaidOrders'),
+            unpaidOrderRetentionDays: $this->fieldValue($page, 'unpaidOrderRetentionDays'),
         );
     }
 

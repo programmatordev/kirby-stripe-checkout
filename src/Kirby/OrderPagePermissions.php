@@ -22,7 +22,10 @@ final class OrderPagePermissions extends PagePermissions
                 && PluginPermissions::allows($kirby, 'orders.read')
                 && PluginPermissions::allows($kirby, 'orders.update')
                 && parent::can($action, $default),
-            'changeSlug', 'changeStatus', 'changeTemplate', 'changeTitle', 'delete', 'duplicate', 'move', 'sort', 'preview' => false,
+            'delete' => $this->model instanceof OrderPage
+                && $this->model->isDeletingStoredOrder()
+                && $kirby->user()?->isKirby() === true,
+            'changeSlug', 'changeStatus', 'changeTemplate', 'changeTitle', 'duplicate', 'move', 'sort', 'preview' => false,
             default => parent::can($action, $default),
         };
     }

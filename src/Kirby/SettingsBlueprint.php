@@ -8,6 +8,7 @@ use Kirby\Cms\App;
 use Kirby\Data\Data;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
+use ProgrammatorDev\StripeCheckout\Configuration\Defaults;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Panel\DiagnosticsSections;
 use Symfony\Component\Intl\Currencies;
@@ -40,6 +41,14 @@ final class SettingsBlueprint
         // The provider registry and active Panel locale make these options
         // runtime data; the YAML blueprint supplies only their static field.
         $settingsFields['currency']['options'] = self::currencyOptions();
+
+        // Use the same defaults for native Page creation and runtime fallbacks.
+        foreach (Defaults::SETTINGS as $name => $default) {
+            if ($default !== null) {
+                $settingsFields[$name]['default'] = $default;
+            }
+        }
+
         $settingsSection['fields'] = $settingsFields;
         $settingsSections['settings'] = $settingsSection;
         $settingsTab['sections'] = $settingsSections;
