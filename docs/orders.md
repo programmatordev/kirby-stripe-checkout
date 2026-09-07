@@ -145,6 +145,8 @@ Recording a hook attempt or result does not advance the order's `updatedAt` or i
 
 A failing native `page.create:after` hook does not make a verified, saved order appear uncreated. Failures before or during the native write still fail creation. Native hooks are not tracked for retries; use the plugin lifecycle hooks for effects that need that record.
 
+The creation event includes native blueprint defaults and custom-field changes from `page.create:before`. Later edits, including those from `page.create:after`, appear on the live Page but do not rewrite the creation snapshot.
+
 Kirby stops calling listeners when one throws. Retrying the whole hook can therefore call listeners that already succeeded. Make external effects idempotent using `deliveryId`, or enqueue `toArray()` into your own durable queue. A process can stop between an external effect and saving its outcome; exactly-once delivery is not promised.
 
 The controlled, single-order deletion primitive emits `programmatordev.stripe-checkout.order.deleted` with Kirby's final in-memory Page after deletion. A failed deletion hook **cannot be retried**: only the last sanitized outcome is retained, not the deleted customer's snapshot. Durable deletion integrations must enqueue successfully during the first invocation. No public deletion route or automatic cleanup runner is available yet.

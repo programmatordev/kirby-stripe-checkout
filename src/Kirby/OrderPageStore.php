@@ -147,18 +147,6 @@ final class OrderPageStore
         }
 
         $container = $this->initialize();
-        // Persist the pending creation delivery in the same content write, so
-        // a process exit after creation does not lose the notification intent.
-        // Resolve custom blueprint defaults first so the snapshot includes the
-        // values that native Page creation will store, not just caller input.
-        $defaults = Page::factory([
-            'parent' => $container,
-            'slug' => $uuid,
-            'template' => OrderSchema::TEMPLATE,
-        ])->createDefaultContent();
-        $fields = OrderCustomFieldsValidator::validate([...$defaults, ...$fields]);
-        $event = DeliveryLedger::event($data, $fields, LifecycleEventType::OrderCreated, 1);
-        $data['lifecycleDeliveries'] = [DeliveryLedger::pending($event)];
 
         try {
             $this->kirby->impersonate('kirby', fn(): Page => Page::create([
@@ -169,17 +157,19 @@ final class OrderPageStore
                 'isDraft' => true,
                 'content' => [...$fields, ...OrderSerializer::encode($data)],
             ]));
-        } catch (Throwable) {
+        } catch (Throwable $error) {
             // Never adopt a colliding order, including a valid-looking record.
-            throw new OrderStorageException('persistence.write_failed');
+            throw $error instanceof OrderStorageException ? $error : new OrderStorageException('persistence.write_failed');
         }
 
+        // The Order Page commit captures and verifies the final native creation
+        // content, including defaults and before-hook edits, before returning.
         $created = $this->requirePage(OrderSchema::CONTAINER . '/' . $uuid);
-
-        if (OrderSerializer::hash($this->data($created)) !== OrderSerializer::hash($data)) {
-            throw new OrderStorageException('persistence.verify_failed');
-        }
-
+        $deliveries = OrderData::list($this->data($created)['lifecycleDeliveries']);
+        // Creation writes and verifies one initial event. Restore its saved ID
+        // rather than generating a different identity for the first delivery.
+        $entry = OrderData::map($deliveries[0]);
+        $event = DeliveryLedger::restoreEvent(OrderData::map($entry['event']));
         (new OrderLifecycle($this->kirby))->deliver($created->uuid()->toString(), $event->deliveryId());
 
         // Listeners may update custom fields; return the post-hook Page rather

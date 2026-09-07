@@ -29,7 +29,12 @@ final class OrderChangesVersion extends Version
             static fn(string $field): bool => OrderSchema::isReserved($field) === false,
             ARRAY_FILTER_USE_KEY,
         );
-        $latest = $this->model->version('latest')->read($language) ?? [];
+        // VersionCache belongs to the model instance. A canonical write through
+        // another Page cannot refresh this retained model's cached latest values.
+        /** @var OrderPage $model */
+        $model = $this->model;
+        $page = (new OrderPageStore($model->kirby()))->requirePage($model->id());
+        $latest = $page->version('latest')->read($language) ?? [];
         $protectedFields = array_filter(
             $latest,
             OrderSchema::isReserved(...),

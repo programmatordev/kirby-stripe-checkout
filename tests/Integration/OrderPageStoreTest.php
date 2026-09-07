@@ -428,8 +428,8 @@ final class OrderPageStoreTest extends KirbyTestCase
         $this->assertSame('Published note', $this->value($published, 'note'));
     }
 
-    #[DataProvider('editingLanguages')]
-    public function testPanelCustomEditsSurviveCanonicalUpdates(?string $languageCode): void
+    #[DataProvider('editingContexts')]
+    public function testPanelCustomEditsSurviveCanonicalUpdates(?string $languageCode, bool $reload): void
     {
         if ($languageCode !== null) {
             $this->environment->close();
@@ -462,9 +462,10 @@ final class OrderPageStoreTest extends KirbyTestCase
         ]);
         $expected = $store->data($updated);
 
-        // A later Panel request still submits its original read-only values.
-        $fresh = $store->requirePage($page->id());
-        Changes::publish($fresh, $input);
+        // Cover both a later Panel request and native publication through a
+        // retained Page whose latest-version cache predates the canonical write.
+        $editingPage = $reload ? $store->requirePage($page->id()) : $page;
+        Changes::publish($editingPage, $input);
         $saved = $store->requirePage($page->id());
         $this->assertSame($expected, $store->data($saved));
         $this->assertSame('Pending note', $saved->content($languageCode ?? 'default')->data()['note'] ?? null);
@@ -478,12 +479,15 @@ final class OrderPageStoreTest extends KirbyTestCase
         }
     }
 
-    /** @return iterable<string, array{?string}> */
-    public static function editingLanguages(): iterable
+    /** @return iterable<string, array{?string, bool}> */
+    public static function editingContexts(): iterable
     {
-        yield 'single language' => [null];
-        yield 'default language' => ['en'];
-        yield 'translated custom fields' => ['pt'];
+        yield 'fresh, single language' => [null, true];
+        yield 'fresh, default language' => ['en', true];
+        yield 'fresh, translated custom fields' => ['pt', true];
+        yield 'retained, single language' => [null, false];
+        yield 'retained, default language' => ['en', false];
+        yield 'retained, translated custom fields' => ['pt', false];
     }
 
     public function testNativeVersionPublishIgnoresProtectedChangesButDirectUpdatesRejectThem(): void

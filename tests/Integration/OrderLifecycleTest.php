@@ -30,10 +30,83 @@ use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
+use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
 use RuntimeException;
 
 final class OrderLifecycleTest extends KirbyTestCase
 {
+    public function testCreationSnapshotIncludesNativeDefaultsAndBeforeHookEdits(): void
+    {
+        $observed = null;
+        $atWrite = null;
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(
+            hooks: [
+                'programmatordev.stripe-checkout.order.fields' => function (): array {
+                    return ['note' => 'Initial note'];
+                },
+                'page.create:before' => function (Page $page): Page {
+                    return $page instanceof OrderPage
+                        ? $page->clone(['content' => [...$page->content('default')->toArray(), 'note' => 'Native hook note']])
+                        : $page;
+                },
+                'page.create:after' => function (Page $page) use (&$atWrite): void {
+                    if ($page instanceof OrderPage) {
+                        // Intent must already be persisted before after hooks or
+                        // lifecycle dispatch, not repaired by a subsequent write.
+                        $atWrite = (new OrderPageStore($page->kirby()))->data($page);
+                        $page->update(['note' => 'Later edit']);
+                    }
+                },
+                'programmatordev.stripe-checkout.order.created' => function (LifecycleEvent $lifecycleEvent) use (&$observed): void {
+                    $observed = $lifecycleEvent;
+                },
+            ],
+            beforeApp: static function (TestWorkspace $workspace): void {
+                $workspace->writePageBlueprint('stripe-checkout-order', [
+                    'extends' => 'programmatordev/stripe-checkout/pages/order',
+                    'tabs' => ['custom' => ['fields' => [
+                        'note' => ['type' => 'text'],
+                        'source' => [
+                            'type' => 'text',
+                            'default' => 'Storefront',
+                        ],
+                    ]]],
+                ]);
+            },
+        );
+        $this->kirby = $this->environment->app();
+        $page = $this->createOrder();
+        $this->assertInstanceOf(LifecycleEvent::class, $observed);
+        $this->assertIsArray($atWrite);
+        $entry = OrderData::map(OrderData::list($atWrite['lifecycleDeliveries'])[0]);
+        $this->assertSame('pending', $entry['status']);
+        $this->assertSame(0, $entry['attempts']);
+        $this->assertEquals($observed->toArray(), $entry['event']);
+        $this->assertSame('Native hook note', $observed->orderSnapshot()['note']);
+        $this->assertSame('Storefront', $observed->orderSnapshot()['source']);
+        $this->assertSame('Later edit', $page->content('default')->data()['note']);
+    }
+
+    public function testBeforeHookCannotChangeCanonicalCreationFacts(): void
+    {
+        $this->restart([
+            'page.create:before' => function (Page $page): Page {
+                return $page instanceof OrderPage
+                    ? $page->clone(['content' => [...$page->content('default')->toArray(), 'languagecode' => 'pt']])
+                    : $page;
+            },
+        ]);
+
+        try {
+            $this->createOrder();
+            $this->fail('Expected canonical before-hook changes to be rejected.');
+        } catch (OrderStorageException $error) {
+            $this->assertSame('persistence.verify_failed', $error->errorCode());
+            $this->assertCount(0, (new OrderPageStore($this->kirby))->orders());
+        }
+    }
+
     public function testNativeAfterCreateFailureDoesNotHideTheCommittedOrder(): void
     {
         $observed = [];
@@ -54,13 +127,15 @@ final class OrderLifecycleTest extends KirbyTestCase
         $this->assertSame('delivered', $this->entries($page)[0]['status']);
     }
 
-    public function testPostCommitRecoveryStillRejectsCorruptOrderContent(): void
+    /** @param array<string, string> $fields */
+    #[DataProvider('postCreationMutations')]
+    public function testPostCommitRecoveryStillRejectsChangedCanonicalContent(array $fields, string $errorCode): void
     {
         $observed = false;
         $this->restart([
-            'page.create:after' => function (Page $page): void {
+            'page.create:after' => function (Page $page) use ($fields): void {
                 if ($page instanceof OrderPage) {
-                    $page->version('latest')->update(['subtotal' => 'broken'], 'default');
+                    $page->version('latest')->update($fields, 'default');
                     throw new RuntimeException('Private native callback error');
                 }
             },
@@ -73,9 +148,16 @@ final class OrderLifecycleTest extends KirbyTestCase
             $this->createOrder();
             $this->fail('Expected invalid stored content to be rejected.');
         } catch (OrderStorageException $error) {
-            $this->assertSame('persistence.content_invalid', $error->errorCode());
+            $this->assertSame($errorCode, $error->errorCode());
             $this->assertFalse($observed);
         }
+    }
+
+    /** @return iterable<string, array{array<string, string>, string}> */
+    public static function postCreationMutations(): iterable
+    {
+        yield 'invalid content' => [['subtotal' => 'broken'], 'persistence.content_invalid'];
+        yield 'valid but changed facts' => [['languagecode' => 'pt'], 'persistence.verify_failed'];
     }
 
     public function testCreationRecoveryNeverAdoptsACollidingOrder(): void

@@ -12,9 +12,13 @@ use Kirby\Data\Yaml;
 use Kirby\Exception\PermissionException;
 use Kirby\Form\Form;
 use Kirby\Toolkit\I18n;
+use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\DeliveryLedger;
+use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderCustomFieldsValidator;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
 use Throwable;
 
 /** @internal Ordinary Kirby fields with guarded custom-field edits and canonical storage. */
@@ -105,19 +109,46 @@ final class OrderPage extends ProtectedOrderPage
         });
     }
 
-    /** @param array<string, mixed> $arguments */
-    private function commitCreation(array $arguments, Closure $callback): mixed
+    /**
+     * @param array<string, mixed> $arguments
+     * @param Closure(OrderPage): OrderPage $callback Native creation writes and returns the same Page.
+     */
+    private function commitCreation(array $arguments, Closure $callback): OrderPage
     {
         $created = null;
+        $initialData = OrderSerializer::decode($this->version('latest')->read('default') ?? [], $this->intendedTemplate()->name(), $this->slug());
+        $creationData = $initialData;
 
         try {
-            return parent::commit('create', $arguments, static function (...$arguments) use ($callback, &$created): mixed {
-                return $created = $callback(...$arguments);
+            parent::commit('create', $arguments, static function (OrderPage $page) use ($callback, $initialData, &$creationData, &$created): OrderPage {
+                // Kirby has applied defaults and all native before hooks, but
+                // this Page still uses memory storage: no order file exists yet.
+                $content = $page->version('latest')->read('default') ?? [];
+                $data = OrderSerializer::decode($content, $page->intendedTemplate()->name(), $page->slug());
+
+                // Valid data is not necessarily unchanged data: native hooks
+                // may edit custom fields, but cannot replace the purchase facts.
+                if (OrderSerializer::hash($data) !== OrderSerializer::hash($initialData)) {
+                    throw new OrderStorageException('persistence.verify_failed');
+                }
+
+                $customFields = OrderCustomFieldsValidator::validate(array_filter(
+                    $content,
+                    static fn(string $field): bool => OrderSchema::isReserved($field) === false,
+                    ARRAY_FILTER_USE_KEY,
+                ));
+                $event = DeliveryLedger::event($data, $customFields, LifecycleEventType::OrderCreated, 1);
+                $creationData = [...$data, 'lifecycleDeliveries' => [DeliveryLedger::pending($event)]];
+                // Add intent in memory so the native callback persists the order
+                // and its final creation snapshot together, not in two writes.
+                $page->version('latest')->update(['lifecycleDeliveries' => Yaml::encode($creationData['lifecycleDeliveries'])], 'default');
+
+                return $created = $callback($page);
             });
         } catch (Throwable $error) {
             // Only recover after this invocation's native write completed.
             // Collisions and failed writes do not produce a completed callback
-            // result. The store still reloads and verifies content before dispatch.
+            // result. Verification below still precedes lifecycle dispatch.
             if ($created instanceof self === false) {
                 throw $error;
             }
@@ -125,9 +156,18 @@ final class OrderPage extends ProtectedOrderPage
             // ModelCommit normally flushes after its hook; an exception skips it.
             $this->kirby()->cache('pages')->flush();
             error_log('Stripe Checkout: lifecycle.creation_hook_failed');
-
-            return $created;
         }
+
+        $store = new OrderPageStore($this->kirby());
+        $page = $store->requirePage($this->id());
+
+        // Include the frozen delivery record in verification. Later custom-field
+        // edits are allowed, but must not rewrite the initial event's snapshot.
+        if (OrderSerializer::hash($store->data($page)) !== OrderSerializer::hash($creationData)) {
+            throw new OrderStorageException('persistence.verify_failed');
+        }
+
+        return $page;
     }
 
     /**
