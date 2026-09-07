@@ -149,6 +149,8 @@ final class OrderPageStore
         $container = $this->initialize();
         // Persist the pending creation delivery in the same content write, so
         // a process exit after creation does not lose the notification intent.
+        // Resolve custom blueprint defaults first so the snapshot includes the
+        // values that native Page creation will store, not just caller input.
         $defaults = Page::factory([
             'parent' => $container,
             'slug' => $uuid,
@@ -180,6 +182,8 @@ final class OrderPageStore
 
         (new OrderLifecycle($this->kirby))->deliver($created->uuid()->toString(), $event->deliveryId());
 
+        // Listeners may update custom fields; return the post-hook Page rather
+        // than the model read before dispatch and outcome persistence.
         return $this->requirePage($created->id());
     }
 
@@ -397,6 +401,8 @@ final class OrderPageStore
         OrderData::uuid($uuid);
         $pageId = OrderSchema::CONTAINER . '/' . (new Uri($uuid))->host();
         $deleted = OrderWriteLock::run($this->kirby, $pageId, function () use ($pageId, $policy, $now): ?array {
+            // An earlier cleanup candidate may since have been paid. Eligibility
+            // must be checked again against the record protected by this lock.
             $page = $this->requirePage($pageId);
             $data = $this->data($page);
 

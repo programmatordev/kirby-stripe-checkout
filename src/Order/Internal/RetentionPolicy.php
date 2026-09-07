@@ -30,6 +30,8 @@ final readonly class RetentionPolicy
             return false;
         }
 
+        // A delayed payment can fail after Checkout completes. Start retention
+        // only once both facts are terminal, not while payment was still pending.
         $terminalAt = match (true) {
             $data['checkoutStatus'] === 'expired' => $data['checkoutExpiredAt'],
             $data['checkoutStatus'] === 'complete' && $data['paymentStatus'] === 'failed'

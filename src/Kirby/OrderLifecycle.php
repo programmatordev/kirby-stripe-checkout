@@ -17,7 +17,7 @@ use Throwable;
 /** @internal Invokes native hooks after commits; failures never undo order state. */
 final class OrderLifecycle
 {
-    /** @var array<string, true> Prevent recursive redelivery from a listener. */
+    /** @var array<string, true> Request-local recursion guard, not a cross-process delivery lock. */
     private static array $active = [];
 
     public function __construct(private readonly App $kirby) {}
@@ -44,6 +44,8 @@ final class OrderLifecycle
                     $candidate = DeliveryLedger::restoreEvent(OrderData::map($entry['event']));
 
                     if ($candidate->deliveryId() === $deliveryId && $entry['status'] !== 'delivered') {
+                        // Record the attempt before invoking listeners. A process
+                        // exit leaves the original event available for another try.
                         $event = $candidate;
                         $entry['attempts'] = OrderData::integer($entry['attempts']) + 1;
                         $entry['lastAttemptAt'] = max(OrderData::timestamp(new DateTimeImmutable()), OrderData::timestamp($event->occurredAt()));
@@ -152,6 +154,8 @@ final class OrderLifecycle
                 'lifecycleEvent' => $event,
             ]);
 
+            // Success means the hook returned without throwing, not that an
+            // email arrived or another external effect completed exactly once.
             return true;
         } catch (Throwable) {
             // Never persist the exception message: listeners may include PII or credentials.

@@ -115,6 +115,8 @@ final class StripeCheckoutArea
 
         // Project effective values only into the view. Opening Settings must
         // neither backfill content nor erase an intentionally blank pending edit.
+        // Keep both versions aligned where no edit exists, otherwise defaults
+        // alone would make Kirby show an unsaved-change state on opening.
         foreach ($report->configurationOrFail()->settings()->all() as $name => $setting) {
             $field = $fields->get(strtolower($name));
 

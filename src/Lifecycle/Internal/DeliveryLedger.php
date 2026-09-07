@@ -136,6 +136,8 @@ final class DeliveryLedger
     /** @param list<array<string, mixed>> $entries */
     public static function nextRevision(array $entries): int
     {
+        // Only event-bearing commits advance this sequence. Events appended
+        // by one commit share a revision; retry outcomes do not consume one.
         $last = $entries === [] ? null : $entries[array_key_last($entries)];
 
         return $last === null ? 1 : self::restoreEvent(OrderData::map($last['event']))->revision() + 1;
@@ -147,6 +149,8 @@ final class DeliveryLedger
      */
     public static function validateTransition(array $before, array $after): void
     {
+        // Existing event facts are append-only. Only their delivery bookkeeping
+        // may advance, so retries retain the original identity and snapshot.
         foreach ($before as $index => $entry) {
             $updated = $after[$index] ?? null;
 
