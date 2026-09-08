@@ -22,7 +22,7 @@ final class PriceResolver
         private readonly StripeCurrencyRegistry $currencies = new StripeCurrencyRegistry(),
     ) {}
 
-    public function resolve(StripePriceReference|string $reference, string $currency): ResolvedPrice
+    public function resolve(StripePriceReference|string $reference, string $currency): StripePrice
     {
         $priceId = $reference instanceof StripePriceReference
             ? $reference->priceId()
@@ -41,7 +41,7 @@ final class PriceResolver
         PriceRecord $record,
         string $currency,
         ?string $expectedPriceId = null,
-    ): ResolvedPrice {
+    ): StripePrice {
         $currency = strtoupper($currency);
 
         if (
@@ -87,7 +87,7 @@ final class PriceResolver
 
         $taxBehavior = $record->taxBehavior ?? 'unspecified';
 
-        return new ResolvedPrice(
+        return new StripePrice(
             priceId: $record->priceId,
             productId: $productId,
             name: $productName,

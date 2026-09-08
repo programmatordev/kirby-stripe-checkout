@@ -7,11 +7,11 @@ namespace ProgrammatorDev\StripeCheckout\Product\Internal;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductPriceSourceMismatchException;
-use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
+use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
-use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use Throwable;
 
 /**
@@ -26,24 +26,24 @@ final class GuardedProductResolver implements ProductResolverInterface
     public function resolve(
         ProductRequest $request,
         ProductResolutionContext $context,
-    ): ResolvedProduct {
+    ): Product {
         try {
-            $resolved = $this->resolver->resolve($request, $context);
+            $product = $this->resolver->resolve($request, $context);
         } catch (ProductException $error) {
             throw $error;
         } catch (Throwable $error) {
             throw new InvalidProductException('product.resolver_failed', $error);
         }
 
-        if ($resolved->priceSource() !== $context->priceSource()) {
+        if ($product->priceSource() !== $context->priceSource()) {
             throw new ProductPriceSourceMismatchException();
         }
 
         // A resolver may canonicalize only the lookup reference; quantity and
         // customer selections must remain exactly as submitted.
         if (
-            $resolved->request()->quantity() !== $request->quantity()
-            || $resolved->request()->selectedOptions() !== $request->selectedOptions()
+            $product->request()->quantity() !== $request->quantity()
+            || $product->request()->selectedOptions() !== $request->selectedOptions()
         ) {
             throw new InvalidProductException('product.resolver_changed_request');
         }
@@ -51,12 +51,12 @@ final class GuardedProductResolver implements ProductResolverInterface
         // Stripe references are checked against the currency when they are
         // retrieved fresh; inline values can be checked at this boundary.
         if (
-            $resolved->price() instanceof InlinePrice
-            && $resolved->price()->unitPrice()->getCurrency()->getCurrencyCode() !== $context->settings()->currency()
+            $product->price() instanceof Price
+            && $product->price()->unitPrice()->getCurrency()->getCurrencyCode() !== $context->settings()->currency()
         ) {
             throw new InvalidProductException('product.currency_mismatch');
         }
 
-        return $resolved;
+        return $product;
     }
 }

@@ -15,9 +15,9 @@ use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Money\MoneyFormatter;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
-use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 
 /**
  * Provides the immutable, Site-scoped entry point for plugin developers.
@@ -81,7 +81,7 @@ final class StripeCheckout
         return (new MoneyFormatter($this->kirby))->symbol($currency, $locale);
     }
 
-    public function resolveProduct(ProductRequest $request): ResolvedProduct
+    public function resolveProduct(ProductRequest $request): Product
     {
         return (new RuntimeFactory($this->kirby))->resolveProduct($request);
     }

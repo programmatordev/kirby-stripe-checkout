@@ -9,7 +9,7 @@ namespace ProgrammatorDev\StripeCheckout\Configuration;
  *
  * @internal
  */
-final class ResolvedConfiguration
+final class Configuration
 {
     /**
      * @param array<string, array<string, string>> $translations

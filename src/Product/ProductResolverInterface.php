@@ -10,5 +10,5 @@ interface ProductResolverInterface
     public function resolve(
         ProductRequest $request,
         ProductResolutionContext $context,
-    ): ResolvedProduct;
+    ): Product;
 }

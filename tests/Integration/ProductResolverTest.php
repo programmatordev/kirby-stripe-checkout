@@ -12,11 +12,11 @@ use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductNotFoundException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductPriceSourceMismatchException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductUnavailableException;
-use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
+use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
-use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
@@ -62,7 +62,7 @@ final class ProductResolverTest extends KirbyTestCase
             $this->assertTrue($product->requiresShipping());
             $this->assertSame('SIMPLE-1', $product->sku());
             $price = $product->price();
-            $this->assertInstanceOf(InlinePrice::class, $price);
+            $this->assertInstanceOf(Price::class, $price);
             $this->assertSame('16.00', $price->unitPrice()->getAmount()->toString());
         }
 
@@ -131,7 +131,7 @@ final class ProductResolverTest extends KirbyTestCase
         $this->assertSame('SHIRT-L', $product->sku());
         $this->assertTrue($product->requiresShipping());
         $price = $product->price();
-        $this->assertInstanceOf(InlinePrice::class, $price);
+        $this->assertInstanceOf(Price::class, $price);
         $this->assertSame('24.00', $price->unitPrice()->getAmount()->toString());
         $this->assertSame('Tamanho', $product->selectedOptions()[0]->optionName());
         $this->assertSame('Grande', $product->selectedOptions()[0]->valueName());
@@ -347,12 +347,12 @@ final class ProductResolverTest extends KirbyTestCase
                     'resolver' => static function (
                         ProductRequest $request,
                         ProductResolutionContext $context,
-                    ): ResolvedProduct {
-                        return new ResolvedProduct(
+                    ): Product {
+                        return new Product(
                             request: $request,
                             name: 'External catalogue product',
                             requiresShipping: $context->settings()->defaultRequiresShipping() ?? false,
-                            price: new InlinePrice(\Brick\Money\Money::of('9.50', 'EUR')),
+                            price: new Price(\Brick\Money\Money::of('9.50', 'EUR')),
                         );
                     },
                 ],
@@ -373,11 +373,11 @@ final class ProductResolverTest extends KirbyTestCase
                     'defaultRequiresShipping' => false,
                 ],
                 'products' => [
-                    'resolver' => static fn(ProductRequest $request): ResolvedProduct => new ResolvedProduct(
+                    'resolver' => static fn(ProductRequest $request): Product => new Product(
                         request: new ProductRequest($request->reference(), 2),
                         name: 'Invalid product',
                         requiresShipping: false,
-                        price: new InlinePrice(\Brick\Money\Money::of('9.50', 'EUR')),
+                        price: new Price(\Brick\Money\Money::of('9.50', 'EUR')),
                     ),
                 ],
             ],
@@ -400,14 +400,14 @@ final class ProductResolverTest extends KirbyTestCase
                     'defaultRequiresShipping' => false,
                 ],
                 'products' => [
-                    'resolver' => static fn(ProductRequest $request): ResolvedProduct => new ResolvedProduct(
+                    'resolver' => static fn(ProductRequest $request): Product => new Product(
                         request: new ProductRequest(
                             $request->reference(),
                             selectedOptions: ['sizeOption' => 'largeValue'],
                         ),
                         name: 'Invalid product',
                         requiresShipping: false,
-                        price: new InlinePrice(\Brick\Money\Money::of('9.50', 'EUR')),
+                        price: new Price(\Brick\Money\Money::of('9.50', 'EUR')),
                         selectedOptions: [new SelectedOption(
                             'sizeOption',
                             'Size',
@@ -440,7 +440,7 @@ final class ProductResolverTest extends KirbyTestCase
                     'defaultRequiresShipping' => false,
                 ],
                 'products' => [
-                    'resolver' => static fn(ProductRequest $request): ResolvedProduct => new ResolvedProduct(
+                    'resolver' => static fn(ProductRequest $request): Product => new Product(
                         request: $request,
                         name: 'Invalid product',
                         requiresShipping: false,
@@ -463,11 +463,11 @@ final class ProductResolverTest extends KirbyTestCase
                     'defaultRequiresShipping' => false,
                 ],
                 'products' => [
-                    'resolver' => static fn(ProductRequest $request): ResolvedProduct => new ResolvedProduct(
+                    'resolver' => static fn(ProductRequest $request): Product => new Product(
                         request: $request,
                         name: 'Invalid product',
                         requiresShipping: false,
-                        price: new InlinePrice(\Brick\Money\Money::of('9.50', 'USD')),
+                        price: new Price(\Brick\Money\Money::of('9.50', 'USD')),
                     ),
                 ],
             ],
@@ -490,7 +490,7 @@ final class ProductResolverTest extends KirbyTestCase
                     'defaultRequiresShipping' => false,
                 ],
                 'products' => [
-                    'resolver' => static function (): ResolvedProduct {
+                    'resolver' => static function (): Product {
                         throw new \RuntimeException('External catalogue failed.');
                     },
                 ],

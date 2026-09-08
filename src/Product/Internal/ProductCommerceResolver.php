@@ -9,7 +9,7 @@ use Kirby\Content\Field;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
-use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
+use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use Throwable;
@@ -34,7 +34,7 @@ final class ProductCommerceResolver
         array $fields,
         ?array $variant,
         ProductResolutionContext $context,
-    ): InlinePrice|StripePriceReference {
+    ): Price|StripePriceReference {
         if ($context->priceSource() === PriceSource::Stripe) {
             $priceId = $variant['stripePriceId'] ?? null;
             $priceId ??= $this->optionalString($this->field($content, $fields['stripePrice'])->value());
@@ -57,7 +57,7 @@ final class ProductCommerceResolver
         try {
             $snapshot = $this->currencies->fromDecimal($amount, $currency);
 
-            return new InlinePrice($this->currencies->toMoney($snapshot));
+            return new Price($this->currencies->toMoney($snapshot));
         } catch (Throwable $error) {
             throw new InvalidProductException('product.price_invalid', $error);
         }

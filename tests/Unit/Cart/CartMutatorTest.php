@@ -15,8 +15,8 @@ use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionCanonicalizer;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionData;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductUnavailableException;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
-use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Test\Support\Cart\InMemoryCartStore;
@@ -35,7 +35,7 @@ final class CartMutatorTest extends TestCase
     protected function setUp(): void
     {
         $this->store = new InMemoryCartStore(new CartSnapshot('cart-id', 'revision-0', [], 100, 100));
-        $this->selections = new SelectionCanonicalizer(function (ProductRequest $request): ResolvedProduct {
+        $this->selections = new SelectionCanonicalizer(function (ProductRequest $request): Product {
             $this->resolutions++;
 
             if ($this->available === false || ($this->maximum !== null && $request->quantity() > $this->maximum)) {
@@ -53,7 +53,7 @@ final class CartMutatorTest extends TestCase
                 $options[] = new SelectedOption($option, $option, $value, $value);
             }
 
-            return new ResolvedProduct(
+            return new Product(
                 $request,
                 'Product',
                 false,

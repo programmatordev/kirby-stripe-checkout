@@ -10,7 +10,7 @@ use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use Throwable;
 
 /** Contains an exact Kirby-owned unit price. */
-final readonly class InlinePrice
+final readonly class Price
 {
     public function __construct(private Money $unitPrice)
     {

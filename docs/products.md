@@ -131,7 +131,7 @@ if ($variant !== null) {
 }
 ```
 
-`price()`, `stripePrice()`, and `requiresShipping()` contain the effective values after applying the product and store fallbacks. In Kirby price mode, `price()` returns an exact Brick `Money` and `stripePrice()` returns `null`. In Stripe price mode, `price()` returns `null` and `stripePrice()` returns the cached validated `ResolvedPrice`. The variant SKU remains `null` when it is not configured because it does not inherit the simple-product SKU.
+`price()`, `stripePrice()`, and `requiresShipping()` contain the effective values after applying the product and store fallbacks. In Kirby price mode, `price()` returns an exact Brick `Money` and `stripePrice()` returns `null`. In Stripe price mode, `price()` returns `null` and `stripePrice()` returns the cached validated `StripePrice`. The variant SKU remains `null` when it is not configured because it does not inherit the simple-product SKU.
 
 Use the mapped field handle when it differs from the default:
 
@@ -216,7 +216,7 @@ $product = $site->stripeCheckout()->resolveProduct($request);
 
 Quantity defaults to `1` and must be a positive integer. Zero does not mean removal. The plugin imposes no store-specific maximum; a custom resolver can reject quantities according to the store's rules.
 
-The default resolver accepts the same useful Page locator forms as Kirby, rejects drafts and missing pages, validates the complete request, and normalizes the result to the Page's canonical `page://...` UUID. The returned `ResolvedProduct` is an immutable snapshot containing the exact price, effective shipping boolean, localized option names, optional SKU and images, and matched variant ID.
+The default resolver accepts the same useful Page locator forms as Kirby, rejects drafts and missing pages, validates the complete request, and normalizes the result to the Page's canonical `page://...` UUID. The returned `Product` is an immutable snapshot containing the exact price, effective shipping boolean, localized option names, optional SKU and images, and matched variant ID.
 
 `$product->image()` returns the first mapped Kirby File for crops, thumbs, and file metadata; cart items expose the same File through `$item->image()`. It returns `null` for missing images or external URL-only sources. `$product->imageUrls()` retains the resolved URLs in their existing order for Stripe and serialization boundaries, and for external-image fallback. Native File objects are not stored in the cart session.
 
@@ -258,7 +258,7 @@ if ($stripePrice !== null) {
 
 Use the mapped field handle when it differs from `stripePrice`. An empty field returns `null`. A malformed ID or a Price that is no longer present in the eligible catalogue raises an `InvalidProductException` instead of returning incomplete data.
 
-Generated variants are already converted storefront values. In Stripe mode, `stripePrice()` returns the cached `ResolvedPrice` directly:
+Generated variants are already converted storefront values. In Stripe mode, `stripePrice()` returns the cached `StripePrice` directly:
 
 ```php
 $variant = $page->options()->toProductOptions()->matchVariant($selectedOptions);
@@ -307,24 +307,24 @@ Configure either a `ProductResolverInterface` object or a typed PHP closure:
 <?php
 
 use Brick\Money\Money;
-use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
-use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
+use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
-use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
+use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 
 return [
     'programmatordev.stripe-checkout.products.resolver' => static function (
         ProductRequest $request,
         ProductResolutionContext $context,
-    ): ResolvedProduct {
+    ): Product {
         $currency = $context->settings()->currency()
             ?? throw new LogicException('The product context requires a store currency.');
 
-        return new ResolvedProduct(
+        return new Product(
             request: $request,
             name: 'External product',
             requiresShipping: false,
-            price: new InlinePrice(Money::of('9.50', $currency)),
+            price: new Price(Money::of('9.50', $currency)),
         );
     },
 ];

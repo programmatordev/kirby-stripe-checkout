@@ -10,14 +10,14 @@ use Kirby\Content\Content;
 use Kirby\Content\Field;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
-use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
+use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\ProductOption;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptionValue;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductVariant;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
-use ProgrammatorDev\StripeCheckout\Stripe\Price\ResolvedPrice;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 use Throwable;
 
 /**
@@ -27,7 +27,7 @@ use Throwable;
  */
 final class ProductOptionsFactory
 {
-    /** @param null|Closure(StripePriceReference): ResolvedPrice $stripePriceResolver */
+    /** @param null|Closure(StripePriceReference): StripePrice $stripePriceResolver */
     public function __construct(
         private readonly ProductConfiguration $configuration,
         private readonly ProductResolutionContext $context,
@@ -92,9 +92,9 @@ final class ProductOptionsFactory
             ),
             $localized['options'],
         );
-        $resolvedStripePrices = [];
+        $stripePrices = [];
         $variants = array_map(
-            function (array $variant) use (&$resolvedStripePrices, $technicalContent, $fields): ProductVariant {
+            function (array $variant) use (&$stripePrices, $technicalContent, $fields): ProductVariant {
                 $price = $this->commerce->price(
                     $technicalContent,
                     $fields,
@@ -103,7 +103,7 @@ final class ProductOptionsFactory
                 );
 
                 if ($price instanceof StripePriceReference) {
-                    $price = $resolvedStripePrices[$price->priceId()]
+                    $price = $stripePrices[$price->priceId()]
                         ??= $this->resolveStripePrice($price);
                 }
 
@@ -127,7 +127,7 @@ final class ProductOptionsFactory
         return new ProductOptions($options, $variants);
     }
 
-    private function resolveStripePrice(StripePriceReference $reference): ResolvedPrice
+    private function resolveStripePrice(StripePriceReference $reference): StripePrice
     {
         if ($this->stripePriceResolver === null) {
             throw new InvalidProductException('product.stripe_price_unavailable');

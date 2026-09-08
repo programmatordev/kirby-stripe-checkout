@@ -7,7 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Product;
 use Brick\Money\Money;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
-use ProgrammatorDev\StripeCheckout\Stripe\Price\ResolvedPrice;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 
 /** Exposes one variant with its effective commerce values. */
 final readonly class ProductVariant
@@ -24,7 +24,7 @@ final readonly class ProductVariant
         string $id,
         array $selectedOptions,
         private bool $enabled,
-        private InlinePrice|ResolvedPrice $sourcePrice,
+        private Price|StripePrice $sourcePrice,
         private bool $requiresShipping,
         ?string $sku = null,
     ) {
@@ -71,14 +71,14 @@ final readonly class ProductVariant
 
     public function price(): ?Money
     {
-        return $this->sourcePrice instanceof InlinePrice
+        return $this->sourcePrice instanceof Price
             ? $this->sourcePrice->unitPrice()
             : null;
     }
 
-    public function stripePrice(): ?ResolvedPrice
+    public function stripePrice(): ?StripePrice
     {
-        return $this->sourcePrice instanceof ResolvedPrice
+        return $this->sourcePrice instanceof StripePrice
             ? $this->sourcePrice
             : null;
     }

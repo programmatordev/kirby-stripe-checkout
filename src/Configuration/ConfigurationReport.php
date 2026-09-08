@@ -15,11 +15,11 @@ use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 final class ConfigurationReport
 {
     private function __construct(
-        private readonly ?ResolvedConfiguration $configuration,
+        private readonly ?Configuration $configuration,
         private readonly ?ConfigurationException $error,
     ) {}
 
-    public static function valid(ResolvedConfiguration $configuration): self
+    public static function valid(Configuration $configuration): self
     {
         return new self($configuration, null);
     }
@@ -39,12 +39,12 @@ final class ConfigurationReport
         return $this->error;
     }
 
-    public function configuration(): ?ResolvedConfiguration
+    public function configuration(): ?Configuration
     {
         return $this->configuration;
     }
 
-    public function configurationOrFail(): ResolvedConfiguration
+    public function configurationOrFail(): Configuration
     {
         if ($this->error !== null) {
             throw $this->error;

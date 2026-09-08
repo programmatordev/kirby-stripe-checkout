@@ -14,9 +14,9 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
 use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
-use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
+use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
-use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 
 final class RetentionPolicyTest extends TestCase
 {
@@ -78,7 +78,7 @@ final class RetentionPolicyTest extends TestCase
     private function data(string $checkout, string $payment): array
     {
         $price = Money::of('16', 'EUR');
-        $product = new ResolvedProduct(new ProductRequest('product', 1), 'Product', false, new InlinePrice($price));
+        $product = new Product(new ProductRequest('product', 1), 'Product', false, new Price($price));
         $context = new OrderCreationContext('example', 'ORD-EXAMPLE', CheckoutSource::Direct, null, null, null, 'hosted', 'EUR', [OrderLineSnapshot::fromProduct($product, $price)]);
         $data = OrderSerializer::creation($context, hash('sha256', 'token'), hash('sha256', 'request'), 'guest', new DateTimeImmutable('2026-09-01T00:00:00Z'));
         $data['checkoutStatus'] = $checkout;

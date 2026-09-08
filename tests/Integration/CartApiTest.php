@@ -17,10 +17,10 @@ use ProgrammatorDev\StripeCheckout\Cart\Internal\CartSnapshot;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\KirbySessionCartStore;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
-use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
+use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
-use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
@@ -76,10 +76,10 @@ final class CartApiTest extends KirbyTestCase
             public int $calls = 0;
         };
         $this->restart(['programmatordev.stripe-checkout' => ['products' => [
-            'resolver' => static function (ProductRequest $request) use ($state): ResolvedProduct {
+            'resolver' => static function (ProductRequest $request) use ($state): Product {
                 $state->calls++;
 
-                return new ResolvedProduct($request, 'Product', false, new InlinePrice(Money::of('10', 'EUR')));
+                return new Product($request, 'Product', false, new Price(Money::of('10', 'EUR')));
             },
         ]]]);
         $original = $this->cart()->add('product', 2);
@@ -181,11 +181,11 @@ final class CartApiTest extends KirbyTestCase
     public function testExternalImageUrlsDoNotProduceKirbyFiles(): void
     {
         $this->restart(['programmatordev.stripe-checkout' => [
-            'products' => ['resolver' => static fn(ProductRequest $request): ResolvedProduct => new ResolvedProduct(
+            'products' => ['resolver' => static fn(ProductRequest $request): Product => new Product(
                 $request,
                 'Shirt',
                 false,
-                new InlinePrice(Money::of('16.00', 'EUR')),
+                new Price(Money::of('16.00', 'EUR')),
                 imageUrls: match ($request->reference()) {
                     'gallery' => ['https://example.test/hero.jpg', 'https://example.test/detail.jpg'],
                     'single' => ['https://example.test/single.jpg'],
@@ -208,18 +208,18 @@ final class CartApiTest extends KirbyTestCase
             public bool $available = true;
         };
         $this->restart(['programmatordev.stripe-checkout' => [
-            'products' => ['resolver' => static function (ProductRequest $request, ProductResolutionContext $context) use ($state): ResolvedProduct {
+            'products' => ['resolver' => static function (ProductRequest $request, ProductResolutionContext $context) use ($state): Product {
                 if ($state->available === false) {
                     throw new RuntimeException('Product no longer available');
                 }
 
                 $portuguese = $context->languageCode() === 'pt';
 
-                return new ResolvedProduct(
+                return new Product(
                     $request,
                     'Shirt',
                     false,
-                    new InlinePrice(Money::of('16.00', 'EUR')),
+                    new Price(Money::of('16.00', 'EUR')),
                     selectedOptions: [new SelectedOption('size', $portuguese ? 'Tamanho' : 'Size', 'large', $portuguese ? 'Grande' : 'Large')],
                     variantId: 'large-shirt',
                 );
@@ -386,11 +386,11 @@ final class CartApiTest extends KirbyTestCase
 
     public function testPartialFailuresNeverReturnAPartialSubtotal(): void
     {
-        $this->restart(['programmatordev.stripe-checkout' => ['products' => ['resolver' => static fn(ProductRequest $request): ResolvedProduct => new ResolvedProduct(
+        $this->restart(['programmatordev.stripe-checkout' => ['products' => ['resolver' => static fn(ProductRequest $request): Product => new Product(
             $request,
             'Product',
             false,
-            new InlinePrice(Money::of('16.00', 'EUR')),
+            new Price(Money::of('16.00', 'EUR')),
         )]]]);
         $cart = $this->cart()->add('first')->add('second', PHP_INT_MAX - 1);
         $this->assertSame(PHP_INT_MAX, $cart->totalQuantity());
@@ -407,12 +407,12 @@ final class CartApiTest extends KirbyTestCase
             public bool $fail = false;
         };
         $this->restart(['programmatordev.stripe-checkout' => [
-            'products' => ['resolver' => static function (ProductRequest $request, ProductResolutionContext $context) use ($state): ResolvedProduct {
+            'products' => ['resolver' => static function (ProductRequest $request, ProductResolutionContext $context) use ($state): Product {
                 if ($state->fail) {
                     throw new RuntimeException('secret_token private/customer/data');
                 }
 
-                return new ResolvedProduct($request, $context->languageCode() . ':' . ($context->user()?->id() ?? 'guest'), false, new InlinePrice(Money::of('2.00', 'EUR')));
+                return new Product($request, $context->languageCode() . ':' . ($context->user()?->id() ?? 'guest'), false, new Price(Money::of('2.00', 'EUR')));
             }],
         ]], languages: [
             ['code' => 'en', 'default' => true, 'locale' => 'en_US', 'name' => 'English'],

@@ -25,9 +25,9 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
 use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
-use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
+use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
-use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
@@ -494,7 +494,7 @@ final class OrderLifecycleTest extends KirbyTestCase
     private function createOrder(?string $languageCode = null): OrderPage
     {
         $price = Money::of('16', 'EUR');
-        $product = new ResolvedProduct(new ProductRequest('product', 1), 'Product', false, new InlinePrice($price));
+        $product = new Product(new ProductRequest('product', 1), 'Product', false, new Price($price));
 
         return (new OrderPageStore($this->kirby))->create(
             [OrderLineSnapshot::fromProduct($product, $price)],

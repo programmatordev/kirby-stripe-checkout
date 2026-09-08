@@ -11,16 +11,16 @@ use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Money\MoneySnapshot;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
-use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
+use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductOption;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptionValue;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductVariant;
-use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
-use ProgrammatorDev\StripeCheckout\Stripe\Price\ResolvedPrice;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 
 final class ProductValuesTest extends TestCase
 {
@@ -28,7 +28,7 @@ final class ProductValuesTest extends TestCase
     public function testProductNamesRejectTextThatCannotEnterAnOrderSnapshot(string $text): void
     {
         $this->expectException(InvalidProductException::class);
-        new ResolvedProduct(new ProductRequest('product'), $text, false, new InlinePrice(Money::of('16', 'EUR')));
+        new Product(new ProductRequest('product'), $text, false, new Price(Money::of('16', 'EUR')));
     }
 
     #[DataProvider('invalidSnapshotText')]
@@ -73,18 +73,18 @@ final class ProductValuesTest extends TestCase
         }
     }
 
-    public function testResolvedProductCarriesAnExactTrustedSnapshot(): void
+    public function testProductCarriesAnExactTrustedSnapshot(): void
     {
         $request = new ProductRequest(
             'page://shirt000000001',
             2,
             ['sizeOption' => 'largeValue'],
         );
-        $product = new ResolvedProduct(
+        $product = new Product(
             request: $request,
             name: 'T-shirt',
             requiresShipping: true,
-            price: new InlinePrice(Money::of('16.00', 'EUR')),
+            price: new Price(Money::of('16.00', 'EUR')),
             selectedOptions: [new SelectedOption('sizeOption', 'Size', 'largeValue', 'Large')],
             description: 'Heavy cotton.',
             imageUrls: ['https://example.test/shirt.jpg'],
@@ -95,7 +95,7 @@ final class ProductValuesTest extends TestCase
 
         $this->assertSame(PriceSource::Kirby, $product->priceSource());
         $price = $product->price();
-        $this->assertInstanceOf(InlinePrice::class, $price);
+        $this->assertInstanceOf(Price::class, $price);
         $this->assertSame('16.00', $price->unitPrice()->getAmount()->toString());
         $this->assertSame('largeVariant0001', $product->variantId());
         $this->assertSame('SHIRT-L', $product->sku());
@@ -103,29 +103,29 @@ final class ProductValuesTest extends TestCase
         $this->assertNull($product->image());
     }
 
-    public function testResolvedProductRejectsAFileThatDoesNotMatchItsFirstImageUrl(): void
+    public function testProductRejectsAFileThatDoesNotMatchItsFirstImageUrl(): void
     {
         $image = $this->createStub(File::class);
         $image->method('url')->willReturn('https://example.test/other.jpg');
         $this->expectException(InvalidProductException::class);
         $this->expectExceptionMessage('product.images_invalid');
 
-        new ResolvedProduct(
+        new Product(
             request: new ProductRequest('products/shirt'),
             name: 'Shirt',
             requiresShipping: false,
-            price: new InlinePrice(Money::of('16.00', 'EUR')),
+            price: new Price(Money::of('16.00', 'EUR')),
             imageUrls: ['https://example.test/first.jpg'],
             image: $image,
         );
     }
 
-    public function testResolvedProductRejectsSelectedOptionsThatDoNotMatchTheRequest(): void
+    public function testProductRejectsSelectedOptionsThatDoNotMatchTheRequest(): void
     {
         $this->expectException(InvalidProductException::class);
         $this->expectExceptionMessage('product.selected_options_invalid');
 
-        new ResolvedProduct(
+        new Product(
             request: new ProductRequest('page://shirt000000001', selectedOptions: [
                 'sizeOption' => 'largeValue',
             ]),
@@ -149,7 +149,7 @@ final class ProductValuesTest extends TestCase
                     'smallVariant001',
                     ['sizeOption' => 'smallValue'],
                     true,
-                    new InlinePrice(Money::of('19.95', 'EUR')),
+                    new Price(Money::of('19.95', 'EUR')),
                     true,
                     sku: 'SHIRT-S',
                 ),
@@ -157,7 +157,7 @@ final class ProductValuesTest extends TestCase
                     'largeVariant001',
                     ['sizeOption' => 'largeValue'],
                     false,
-                    new InlinePrice(Money::of('20.00', 'EUR')),
+                    new Price(Money::of('20.00', 'EUR')),
                     false,
                 ),
             ],
@@ -190,7 +190,7 @@ final class ProductValuesTest extends TestCase
             'smallVariant001',
             ['sizeOption' => 'smallValue'],
             true,
-            new ResolvedPrice(
+            new StripePrice(
                 'price_fixture',
                 'prod_fixture',
                 'T-shirt',
@@ -203,7 +203,7 @@ final class ProductValuesTest extends TestCase
         $stripePrice = $variant->stripePrice();
 
         $this->assertNull($price);
-        $this->assertInstanceOf(ResolvedPrice::class, $stripePrice);
+        $this->assertInstanceOf(StripePrice::class, $stripePrice);
         $this->assertSame('price_fixture', $stripePrice->priceId());
         $this->assertNull($variant->toArray()['price']);
         $this->assertSame([
@@ -235,7 +235,7 @@ final class ProductValuesTest extends TestCase
                 'colourVariant01',
                 ['colourOption' => 'redValue'],
                 true,
-                new InlinePrice(Money::of('10.00', 'EUR')),
+                new Price(Money::of('10.00', 'EUR')),
                 false,
             )],
         );
@@ -256,14 +256,14 @@ final class ProductValuesTest extends TestCase
                     'firstVariant001',
                     ['sizeOption' => 'smallValue'],
                     true,
-                    new InlinePrice(Money::of('10.00', 'EUR')),
+                    new Price(Money::of('10.00', 'EUR')),
                     false,
                 ),
                 new ProductVariant(
                     'secondVariant01',
                     ['sizeOption' => 'smallValue'],
                     true,
-                    new InlinePrice(Money::of('10.00', 'EUR')),
+                    new Price(Money::of('10.00', 'EUR')),
                     false,
                 ),
             ],
@@ -284,7 +284,7 @@ final class ProductValuesTest extends TestCase
                 'smallVariant001',
                 ['sizeOption' => 'smallValue'],
                 true,
-                new InlinePrice(Money::of('10.00', 'EUR')),
+                new Price(Money::of('10.00', 'EUR')),
                 false,
             )],
         );

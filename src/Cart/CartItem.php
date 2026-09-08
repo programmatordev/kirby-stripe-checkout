@@ -6,8 +6,8 @@ namespace ProgrammatorDev\StripeCheckout\Cart;
 
 use Brick\Money\Money;
 use Kirby\Cms\File;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
-use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 
 /** One immutable resolved line; unavailable selections remain removable. */
@@ -20,7 +20,7 @@ final readonly class CartItem
     public function __construct(
         private string $id,
         private ProductRequest $request,
-        private ?ResolvedProduct $product,
+        private ?Product $product,
         private ?Money $price,
         private ?Money $subtotal,
         private array $errors = [],
@@ -41,7 +41,7 @@ final readonly class CartItem
         return $this->request->quantity();
     }
 
-    public function product(): ?ResolvedProduct
+    public function product(): ?Product
     {
         return $this->product;
     }

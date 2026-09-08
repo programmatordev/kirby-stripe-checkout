@@ -12,10 +12,10 @@ use Kirby\Content\Field;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductUnavailableException;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
-use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use Throwable;
 
@@ -36,7 +36,7 @@ final class KirbyPageProductResolver implements ProductResolverInterface
     public function resolve(
         ProductRequest $request,
         ProductResolutionContext $context,
-    ): ResolvedProduct {
+    ): Product {
         $page = $this->locator->find($context->site(), $request->reference());
         $fields = $this->configuration->fields();
         $technicalContent = $this->technicalContent($page);
@@ -77,7 +77,7 @@ final class KirbyPageProductResolver implements ProductResolverInterface
             throw new InvalidProductException('product.name_missing');
         }
 
-        return new ResolvedProduct(
+        return new Product(
             request: $resolvedRequest,
             name: $name,
             requiresShipping: $shipping,

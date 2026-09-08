@@ -46,10 +46,10 @@ final class LocalDiagnostics
             $this->dependency('stripePhp', defined(Stripe::class . '::VERSION') ? Stripe::VERSION : null, class_exists(Stripe::class)),
         ];
 
-        $configuration = (new RuntimeFactory($this->kirby))->configurationReport();
+        $configurationReport = (new RuntimeFactory($this->kirby))->configurationReport();
 
-        if ($configuration->isValid() === false) {
-            $error = $configuration->error();
+        if ($configurationReport->isValid() === false) {
+            $error = $configurationReport->error();
             $checks[] = $this->failure('configuration', $error);
 
             foreach (['secretKey', 'publishableKey', 'webhookSecret'] as $id) {
@@ -61,13 +61,13 @@ final class LocalDiagnostics
             }
         } else {
             $checks[] = $this->check('configuration', self::PASS, 'configuration.ready');
-            $resolved = $configuration->configurationOrFail();
-            $stripe = $resolved->stripe();
+            $configuration = $configurationReport->configurationOrFail();
+            $stripe = $configuration->stripe();
             $checks[] = $this->credential('secretKey', $stripe->hasSecretKey(), $stripe->serverMode());
             $checks[] = $this->credential('publishableKey', $stripe->hasPublishableKey(), $stripe->publishableMode());
             $checks[] = $this->credential('webhookSecret', $stripe->hasWebhookSecret(), CredentialMode::Unknown);
-            $settings = $resolved->settings();
-            $housekeeping = $resolved->housekeeping();
+            $settings = $configuration->settings();
+            $housekeeping = $configuration->housekeeping();
             $checks[] = $this->check('housekeeping', self::PASS, 'housekeeping.configured', [
                 'intervalHours' => (string) $housekeeping['intervalHours'],
                 'batchSize' => (string) $housekeeping['batchSize'],

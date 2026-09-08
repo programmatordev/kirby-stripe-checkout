@@ -16,7 +16,7 @@ use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\StripePriceField;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
-use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
+use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 
@@ -274,15 +274,15 @@ try {
             'requiresShipping' => 'inherit',
         ],
     ])->changeStatus('listed');
-    $resolvedProduct = $stripeCheckout->resolveProduct(new ProductRequest($productPage->id()));
-    $resolvedPrice = $resolvedProduct->price();
+    $product = $stripeCheckout->resolveProduct(new ProductRequest($productPage->id()));
+    $price = $product->price();
 
     if (
-        $resolvedProduct->request()->reference() !== $productPage->uuid()->toString()
-        || $resolvedProduct->name() !== 'Consumer product'
-        || $resolvedProduct->requiresShipping() !== false
-        || $resolvedPrice instanceof InlinePrice === false
-        || $resolvedPrice->unitPrice()->getAmount()->toString() !== '16.00'
+        $product->request()->reference() !== $productPage->uuid()->toString()
+        || $product->name() !== 'Consumer product'
+        || $product->requiresShipping() !== false
+        || $price instanceof Price === false
+        || $price->unitPrice()->getAmount()->toString() !== '16.00'
     ) {
         throw new RuntimeException('The installed package did not resolve a Kirby product correctly.');
     }

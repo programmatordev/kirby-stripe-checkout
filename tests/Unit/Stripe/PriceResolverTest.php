@@ -17,24 +17,24 @@ final class PriceResolverTest extends TestCase
     {
         $record = self::record();
         $provider = new FakePriceProvider(prices: [$record->priceId => $record]);
-        $resolved = (new PriceResolver($provider))->resolve($record->priceId, 'EUR');
+        $stripePrice = (new PriceResolver($provider))->resolve($record->priceId, 'EUR');
 
         $this->assertSame(['price_standard'], $provider->retrievedIds);
-        $this->assertSame('price_standard', $resolved->priceId());
-        $this->assertSame('prod_standard', $resolved->productId());
-        $this->assertSame('Canvas bag', $resolved->name());
-        $this->assertSame('16.00', $resolved->price()->getAmount()->toString());
-        $this->assertSame('EUR', $resolved->price()->getCurrency()->getCurrencyCode());
-        $this->assertSame('exclusive', $resolved->taxBehavior());
-        $this->assertSame('txcd_99999999', $resolved->taxCode());
+        $this->assertSame('price_standard', $stripePrice->priceId());
+        $this->assertSame('prod_standard', $stripePrice->productId());
+        $this->assertSame('Canvas bag', $stripePrice->name());
+        $this->assertSame('16.00', $stripePrice->price()->getAmount()->toString());
+        $this->assertSame('EUR', $stripePrice->price()->getCurrency()->getCurrencyCode());
+        $this->assertSame('exclusive', $stripePrice->taxBehavior());
+        $this->assertSame('txcd_99999999', $stripePrice->taxCode());
     }
 
     public function testMathematicallyIntegralDecimalProviderAmountIsAccepted(): void
     {
         $record = self::record(unitAmount: null, unitAmountDecimal: '1600.000');
-        $resolved = (new PriceResolver(new FakePriceProvider()))->resolveRecord($record, 'EUR');
+        $stripePrice = (new PriceResolver(new FakePriceProvider()))->resolveRecord($record, 'EUR');
 
-        $this->assertSame('16.00', $resolved->price()->getAmount()->toString());
+        $this->assertSame('16.00', $stripePrice->price()->getAmount()->toString());
     }
 
     #[DataProvider('ineligibleRecords')]

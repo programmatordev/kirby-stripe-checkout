@@ -59,7 +59,7 @@ final class ConfigurationResolver
 
             $this->validateCredentialCombination($stripe);
 
-            return ConfigurationReport::valid(new ResolvedConfiguration(
+            return ConfigurationReport::valid(new Configuration(
                 settings: $settings,
                 stripe: $stripe,
                 translations: $translations,
@@ -332,13 +332,13 @@ final class ConfigurationResolver
         $resolver->setAllowedTypes('secretKey', ['null', 'string']);
         $resolver->setAllowedTypes('webhookSecret', ['null', 'string']);
 
-        /** @var array{publishableKey: string|null, secretKey: string|null, webhookSecret: string|null} $resolved */
-        $resolved = $resolver->resolve($stripe);
+        /** @var array{publishableKey: string|null, secretKey: string|null, webhookSecret: string|null} $credentials */
+        $credentials = $resolver->resolve($stripe);
 
         return new StripeConfiguration(
-            secretKey: $resolved['secretKey'],
-            publishableKey: $resolved['publishableKey'],
-            webhookSecret: $resolved['webhookSecret'],
+            secretKey: $credentials['secretKey'],
+            publishableKey: $credentials['publishableKey'],
+            webhookSecret: $credentials['webhookSecret'],
         );
     }
 
@@ -424,13 +424,13 @@ final class ConfigurationResolver
             $resolver->setAllowedTypes($name, ['null', is_bool($default) ? 'bool' : 'int']);
         }
 
-        /** @var array<string, mixed> $resolved */
-        $resolved = $resolver->resolve($settings);
+        /** @var array<string, mixed> $phpSettings */
+        $phpSettings = $resolver->resolve($settings);
 
         $effective = [];
 
         foreach (Defaults::SETTINGS as $name => $default) {
-            $effective[$name] = $this->resolveSetting($resolved[$name], $pageSettings?->value($name), $default);
+            $effective[$name] = $this->resolveSetting($phpSettings[$name], $pageSettings?->value($name), $default);
         }
 
         return new Settings($effective);
@@ -466,7 +466,7 @@ final class ConfigurationResolver
      */
     private function resolveTranslations(array $translations): array
     {
-        $resolved = [];
+        $translationOverrides = [];
         $knownSuffixes = array_fill_keys(Catalogue::suffixes(), true);
 
         foreach ($translations as $locale => $overrides) {
@@ -498,18 +498,18 @@ final class ConfigurationResolver
                     throw new ConfigurationException('configuration.translation_invalid', $path);
                 }
 
-                $resolved[$locale][$key] = $value;
+                $translationOverrides[$locale][$key] = $value;
             }
         }
 
-        ksort($resolved);
+        ksort($translationOverrides);
 
-        foreach ($resolved as $locale => $overrides) {
+        foreach ($translationOverrides as $locale => $overrides) {
             ksort($overrides);
-            $resolved[$locale] = $overrides;
+            $translationOverrides[$locale] = $overrides;
         }
 
-        return $resolved;
+        return $translationOverrides;
     }
 
     private function validateCredentialCombination(StripeConfiguration $stripe): void

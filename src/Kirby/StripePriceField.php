@@ -13,7 +13,7 @@ use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogue;
-use ProgrammatorDev\StripeCheckout\Stripe\Price\ResolvedPrice;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 
 /**
  * Exposes one scalar Stripe Price reference through Kirby's field API.
@@ -234,7 +234,7 @@ final class StripePriceField extends FieldClass
         return [
             'catalogue' => self::status($result),
             'data' => array_map(
-                static fn(ResolvedPrice $price): array => self::item($price),
+                static fn(StripePrice $price): array => self::item($price),
                 $result['items'],
             ),
             'pagination' => [
@@ -267,11 +267,11 @@ final class StripePriceField extends FieldClass
             $productId = is_string($productId) ? $productId : '';
             $prices = array_values(array_filter(
                 $state['items'],
-                static fn(ResolvedPrice $price): bool => $price->productId() === $productId
+                static fn(StripePrice $price): bool => $price->productId() === $productId
                     && self::priceMatches($price, $query),
             ));
             $data = array_map(
-                static fn(ResolvedPrice $price): array => self::pickerPriceItem($price),
+                static fn(StripePrice $price): array => self::pickerPriceItem($price),
                 $prices,
             );
         } else {
@@ -334,7 +334,7 @@ final class StripePriceField extends FieldClass
     }
 
     /**
-     * @param list<ResolvedPrice> $items
+     * @param list<StripePrice> $items
      * @return array<string, mixed>|null
      */
     private function selected(array $items, string $value, bool $unavailable = true): ?array
@@ -370,7 +370,7 @@ final class StripePriceField extends FieldClass
     }
 
     /** @return array<string, mixed> */
-    private static function item(ResolvedPrice $price): array
+    private static function item(StripePrice $price): array
     {
         $text = array_filter([
             $price->name(),
@@ -401,7 +401,7 @@ final class StripePriceField extends FieldClass
     }
 
     /**
-     * @param array{id: string, name: string, images: list<string>, prices: list<ResolvedPrice>} $group
+     * @param array{id: string, name: string, images: list<string>, prices: list<StripePrice>} $group
      * @return array<string, mixed>
      */
     private static function pickerProductItem(array $group): array
@@ -419,7 +419,7 @@ final class StripePriceField extends FieldClass
     }
 
     /** @return array<string, mixed> */
-    private static function pickerPriceItem(ResolvedPrice $price): array
+    private static function pickerPriceItem(StripePrice $price): array
     {
         $amount = self::formattedAmount($price);
         $nickname = $price->nickname();
@@ -433,7 +433,7 @@ final class StripePriceField extends FieldClass
         ];
     }
 
-    private static function formattedAmount(ResolvedPrice $price): string
+    private static function formattedAmount(StripePrice $price): string
     {
         $money = $price->price();
 
@@ -449,7 +449,7 @@ final class StripePriceField extends FieldClass
     }
 
     /**
-     * @param array{id: string, name: string, images: list<string>, prices: list<ResolvedPrice>} $group
+     * @param array{id: string, name: string, images: list<string>, prices: list<StripePrice>} $group
      */
     private static function productMatches(array $group, string $query): bool
     {
@@ -467,7 +467,7 @@ final class StripePriceField extends FieldClass
         return str_contains(mb_strtolower(implode(' ', $values)), $query);
     }
 
-    private static function priceMatches(ResolvedPrice $price, string $query): bool
+    private static function priceMatches(StripePrice $price, string $query): bool
     {
         if ($query === '') {
             return true;
@@ -508,7 +508,7 @@ final class StripePriceField extends FieldClass
     }
 
     /**
-     * @param array{items: list<ResolvedPrice>, refreshedAt: ?int, failedAt: ?int, error: ?string} $state
+     * @param array{items: list<StripePrice>, refreshedAt: ?int, failedAt: ?int, error: ?string} $state
      * @return array{error: ?string, failedAt: ?int, refreshedAt: ?int, status: string}
      */
     private static function status(array $state): array

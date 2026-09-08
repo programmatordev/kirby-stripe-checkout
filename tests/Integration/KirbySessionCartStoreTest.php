@@ -14,8 +14,8 @@ use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutator;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartSnapshot;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\KirbySessionCartStore;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionCanonicalizer;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
-use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use RuntimeException;
@@ -224,7 +224,7 @@ final class KirbySessionCartStoreTest extends KirbyTestCase
 
     private function mutator(KirbySessionCartStore $store): CartMutator
     {
-        return new CartMutator($store, new SelectionCanonicalizer(static fn(ProductRequest $request): ResolvedProduct => new ResolvedProduct(
+        return new CartMutator($store, new SelectionCanonicalizer(static fn(ProductRequest $request): Product => new Product(
             $request,
             'Shirt',
             false,

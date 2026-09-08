@@ -13,7 +13,7 @@ use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
  * Contains trusted product facts and optional request-scoped Kirby image access.
  * Native File objects are presentation handles, never persisted commerce data.
  */
-final readonly class ResolvedProduct
+final readonly class Product
 {
     private string $name;
 
@@ -41,7 +41,7 @@ final readonly class ResolvedProduct
         private ProductRequest $request,
         string $name,
         private bool $requiresShipping,
-        private InlinePrice|StripePriceReference $price,
+        private Price|StripePriceReference $price,
         array $selectedOptions = [],
         ?string $description = null,
         array $imageUrls = [],
@@ -80,14 +80,14 @@ final readonly class ResolvedProduct
         return $this->requiresShipping;
     }
 
-    public function price(): InlinePrice|StripePriceReference
+    public function price(): Price|StripePriceReference
     {
         return $this->price;
     }
 
     public function priceSource(): PriceSource
     {
-        return $this->price instanceof InlinePrice ? PriceSource::Kirby : PriceSource::Stripe;
+        return $this->price instanceof Price ? PriceSource::Kirby : PriceSource::Stripe;
     }
 
     /** @return list<SelectedOption> */
@@ -141,22 +141,22 @@ final readonly class ResolvedProduct
             throw new InvalidProductException('product.selected_options_invalid');
         }
 
-        $resolved = [];
+        $optionValues = [];
 
         foreach ($selectedOptions as $selectedOption) {
             if (
                 $selectedOption instanceof SelectedOption === false
-                || isset($resolved[$selectedOption->optionId()])
+                || isset($optionValues[$selectedOption->optionId()])
             ) {
                 throw new InvalidProductException('product.selected_options_invalid');
             }
 
-            $resolved[$selectedOption->optionId()] = $selectedOption->valueId();
+            $optionValues[$selectedOption->optionId()] = $selectedOption->valueId();
         }
 
-        ksort($resolved);
+        ksort($optionValues);
 
-        if ($resolved !== $requestedOptions) {
+        if ($optionValues !== $requestedOptions) {
             throw new InvalidProductException('product.selected_options_invalid');
         }
 

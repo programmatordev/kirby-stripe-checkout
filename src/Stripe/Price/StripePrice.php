@@ -15,7 +15,7 @@ use Throwable;
 /**
  * Contains validated Stripe Price and Product facts for display and checkout.
  */
-final readonly class ResolvedPrice
+final readonly class StripePrice
 {
     private string $priceId;
     private string $productId;

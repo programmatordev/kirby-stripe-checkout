@@ -6,8 +6,8 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
 use Closure;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
-use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 
 /**
  * Shares reference normalization and checked merging between cart and buy-now input.
@@ -18,7 +18,7 @@ final class SelectionCanonicalizer
 {
     public const MAX_ENTRIES = 100;
 
-    /** @param Closure(ProductRequest): ResolvedProduct $resolveProduct */
+    /** @param Closure(ProductRequest): Product $resolveProduct */
     public function __construct(private readonly Closure $resolveProduct) {}
 
     public function resolve(ProductRequest $request): ProductRequest
@@ -42,7 +42,7 @@ final class SelectionCanonicalizer
 
     public function withQuantity(ProductRequest $existing, int $quantity): ProductRequest
     {
-        $resolved = $this->resolve(new ProductRequest(
+        $request = $this->resolve(new ProductRequest(
             $existing->reference(),
             $quantity,
             $existing->selectedOptions(),
@@ -50,11 +50,11 @@ final class SelectionCanonicalizer
 
         // A persisted canonical reference must remain stable; changing it here
         // could silently turn an update into a second equivalent cart entry.
-        if (SelectionData::equivalent($existing, $resolved) === false) {
+        if (SelectionData::equivalent($existing, $request) === false) {
             throw new CheckoutInputException('selection.invalid');
         }
 
-        return $resolved;
+        return $request;
     }
 
     /** @return non-empty-list<ProductRequest> */

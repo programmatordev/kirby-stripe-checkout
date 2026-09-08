@@ -27,7 +27,7 @@ final class PriceCatalogue
     ) {}
 
     /**
-     * @return array{items: list<ResolvedPrice>, refreshedAt: ?int, failedAt: ?int, error: ?string}
+     * @return array{items: list<StripePrice>, refreshedAt: ?int, failedAt: ?int, error: ?string}
      */
     public function current(string $currency): array
     {
@@ -35,7 +35,7 @@ final class PriceCatalogue
     }
 
     /**
-     * @return array{items: list<ResolvedPrice>, refreshedAt: ?int, failedAt: ?int, error: ?string}
+     * @return array{items: list<StripePrice>, refreshedAt: ?int, failedAt: ?int, error: ?string}
      */
     public function load(string $currency): array
     {
@@ -55,7 +55,7 @@ final class PriceCatalogue
             : $state;
     }
 
-    public function find(string $priceId, string $currency): ?ResolvedPrice
+    public function find(string $priceId, string $currency): ?StripePrice
     {
         foreach ($this->load($currency)['items'] as $price) {
             if ($price->priceId() === $priceId) {
@@ -67,7 +67,7 @@ final class PriceCatalogue
     }
 
     /**
-     * @return array{items: list<ResolvedPrice>, refreshedAt: ?int, failedAt: ?int, error: ?string}
+     * @return array{items: list<StripePrice>, refreshedAt: ?int, failedAt: ?int, error: ?string}
      */
     public function refresh(string $currency): array
     {
@@ -112,7 +112,7 @@ final class PriceCatalogue
                 }
             } while ($page->hasMore());
 
-            uasort($items, static function (ResolvedPrice $left, ResolvedPrice $right): int {
+            uasort($items, static function (StripePrice $left, StripePrice $right): int {
                 return [$left->name(), $left->nickname() ?? '', $left->priceId()]
                     <=> [$right->name(), $right->nickname() ?? '', $right->priceId()];
             });
@@ -139,7 +139,7 @@ final class PriceCatalogue
     }
 
     /**
-     * @return array{items: list<ResolvedPrice>, page: int, pages: int, total: int, refreshedAt: ?int, failedAt: ?int, error: ?string}
+     * @return array{items: list<StripePrice>, page: int, pages: int, total: int, refreshedAt: ?int, failedAt: ?int, error: ?string}
      */
     public function search(
         string $currency,
@@ -151,7 +151,7 @@ final class PriceCatalogue
         $query = mb_strtolower(trim($query ?? ''));
         $items = $query === '' ? $state['items'] : array_values(array_filter(
             $state['items'],
-            static function (ResolvedPrice $price) use ($query): bool {
+            static function (StripePrice $price) use ($query): bool {
                 $haystack = mb_strtolower(implode(' ', [
                     $price->priceId(),
                     $price->productId(),
@@ -181,7 +181,7 @@ final class PriceCatalogue
     }
 
     /**
-     * @param array{items: list<ResolvedPrice>, refreshedAt: ?int, failedAt: ?int, error: ?string} $state
+     * @param array{items: list<StripePrice>, refreshedAt: ?int, failedAt: ?int, error: ?string} $state
      * @return array<string, mixed>
      */
     private function encode(array $state): array
@@ -189,14 +189,14 @@ final class PriceCatalogue
         return [
             ...$state,
             'items' => array_map(
-                static fn(ResolvedPrice $price): array => $price->toArray(),
+                static fn(StripePrice $price): array => $price->toArray(),
                 $state['items'],
             ),
         ];
     }
 
     /**
-     * @return array{items: list<ResolvedPrice>, refreshedAt: ?int, failedAt: ?int, error: ?string}
+     * @return array{items: list<StripePrice>, refreshedAt: ?int, failedAt: ?int, error: ?string}
      */
     private function decode(mixed $cached): array
     {
@@ -235,7 +235,7 @@ final class PriceCatalogue
     }
 
     /** @param array<mixed, mixed> $item */
-    private function fromArray(array $item): ResolvedPrice
+    private function fromArray(array $item): StripePrice
     {
         foreach (['priceId', 'productId', 'name', 'currency', 'minorAmount', 'taxBehavior'] as $key) {
             if (array_key_exists($key, $item) === false) {
@@ -249,7 +249,7 @@ final class PriceCatalogue
             throw new \UnexpectedValueException('Invalid cached Price images.');
         }
 
-        return new ResolvedPrice(
+        return new StripePrice(
             priceId: $this->string($item['priceId']),
             productId: $this->string($item['productId']),
             name: $this->string($item['name']),

@@ -9,8 +9,8 @@ use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionCanonicalizer;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionData;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
-use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 
 final class SelectionDataTest extends TestCase
@@ -124,7 +124,7 @@ final class SelectionDataTest extends TestCase
 
     public function testExistingCanonicalReferencesCannotChangeDuringQuantityUpdates(): void
     {
-        $canonicalizer = new SelectionCanonicalizer(static fn(ProductRequest $request): ResolvedProduct => new ResolvedProduct(
+        $canonicalizer = new SelectionCanonicalizer(static fn(ProductRequest $request): Product => new Product(
             new ProductRequest('different-product', $request->quantity()),
             'Product',
             false,
@@ -147,9 +147,9 @@ final class SelectionDataTest extends TestCase
 
     private function canonicalizer(int &$calls): SelectionCanonicalizer
     {
-        return new SelectionCanonicalizer(static function (ProductRequest $request) use (&$calls): ResolvedProduct {
+        return new SelectionCanonicalizer(static function (ProductRequest $request) use (&$calls): Product {
             $calls++;
-            return new ResolvedProduct($request, 'Product', false, new StripePriceReference('price_fixture'));
+            return new Product($request, 'Product', false, new StripePriceReference('price_fixture'));
         });
     }
 }

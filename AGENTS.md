@@ -46,7 +46,7 @@
 - Name classes by their responsibility rather than their current implementation technology. Name external implementations after the stable integration boundary, such as an API, rather than the client library used internally.
 - Name plugin-owned interfaces with the `Interface` suffix, including their filenames.
 - Use precise role names such as `Resolver`, `Factory`, `Catalogue`, `Record`, `Reference`, and `Formatter` consistently.
-- Use `Reference` for an unresolved identifier, `Record` for untrusted provider data, and `Resolved...` for a validated domain value.
+- Use `Reference` for an unresolved identifier and `Record` for untrusted provider data. Name validated domain values directly, such as `Product`, `Price`, and `StripePrice`; validation is a class guarantee, not a `Resolved` prefix.
 - Keep mapped Page values as ordinary Kirby fields. Name plugin-owned Field converters into typed product-domain values with the singular `toProduct*()` prefix, such as `toProductOptions()` and `toProductStripePrice()`; do not apply this prefix to unrelated conversions.
 - Avoid vague names such as `Manager`, `Service`, `Helper`, and `Handler` when a more specific responsibility can be named.
 - Keep related PHP classes, Panel components, tests, factory methods, and documentation terminology aligned when a concept is renamed.

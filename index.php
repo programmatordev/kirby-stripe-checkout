@@ -22,7 +22,7 @@ use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
-use ProgrammatorDev\StripeCheckout\Stripe\Price\ResolvedPrice;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 use ProgrammatorDev\StripeCheckout\Translation\Registration;
 
@@ -71,7 +71,7 @@ App::plugin(
 
                 return (new RuntimeFactory($page->kirby()))->productOptionsFromField($field);
             },
-            'toProductStripePrice' => static function (Field $field): ?ResolvedPrice {
+            'toProductStripePrice' => static function (Field $field): ?StripePrice {
                 $page = $field->parent();
 
                 if ($page instanceof Page === false) {

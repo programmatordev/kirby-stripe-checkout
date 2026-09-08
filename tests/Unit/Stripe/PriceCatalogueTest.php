@@ -216,10 +216,10 @@ final class PriceCatalogueTest extends TestCase
         $catalogue = new PriceCatalogue(new MemoryCache(), $provider, $resolver);
 
         $listed = $catalogue->search('EUR')['items'][0];
-        $resolved = $resolver->resolve('price_current', 'EUR');
+        $stripePrice = $resolver->resolve('price_current', 'EUR');
 
         $this->assertSame('16.00', $listed->price()->getAmount()->toString());
-        $this->assertSame('24.00', $resolved->price()->getAmount()->toString());
+        $this->assertSame('24.00', $stripePrice->price()->getAmount()->toString());
         $this->assertSame(['price_current'], $provider->retrievedIds);
     }
 

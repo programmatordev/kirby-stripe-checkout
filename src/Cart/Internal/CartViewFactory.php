@@ -18,7 +18,7 @@ use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductException;
-use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
+use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 use ProgrammatorDev\StripeCheckout\Translation\LocaleResolver;
 use Throwable;
@@ -68,7 +68,7 @@ final class CartViewFactory
                 }
 
                 $price = $product->price();
-                $itemPrice = $price instanceof InlinePrice
+                $itemPrice = $price instanceof Price
                     ? $price->unitPrice()
                     : $runtime->stripePriceResolver()->resolve($price, $currency?->getCurrencyCode() ?? '')->price();
                 $itemSubtotal = $itemPrice->multipliedBy($entry->request()->quantity());

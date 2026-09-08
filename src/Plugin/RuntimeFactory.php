@@ -26,17 +26,17 @@ use ProgrammatorDev\StripeCheckout\Product\Internal\GuardedProductResolver;
 use ProgrammatorDev\StripeCheckout\Product\Internal\KirbyPageLocator;
 use ProgrammatorDev\StripeCheckout\Product\Internal\KirbyPageProductResolver;
 use ProgrammatorDev\StripeCheckout\Product\Internal\ProductOptionsFactory;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
-use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogue;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceProviderInterface;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceResolver;
-use ProgrammatorDev\StripeCheckout\Stripe\Price\ResolvedPrice;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\StripeApiPriceProvider;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 use ProgrammatorDev\StripeCheckout\Translation\LocaleResolver;
 use Stripe\StripeClient;
 
@@ -72,7 +72,7 @@ final class RuntimeFactory
         }
 
         $store = new KirbySessionCartStore($this->kirby->session(), Uuid::generate(...));
-        $selections = new SelectionCanonicalizer(function (ProductRequest $request): ResolvedProduct {
+        $selections = new SelectionCanonicalizer(function (ProductRequest $request): Product {
             // Rebuild context after login/language changes, even when a project
             // keeps the same Cart object for several operations in one request.
             $runtime = new self($this->kirby);
@@ -96,7 +96,7 @@ final class RuntimeFactory
         return (new CartViewFactory($this->kirby))->create($store->read(), $mutator, $resolve);
     }
 
-    public function resolveProduct(ProductRequest $request): ResolvedProduct
+    public function resolveProduct(ProductRequest $request): Product
     {
         return (new GuardedProductResolver($this->productResolver()))->resolve(
             $request,
@@ -119,7 +119,7 @@ final class RuntimeFactory
         return $this->productOptionsFactory()->forField($field);
     }
 
-    public function productStripePriceFromField(Field $field): ?ResolvedPrice
+    public function productStripePriceFromField(Field $field): ?StripePrice
     {
         $value = $field->value();
 
@@ -134,7 +134,7 @@ final class RuntimeFactory
         return $this->productStripePrice($value);
     }
 
-    public function productStripePrice(StripePriceReference|string $reference): ResolvedPrice
+    public function productStripePrice(StripePriceReference|string $reference): StripePrice
     {
         $reference = is_string($reference)
             ? new StripePriceReference($reference)
@@ -242,7 +242,7 @@ final class RuntimeFactory
         return new ProductOptionsFactory(
             $this->products(),
             $this->productContext(),
-            stripePriceResolver: fn(StripePriceReference $reference): ResolvedPrice => $this->productStripePrice($reference),
+            stripePriceResolver: fn(StripePriceReference $reference): StripePrice => $this->productStripePrice($reference),
         );
     }
 

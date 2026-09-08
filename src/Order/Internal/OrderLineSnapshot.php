@@ -7,9 +7,9 @@ namespace ProgrammatorDev\StripeCheckout\Order\Internal;
 use Brick\Money\Money;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
-use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
+use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
-use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use Throwable;
@@ -21,12 +21,12 @@ final readonly class OrderLineSnapshot
     private function __construct(private array $data, private Money $subtotal) {}
 
     /** Stripe-backed prices must already be resolved by the caller; snapshotting performs no lookup. */
-    public static function fromProduct(ResolvedProduct $product, Money $price, ?string $stripeProductId = null): self
+    public static function fromProduct(Product $product, Money $price, ?string $stripeProductId = null): self
     {
         $registry = new StripeCurrencyRegistry();
         $subtotal = $price->multipliedBy($product->request()->quantity());
 
-        if ($product->price() instanceof InlinePrice && $product->price()->unitPrice()->isEqualTo($price) === false) {
+        if ($product->price() instanceof Price && $product->price()->unitPrice()->isEqualTo($price) === false) {
             throw new OrderDataException();
         }
 
@@ -101,7 +101,7 @@ final readonly class OrderLineSnapshot
             $price = $registry->toMoney($registry->fromDecimal(OrderData::text($data['price']), $currency));
             $request = new ProductRequest(OrderData::text($data['reference']), OrderData::integer($data['quantity']), $selection);
             $priceDefinition = match ($data['priceSource']) {
-                'kirby' => new InlinePrice($price),
+                'kirby' => new Price($price),
                 'stripe' => new StripePriceReference(OrderData::text($data['stripePriceId'])),
                 default => throw new OrderDataException(),
             };
@@ -114,7 +114,7 @@ final readonly class OrderLineSnapshot
             }
 
             // Reuse product invariants rather than maintain a second options/image/SKU validator.
-            $product = new ResolvedProduct(
+            $product = new Product(
                 $request,
                 OrderData::text($data['name']),
                 OrderData::boolean($data['requiresShipping']),

@@ -19,10 +19,10 @@ use ProgrammatorDev\StripeCheckout\Cart\Exception\CartException;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartResponseMapper;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
-use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
+use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
-use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
@@ -101,10 +101,10 @@ final class CartRoutesTest extends KirbyTestCase
             /** @var list<string> */
             public array $calls = [];
         };
-        $this->restart(['products' => ['resolver' => static function (ProductRequest $request) use ($state): ResolvedProduct {
+        $this->restart(['products' => ['resolver' => static function (ProductRequest $request) use ($state): Product {
             $state->calls[] = $request->reference() . ':' . $request->quantity();
 
-            return new ResolvedProduct($request, 'Product', false, new InlinePrice(Money::of('10', 'EUR')));
+            return new Product($request, 'Product', false, new Price(Money::of('10', 'EUR')));
         }]]);
         $response = $this->send('POST', '/items', ['reference' => 'a']);
         $this->assertSame(200, $response->code());
@@ -261,11 +261,11 @@ final class CartRoutesTest extends KirbyTestCase
 
     public function testOptionsUseTheCartVocabularyInJsonAndForms(): void
     {
-        $this->restart(['products' => ['resolver' => static fn(ProductRequest $request): ResolvedProduct => new ResolvedProduct(
+        $this->restart(['products' => ['resolver' => static fn(ProductRequest $request): Product => new Product(
             $request,
             'Shirt',
             false,
-            new InlinePrice(Money::of('16', 'EUR')),
+            new Price(Money::of('16', 'EUR')),
             selectedOptions: [new SelectedOption('size', 'Size', 'large', 'Large')],
             variantId: 'large-variant',
         )]]);
@@ -356,11 +356,11 @@ final class CartRoutesTest extends KirbyTestCase
 
     public function testMultilingualRoutesResolveCurrentLanguageWithoutChangingRevision(): void
     {
-        $this->restart(['products' => ['resolver' => static fn(ProductRequest $request, ProductResolutionContext $context): ResolvedProduct => new ResolvedProduct(
+        $this->restart(['products' => ['resolver' => static fn(ProductRequest $request, ProductResolutionContext $context): Product => new Product(
             $request,
             $context->languageCode() === 'pt' ? 'Camisola' : 'Shirt',
             false,
-            new InlinePrice(Money::of('16', 'EUR')),
+            new Price(Money::of('16', 'EUR')),
         )]], languages: [
             ['code' => 'en', 'default' => true, 'locale' => 'en_US', 'name' => 'English', 'url' => '/'],
             ['code' => 'pt', 'locale' => 'pt_PT', 'name' => 'Português', 'url' => '/pt'],
@@ -405,12 +405,12 @@ final class CartRoutesTest extends KirbyTestCase
         $state = new class {
             public bool $available = true;
         };
-        $this->restart(['products' => ['resolver' => static function (ProductRequest $request) use ($state): ResolvedProduct {
+        $this->restart(['products' => ['resolver' => static function (ProductRequest $request) use ($state): Product {
             if ($state->available === false) {
                 throw new InvalidProductException('PRIVATE CUSTOMER DATA');
             }
 
-            return new ResolvedProduct($request, $request->reference(), false, new InlinePrice(Money::of('1', 'EUR')));
+            return new Product($request, $request->reference(), false, new Price(Money::of('1', 'EUR')));
         }]]);
         $cart = $this->cart();
 
@@ -436,7 +436,7 @@ final class CartRoutesTest extends KirbyTestCase
         $this->restart([
             'settings' => ['priceSource' => 'stripe'],
             'stripe' => ['secretKey' => 'sk_test_fixture'],
-            'products' => ['resolver' => static fn(ProductRequest $request): ResolvedProduct => new ResolvedProduct(
+            'products' => ['resolver' => static fn(ProductRequest $request): Product => new Product(
                 $request,
                 'Shirt',
                 false,

@@ -9,7 +9,7 @@ use Kirby\Form\Form;
 use ProgrammatorDev\StripeCheckout\Kirby\StripePriceField;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
-use ProgrammatorDev\StripeCheckout\Stripe\Price\ResolvedPrice;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
@@ -24,7 +24,7 @@ final class StripePriceFieldTest extends KirbyTestCase
         /** @phpstan-ignore-next-line method.nonObject, method.notFound */
         $price = $page->price()->toProductStripePrice();
 
-        $this->assertInstanceOf(ResolvedPrice::class, $price);
+        $this->assertInstanceOf(StripePrice::class, $price);
         $this->assertSame('price_canvas', $price->priceId());
         $this->assertSame('prod_canvas', $price->productId());
         $this->assertSame('Canvas bag', $price->name());
@@ -77,7 +77,7 @@ final class StripePriceFieldTest extends KirbyTestCase
         $stripePrice = $variant->stripePrice();
 
         $this->assertNull($variant->price());
-        $this->assertInstanceOf(ResolvedPrice::class, $stripePrice);
+        $this->assertInstanceOf(StripePrice::class, $stripePrice);
         $this->assertSame('price_canvas', $stripePrice->priceId());
         $this->assertSame('16.00', $stripePrice->price()->getAmount()->toString());
         $this->assertNull($variant->toArray()['price']);

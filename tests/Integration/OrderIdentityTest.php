@@ -14,9 +14,9 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
-use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
+use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
-use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 
 final class OrderIdentityTest extends TestCase
@@ -55,7 +55,7 @@ final class OrderIdentityTest extends TestCase
 
             $number = (new OrderNumberFormatter())->format($id);
             $price = Money::of('16', 'EUR');
-            $product = new ResolvedProduct(new ProductRequest('product'), 'Product', false, new InlinePrice($price));
+            $product = new Product(new ProductRequest('product'), 'Product', false, new Price($price));
             $context = new OrderCreationContext($id, $number, CheckoutSource::Direct, null, null, null, 'hosted', 'EUR', [OrderLineSnapshot::fromProduct($product, $price)]);
             $content = OrderSerializer::creation($context, hash('sha256', 'token'), hash('sha256', 'request'), 'guest', new DateTimeImmutable());
 

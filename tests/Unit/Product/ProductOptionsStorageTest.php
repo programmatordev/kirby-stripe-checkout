@@ -7,9 +7,9 @@ namespace ProgrammatorDev\StripeCheckout\Test\Unit\Product;
 use Brick\Money\Money;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
-use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
 use ProgrammatorDev\StripeCheckout\Product\Internal\VariantMatrix;
 use ProgrammatorDev\StripeCheckout\Product\Internal\VariantSchema;
+use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\ProductOption;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptionValue;
@@ -306,7 +306,7 @@ final class ProductOptionsStorageTest extends TestCase
                 $matchesFixture ? $variant['id'] : 'fallbackVariant' . $index,
                 $selectedOptions,
                 $matchesFixture && $variant['enabled'],
-                new InlinePrice(Money::of('10.00', 'EUR')),
+                new Price(Money::of('10.00', 'EUR')),
                 false,
             );
         }

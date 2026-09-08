@@ -13,7 +13,7 @@ final class ProductBlueprintTest extends KirbyTestCase
 {
     private const PREFIX = 'programmatordev.stripe-checkout';
 
-    public function testInlinePriceAndVariantBlueprintsUseEffectiveCurrency(): void
+    public function testPriceAndVariantBlueprintsUseEffectiveCurrency(): void
     {
         $this->restart([
             self::PREFIX => [

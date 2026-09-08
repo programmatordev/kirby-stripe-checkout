@@ -24,9 +24,9 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 use ProgrammatorDev\StripeCheckout\Order\RefundStatus;
-use ProgrammatorDev\StripeCheckout\Product\InlinePrice;
+use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
-use ProgrammatorDev\StripeCheckout\Product\ResolvedProduct;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use RuntimeException;
@@ -76,7 +76,7 @@ final class OrderValuesTest extends TestCase
     public function testExactPriceAndProviderUnits(string $currency, string $amount, int $providerPrice): void
     {
         $price = Money::of($amount, $currency);
-        $line = OrderLineSnapshot::fromProduct(new ResolvedProduct(new ProductRequest('product', 2), 'Product', false, new InlinePrice($price)), $price);
+        $line = OrderLineSnapshot::fromProduct(new Product(new ProductRequest('product', 2), 'Product', false, new Price($price)), $price);
         $data = $line->toArray();
         $this->assertSame([
             'price' => $providerPrice,
@@ -100,7 +100,7 @@ final class OrderValuesTest extends TestCase
 
     public function testStripeLinesRetainResolvedMoneyAndPriceProductReferences(): void
     {
-        $line = OrderLineSnapshot::fromProduct(new ResolvedProduct(new ProductRequest('product'), 'Stripe product', false, new StripePriceReference('price_test')), Money::of('25', 'EUR'), 'prod_test');
+        $line = OrderLineSnapshot::fromProduct(new Product(new ProductRequest('product'), 'Stripe product', false, new StripePriceReference('price_test')), Money::of('25', 'EUR'), 'prod_test');
         $data = $line->toArray();
         $this->assertSame('stripe', $data['priceSource']);
         $this->assertSame('price_test', $data['stripePriceId']);
@@ -111,11 +111,11 @@ final class OrderValuesTest extends TestCase
     public function testUnicodeProductTextSurvivesOrderSerialization(): void
     {
         $price = Money::of('16', 'EUR');
-        $product = new ResolvedProduct(
+        $product = new Product(
             new ProductRequest('product', 1, ['size' => 'large']),
             'T-shirt — Edição 日本語 👕',
             false,
-            new InlinePrice($price),
+            new Price($price),
             [new SelectedOption('size', 'Tamanho', 'large', 'Grande — 大')],
             variantId: 'large-variant',
         );
@@ -212,7 +212,7 @@ final class OrderValuesTest extends TestCase
 
     public function testContextRejectsMixedSources(): void
     {
-        $stripe = OrderLineSnapshot::fromProduct(new ResolvedProduct(new ProductRequest('other'), 'Other', false, new StripePriceReference('price_other')), Money::of('16', 'EUR'));
+        $stripe = OrderLineSnapshot::fromProduct(new Product(new ProductRequest('other'), 'Other', false, new StripePriceReference('price_other')), Money::of('16', 'EUR'));
         $this->expectException(OrderDataException::class);
         $this->context(lines: [$this->line(), $stripe]);
     }
@@ -220,7 +220,7 @@ final class OrderValuesTest extends TestCase
     public function testContextRejectsMixedCurrencies(): void
     {
         $price = Money::of('16', 'USD');
-        $line = OrderLineSnapshot::fromProduct(new ResolvedProduct(new ProductRequest('other'), 'Other', false, new InlinePrice($price)), $price);
+        $line = OrderLineSnapshot::fromProduct(new Product(new ProductRequest('other'), 'Other', false, new Price($price)), $price);
         $this->expectException(OrderDataException::class);
         $this->context(lines: [$this->line(), $line]);
     }
@@ -544,7 +544,7 @@ final class OrderValuesTest extends TestCase
 
     public function testInlineSnapshotCannotSubstituteADifferentPrice(): void
     {
-        $product = new ResolvedProduct(new ProductRequest('product'), 'Product', false, new InlinePrice(Money::of('16', 'EUR')));
+        $product = new Product(new ProductRequest('product'), 'Product', false, new Price(Money::of('16', 'EUR')));
         $this->expectException(OrderDataException::class);
         OrderLineSnapshot::fromProduct($product, Money::of('17', 'EUR'));
     }
@@ -709,7 +709,7 @@ final class OrderValuesTest extends TestCase
     private function line(): OrderLineSnapshot
     {
         $price = Money::of('16', 'EUR');
-        $product = new ResolvedProduct(new ProductRequest('page://shirt', 2, ['size' => 'large']), 'T-shirt', true, new InlinePrice($price), [new SelectedOption('size', 'Size', 'large', 'Large')], imageUrls: ['https://example.com/shirt.jpg'], sku: 'SHIRT-L', variantId: 'large-variant');
+        $product = new Product(new ProductRequest('page://shirt', 2, ['size' => 'large']), 'T-shirt', true, new Price($price), [new SelectedOption('size', 'Size', 'large', 'Large')], imageUrls: ['https://example.com/shirt.jpg'], sku: 'SHIRT-L', variantId: 'large-variant');
 
         return OrderLineSnapshot::fromProduct($product, $price);
     }
