@@ -50,7 +50,7 @@ final class CartSelectionTest extends KirbyTestCase
         $this->assertNotSame($first->revision(), $merged->revision());
         $this->assertEquals(
             array_map(static fn(CartEntry $entry): ProductRequest => $entry->request(), $merged->entries()),
-            $requestNormalizer->direct([
+            $requestNormalizer->normalizeDirectInput([
                 ['reference' => $page->id(), 'quantity' => 2],
                 ['reference' => $page->uuid()->toString(), 'quantity' => 3],
             ]),

@@ -111,7 +111,7 @@ final class PriceCatalogueTest extends TestCase
         $provider = new FakePriceProvider();
         $catalogue = new PriceCatalogue($cache, $provider, new PriceResolver($provider));
 
-        $state = $catalogue->current('EUR');
+        $state = $catalogue->cached('EUR');
 
         $this->assertSame([], $state['items']);
         $this->assertNull($state['refreshedAt']);
@@ -196,7 +196,7 @@ final class PriceCatalogueTest extends TestCase
         $provider->failLists = true;
 
         $failed = $catalogue->refresh('EUR');
-        $cached = $catalogue->current('EUR');
+        $cached = $catalogue->cached('EUR');
 
         $this->assertSame('prices.refresh_failed', $failed['error']);
         $this->assertNotNull($failed['failedAt']);

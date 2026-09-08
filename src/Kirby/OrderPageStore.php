@@ -170,7 +170,7 @@ final class OrderPageStore
         // rather than generating a different identity for the first delivery.
         $entry = OrderData::map($deliveries[0]);
         $event = HookDeliveryLedger::restoreEvent(OrderData::map($entry['event']));
-        (new OrderHookDispatcher($this->kirby))->deliver($created->uuid()->toString(), $event->deliveryId());
+        (new OrderHookDispatcher($this->kirby))->dispatch($created->uuid()->toString(), $event->deliveryId());
 
         // Listeners may update custom fields; return the post-hook Page rather
         // than the model read before dispatch and outcome persistence.
@@ -387,7 +387,7 @@ final class OrderPageStore
         });
 
         foreach ($deliveryIds as $deliveryId) {
-            (new OrderHookDispatcher($this->kirby))->deliver($uuid, $deliveryId);
+            (new OrderHookDispatcher($this->kirby))->dispatch($uuid, $deliveryId);
         }
 
         return $deliveryIds === [] ? $updated : $this->requirePage($pageId);
@@ -437,7 +437,7 @@ final class OrderPageStore
             return false;
         }
 
-        (new OrderHookDispatcher($this->kirby))->deleted($deletion[0], $deletion[1]);
+        (new OrderHookDispatcher($this->kirby))->dispatchDeletion($deletion[0], $deletion[1]);
 
         return true;
     }

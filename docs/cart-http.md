@@ -179,7 +179,7 @@ Request `Accept: text/html` on the same routes. The response body is the fragmen
 The renderer receives the Cart when available, including after a rejected mutation, or `null` for errors before one can be read. Rejection does not erase the cart's controls; render them alongside the error. `CartRenderContext` exposes only:
 
 - `operation()`: `CartOperation::Read`, `Add`, `Update`, `Remove` or `Clear`;
-- `status()`: the HTTP status;
+- `httpStatus()`: the HTTP status;
 - `error()`: the safe CartError, or `null` on success.
 
 Render the current revision into every update/remove/clear control. Handle a nullable cart and escape displayed values. Route rendering has no Page template scope: pass any additional variables your snippet uses explicitly, as with `site` above. See the repository's `site/snippets/cart.php` and `cart-script.php` for a working development example. The snippet name and markup are entirely yours.

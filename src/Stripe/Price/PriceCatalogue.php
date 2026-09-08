@@ -29,7 +29,7 @@ final class PriceCatalogue
     /**
      * @return array{items: list<StripePrice>, refreshedAt: ?int, failedAt: ?int, error: ?string}
      */
-    public function current(string $currency): array
+    public function cached(string $currency): array
     {
         return $this->decode($this->cache->get($this->key($currency)));
     }
@@ -39,7 +39,7 @@ final class PriceCatalogue
      */
     public function load(string $currency): array
     {
-        $state = $this->current($currency);
+        $state = $this->cached($currency);
         $now = time();
         $retryAllowed = $state['failedAt'] === null
             || $state['failedAt'] <= $now - self::FAILED_REFRESH_COOLDOWN_SECONDS;
@@ -71,7 +71,7 @@ final class PriceCatalogue
      */
     public function refresh(string $currency): array
     {
-        $previous = $this->current($currency);
+        $previous = $this->cached($currency);
 
         try {
             if ($this->provider === null || $this->resolver === null) {

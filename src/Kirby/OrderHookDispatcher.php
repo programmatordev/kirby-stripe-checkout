@@ -23,7 +23,7 @@ final class OrderHookDispatcher
     public function __construct(private readonly App $kirby) {}
 
     /** A primitive for pending/failed deliveries; not a public retry route. */
-    public function deliver(string $uuid, string $deliveryId): void
+    public function dispatch(string $uuid, string $deliveryId): void
     {
         $key = $uuid . ':' . $deliveryId;
 
@@ -99,7 +99,7 @@ final class OrderHookDispatcher
         }
     }
 
-    public function deleted(Page $order, LifecycleEvent $event): void
+    public function dispatchDeletion(Page $order, LifecycleEvent $event): void
     {
         $delivered = $this->invoke($order, $event);
 

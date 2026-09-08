@@ -130,13 +130,13 @@ final class CartEndpoint
                 throw new \UnexpectedValueException();
             }
 
-            return new Response($html, 'text/html', $context->status(), self::HEADERS);
+            return new Response($html, 'text/html', $context->httpStatus(), self::HEADERS);
         } catch (Throwable) {
             error_log('Stripe Checkout: cart.renderer_failed');
             // A committed mutation must not look retryable if only rendering failed.
-            $status = $context->status() === 200
+            $status = $context->httpStatus() === 200
                 ? ($context->operation() === CartOperation::Read ? 500 : 204)
-                : $context->status();
+                : $context->httpStatus();
 
             return new Response('', 'text/html', $status, self::HEADERS);
         }

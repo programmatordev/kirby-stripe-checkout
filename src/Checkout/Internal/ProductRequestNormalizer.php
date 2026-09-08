@@ -28,7 +28,7 @@ final class ProductRequestNormalizer
 
     public function merge(ProductRequest $existing, ProductRequest $incoming): ProductRequest
     {
-        if (ProductRequestData::equivalent($existing, $incoming) === false) {
+        if (ProductRequestData::sameItem($existing, $incoming) === false) {
             throw new CheckoutInputException('selection.invalid');
         }
 
@@ -50,7 +50,7 @@ final class ProductRequestNormalizer
 
         // A persisted canonical reference must remain stable; changing it here
         // could silently turn an update into a second equivalent cart entry.
-        if (ProductRequestData::equivalent($existing, $request) === false) {
+        if (ProductRequestData::sameItem($existing, $request) === false) {
             throw new CheckoutInputException('selection.invalid');
         }
 
@@ -58,7 +58,7 @@ final class ProductRequestNormalizer
     }
 
     /** @return non-empty-list<ProductRequest> */
-    public function direct(mixed $items): array
+    public function normalizeDirectInput(mixed $items): array
     {
         if (is_array($items) === false || array_is_list($items) === false || $items === []) {
             throw new CheckoutInputException('selection.invalid');
@@ -81,7 +81,7 @@ final class ProductRequestNormalizer
             $request = $this->normalize($request);
 
             foreach ($normalizedRequests as $index => $existing) {
-                if (ProductRequestData::equivalent($existing, $request)) {
+                if (ProductRequestData::sameItem($existing, $request)) {
                     $normalizedRequests[$index] = $this->merge($existing, $request);
                     continue 2;
                 }

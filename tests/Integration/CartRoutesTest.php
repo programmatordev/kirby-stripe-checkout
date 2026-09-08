@@ -302,7 +302,7 @@ final class CartRoutesTest extends KirbyTestCase
         $this->assertStringContainsString('>1</div>', $response->body());
         /** @var list<CartRenderContext> $calls */
         $this->assertSame(CartOperation::Add, $calls[0]->operation());
-        $this->assertSame(200, $calls[0]->status());
+        $this->assertSame(200, $calls[0]->httpStatus());
         $this->assertNull($calls[0]->error());
         $response = $this->send('DELETE', '', ['revision' => 'stale'], ['Accept' => 'text/html']);
         $this->assertSame(409, $response->code());

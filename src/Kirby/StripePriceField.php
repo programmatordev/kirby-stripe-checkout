@@ -77,7 +77,7 @@ final class StripePriceField extends FieldClass
                 throw new InvalidArgumentException('Store currency is missing.');
             }
 
-            $state = $runtime->stripePriceCatalogue()->current($currency);
+            $state = $runtime->stripePriceCatalogue()->cached($currency);
             $selected = $this->selected(
                 $state['items'],
                 $value,
@@ -311,7 +311,7 @@ final class StripePriceField extends FieldClass
     public static function selectedResponse(App $kirby, mixed $priceIds): array
     {
         [$catalogue, $currency] = self::catalogue($kirby);
-        $state = $catalogue->current($currency);
+        $state = $catalogue->cached($currency);
         $priceIds = is_array($priceIds)
             ? $priceIds
             : (is_string($priceIds) ? explode(',', $priceIds) : []);

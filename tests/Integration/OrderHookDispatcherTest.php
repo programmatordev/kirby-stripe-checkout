@@ -199,7 +199,7 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $cache->set('order-summary', 'unchanged');
         $fail = false;
         $event = OrderData::map($entry['event']);
-        (new OrderHookDispatcher($this->kirby))->deliver($page->uuid()->toString(), OrderData::text($event['deliveryId']));
+        (new OrderHookDispatcher($this->kirby))->dispatch($page->uuid()->toString(), OrderData::text($event['deliveryId']));
         $page = $store->requirePage($page->id());
         $after = $store->data($page);
         $retried = $this->entries($page)[0];
@@ -273,8 +273,8 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $dispatcher = new OrderHookDispatcher($this->kirby);
         $event = OrderData::map($entry['event']);
         $deliveryId = OrderData::text($event['deliveryId']);
-        $dispatcher->deliver($first->uuid()->toString(), $deliveryId);
-        $dispatcher->deliver($first->uuid()->toString(), $deliveryId);
+        $dispatcher->dispatch($first->uuid()->toString(), $deliveryId);
+        $dispatcher->dispatch($first->uuid()->toString(), $deliveryId);
         $this->assertCount(3, $observed);
         $this->assertSame($observed[0][0], $observed[2][0]);
         $this->assertSame('open', $observed[2][1]);
@@ -341,7 +341,7 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $this->assertSame('en', $this->kirby->languageCode());
         $entry = $this->entries($page)[0];
         $event = OrderData::map($entry['event']);
-        (new OrderHookDispatcher($this->kirby))->deliver($page->uuid()->toString(), OrderData::text($event['deliveryId']));
+        (new OrderHookDispatcher($this->kirby))->dispatch($page->uuid()->toString(), OrderData::text($event['deliveryId']));
         $this->assertSame(['pt', 'pt'], $observed);
         $this->assertSame('en', $this->kirby->languageCode());
         $this->assertNull($page->version('latest')->read('pt'));

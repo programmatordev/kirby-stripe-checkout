@@ -46,7 +46,7 @@ final readonly class CartSnapshot
 
         foreach ($entries as $entry) {
             foreach ($seen as $previous) {
-                if ($entry->id() === $previous->id() || ProductRequestData::equivalent($entry->request(), $previous->request())) {
+                if ($entry->id() === $previous->id() || ProductRequestData::sameItem($entry->request(), $previous->request())) {
                     throw new InvalidArgumentException('Duplicate cart entry.');
                 }
             }

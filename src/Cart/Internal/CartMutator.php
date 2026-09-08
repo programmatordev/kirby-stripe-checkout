@@ -50,7 +50,7 @@ final class CartMutator
             $entries = $current->entries();
 
             foreach ($entries as $index => $entry) {
-                if (ProductRequestData::equivalent($entry->request(), $request)) {
+                if (ProductRequestData::sameItem($entry->request(), $request)) {
                     $entries[$index] = new CartEntry($entry->id(), $this->requestNormalizer->merge($entry->request(), $request));
 
                     return $this->changed($current, $entries);

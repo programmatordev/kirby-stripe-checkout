@@ -56,7 +56,7 @@ final class ProductRequestData
     }
 
     /** Quantity is deliberately excluded: matching selections share one cart line. */
-    public static function equivalent(ProductRequest $left, ProductRequest $right): bool
+    public static function sameItem(ProductRequest $left, ProductRequest $right): bool
     {
         return $left->reference() === $right->reference()
             && $left->selectedOptions() === $right->selectedOptions();

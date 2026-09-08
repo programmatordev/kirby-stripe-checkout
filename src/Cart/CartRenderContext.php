@@ -9,7 +9,7 @@ final readonly class CartRenderContext
 {
     public function __construct(
         private CartOperation $operation,
-        private int $status,
+        private int $httpStatus,
         private ?CartError $error = null,
     ) {}
 
@@ -18,9 +18,9 @@ final readonly class CartRenderContext
         return $this->operation;
     }
 
-    public function status(): int
+    public function httpStatus(): int
     {
-        return $this->status;
+        return $this->httpStatus;
     }
 
     public function error(): ?CartError

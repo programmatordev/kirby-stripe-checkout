@@ -63,7 +63,7 @@ final class CartViewFactory
                 $product = $runtime->resolveProduct($entry->request());
 
                 // A saved selection may become unavailable, never a different product.
-                if (ProductRequestData::equivalent($entry->request(), $product->request()) === false) {
+                if (ProductRequestData::sameItem($entry->request(), $product->request()) === false) {
                     throw new InvalidProductException('product.resolver_changed_request');
                 }
 

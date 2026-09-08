@@ -245,7 +245,7 @@ final class CartMutatorTest extends TestCase
         }
 
         $before = $this->store->read();
-        $direct = $this->requestNormalizer->direct($inputs);
+        $direct = $this->requestNormalizer->normalizeDirectInput($inputs);
 
         $this->assertEquals($direct, array_map(static fn(CartEntry $entry): ProductRequest => $entry->request(), $before->entries()));
         $this->assertSame($before, $this->store->read());

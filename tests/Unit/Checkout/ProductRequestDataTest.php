@@ -71,19 +71,19 @@ final class ProductRequestDataTest extends TestCase
         $requestNormalizer = $this->requestNormalizer($calls);
 
         try {
-            $requestNormalizer->direct(array_fill(0, 101, ['reference' => 'shirt']));
+            $requestNormalizer->normalizeDirectInput(array_fill(0, 101, ['reference' => 'shirt']));
             $this->fail('Expected line limit.');
         } catch (CheckoutInputException $error) {
             $this->assertSame('selection.line_limit_exceeded', $error->errorCode());
         }
 
         $this->assertSame(0, $calls);
-        $merged = $requestNormalizer->direct(array_fill(0, 100, ['reference' => 'shirt']));
+        $merged = $requestNormalizer->normalizeDirectInput(array_fill(0, 100, ['reference' => 'shirt']));
         $this->assertCount(1, $merged);
         $this->assertSame(100, $merged[0]->quantity());
 
         $distinct = array_map(static fn(int $i): array => ['reference' => 'product-' . $i], range(1, 100));
-        $this->assertCount(100, $requestNormalizer->direct($distinct));
+        $this->assertCount(100, $requestNormalizer->normalizeDirectInput($distinct));
     }
 
     #[DataProvider('invalidDirectInputs')]
@@ -92,7 +92,7 @@ final class ProductRequestDataTest extends TestCase
         $calls = 0;
 
         try {
-            $this->requestNormalizer($calls)->direct($input);
+            $this->requestNormalizer($calls)->normalizeDirectInput($input);
             $this->fail('Expected invalid direct input.');
         } catch (CheckoutInputException $error) {
             $this->assertSame('selection.invalid', $error->errorCode());
@@ -116,7 +116,7 @@ final class ProductRequestDataTest extends TestCase
         $calls = 0;
         $this->expectException(CheckoutInputException::class);
         $this->expectExceptionMessage('selection.quantity_invalid');
-        $this->requestNormalizer($calls)->direct([
+        $this->requestNormalizer($calls)->normalizeDirectInput([
             ['reference' => 'shirt', 'quantity' => PHP_INT_MAX],
             ['reference' => 'other'],
         ]);
@@ -139,7 +139,7 @@ final class ProductRequestDataTest extends TestCase
     {
         $calls = 0;
         $this->expectException(CheckoutInputException::class);
-        $this->requestNormalizer($calls)->direct([
+        $this->requestNormalizer($calls)->normalizeDirectInput([
             ['reference' => 'shirt', 'quantity' => PHP_INT_MAX],
             ['reference' => 'shirt'],
         ]);
