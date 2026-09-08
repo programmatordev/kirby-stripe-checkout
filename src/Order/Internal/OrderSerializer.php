@@ -7,7 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Order\Internal;
 use DateTimeImmutable;
 use Kirby\Data\Yaml;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
-use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\DeliveryLedger;
+use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\DisputeStatus;
@@ -223,7 +223,7 @@ final class OrderSerializer
                 OrderData::nullableString($data['languageCode'] ?? null),
                 OrderData::text($attempt['uiMode']),
                 $currency,
-                array_map(static fn(mixed $line): OrderLineSnapshot => OrderLineSnapshot::fromArray(OrderData::map($line)), OrderData::list($data['initiatingLineItems'])),
+                array_map(static fn(mixed $lineItem): OrderLineItemSnapshot => OrderLineItemSnapshot::fromArray(OrderData::map($lineItem)), OrderData::list($data['initiatingLineItems'])),
             );
             $data['initiatingLineItems'] = $context->lineItems();
 
@@ -238,7 +238,7 @@ final class OrderSerializer
             self::validateState($data, $checkoutStatus, $paymentStatus);
 
             if (isset($data['lifecycleDeliveries'])) {
-                $data['lifecycleDeliveries'] = DeliveryLedger::normalize($data['lifecycleDeliveries'], $uuid);
+                $data['lifecycleDeliveries'] = HookDeliveryLedger::normalize($data['lifecycleDeliveries'], $uuid);
             }
 
             $deferredSnapshots = array_diff(OrderSchema::SNAPSHOTS, ['stripeCheckout', 'checkoutAttempt', 'initiatingLineItems', 'lifecycleDeliveries']);

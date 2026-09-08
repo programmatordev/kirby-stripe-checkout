@@ -53,12 +53,12 @@ final class StripeConfiguration
         return $this->webhookSecret !== null;
     }
 
-    public function serverMode(): CredentialMode
+    public function secretKeyMode(): CredentialMode
     {
         return $this->detectMode($this->secretKey, ['sk', 'rk']);
     }
 
-    public function publishableMode(): CredentialMode
+    public function publishableKeyMode(): CredentialMode
     {
         return $this->detectMode($this->publishableKey, ['pk']);
     }
@@ -70,8 +70,8 @@ final class StripeConfiguration
             'secretKeyConfigured' => $this->hasSecretKey(),
             'publishableKeyConfigured' => $this->hasPublishableKey(),
             'webhookSecretConfigured' => $this->hasWebhookSecret(),
-            'serverMode' => $this->serverMode()->value,
-            'publishableMode' => $this->publishableMode()->value,
+            'secretKeyMode' => $this->secretKeyMode()->value,
+            'publishableKeyMode' => $this->publishableKeyMode()->value,
         ];
     }
 

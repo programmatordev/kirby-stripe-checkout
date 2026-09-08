@@ -10,7 +10,7 @@ use Kirby\Uuid\Uuid;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
-use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineSnapshot;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
@@ -56,7 +56,7 @@ final class OrderIdentityTest extends TestCase
             $number = (new OrderNumberFormatter())->format($id);
             $price = Money::of('16', 'EUR');
             $product = new Product(new ProductRequest('product'), 'Product', false, new Price($price));
-            $context = new OrderCreationContext($id, $number, CheckoutSource::Direct, null, null, null, 'hosted', 'EUR', [OrderLineSnapshot::fromProduct($product, $price)]);
+            $context = new OrderCreationContext($id, $number, CheckoutSource::Direct, null, null, null, 'hosted', 'EUR', [OrderLineItemSnapshot::fromProduct($product, $price)]);
             $content = OrderSerializer::creation($context, hash('sha256', 'token'), hash('sha256', 'request'), 'guest', new DateTimeImmutable());
 
             $this->assertSame($id, $content['uuid']);

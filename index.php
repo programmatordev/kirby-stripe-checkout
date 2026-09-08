@@ -98,7 +98,7 @@ App::plugin(
             'system.loadPlugins:after' => function (): void {
                 // Kirby binds plugin hooks to the active App instance.
                 // @phpstan-ignore variable.undefined, argument.type
-                Registration::applyProjectOverrides($this);
+                Registration::applyCustomOverrides($this);
 
                 try {
                     // Composer cannot create site content while installing the

@@ -12,8 +12,8 @@ use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutationException;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutator;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartSnapshot;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionCanonicalizer;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionData;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductUnavailableException;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
@@ -25,7 +25,7 @@ final class CartMutatorTest extends TestCase
 {
     private InMemoryCartStore $store;
     private CartMutator $cart;
-    private SelectionCanonicalizer $selections;
+    private ProductRequestNormalizer $requestNormalizer;
     private bool $available = true;
     private ?int $maximum = null;
     private int $resolutions = 0;
@@ -35,7 +35,7 @@ final class CartMutatorTest extends TestCase
     protected function setUp(): void
     {
         $this->store = new InMemoryCartStore(new CartSnapshot('cart-id', 'revision-0', [], 100, 100));
-        $this->selections = new SelectionCanonicalizer(function (ProductRequest $request): Product {
+        $this->requestNormalizer = new ProductRequestNormalizer(function (ProductRequest $request): Product {
             $this->resolutions++;
 
             if ($this->available === false || ($this->maximum !== null && $request->quantity() > $this->maximum)) {
@@ -69,7 +69,7 @@ final class CartMutatorTest extends TestCase
     {
         return new CartMutator(
             $this->store,
-            $this->selections,
+            $this->requestNormalizer,
             fn(): string => 'item-' . ++$this->nextId,
             fn(): string => 'revision-' . ++$this->nextRevision,
             static fn(): int => 200,
@@ -241,11 +241,11 @@ final class CartMutatorTest extends TestCase
         ];
 
         foreach ($inputs as $input) {
-            $this->cart->add(SelectionData::parse($input));
+            $this->cart->add(ProductRequestData::parse($input));
         }
 
         $before = $this->store->read();
-        $direct = $this->selections->direct($inputs);
+        $direct = $this->requestNormalizer->direct($inputs);
 
         $this->assertEquals($direct, array_map(static fn(CartEntry $entry): ProductRequest => $entry->request(), $before->entries()));
         $this->assertSame($before, $this->store->read());

@@ -12,7 +12,7 @@ use Kirby\Data\Yaml;
 use Kirby\Exception\PermissionException;
 use Kirby\Form\Form;
 use Kirby\Toolkit\I18n;
-use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\DeliveryLedger;
+use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderCustomFieldsValidator;
@@ -137,8 +137,8 @@ final class OrderPage extends ProtectedOrderPage
                     static fn(string $field): bool => OrderSchema::isReserved($field) === false,
                     ARRAY_FILTER_USE_KEY,
                 ));
-                $event = DeliveryLedger::event($data, $customFields, LifecycleEventType::OrderCreated, 1);
-                $creationData = [...$data, 'lifecycleDeliveries' => [DeliveryLedger::pending($event)]];
+                $event = HookDeliveryLedger::event($data, $customFields, LifecycleEventType::OrderCreated, 1);
+                $creationData = [...$data, 'lifecycleDeliveries' => [HookDeliveryLedger::pending($event)]];
                 // Add intent in memory so the native callback persists the order
                 // and its final creation snapshot together, not in two writes.
                 $page->version('latest')->update(['lifecycleDeliveries' => Yaml::encode($creationData['lifecycleDeliveries'])], 'default');

@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartEntry;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutator;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartSnapshot;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionCanonicalizer;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Test\Support\Cart\InMemoryCartStore;
 
@@ -49,7 +49,7 @@ final class CartSnapshotTest extends TestCase
         $store = new InMemoryCartStore(new CartSnapshot('cart', 'revision', [], 100, 200, 'PT'));
         $mutator = new CartMutator(
             $store,
-            new SelectionCanonicalizer(static fn() => throw new \LogicException('Clear must not resolve products.')),
+            new ProductRequestNormalizer(static fn() => throw new \LogicException('Clear must not resolve products.')),
             static fn(): string => 'unused-id',
             static fn(): string => 'new-revision',
             static fn(): int => 150,

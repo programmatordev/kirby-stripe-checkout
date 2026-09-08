@@ -11,7 +11,7 @@ use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Cart\CartError;
 use ProgrammatorDev\StripeCheckout\Cart\CartItem;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionData;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Exception\MoneyException;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
@@ -63,13 +63,13 @@ final class CartViewFactory
                 $product = $runtime->resolveProduct($entry->request());
 
                 // A saved selection may become unavailable, never a different product.
-                if (SelectionData::equivalent($entry->request(), $product->request()) === false) {
+                if (ProductRequestData::equivalent($entry->request(), $product->request()) === false) {
                     throw new InvalidProductException('product.resolver_changed_request');
                 }
 
                 $price = $product->price();
                 $itemPrice = $price instanceof Price
-                    ? $price->unitPrice()
+                    ? $price->price()
                     : $runtime->stripePriceResolver()->resolve($price, $currency?->getCurrencyCode() ?? '')->price();
                 $itemSubtotal = $itemPrice->multipliedBy($entry->request()->quantity());
                 (new StripeCurrencyRegistry())->fromMoney($itemSubtotal);

@@ -18,7 +18,7 @@ use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 use ProgrammatorDev\StripeCheckout\Order\RefundStatus;
 
 /** @internal Persisted event-time facts and hook outcomes, separate from Stripe's event ledger. */
-final class DeliveryLedger
+final class HookDeliveryLedger
 {
     /**
      * @param array<string, mixed> $data

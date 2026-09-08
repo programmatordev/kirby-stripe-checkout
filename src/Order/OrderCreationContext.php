@@ -7,11 +7,11 @@ namespace ProgrammatorDev\StripeCheckout\Order;
 use Brick\Money\Money;
 use Kirby\Uuid\Uri;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionCanonicalizer;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
-use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineSnapshot;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 
 /**
  * Immutable purchase facts prepared before the Order Page is created.
@@ -27,7 +27,7 @@ final readonly class OrderCreationContext
     /** @var list<array<string, mixed>> */
     private array $lineItems;
 
-    /** @param array<array-key, OrderLineSnapshot> $lineItems */
+    /** @param array<array-key, OrderLineItemSnapshot> $lineItems */
     public function __construct(
         private string $uuid,
         private string $orderNumber,
@@ -65,7 +65,7 @@ final readonly class OrderCreationContext
             ($sourceType === CheckoutSource::Cart) !== ($cartRevision !== null)
             || in_array($uiMode, ['hosted', 'embedded'], true) === false
             || array_is_list($lineItems) === false || $lineItems === []
-            || count($lineItems) > SelectionCanonicalizer::MAX_ENTRIES
+            || count($lineItems) > ProductRequestNormalizer::MAX_ENTRIES
         ) {
             throw new OrderDataException();
         }
@@ -75,15 +75,15 @@ final readonly class OrderCreationContext
         $snapshots = [];
         $priceSource = null;
 
-        foreach ($lineItems as $line) {
-            $snapshot = $line->toArray();
+        foreach ($lineItems as $lineItem) {
+            $snapshot = $lineItem->toArray();
 
             if ($snapshot['currency'] !== $currency || $priceSource !== null && $priceSource !== $snapshot['priceSource']) {
                 throw new OrderDataException();
             }
 
             $priceSource = $snapshot['priceSource'];
-            $subtotal = $subtotal->plus($line->subtotal());
+            $subtotal = $subtotal->plus($lineItem->subtotal());
             $snapshots[] = $snapshot;
         }
 

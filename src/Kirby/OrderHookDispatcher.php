@@ -9,13 +9,13 @@ use Kirby\Cms\App;
 use Kirby\Cms\Events;
 use Kirby\Cms\Page;
 use Kirby\Data\Data;
-use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\DeliveryLedger;
+use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEvent;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use Throwable;
 
 /** @internal Invokes native hooks after commits; failures never undo order state. */
-final class OrderLifecycle
+final class OrderHookDispatcher
 {
     /** @var array<string, true> Request-local recursion guard, not a cross-process delivery lock. */
     private static array $active = [];
@@ -41,7 +41,7 @@ final class OrderLifecycle
                 $entries = $data['lifecycleDeliveries'] ?? [];
 
                 foreach ($entries as &$entry) {
-                    $candidate = DeliveryLedger::restoreEvent(OrderData::map($entry['event']));
+                    $candidate = HookDeliveryLedger::restoreEvent(OrderData::map($entry['event']));
 
                     if ($candidate->deliveryId() === $deliveryId && $entry['status'] !== 'delivered') {
                         // Record the attempt before invoking listeners. A process

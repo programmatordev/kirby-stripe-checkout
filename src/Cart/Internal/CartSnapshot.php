@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Cart\Internal;
 
 use InvalidArgumentException;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionCanonicalizer;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionData;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
 
 /**
@@ -33,7 +33,7 @@ final readonly class CartSnapshot
 
         if (
             array_is_list($entries) === false
-            || count($entries) > SelectionCanonicalizer::MAX_ENTRIES
+            || count($entries) > ProductRequestNormalizer::MAX_ENTRIES
             || $createdAt < 0
             || $updatedAt < $createdAt
             || ($destinationCountry !== null && preg_match('/\A[A-Z]{2}\z/', $destinationCountry) !== 1)
@@ -46,7 +46,7 @@ final readonly class CartSnapshot
 
         foreach ($entries as $entry) {
             foreach ($seen as $previous) {
-                if ($entry->id() === $previous->id() || SelectionData::equivalent($entry->request(), $previous->request())) {
+                if ($entry->id() === $previous->id() || ProductRequestData::equivalent($entry->request(), $previous->request())) {
                     throw new InvalidArgumentException('Duplicate cart entry.');
                 }
             }
@@ -54,7 +54,7 @@ final readonly class CartSnapshot
             // Keep totalQuantity() representable even when no prices can resolve.
             $quantity = $quantity === 0
                 ? $entry->request()->quantity()
-                : SelectionData::addQuantities($quantity, $entry->request()->quantity());
+                : ProductRequestData::addQuantities($quantity, $entry->request()->quantity());
             $seen[] = $entry;
         }
 

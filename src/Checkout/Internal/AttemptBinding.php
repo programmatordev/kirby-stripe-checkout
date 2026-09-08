@@ -62,7 +62,7 @@ final readonly class AttemptBinding
             $requestFingerprint,
             $cartId,
             $cartRevision,
-            array_map(SelectionData::toArray(...), $items),
+            array_map(ProductRequestData::toArray(...), $items),
         ], JSON_THROW_ON_ERROR));
     }
 
@@ -82,14 +82,14 @@ final readonly class AttemptBinding
         return new self(CheckoutSource::Cart, $userUuid, $guestReference, $requestFingerprint, $cart->id(), $cart->revision(), []);
     }
 
-    /** @param array<array-key, ProductRequest> $items Canonical output from SelectionCanonicalizer. */
+    /** @param array<array-key, ProductRequest> $items Canonical output from ProductRequestNormalizer. */
     public static function direct(
         array $items,
         string $requestFingerprint,
         ?string $userUuid = null,
         ?string $guestReference = null,
     ): self {
-        if (array_is_list($items) === false || $items === [] || count($items) > SelectionCanonicalizer::MAX_ENTRIES) {
+        if (array_is_list($items) === false || $items === [] || count($items) > ProductRequestNormalizer::MAX_ENTRIES) {
             throw new CheckoutInputException('selection.invalid');
         }
 

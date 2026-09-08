@@ -7,7 +7,7 @@ declare(strict_types=1);
 use Kirby\Session\Sessions;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutator;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\KirbySessionCartStore;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionCanonicalizer;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
@@ -18,7 +18,7 @@ require dirname(__DIR__, 3) . '/vendor/autoload.php';
 $input = json_decode((string) fgets(STDIN), true, flags: JSON_THROW_ON_ERROR);
 $session = (new Sessions($input['root'], ['mode' => 'manual', 'gcInterval' => false]))->get($input['token']);
 $store = new KirbySessionCartStore($session, static fn(): string => bin2hex(random_bytes(8)));
-$mutator = new CartMutator($store, new SelectionCanonicalizer(static fn(ProductRequest $request): Product => new Product(
+$mutator = new CartMutator($store, new ProductRequestNormalizer(static fn(ProductRequest $request): Product => new Product(
     $request,
     'Shirt',
     false,

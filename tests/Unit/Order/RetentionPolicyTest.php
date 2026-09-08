@@ -10,7 +10,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
-use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineSnapshot;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
 use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
@@ -79,7 +79,7 @@ final class RetentionPolicyTest extends TestCase
     {
         $price = Money::of('16', 'EUR');
         $product = new Product(new ProductRequest('product', 1), 'Product', false, new Price($price));
-        $context = new OrderCreationContext('example', 'ORD-EXAMPLE', CheckoutSource::Direct, null, null, null, 'hosted', 'EUR', [OrderLineSnapshot::fromProduct($product, $price)]);
+        $context = new OrderCreationContext('example', 'ORD-EXAMPLE', CheckoutSource::Direct, null, null, null, 'hosted', 'EUR', [OrderLineItemSnapshot::fromProduct($product, $price)]);
         $data = OrderSerializer::creation($context, hash('sha256', 'token'), hash('sha256', 'request'), 'guest', new DateTimeImmutable('2026-09-01T00:00:00Z'));
         $data['checkoutStatus'] = $checkout;
         $data['paymentStatus'] = $payment;

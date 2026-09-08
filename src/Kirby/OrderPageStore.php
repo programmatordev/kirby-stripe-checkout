@@ -16,7 +16,7 @@ use Kirby\Uuid\Uuid;
 use Kirby\Uuid\Uuids;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
-use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\DeliveryLedger;
+use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
@@ -24,7 +24,7 @@ use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderCustomFieldsValidator;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
-use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineSnapshot;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
@@ -105,7 +105,7 @@ final class OrderPageStore
         return $page;
     }
 
-    /** @param list<OrderLineSnapshot> $lineItems */
+    /** @param list<OrderLineItemSnapshot> $lineItems */
     public function create(
         array $lineItems,
         string $currency,
@@ -169,8 +169,8 @@ final class OrderPageStore
         // Creation writes and verifies one initial event. Restore its saved ID
         // rather than generating a different identity for the first delivery.
         $entry = OrderData::map($deliveries[0]);
-        $event = DeliveryLedger::restoreEvent(OrderData::map($entry['event']));
-        (new OrderLifecycle($this->kirby))->deliver($created->uuid()->toString(), $event->deliveryId());
+        $event = HookDeliveryLedger::restoreEvent(OrderData::map($entry['event']));
+        (new OrderHookDispatcher($this->kirby))->deliver($created->uuid()->toString(), $event->deliveryId());
 
         // Listeners may update custom fields; return the post-hook Page rather
         // than the model read before dispatch and outcome persistence.
@@ -353,7 +353,7 @@ final class OrderPageStore
             if ($events !== []) {
                 /** @var list<array<string, mixed>> $entries */
                 $entries = $after['lifecycleDeliveries'] ?? [];
-                $revision = DeliveryLedger::nextRevision($entries);
+                $revision = HookDeliveryLedger::nextRevision($entries);
                 $types = [];
 
                 foreach ($events as $type) {
@@ -362,8 +362,8 @@ final class OrderPageStore
                     }
 
                     $types[$type->value] = true;
-                    $event = DeliveryLedger::event($after, $content, $type, $revision, $triggerType, $triggerId);
-                    $entries[] = DeliveryLedger::pending($event);
+                    $event = HookDeliveryLedger::event($after, $content, $type, $revision, $triggerType, $triggerId);
+                    $entries[] = HookDeliveryLedger::pending($event);
                     $deliveryIds[] = $event->deliveryId();
                 }
 
@@ -387,7 +387,7 @@ final class OrderPageStore
         });
 
         foreach ($deliveryIds as $deliveryId) {
-            (new OrderLifecycle($this->kirby))->deliver($uuid, $deliveryId);
+            (new OrderHookDispatcher($this->kirby))->deliver($uuid, $deliveryId);
         }
 
         return $deliveryIds === [] ? $updated : $this->requirePage($pageId);
@@ -412,7 +412,7 @@ final class OrderPageStore
             /** @var list<array<string, mixed>> $entries */
             $entries = $data['lifecycleDeliveries'] ?? [];
             $data['updatedAt'] = OrderData::timestamp($now);
-            $event = DeliveryLedger::event($data, $customFields, LifecycleEventType::OrderDeleted, DeliveryLedger::nextRevision($entries));
+            $event = HookDeliveryLedger::event($data, $customFields, LifecycleEventType::OrderDeleted, HookDeliveryLedger::nextRevision($entries));
 
             try {
                 $this->kirby->impersonate('kirby', fn(): bool => $page->deleteStoredOrder());
@@ -437,7 +437,7 @@ final class OrderPageStore
             return false;
         }
 
-        (new OrderLifecycle($this->kirby))->deleted($deletion[0], $deletion[1]);
+        (new OrderHookDispatcher($this->kirby))->deleted($deletion[0], $deletion[1]);
 
         return true;
     }
@@ -477,7 +477,7 @@ final class OrderPageStore
         $previousDeliveries = $before['lifecycleDeliveries'] ?? [];
         /** @var list<array<string, mixed>> $deliveries */
         $deliveries = $after['lifecycleDeliveries'] ?? [];
-        DeliveryLedger::validateTransition($previousDeliveries, $deliveries);
+        HookDeliveryLedger::validateTransition($previousDeliveries, $deliveries);
 
         $immutableFields = ['uuid', 'title', 'orderNumber', 'stripeCheckout', 'checkoutAttempt', 'userUuid', 'languageCode', 'currency', 'createdAt', 'initiatingLineItems'];
 

@@ -6,8 +6,8 @@ namespace ProgrammatorDev\StripeCheckout\Cart\Internal;
 
 use Closure;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionCanonicalizer;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionData;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 
 /**
@@ -31,7 +31,7 @@ final class CartMutator
      */
     public function __construct(
         private readonly CartStoreInterface $store,
-        private readonly SelectionCanonicalizer $selections,
+        private readonly ProductRequestNormalizer $requestNormalizer,
         private readonly Closure $newId,
         ?Closure $newRevision = null,
         ?Closure $clock = null,
@@ -46,18 +46,18 @@ final class CartMutator
         return $this->store->mutate(function (CartSnapshot $current) use ($request): CartSnapshot {
             // Resolve aliases before comparing so page IDs and UUIDs can merge
             // into the same line when they identify the same product/options.
-            $request = $this->selections->resolve($request);
+            $request = $this->requestNormalizer->normalize($request);
             $entries = $current->entries();
 
             foreach ($entries as $index => $entry) {
-                if (SelectionData::equivalent($entry->request(), $request)) {
-                    $entries[$index] = new CartEntry($entry->id(), $this->selections->merge($entry->request(), $request));
+                if (ProductRequestData::equivalent($entry->request(), $request)) {
+                    $entries[$index] = new CartEntry($entry->id(), $this->requestNormalizer->merge($entry->request(), $request));
 
                     return $this->changed($current, $entries);
                 }
             }
 
-            if (count($entries) >= SelectionCanonicalizer::MAX_ENTRIES) {
+            if (count($entries) >= ProductRequestNormalizer::MAX_ENTRIES) {
                 throw new CheckoutInputException('selection.line_limit_exceeded');
             }
 
@@ -81,7 +81,7 @@ final class CartMutator
             $entry = $entries[$index];
             // Even an unchanged quantity must still pass current product rules;
             // a successful no-op then preserves the original snapshot/revision.
-            $request = $this->selections->withQuantity($entry->request(), $quantity);
+            $request = $this->requestNormalizer->withQuantity($entry->request(), $quantity);
 
             if ($quantity === $entry->request()->quantity()) {
                 return $current;

@@ -17,7 +17,7 @@ use ProgrammatorDev\StripeCheckout\Order\DisputeStatus;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderCustomFieldsValidator;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
-use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineSnapshot;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
@@ -47,12 +47,12 @@ final class OrderValuesTest extends TestCase
         $this->assertSame('hosted', $context->uiMode());
         $this->assertSame('EUR', $context->currency());
         $this->assertSame('32.00', (string) $context->subtotal()->getAmount());
-        $lines = $context->lineItems();
-        $this->assertIsArray($lines[0]['options']);
-        $this->assertIsArray($lines[0]['options'][0]);
-        $this->assertSame('Large', $lines[0]['options'][0]['valueName']);
-        $this->assertSame('SHIRT-L', $lines[0]['sku']);
-        $lines[0]['name'] = 'Changed';
+        $lineItems = $context->lineItems();
+        $this->assertIsArray($lineItems[0]['options']);
+        $this->assertIsArray($lineItems[0]['options'][0]);
+        $this->assertSame('Large', $lineItems[0]['options'][0]['valueName']);
+        $this->assertSame('SHIRT-L', $lineItems[0]['sku']);
+        $lineItems[0]['name'] = 'Changed';
         $this->assertSame('T-shirt', $context->lineItems()[0]['name']);
     }
 
@@ -76,14 +76,14 @@ final class OrderValuesTest extends TestCase
     public function testExactPriceAndProviderUnits(string $currency, string $amount, int $providerPrice): void
     {
         $price = Money::of($amount, $currency);
-        $line = OrderLineSnapshot::fromProduct(new Product(new ProductRequest('product', 2), 'Product', false, new Price($price)), $price);
-        $data = $line->toArray();
+        $lineItem = OrderLineItemSnapshot::fromProduct(new Product(new ProductRequest('product', 2), 'Product', false, new Price($price)), $price);
+        $data = $lineItem->toArray();
         $this->assertSame([
             'price' => $providerPrice,
             'subtotal' => $providerPrice * 2,
         ], $data['providerAmounts']);
         $this->assertSame((string) $price->getAmount(), $data['price']);
-        $this->assertSame($data, OrderLineSnapshot::fromArray($data)->toArray());
+        $this->assertSame($data, OrderLineItemSnapshot::fromArray($data)->toArray());
     }
 
     /** @return iterable<string, array{string, string, int}> */
@@ -98,10 +98,10 @@ final class OrderValuesTest extends TestCase
         yield 'MGA zero provider decimals' => ['MGA', '16', 16];
     }
 
-    public function testStripeLinesRetainResolvedMoneyAndPriceProductReferences(): void
+    public function testStripeLineItemsRetainResolvedMoneyAndPriceProductReferences(): void
     {
-        $line = OrderLineSnapshot::fromProduct(new Product(new ProductRequest('product'), 'Stripe product', false, new StripePriceReference('price_test')), Money::of('25', 'EUR'), 'prod_test');
-        $data = $line->toArray();
+        $lineItem = OrderLineItemSnapshot::fromProduct(new Product(new ProductRequest('product'), 'Stripe product', false, new StripePriceReference('price_test')), Money::of('25', 'EUR'), 'prod_test');
+        $data = $lineItem->toArray();
         $this->assertSame('stripe', $data['priceSource']);
         $this->assertSame('price_test', $data['stripePriceId']);
         $this->assertSame('prod_test', $data['stripeProductId']);
@@ -119,7 +119,7 @@ final class OrderValuesTest extends TestCase
             [new SelectedOption('size', 'Tamanho', 'large', 'Grande — 大')],
             variantId: 'large-variant',
         );
-        $data = OrderSerializer::creation($this->context(lines: [OrderLineSnapshot::fromProduct($product, $price)]), hash('sha256', 'token'), hash('sha256', 'request'), 'guest', new DateTimeImmutable());
+        $data = OrderSerializer::creation($this->context(lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)]), hash('sha256', 'token'), hash('sha256', 'request'), 'guest', new DateTimeImmutable());
         $fields = OrderData::map(Txt::decode(Txt::encode(OrderSerializer::encode($data))));
         $this->assertSame($data, OrderSerializer::decode($fields, OrderSchema::TEMPLATE, 'Abc123def456GHI7'));
     }
@@ -170,17 +170,17 @@ final class OrderValuesTest extends TestCase
         $this->assertSame(OrderData::map($data), OrderSerializer::normalize($data));
     }
 
-    #[DataProvider('invalidLines')]
-    public function testRejectsCorruptOrUnknownInitiatingLineFacts(string $field, mixed $value): void
+    #[DataProvider('invalidLineItems')]
+    public function testRejectsCorruptOrUnknownInitiatingLineItemFacts(string $field, mixed $value): void
     {
-        $data = $this->line()->toArray();
+        $data = $this->lineItem()->toArray();
         $data[$field] = $value;
         $this->expectException(OrderDataException::class);
-        OrderLineSnapshot::fromArray($data);
+        OrderLineItemSnapshot::fromArray($data);
     }
 
     /** @return iterable<string, array{string, mixed}> */
-    public static function invalidLines(): iterable
+    public static function invalidLineItems(): iterable
     {
         yield 'float' => ['price', 16.0];
         yield 'negative' => ['price', '-16'];
@@ -212,17 +212,17 @@ final class OrderValuesTest extends TestCase
 
     public function testContextRejectsMixedSources(): void
     {
-        $stripe = OrderLineSnapshot::fromProduct(new Product(new ProductRequest('other'), 'Other', false, new StripePriceReference('price_other')), Money::of('16', 'EUR'));
+        $stripe = OrderLineItemSnapshot::fromProduct(new Product(new ProductRequest('other'), 'Other', false, new StripePriceReference('price_other')), Money::of('16', 'EUR'));
         $this->expectException(OrderDataException::class);
-        $this->context(lines: [$this->line(), $stripe]);
+        $this->context(lineItems: [$this->lineItem(), $stripe]);
     }
 
     public function testContextRejectsMixedCurrencies(): void
     {
         $price = Money::of('16', 'USD');
-        $line = OrderLineSnapshot::fromProduct(new Product(new ProductRequest('other'), 'Other', false, new Price($price)), $price);
+        $lineItem = OrderLineItemSnapshot::fromProduct(new Product(new ProductRequest('other'), 'Other', false, new Price($price)), $price);
         $this->expectException(OrderDataException::class);
-        $this->context(lines: [$this->line(), $line]);
+        $this->context(lineItems: [$this->lineItem(), $lineItem]);
     }
 
     public function testDirectAndSingleLanguageFactsRemainExplicit(): void
@@ -255,12 +255,12 @@ final class OrderValuesTest extends TestCase
     {
         $data = $this->data();
         $attempt = OrderData::map($data['checkoutAttempt']);
-        $line = $this->line()->toArray();
-        $options = OrderData::list($line['options']);
+        $lineItem = $this->lineItem()->toArray();
+        $options = OrderData::list($lineItem['options']);
         $option = OrderData::map($options[0]);
         $snapshot = match ($scope) {
             'attempt' => $attempt,
-            'line' => $line,
+            'line' => $lineItem,
             'option' => $option,
             default => $this->fail('Unknown snapshot fixture.'),
         };
@@ -277,12 +277,12 @@ final class OrderValuesTest extends TestCase
             OrderSerializer::normalize($data);
         } else {
             if ($scope === 'option') {
-                $line['options'] = [$snapshot];
+                $lineItem['options'] = [$snapshot];
             } else {
-                $line = $snapshot;
+                $lineItem = $snapshot;
             }
 
-            OrderLineSnapshot::fromArray($line);
+            OrderLineItemSnapshot::fromArray($lineItem);
         }
     }
 
@@ -525,9 +525,9 @@ final class OrderValuesTest extends TestCase
             'user id' => $this->context(user: 'customer@example.com'),
             'user UUID path' => $this->context(user: 'user://customer/path'),
             'empty language' => $this->context(language: ''),
-            'empty lines' => $this->context(lines: []),
-            'too many lines' => $this->context(lines: array_fill(0, 101, $this->line())),
-            'non list' => $this->context(lines: ['item' => $this->line()]),
+            'empty lines' => $this->context(lineItems: []),
+            'too many lines' => $this->context(lineItems: array_fill(0, 101, $this->lineItem())),
+            'non list' => $this->context(lineItems: ['item' => $this->lineItem()]),
             default => $this->fail('Unknown fixture.'),
         };
     }
@@ -546,7 +546,7 @@ final class OrderValuesTest extends TestCase
     {
         $product = new Product(new ProductRequest('product'), 'Product', false, new Price(Money::of('16', 'EUR')));
         $this->expectException(OrderDataException::class);
-        OrderLineSnapshot::fromProduct($product, Money::of('17', 'EUR'));
+        OrderLineItemSnapshot::fromProduct($product, Money::of('17', 'EUR'));
     }
 
     public function testBothOrNeitherActorAreRejected(): void
@@ -700,18 +700,18 @@ final class OrderValuesTest extends TestCase
         $this->assertSame('order.created', $event->toArray()['type']);
     }
 
-    /** @param array<array-key, OrderLineSnapshot>|null $lines */
-    private function context(?array $lines = null, CheckoutSource $source = CheckoutSource::Cart, ?string $revision = 'revision', ?string $language = 'en', ?string $user = null): OrderCreationContext
+    /** @param array<array-key, OrderLineItemSnapshot>|null $lineItems */
+    private function context(?array $lineItems = null, CheckoutSource $source = CheckoutSource::Cart, ?string $revision = 'revision', ?string $language = 'en', ?string $user = null): OrderCreationContext
     {
-        return new OrderCreationContext('Abc123def456GHI7', 'ORD-ABC123DEF456GHI7', $source, $revision, $user, $language, 'hosted', 'EUR', $lines ?? [$this->line()]);
+        return new OrderCreationContext('Abc123def456GHI7', 'ORD-ABC123DEF456GHI7', $source, $revision, $user, $language, 'hosted', 'EUR', $lineItems ?? [$this->lineItem()]);
     }
 
-    private function line(): OrderLineSnapshot
+    private function lineItem(): OrderLineItemSnapshot
     {
         $price = Money::of('16', 'EUR');
         $product = new Product(new ProductRequest('page://shirt', 2, ['size' => 'large']), 'T-shirt', true, new Price($price), [new SelectedOption('size', 'Size', 'large', 'Large')], imageUrls: ['https://example.com/shirt.jpg'], sku: 'SHIRT-L', variantId: 'large-variant');
 
-        return OrderLineSnapshot::fromProduct($product, $price);
+        return OrderLineItemSnapshot::fromProduct($product, $price);
     }
 
     /** @return array<string, mixed> */

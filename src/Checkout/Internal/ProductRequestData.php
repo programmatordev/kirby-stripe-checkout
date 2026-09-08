@@ -9,11 +9,11 @@ use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 
 /**
- * Defines selection parsing, projection, equality, and checked quantity rules.
+ * Defines product request parsing, projection, equality, and checked quantity rules.
  *
  * @internal
  */
-final class SelectionData
+final class ProductRequestData
 {
     public static function parse(mixed $input): ProductRequest
     {

@@ -9,7 +9,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartEntry;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutator;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartSnapshot;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionCanonicalizer;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 use ProgrammatorDev\StripeCheckout\Test\Support\Cart\InMemoryCartStore;
@@ -35,9 +35,9 @@ final class CartSelectionTest extends KirbyTestCase
             'content' => ['title' => 'Shirt', 'price' => '16.00'],
         ])->changeStatus('unlisted');
         $plugin = new StripeCheckout($this->kirby);
-        $selections = new SelectionCanonicalizer($plugin->resolveProduct(...));
+        $requestNormalizer = new ProductRequestNormalizer($plugin->resolveProduct(...));
         $store = new InMemoryCartStore(new CartSnapshot(Uuid::generate(), 'initial-revision', [], 100, 100));
-        $cart = new CartMutator($store, $selections, Uuid::generate(...));
+        $cart = new CartMutator($store, $requestNormalizer, Uuid::generate(...));
         $first = $cart->add(new ProductRequest($page->id(), 2));
         $merged = $cart->add(new ProductRequest($page->uuid()->toString(), 3));
 
@@ -50,7 +50,7 @@ final class CartSelectionTest extends KirbyTestCase
         $this->assertNotSame($first->revision(), $merged->revision());
         $this->assertEquals(
             array_map(static fn(CartEntry $entry): ProductRequest => $entry->request(), $merged->entries()),
-            $selections->direct([
+            $requestNormalizer->direct([
                 ['reference' => $page->id(), 'quantity' => 2],
                 ['reference' => $page->uuid()->toString(), 'quantity' => 3],
             ]),

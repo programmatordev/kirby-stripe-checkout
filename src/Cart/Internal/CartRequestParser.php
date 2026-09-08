@@ -8,7 +8,7 @@ use Kirby\Cms\App;
 use Kirby\Http\Request;
 use ProgrammatorDev\StripeCheckout\Cart\CartOperation;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionData;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
 use stdClass;
 
 /** @internal Validates HTTP transport only; product rules remain in the shared cart API. */
@@ -91,7 +91,7 @@ final class CartRequestParser
                 unset($selection['options']);
             }
 
-            $product = SelectionData::parse($selection);
+            $product = ProductRequestData::parse($selection);
 
             return [
                 'reference' => $product->reference(),

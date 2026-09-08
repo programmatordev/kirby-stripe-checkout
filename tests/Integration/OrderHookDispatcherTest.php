@@ -14,7 +14,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
-use ProgrammatorDev\StripeCheckout\Kirby\OrderLifecycle;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderHookDispatcher;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEvent;
@@ -22,7 +22,7 @@ use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
-use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineSnapshot;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
 use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
 use ProgrammatorDev\StripeCheckout\Product\Price;
@@ -33,7 +33,7 @@ use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
 use RuntimeException;
 
-final class OrderLifecycleTest extends KirbyTestCase
+final class OrderHookDispatcherTest extends KirbyTestCase
 {
     public function testCreationSnapshotIncludesNativeDefaultsAndBeforeHookEdits(): void
     {
@@ -199,7 +199,7 @@ final class OrderLifecycleTest extends KirbyTestCase
         $cache->set('order-summary', 'unchanged');
         $fail = false;
         $event = OrderData::map($entry['event']);
-        (new OrderLifecycle($this->kirby))->deliver($page->uuid()->toString(), OrderData::text($event['deliveryId']));
+        (new OrderHookDispatcher($this->kirby))->deliver($page->uuid()->toString(), OrderData::text($event['deliveryId']));
         $page = $store->requirePage($page->id());
         $after = $store->data($page);
         $retried = $this->entries($page)[0];
@@ -270,11 +270,11 @@ final class OrderLifecycleTest extends KirbyTestCase
             'checkoutOpenedAt' => $data['createdAt'],
         ]);
         $fail = false;
-        $lifecycle = new OrderLifecycle($this->kirby);
+        $dispatcher = new OrderHookDispatcher($this->kirby);
         $event = OrderData::map($entry['event']);
         $deliveryId = OrderData::text($event['deliveryId']);
-        $lifecycle->deliver($first->uuid()->toString(), $deliveryId);
-        $lifecycle->deliver($first->uuid()->toString(), $deliveryId);
+        $dispatcher->deliver($first->uuid()->toString(), $deliveryId);
+        $dispatcher->deliver($first->uuid()->toString(), $deliveryId);
         $this->assertCount(3, $observed);
         $this->assertSame($observed[0][0], $observed[2][0]);
         $this->assertSame('open', $observed[2][1]);
@@ -341,7 +341,7 @@ final class OrderLifecycleTest extends KirbyTestCase
         $this->assertSame('en', $this->kirby->languageCode());
         $entry = $this->entries($page)[0];
         $event = OrderData::map($entry['event']);
-        (new OrderLifecycle($this->kirby))->deliver($page->uuid()->toString(), OrderData::text($event['deliveryId']));
+        (new OrderHookDispatcher($this->kirby))->deliver($page->uuid()->toString(), OrderData::text($event['deliveryId']));
         $this->assertSame(['pt', 'pt'], $observed);
         $this->assertSame('en', $this->kirby->languageCode());
         $this->assertNull($page->version('latest')->read('pt'));
@@ -383,7 +383,7 @@ final class OrderLifecycleTest extends KirbyTestCase
         $this->assertSame('failed', $outcome['status']);
         $this->assertSame(['deliveryId', 'occurredAt', 'status', 'errorCode'], array_keys($outcome));
         $this->assertStringNotContainsString('Private', json_encode($outcome, JSON_THROW_ON_ERROR));
-        $this->assertTrue((new OrderLifecycle($this->kirby))->hasFailedDeletionDelivery());
+        $this->assertTrue((new OrderHookDispatcher($this->kirby))->hasFailedDeletionDelivery());
         $this->assertCount(0, $store->orders());
     }
 
@@ -497,7 +497,7 @@ final class OrderLifecycleTest extends KirbyTestCase
         $product = new Product(new ProductRequest('product', 1), 'Product', false, new Price($price));
 
         return (new OrderPageStore($this->kirby))->create(
-            [OrderLineSnapshot::fromProduct($product, $price)],
+            [OrderLineItemSnapshot::fromProduct($product, $price)],
             'EUR',
             CheckoutSource::Direct,
             null,

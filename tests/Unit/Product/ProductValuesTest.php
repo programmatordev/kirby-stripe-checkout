@@ -96,7 +96,7 @@ final class ProductValuesTest extends TestCase
         $this->assertSame(PriceSource::Kirby, $product->priceSource());
         $price = $product->price();
         $this->assertInstanceOf(Price::class, $price);
-        $this->assertSame('16.00', $price->unitPrice()->getAmount()->toString());
+        $this->assertSame('16.00', $price->price()->getAmount()->toString());
         $this->assertSame('largeVariant0001', $product->variantId());
         $this->assertSame('SHIRT-L', $product->sku());
         $this->assertSame(['https://example.test/shirt.jpg'], $product->imageUrls());

@@ -63,7 +63,7 @@ final class ProductResolverTest extends KirbyTestCase
             $this->assertSame('SIMPLE-1', $product->sku());
             $price = $product->price();
             $this->assertInstanceOf(Price::class, $price);
-            $this->assertSame('16.00', $price->unitPrice()->getAmount()->toString());
+            $this->assertSame('16.00', $price->price()->getAmount()->toString());
         }
 
         $unlisted = $this->kirby->site()->createChild([
@@ -132,7 +132,7 @@ final class ProductResolverTest extends KirbyTestCase
         $this->assertTrue($product->requiresShipping());
         $price = $product->price();
         $this->assertInstanceOf(Price::class, $price);
-        $this->assertSame('24.00', $price->unitPrice()->getAmount()->toString());
+        $this->assertSame('24.00', $price->price()->getAmount()->toString());
         $this->assertSame('Tamanho', $product->selectedOptions()[0]->optionName());
         $this->assertSame('Grande', $product->selectedOptions()[0]->valueName());
 

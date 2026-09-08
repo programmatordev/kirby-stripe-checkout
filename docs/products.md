@@ -218,6 +218,8 @@ Quantity defaults to `1` and must be a positive integer. Zero does not mean remo
 
 The default resolver accepts the same useful Page locator forms as Kirby, rejects drafts and missing pages, validates the complete request, and normalizes the result to the Page's canonical `page://...` UUID. The returned `Product` is an immutable snapshot containing the exact price, effective shipping boolean, localized option names, optional SKU and images, and matched variant ID.
 
+In Kirby price mode, `Product::price()` returns a `Price` value; its `price()` method returns the exact Brick `Money`. In Stripe price mode, `Product::price()` returns a `StripePriceReference`, which still needs a Stripe lookup. A converted `StripePrice` exposes its exact Brick `Money` through `price()` as well.
+
 `$product->image()` returns the first mapped Kirby File for crops, thumbs, and file metadata; cart items expose the same File through `$item->image()`. It returns `null` for missing images or external URL-only sources. `$product->imageUrls()` retains the resolved URLs in their existing order for Stripe and serialization boundaries, and for external-image fallback. Native File objects are not stored in the cart session.
 
 A custom resolver that already has a Kirby File can provide `image: $file` alongside `imageUrls`, whose first URL must match `$file->url()`. URL-only resolvers leave `image` unset; the plugin does not download external images or reconstruct Files from URLs.

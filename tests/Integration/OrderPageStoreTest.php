@@ -29,7 +29,7 @@ use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
-use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineSnapshot;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
@@ -707,7 +707,7 @@ final class OrderPageStoreTest extends KirbyTestCase
         $product = new Product(new ProductRequest('product', 2), 'Product', false, new Price($price));
 
         return (new OrderPageStore($this->kirby))->create(
-            [OrderLineSnapshot::fromProduct($product, $price)],
+            [OrderLineItemSnapshot::fromProduct($product, $price)],
             'EUR',
             CheckoutSource::Direct,
             null,

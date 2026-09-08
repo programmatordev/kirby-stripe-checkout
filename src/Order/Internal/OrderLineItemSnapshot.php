@@ -14,8 +14,8 @@ use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use Throwable;
 
-/** @internal Frozen initiating line; never re-resolves a product or retains Kirby Files. */
-final readonly class OrderLineSnapshot
+/** @internal Frozen initiating order line item; never re-resolves a product or retains Kirby Files. */
+final readonly class OrderLineItemSnapshot
 {
     /** @param array<string, mixed> $data */
     private function __construct(private array $data, private Money $subtotal) {}
@@ -26,7 +26,7 @@ final readonly class OrderLineSnapshot
         $registry = new StripeCurrencyRegistry();
         $subtotal = $price->multipliedBy($product->request()->quantity());
 
-        if ($product->price() instanceof Price && $product->price()->unitPrice()->isEqualTo($price) === false) {
+        if ($product->price() instanceof Price && $product->price()->price()->isEqualTo($price) === false) {
             throw new OrderDataException();
         }
 

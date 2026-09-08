@@ -14,21 +14,21 @@ use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
  *
  * @internal The callback is the guarded product-resolution boundary for the operation.
  */
-final class SelectionCanonicalizer
+final class ProductRequestNormalizer
 {
     public const MAX_ENTRIES = 100;
 
     /** @param Closure(ProductRequest): Product $resolveProduct */
     public function __construct(private readonly Closure $resolveProduct) {}
 
-    public function resolve(ProductRequest $request): ProductRequest
+    public function normalize(ProductRequest $request): ProductRequest
     {
         return ($this->resolveProduct)($request)->request();
     }
 
     public function merge(ProductRequest $existing, ProductRequest $incoming): ProductRequest
     {
-        if (SelectionData::equivalent($existing, $incoming) === false) {
+        if (ProductRequestData::equivalent($existing, $incoming) === false) {
             throw new CheckoutInputException('selection.invalid');
         }
 
@@ -36,13 +36,13 @@ final class SelectionCanonicalizer
         // so the resolver must also accept the resulting quantity.
         return $this->withQuantity(
             $existing,
-            SelectionData::addQuantities($existing->quantity(), $incoming->quantity()),
+            ProductRequestData::addQuantities($existing->quantity(), $incoming->quantity()),
         );
     }
 
     public function withQuantity(ProductRequest $existing, int $quantity): ProductRequest
     {
-        $request = $this->resolve(new ProductRequest(
+        $request = $this->normalize(new ProductRequest(
             $existing->reference(),
             $quantity,
             $existing->selectedOptions(),
@@ -50,7 +50,7 @@ final class SelectionCanonicalizer
 
         // A persisted canonical reference must remain stable; changing it here
         // could silently turn an update into a second equivalent cart entry.
-        if (SelectionData::equivalent($existing, $request) === false) {
+        if (ProductRequestData::equivalent($existing, $request) === false) {
             throw new CheckoutInputException('selection.invalid');
         }
 
@@ -70,26 +70,26 @@ final class SelectionCanonicalizer
         }
 
         // Parse the complete body before running any project resolver.
-        $requests = array_map(SelectionData::parse(...), $items);
-        $canonical = [];
+        $requests = array_map(ProductRequestData::parse(...), $items);
+        $normalizedRequests = [];
         $totalQuantity = 0;
 
         foreach ($requests as $request) {
             $totalQuantity = $totalQuantity === 0
                 ? $request->quantity()
-                : SelectionData::addQuantities($totalQuantity, $request->quantity());
-            $request = $this->resolve($request);
+                : ProductRequestData::addQuantities($totalQuantity, $request->quantity());
+            $request = $this->normalize($request);
 
-            foreach ($canonical as $index => $existing) {
-                if (SelectionData::equivalent($existing, $request)) {
-                    $canonical[$index] = $this->merge($existing, $request);
+            foreach ($normalizedRequests as $index => $existing) {
+                if (ProductRequestData::equivalent($existing, $request)) {
+                    $normalizedRequests[$index] = $this->merge($existing, $request);
                     continue 2;
                 }
             }
 
-            $canonical[] = $request;
+            $normalizedRequests[] = $request;
         }
 
-        return array_values($canonical);
+        return array_values($normalizedRequests);
     }
 }

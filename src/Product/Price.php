@@ -12,17 +12,17 @@ use Throwable;
 /** Contains an exact Kirby-owned unit price. */
 final readonly class Price
 {
-    public function __construct(private Money $unitPrice)
+    public function __construct(private Money $price)
     {
         try {
-            (new StripeCurrencyRegistry())->fromMoney($this->unitPrice);
+            (new StripeCurrencyRegistry())->fromMoney($this->price);
         } catch (Throwable $error) {
             throw new InvalidProductException('product.price_invalid', $error);
         }
     }
 
-    public function unitPrice(): Money
+    public function price(): Money
     {
-        return $this->unitPrice;
+        return $this->price;
     }
 }

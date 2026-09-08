@@ -160,8 +160,8 @@ final class ConfigurationResolverTest extends TestCase
         $this->assertTrue($configuration->stripe()->hasSecretKey());
         $this->assertTrue($configuration->stripe()->hasPublishableKey());
         $this->assertTrue($configuration->stripe()->hasWebhookSecret());
-        $this->assertSame(CredentialMode::Test, $configuration->stripe()->serverMode());
-        $this->assertSame(CredentialMode::Test, $configuration->stripe()->publishableMode());
+        $this->assertSame(CredentialMode::Test, $configuration->stripe()->secretKeyMode());
+        $this->assertSame(CredentialMode::Test, $configuration->stripe()->publishableKeyMode());
     }
 
     public function testResolvesFullyDottedConfiguration(): void
@@ -177,8 +177,8 @@ final class ConfigurationResolverTest extends TestCase
         $this->assertSame(PriceSource::Stripe, $configuration->settings()->priceSource());
         $this->assertSame('USD', $configuration->settings()->currency());
         $this->assertTrue($configuration->settings()->defaultRequiresShipping());
-        $this->assertSame(CredentialMode::Unknown, $configuration->stripe()->serverMode());
-        $this->assertSame(CredentialMode::Unknown, $configuration->stripe()->publishableMode());
+        $this->assertSame(CredentialMode::Unknown, $configuration->stripe()->secretKeyMode());
+        $this->assertSame(CredentialMode::Unknown, $configuration->stripe()->publishableKeyMode());
     }
 
     public function testResolvesKirbysNormalizedDottedConfiguration(): void
@@ -196,8 +196,8 @@ final class ConfigurationResolverTest extends TestCase
         $this->assertSame(PriceSource::Stripe, $configuration->settings()->priceSource());
         $this->assertSame('GBP', $configuration->settings()->currency());
         $this->assertFalse($configuration->settings()->defaultRequiresShipping());
-        $this->assertSame(CredentialMode::Live, $configuration->stripe()->serverMode());
-        $this->assertSame(CredentialMode::Live, $configuration->stripe()->publishableMode());
+        $this->assertSame(CredentialMode::Live, $configuration->stripe()->secretKeyMode());
+        $this->assertSame(CredentialMode::Live, $configuration->stripe()->publishableKeyMode());
     }
 
     public function testExplicitNullSettingFallsThroughToTheInternalDefault(): void

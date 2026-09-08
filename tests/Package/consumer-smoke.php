@@ -282,7 +282,7 @@ try {
         || $product->name() !== 'Consumer product'
         || $product->requiresShipping() !== false
         || $price instanceof Price === false
-        || $price->unitPrice()->getAmount()->toString() !== '16.00'
+        || $price->price()->getAmount()->toString() !== '16.00'
     ) {
         throw new RuntimeException('The installed package did not resolve a Kirby product correctly.');
     }

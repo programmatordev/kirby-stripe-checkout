@@ -52,7 +52,7 @@ final class GuardedProductResolver implements ProductResolverInterface
         // retrieved fresh; inline values can be checked at this boundary.
         if (
             $product->price() instanceof Price
-            && $product->price()->unitPrice()->getCurrency()->getCurrencyCode() !== $context->settings()->currency()
+            && $product->price()->price()->getCurrency()->getCurrencyCode() !== $context->settings()->currency()
         ) {
             throw new InvalidProductException('product.currency_mismatch');
         }

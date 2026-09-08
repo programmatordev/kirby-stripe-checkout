@@ -72,7 +72,7 @@ final readonly class ProductVariant
     public function price(): ?Money
     {
         return $this->sourcePrice instanceof Price
-            ? $this->sourcePrice->unitPrice()
+            ? $this->sourcePrice->price()
             : null;
     }
 

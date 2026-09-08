@@ -12,7 +12,7 @@ use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutationException;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutator;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartSnapshot;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartViewFactory;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionData;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
 use Throwable;
 
 /**
@@ -42,7 +42,7 @@ final class Cart
     /** @param array<string, string> $options */
     public function add(string $reference, int $quantity = 1, array $options = []): self
     {
-        return $this->mutate(fn(): CartSnapshot => $this->mutator->add(SelectionData::parse([
+        return $this->mutate(fn(): CartSnapshot => $this->mutator->add(ProductRequestData::parse([
             'reference' => $reference,
             'quantity' => $quantity,
             'selectedOptions' => $options,

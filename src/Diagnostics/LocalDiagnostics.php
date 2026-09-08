@@ -7,7 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Diagnostics;
 use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
-use ProgrammatorDev\StripeCheckout\Kirby\OrderLifecycle;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderHookDispatcher;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
@@ -63,8 +63,8 @@ final class LocalDiagnostics
             $checks[] = $this->check('configuration', self::PASS, 'configuration.ready');
             $configuration = $configurationReport->configurationOrFail();
             $stripe = $configuration->stripe();
-            $checks[] = $this->credential('secretKey', $stripe->hasSecretKey(), $stripe->serverMode());
-            $checks[] = $this->credential('publishableKey', $stripe->hasPublishableKey(), $stripe->publishableMode());
+            $checks[] = $this->credential('secretKey', $stripe->hasSecretKey(), $stripe->secretKeyMode());
+            $checks[] = $this->credential('publishableKey', $stripe->hasPublishableKey(), $stripe->publishableKeyMode());
             $checks[] = $this->credential('webhookSecret', $stripe->hasWebhookSecret(), CredentialMode::Unknown);
             $settings = $configuration->settings();
             $housekeeping = $configuration->housekeeping();
@@ -123,7 +123,7 @@ final class LocalDiagnostics
             $checks[] = $this->check('orders', self::FAIL, 'orders.invalid', ['code' => $error->errorCode()]);
         }
 
-        if ((new OrderLifecycle($this->kirby))->hasFailedDeletionDelivery()) {
+        if ((new OrderHookDispatcher($this->kirby))->hasFailedDeletionDelivery()) {
             $checks[] = $this->check('lifecycleDeletion', self::WARNING, 'lifecycleDeletion.failed');
         }
 

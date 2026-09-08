@@ -8,13 +8,13 @@ use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 
 /**
- * Applies validated project overrides after Kirby has loaded all plugins.
+ * Applies validated custom overrides after Kirby has loaded all plugins.
  *
  * @internal
  */
 final class Registration
 {
-    public static function applyProjectOverrides(App $kirby): void
+    public static function applyCustomOverrides(App $kirby): void
     {
         /** @var array<string, mixed> $options */
         $options = $kirby->options();

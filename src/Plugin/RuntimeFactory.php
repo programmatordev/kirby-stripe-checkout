@@ -13,7 +13,7 @@ use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutator;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartViewFactory;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\KirbySessionCartStore;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\SelectionCanonicalizer;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationReport;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
@@ -72,7 +72,7 @@ final class RuntimeFactory
         }
 
         $store = new KirbySessionCartStore($this->kirby->session(), Uuid::generate(...));
-        $selections = new SelectionCanonicalizer(function (ProductRequest $request): Product {
+        $requestNormalizer = new ProductRequestNormalizer(function (ProductRequest $request): Product {
             // Rebuild context after login/language changes, even when a project
             // keeps the same Cart object for several operations in one request.
             $runtime = new self($this->kirby);
@@ -91,7 +91,7 @@ final class RuntimeFactory
 
             return $product;
         });
-        $mutator = new CartMutator($store, $selections, Uuid::generate(...));
+        $mutator = new CartMutator($store, $requestNormalizer, Uuid::generate(...));
 
         return (new CartViewFactory($this->kirby))->create($store->read(), $mutator, $resolve);
     }

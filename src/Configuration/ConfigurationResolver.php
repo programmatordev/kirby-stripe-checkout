@@ -514,17 +514,17 @@ final class ConfigurationResolver
 
     private function validateCredentialCombination(StripeConfiguration $stripe): void
     {
-        $serverMode = $stripe->serverMode();
-        $publishableMode = $stripe->publishableMode();
+        $secretKeyMode = $stripe->secretKeyMode();
+        $publishableKeyMode = $stripe->publishableKeyMode();
 
         // Reject only a mismatch that can be proven from recognized prefixes;
         // Stripe remains authoritative for unknown or future key formats.
         if (
             $stripe->hasSecretKey()
             && $stripe->hasPublishableKey()
-            && $serverMode !== CredentialMode::Unknown
-            && $publishableMode !== CredentialMode::Unknown
-            && $serverMode !== $publishableMode
+            && $secretKeyMode !== CredentialMode::Unknown
+            && $publishableKeyMode !== CredentialMode::Unknown
+            && $secretKeyMode !== $publishableKeyMode
         ) {
             throw new ConfigurationException(
                 'configuration.credential_mode_mismatch',
