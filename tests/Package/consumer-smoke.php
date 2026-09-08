@@ -198,6 +198,8 @@ try {
             'settings.update' => false,
             'diagnostics.read' => false,
             'prices.read' => false,
+            'orders.read' => false,
+            'orders.update' => false,
         ]
     ) {
         throw new RuntimeException('The package did not register its Panel permissions.');
@@ -261,6 +263,8 @@ try {
         throw new RuntimeException('The installed package did not initialize its Stripe Checkout Page automatically.');
     }
 
+    // Fixture writes require an authorized user; public product resolution does not.
+    $app->impersonate('kirby');
     $hubPage->update([
         'currency' => 'EUR',
         'defaultRequiresShipping' => 'no',
@@ -274,6 +278,7 @@ try {
             'requiresShipping' => 'inherit',
         ],
     ])->changeStatus('listed');
+    $app->impersonate(null);
     $product = $stripeCheckout->resolveProduct(new ProductRequest($productPage->id()));
     $price = $product->price();
 
