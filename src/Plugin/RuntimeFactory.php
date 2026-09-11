@@ -14,6 +14,10 @@ use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutator;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartViewFactory;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\KirbySessionCartStore;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestBuilder;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestCustomizer;
+use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
+use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationReport;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
@@ -185,6 +189,18 @@ final class RuntimeFactory
     public function checkoutSessionGateway(): CheckoutSessionGatewayInterface
     {
         return new StripeApiCheckoutSessionGateway($this->stripeClient());
+    }
+
+    public function checkoutSessionRequest(SessionRequestContext $context): SessionRequest
+    {
+        $configuration = $this->configurationReport()->configurationOrFail();
+        $builtIn = (new SessionRequestBuilder($this->kirby))->build($context);
+
+        return (new SessionRequestCustomizer($this->kirby))->customize(
+            $context,
+            $builtIn,
+            $configuration->sessionRequestFactory(),
+        );
     }
 
     public function configurationReport(): ConfigurationReport

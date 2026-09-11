@@ -216,6 +216,7 @@ try {
         'docs/money.md',
         'docs/panel.md',
         'docs/products.md',
+        'docs/session-requests.md',
         'docs/translations.md',
         'translations/en.php',
         'translations/pt_PT.php',

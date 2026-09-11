@@ -9,6 +9,7 @@ Kirby Stripe Checkout is under active development and is not ready for productio
 - [Products and variants](products.md) — reusable fields, existing-schema mapping, options, variants, and product resolution.
 - [Cart](cart.md) — adding and changing items in PHP, exact totals, errors, and session behavior.
 - [Cart HTTP routes](cart-http.md) — browser requests, CSRF, revisions, JSON and HTML fragments.
+- [Checkout Session requests](session-requests.md) — the protected standard request and safe project customization.
 - [Orders](orders.md) — native Pages, scoped queries, custom fields, separate states and immutable snapshots.
 - [Panel and diagnostics](panel.md) — automatic setup, permissions, menu composition, and local checks.
 - [Translations](translations.md) — bundled languages and project overrides.

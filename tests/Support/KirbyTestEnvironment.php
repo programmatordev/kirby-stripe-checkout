@@ -36,7 +36,7 @@ final class KirbyTestEnvironment
     /**
      * @param array<string, mixed>             $options
      * @param list<array<string, mixed>>|null $languages
-     * @param array<string, callable>          $hooks
+     * @param array<string, callable|list<callable>> $hooks
      * @param list<array<string, mixed>>|null $roles
      * @param list<array<string, mixed>>|null $users
      * @param array<string, mixed>|null        $request

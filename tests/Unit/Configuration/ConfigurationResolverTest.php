@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Unit\Configuration;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestFactoryInterface;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationReport;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
@@ -111,6 +112,24 @@ final class ConfigurationResolverTest extends TestCase
         foreach ($invalid as $orders) {
             $this->assertFalse($resolver->resolve([self::PREFIX => ['orders' => $orders]])->isValid());
         }
+    }
+
+    public function testSessionRequestFactorySupportsNestedAndDottedConfiguration(): void
+    {
+        $factory = $this->createStub(SessionRequestFactoryInterface::class);
+        $resolver = new ConfigurationResolver();
+        $nested = $resolver->resolve([
+            self::PREFIX => [
+                'checkout' => ['sessionRequestFactory' => $factory],
+            ],
+        ])->configurationOrFail();
+        $dotted = $resolver->resolve([
+            self::PREFIX . '.checkout.sessionRequestFactory' => $factory,
+        ])->configurationOrFail();
+
+        $this->assertSame($factory, $nested->sessionRequestFactory());
+        $this->assertSame($factory, $dotted->sessionRequestFactory());
+        $this->assertNull($resolver->resolve([])->configurationOrFail()->sessionRequestFactory());
     }
 
     public function testResolvesTheInternalDefaultWithoutCredentials(): void
@@ -400,6 +419,21 @@ final class ConfigurationResolverTest extends TestCase
             [self::PREFIX => ['settings' => 'stripe']],
             'configuration.type_invalid',
             'settings',
+        ];
+        yield 'checkout section has wrong type' => [
+            [self::PREFIX => ['checkout' => false]],
+            'configuration.type_invalid',
+            'checkout',
+        ];
+        yield 'unknown checkout option' => [
+            [self::PREFIX => ['checkout' => ['other' => true]]],
+            'configuration.option_unknown',
+            'checkout.other',
+        ];
+        yield 'Session request factory has wrong type' => [
+            [self::PREFIX => ['checkout' => ['sessionRequestFactory' => 'factory']]],
+            'configuration.type_invalid',
+            'checkout.sessionRequestFactory',
         ];
         yield 'price source boolean has wrong type' => [
             [self::PREFIX => ['settings' => ['priceSource' => false]]],

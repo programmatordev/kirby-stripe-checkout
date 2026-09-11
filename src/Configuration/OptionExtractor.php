@@ -19,6 +19,7 @@ final class OptionExtractor
     private const DOTTED_LEAVES = [
         'cart.enabled',
         'cart.renderer',
+        'checkout.sessionRequestFactory',
         'housekeeping.intervalHours',
         'housekeeping.batchSize',
         'orders.numberFormatter',
@@ -132,7 +133,7 @@ final class OptionExtractor
         $paths = [];
 
         foreach ($root as $section => $value) {
-            if (in_array($section, ['cart', 'housekeeping', 'orders', 'settings', 'stripe'], true) && is_array($value)) {
+            if (in_array($section, ['cart', 'checkout', 'housekeeping', 'orders', 'settings', 'stripe'], true) && is_array($value)) {
                 foreach (array_keys($value) as $leaf) {
                     $paths[$section . '.' . (string) $leaf] = true;
                 }

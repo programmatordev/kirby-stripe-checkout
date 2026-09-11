@@ -159,3 +159,7 @@ The session cart is enabled by default. Set the PHP-only `cart.enabled` option t
 ## Order numbers
 
 The optional PHP-only `orders.numberFormatter` closure changes the visible order number without changing the native UUID. See [Orders](orders.md) for its input and a configuration example. It is not a Panel setting.
+
+## Advanced Session construction
+
+The PHP-only `checkout.sessionRequestFactory` option can complete construction of one Checkout Session request while the plugin continues to enforce its payment, navigation, currency, and order-correlation guarantees. For smaller composable additions, use the Kirby Session-parameter filter. When both are present, the factory receives the request after all filters have run. See [Checkout Session requests](session-requests.md) for both contracts and their safety limits.
