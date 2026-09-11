@@ -62,6 +62,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           tools: composer:v2
+          extensions: intl
           ini-values: pcov.directory=${{ github.workspace }}
           coverage: ${{ matrix.php == '8.2' && 'pcov' || 'none' }}
 
@@ -127,6 +128,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           tools: composer:v2
+          extensions: intl
           coverage: none
 
       - name: Resolve dependency range
@@ -151,6 +153,7 @@ jobs:
         with:
           php-version: "8.2"
           tools: composer:v2
+          extensions: intl
           coverage: none
 
       - name: Build package artifact
