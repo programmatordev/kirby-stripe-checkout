@@ -32,11 +32,14 @@ use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
+use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionGatewayInterface;
+use ProgrammatorDev\StripeCheckout\Stripe\Checkout\StripeApiCheckoutSessionGateway;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogue;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceProviderInterface;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceResolver;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\StripeApiPriceProvider;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
+use ProgrammatorDev\StripeCheckout\Stripe\StripeApiClientFactory;
 use ProgrammatorDev\StripeCheckout\Translation\LocaleResolver;
 use Stripe\StripeClient;
 
@@ -48,6 +51,8 @@ use Stripe\StripeClient;
 final class RuntimeFactory
 {
     private ?ConfigurationReport $configurationReport = null;
+
+    private ?StripeClient $stripeClient = null;
 
     public function __construct(
         private readonly App $kirby,
@@ -177,6 +182,11 @@ final class RuntimeFactory
         return new PriceResolver($provider);
     }
 
+    public function checkoutSessionGateway(): CheckoutSessionGatewayInterface
+    {
+        return new StripeApiCheckoutSessionGateway($this->stripeClient());
+    }
+
     public function configurationReport(): ConfigurationReport
     {
         /** @var array<string, mixed> $options */
@@ -255,6 +265,23 @@ final class RuntimeFactory
 
         return $secretKey === null
             ? null
-            : new StripeApiPriceProvider(new StripeClient($secretKey));
+            : new StripeApiPriceProvider($this->stripeClient());
+    }
+
+    private function stripeClient(): StripeClient
+    {
+        if ($this->stripeClient !== null) {
+            return $this->stripeClient;
+        }
+
+        $configuration = $this->configurationReport()
+            ->configurationOrFail()
+            ->stripe();
+        $version = App::plugin(PluginMetadata::NAME)?->version();
+
+        return $this->stripeClient = (new StripeApiClientFactory())->create(
+            $configuration,
+            $version,
+        );
     }
 }

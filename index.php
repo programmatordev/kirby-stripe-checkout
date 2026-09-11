@@ -19,6 +19,7 @@ use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\StripePriceField;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
+use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
@@ -27,7 +28,7 @@ use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 use ProgrammatorDev\StripeCheckout\Translation\Registration;
 
 App::plugin(
-    name: 'programmatordev/stripe-checkout',
+    name: PluginMetadata::NAME,
     extends: [
         // Business defaults stay in the resolver. This only enables Kirby's
         // native cache for the read-only Stripe Price catalogue.
@@ -41,7 +42,7 @@ App::plugin(
             'pages/stripe-checkout-order' => [OrderBlueprint::class, 'load'],
             // A site override needs a separate extension target; extending its
             // own pages/stripe-checkout-order name would resolve back to itself.
-            'programmatordev/stripe-checkout/pages/order' => [OrderBlueprint::class, 'load'],
+            PluginMetadata::NAME . '/pages/order' => [OrderBlueprint::class, 'load'],
             'pages/stripe-checkout-orders' => __DIR__ . '/blueprints/pages/stripe-checkout-orders.yml',
             'fields/stripe-checkout/name' => [ProductBlueprint::class, 'name'],
             'fields/stripe-checkout/price' => [ProductBlueprint::class, 'price'],

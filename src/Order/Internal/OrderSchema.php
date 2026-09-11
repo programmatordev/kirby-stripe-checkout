@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Order\Internal;
 
+use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
+
 /** @internal Single registry for content serialization and reserved field protection. */
 final class OrderSchema
 {
-    public const OWNER = 'programmatordev/stripe-checkout';
+    public const OWNER = PluginMetadata::NAME;
     public const VERSION = 1;
     public const TEMPLATE = 'stripe-checkout-order';
     public const CONTAINER = 'stripe-checkout-orders';

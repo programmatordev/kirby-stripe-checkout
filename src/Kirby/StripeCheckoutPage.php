@@ -15,6 +15,7 @@ use Kirby\Exception\PermissionException;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Configuration\PageSettings;
+use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 
 /**
  * Provides the plugin-owned hub Page and stores editable settings natively.
@@ -28,7 +29,7 @@ use ProgrammatorDev\StripeCheckout\Configuration\PageSettings;
 final class StripeCheckoutPage extends Page
 {
     public const ID = 'stripe-checkout';
-    public const OWNER = 'programmatordev/stripe-checkout';
+    public const OWNER = PluginMetadata::NAME;
     public const SCHEMA_VERSION = 1;
     public const TEMPLATE = 'stripe-checkout';
 
