@@ -6,15 +6,20 @@ namespace ProgrammatorDev\StripeCheckout\Stripe\Checkout;
 
 use InvalidArgumentException;
 
-/** @internal Sanitized provider failure facts that are safe to persist and report. */
+/** @internal Sanitized provider outcome and its independent retry decision. */
 final readonly class CheckoutSessionFailure
 {
     public function __construct(
         private CheckoutSessionFailureType $type,
+        private bool $retryable,
         private ?string $requestId = null,
         private ?string $providerCode = null,
         private ?string $providerType = null,
     ) {
+        if ($retryable && in_array($type, [CheckoutSessionFailureType::Rejected, CheckoutSessionFailureType::Incompatible], true)) {
+            throw new InvalidArgumentException('A definitive provider outcome cannot be retryable.');
+        }
+
         foreach ([$requestId, $providerCode, $providerType] as $value) {
             if ($value !== null && self::isSafeText($value) === false) {
                 throw new InvalidArgumentException('Provider failure facts must be safe text.');
@@ -24,12 +29,14 @@ final readonly class CheckoutSessionFailure
 
     public static function fromProvider(
         CheckoutSessionFailureType $type,
+        bool $retryable,
         mixed $requestId = null,
         mixed $providerCode = null,
         mixed $providerType = null,
     ): self {
         return new self(
             type: $type,
+            retryable: $retryable,
             requestId: self::safeText($requestId),
             providerCode: self::safeText($providerCode),
             providerType: self::safeText($providerType),
@@ -58,11 +65,7 @@ final readonly class CheckoutSessionFailure
 
     public function isRetryable(): bool
     {
-        return in_array($this->type, [
-            CheckoutSessionFailureType::Retryable,
-            CheckoutSessionFailureType::Unavailable,
-            CheckoutSessionFailureType::Uncertain,
-        ], true);
+        return $this->retryable;
     }
 
     /** @return array{type: string, requestId: ?string, providerCode: ?string, providerType: ?string, retryable: bool} */

@@ -78,6 +78,10 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $this->assertSame($request->fingerprint(), $checkoutAttempt['requestFingerprint']);
         $this->assertSame(ApiVersion::CURRENT, $checkoutAttempt['stripeApiVersion']);
         $this->assertSame('test', $checkoutAttempt['credentialMode']);
+        $this->assertSame(
+            hash_hmac('sha256', $order->pageUuid(), 'sk_test_checkout'),
+            $checkoutAttempt['credentialFingerprint'],
+        );
         $this->assertSame('stripe-checkout/session/' . $order->uuid(), $checkoutAttempt['idempotencyKey']);
         $persisted = OrderData::json($data);
 
@@ -151,6 +155,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $order = $this->order(UiMode::Hosted);
         $failure = new CheckoutSessionFailure(
             type: CheckoutSessionFailureType::Uncertain,
+            retryable: true,
             requestId: 'req_uncertain',
             providerCode: 'api_connection_error',
             providerType: 'api_connection_error',
@@ -219,6 +224,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $rejectedGateway->creationFailure = new CheckoutSessionGatewayException(
             failure: new CheckoutSessionFailure(
                 type: CheckoutSessionFailureType::Rejected,
+                retryable: false,
                 requestId: 'req_rejected',
                 providerCode: 'parameter_invalid_integer',
                 providerType: 'invalid_request_error',
@@ -277,7 +283,10 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $order = $this->order(UiMode::Hosted);
         $gateway = new FakeCheckoutSessionGateway();
         $gateway->creationFailure = new CheckoutSessionGatewayException(
-            failure: new CheckoutSessionFailure(type: CheckoutSessionFailureType::Uncertain),
+            failure: new CheckoutSessionFailure(
+                type: CheckoutSessionFailureType::Uncertain,
+                retryable: true,
+            ),
             error: new RuntimeException('private'),
         );
 
@@ -373,6 +382,78 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         );
     }
 
+    public function testChangedStripeCredentialCannotReuseAnExistingAttemptInTheSameMode(): void
+    {
+        $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
+        $configuration = $this->configuration(UiMode::Hosted, secretKey: 'sk_test_first');
+        $order = $this->order(UiMode::Hosted);
+        $firstGateway = new FakeCheckoutSessionGateway();
+        $firstGateway->creationFailure = new CheckoutSessionGatewayException(
+            failure: new CheckoutSessionFailure(
+                type: CheckoutSessionFailureType::Uncertain,
+                retryable: true,
+            ),
+            error: new RuntimeException('private'),
+        );
+
+        try {
+            $this->creator($configuration, $firstGateway)->create(
+                order: $order,
+                binding: $this->binding(),
+                token: $this->token(),
+                guestReference: 'guest-browser',
+                now: $now,
+            );
+        } catch (CheckoutSessionException) {
+        }
+
+        $retryGateway = new FakeCheckoutSessionGateway();
+
+        try {
+            $this->creator(
+                configuration: $this->configuration(UiMode::Hosted, secretKey: 'sk_test_second'),
+                gateway: $retryGateway,
+            )->create(
+                order: $this->order(UiMode::Hosted),
+                binding: $this->binding(),
+                token: $this->token(),
+                guestReference: 'guest-browser',
+                now: $now,
+            );
+            $this->fail('Expected another Stripe credential to conflict with the attempt.');
+        } catch (CheckoutInputException $error) {
+            $this->assertSame('checkout.attempt_conflict', $error->errorCode());
+        }
+
+        $this->assertSame([], $retryGateway->requests);
+        $this->assertSame([], $retryGateway->retrievals);
+    }
+
+    public function testUnknownCredentialModeUsesStripeResponseAsTheAuthority(): void
+    {
+        $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
+        $configuration = $this->configuration(UiMode::Hosted, secretKey: 'opaque_future_key');
+        $order = $this->order(UiMode::Hosted);
+        $request = $this->request(order: $order, configuration: $configuration, now: $now);
+        $sessionRecord = $this->sessionRecord(
+            order: $order,
+            request: $request,
+            now: $now,
+            uiMode: UiMode::Hosted,
+            overrides: ['liveMode' => true],
+        );
+
+        $presentation = $this->creator($configuration, new FakeCheckoutSessionGateway([$sessionRecord]))->create(
+            order: $order,
+            binding: $this->binding(),
+            token: $this->token(),
+            guestReference: 'guest-browser',
+            now: $now,
+        );
+
+        $this->assertFalse($presentation->isReused());
+    }
+
     public function testAWebhookObservationCanWinBeforeTheCreateResponseIsAttached(): void
     {
         $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
@@ -421,7 +502,10 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $store = new OrderPageStore($this->kirby);
         $gateway = new FakeCheckoutSessionGateway(retrievalResults: [$sessionRecord->id => $sessionRecord]);
         $gateway->creationFailure = new CheckoutSessionGatewayException(
-            failure: new CheckoutSessionFailure(type: CheckoutSessionFailureType::Retryable),
+            failure: new CheckoutSessionFailure(
+                type: CheckoutSessionFailureType::Unavailable,
+                retryable: true,
+            ),
             error: new RuntimeException('private'),
         );
         $gateway->beforeCreate = static function () use ($store, $order, $sessionRecord, $now): void {
@@ -445,7 +529,87 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
 
         $this->assertTrue($presentation->isReused());
         $this->assertSame([$sessionRecord->id], $gateway->retrievals);
-        $this->assertSame(CheckoutStatus::Open->value, $store->data($store->order($order->pageUuid()) ?? $this->fail('Order missing.'))['checkoutStatus']);
+        $data = $store->data($store->order($order->pageUuid()) ?? $this->fail('Order missing.'));
+        $this->assertSame(CheckoutStatus::Open->value, $data['checkoutStatus']);
+        $this->assertNull(OrderData::map($data['checkoutAttempt'])['providerFailure']);
+    }
+
+    public function testNonRetryableUncertainAttemptWaitsForReconciliation(): void
+    {
+        $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
+        $configuration = $this->configuration(UiMode::Hosted);
+        $order = $this->order(UiMode::Hosted);
+        $firstGateway = new FakeCheckoutSessionGateway();
+        $firstGateway->creationFailure = new CheckoutSessionGatewayException(
+            failure: new CheckoutSessionFailure(
+                type: CheckoutSessionFailureType::Uncertain,
+                retryable: false,
+            ),
+            error: new RuntimeException('private'),
+        );
+
+        try {
+            $this->creator($configuration, $firstGateway)->create(
+                order: $order,
+                binding: $this->binding(),
+                token: $this->token(),
+                guestReference: 'guest-browser',
+                now: $now,
+            );
+        } catch (CheckoutSessionException) {
+        }
+
+        $retryGateway = new FakeCheckoutSessionGateway();
+
+        try {
+            $this->creator($configuration, $retryGateway)->create(
+                order: $this->order(UiMode::Hosted),
+                binding: $this->binding(),
+                token: $this->token(),
+                guestReference: 'guest-browser',
+                now: $now->add(new DateInterval('PT1M')),
+            );
+            $this->fail('Expected the uncertain attempt to wait for reconciliation.');
+        } catch (CheckoutSessionException $error) {
+            $this->assertSame('checkout.session_uncertain', $error->errorCode());
+            $this->assertFalse($error->isRetryable());
+        }
+
+        $this->assertSame([], $retryGateway->requests);
+    }
+
+    public function testConcurrentTerminalObservationSuppressesAStalePresentation(): void
+    {
+        $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
+        $configuration = $this->configuration(UiMode::Hosted);
+        $order = $this->order(UiMode::Hosted);
+        $request = $this->request(order: $order, configuration: $configuration, now: $now);
+        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
+        $gateway = new FakeCheckoutSessionGateway([$sessionRecord]);
+        $store = new OrderPageStore($this->kirby);
+        $gateway->beforeCreate = static function () use ($store, $order, $sessionRecord, $now): void {
+            $store->update($order->pageUuid(), static function (array $data) use ($sessionRecord, $now): array {
+                $data['stripeCheckoutSessionId'] = $sessionRecord->id;
+                $data['checkoutStatus'] = CheckoutStatus::Expired->value;
+                $data['checkoutExpiredAt'] = OrderData::timestamp($now);
+                $data['updatedAt'] = max($data['updatedAt'], OrderData::timestamp($now));
+
+                return $data;
+            });
+        };
+
+        try {
+            $this->creator($configuration, $gateway)->create(
+                order: $order,
+                binding: $this->binding(),
+                token: $this->token(),
+                guestReference: 'guest-browser',
+                now: $now,
+            );
+            $this->fail('Expected the terminal observation to close the attempt.');
+        } catch (CheckoutInputException $error) {
+            $this->assertSame('checkout.attempt_closed', $error->errorCode());
+        }
     }
 
     public function testProviderMetadataOrderAndAdditionalCustomKeysDoNotAffectCorrelation(): void
@@ -506,7 +670,10 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             now: $now,
         );
         $gateway->retrievalFailure = new CheckoutSessionGatewayException(
-            failure: new CheckoutSessionFailure(type: CheckoutSessionFailureType::Rejected),
+            failure: new CheckoutSessionFailure(
+                type: CheckoutSessionFailureType::Rejected,
+                retryable: false,
+            ),
             error: new RuntimeException('private'),
         );
 
@@ -735,7 +902,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         return (new SessionRequestBuilder($this->kirby))->build($context);
     }
 
-    /** @param array{clientReferenceId?: string, metadata?: array<string, string>} $overrides */
+    /** @param array{clientReferenceId?: string, metadata?: array<string, string>, liveMode?: bool} $overrides */
     private function sessionRecord(
         OrderCreationContext $order,
         SessionRequest $request,
@@ -757,7 +924,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             expiresAt: is_int($parameters['expires_at']) ? $parameters['expires_at'] : null,
             status: 'open',
             paymentStatus: 'unpaid',
-            liveMode: false,
+            liveMode: $overrides['liveMode'] ?? false,
             mode: 'payment',
             uiMode: is_string($parameters['ui_mode']) ? $parameters['ui_mode'] : null,
             currency: 'eur',

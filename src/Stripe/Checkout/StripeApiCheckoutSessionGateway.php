@@ -35,6 +35,8 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
                 // vocabulary, which is wider than its generated array shape.
                 // @phpstan-ignore-next-line argument.type
                 $request->parameters(),
+                // Supplying our persisted key lets both SDK retries and a later
+                // PHP request address the same Stripe mutation.
                 ['idempotency_key' => $idempotencyKey],
             );
         } catch (Throwable $error) {

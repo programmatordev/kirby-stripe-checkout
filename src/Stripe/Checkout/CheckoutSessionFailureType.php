@@ -8,7 +8,6 @@ namespace ProgrammatorDev\StripeCheckout\Stripe\Checkout;
 enum CheckoutSessionFailureType: string
 {
     case Rejected = 'provider_rejected';
-    case Retryable = 'provider_retryable';
     case Unavailable = 'provider_unavailable';
     case Uncertain = 'provider_uncertain';
     case Incompatible = 'provider_incompatible';

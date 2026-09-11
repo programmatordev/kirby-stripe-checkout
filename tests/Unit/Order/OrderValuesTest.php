@@ -319,6 +319,7 @@ final class OrderValuesTest extends TestCase
                 'idempotencyKey',
                 'stripeApiVersion',
                 'credentialMode',
+                'credentialFingerprint',
                 'operation',
                 'retryUntil',
                 'source',

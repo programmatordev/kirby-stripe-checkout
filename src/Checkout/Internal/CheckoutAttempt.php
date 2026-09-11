@@ -37,6 +37,7 @@ final readonly class CheckoutAttempt
         private ?string $guestReference,
         private string $stripeApiVersion,
         private CredentialMode $credentialMode,
+        private string $credentialFingerprint,
         DateTimeImmutable $createdAt,
     ) {
         if ($context->order() !== $order) {
@@ -44,6 +45,10 @@ final readonly class CheckoutAttempt
         }
 
         OrderData::text($stripeApiVersion, 80);
+
+        if (preg_match('/\A[a-f0-9]{64}\z/', $credentialFingerprint) !== 1) {
+            throw new OrderDataException();
+        }
 
         if (($order->userUuid() === null) === ($guestReference === null)) {
             throw new OrderDataException();
@@ -86,8 +91,10 @@ final readonly class CheckoutAttempt
             'idempotencyKey' => $this->idempotencyKey,
             // An exact retry must retain the API semantics used for the first POST.
             'stripeApiVersion' => $this->stripeApiVersion,
-            // Stripe idempotency is scoped by account mode; never cross test/live.
+            // Mode drives transport/presentation policy. The opaque fingerprint
+            // separately prevents reuse with another credential in the same mode.
             'credentialMode' => $this->credentialMode->value,
+            'credentialFingerprint' => $this->credentialFingerprint,
             'operation' => self::OPERATION,
             'retryUntil' => OrderData::timestamp($this->retryUntil),
             'source' => $this->order->sourceType()->value,

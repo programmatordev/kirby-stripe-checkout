@@ -19,7 +19,7 @@ final class CheckoutSessionRecordValidator
         CheckoutSessionRecord $sessionRecord,
         SessionRequestContext $context,
         SessionRequest $request,
-        bool $liveMode,
+        ?bool $liveMode,
     ): void {
         $parameters = $request->parameters();
         // Custom metadata is an escape hatch. Only the private keys establish
@@ -49,7 +49,7 @@ final class CheckoutSessionRecordValidator
             || $sessionRecord->expiresAt !== $context->expiresAt()->getTimestamp()
             || $sessionRecord->status !== 'open'
             || in_array($sessionRecord->paymentStatus, ['unpaid', 'no_payment_required'], true) === false
-            || $sessionRecord->liveMode !== $liveMode
+            || $liveMode !== null && $sessionRecord->liveMode !== $liveMode
             || $sessionRecord->mode !== 'payment'
             || $sessionRecord->uiMode !== $uiMode
             || strtolower((string) $sessionRecord->currency) !== strtolower($context->order()->currency())

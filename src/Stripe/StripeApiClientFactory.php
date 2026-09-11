@@ -17,6 +17,8 @@ use Stripe\Util\ApiVersion;
  */
 final class StripeApiClientFactory
 {
+    // The SDK owns this short in-process retry loop. Recovery in a later PHP
+    // request is separately guarded by the persisted Checkout attempt.
     private const MAX_NETWORK_RETRIES = 2;
 
     public function create(

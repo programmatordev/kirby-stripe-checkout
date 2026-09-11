@@ -80,6 +80,7 @@ final class CheckoutSessionCreator
                     guestReference: $guestReference,
                     stripeApiVersion: $this->stripeApiVersion,
                     credentialMode: $this->configuration->stripe()->secretKeyMode(),
+                    credentialFingerprint: $this->credentialFingerprint($order),
                     createdAt: $now,
                 );
 
@@ -149,6 +150,16 @@ final class CheckoutSessionCreator
             throw new CheckoutInputException('checkout.attempt_closed');
         }
 
+        $providerFailure = $checkoutAttempt['providerFailure'];
+
+        if ($providerFailure !== null) {
+            $providerFailure = OrderData::map($providerFailure);
+
+            if (OrderData::boolean($providerFailure['retryable'] ?? null) === false) {
+                throw $this->persistedFailureException($providerFailure);
+            }
+        }
+
         if ($now >= OrderData::date($checkoutAttempt['retryUntil'])) {
             $page = $this->markRetryExpired($page, $now);
             $presentation = $this->presentationFromConcurrentAssociation(
@@ -164,6 +175,9 @@ final class CheckoutSessionCreator
             throw new CheckoutSessionException('checkout.attempt_retry_expired');
         }
 
+        // This is recovery in a later PHP request after stripe-php has already
+        // exhausted its own retries. Reusing the saved request and key is what
+        // prevents the recovery call from creating a second Session.
         return $this->createSession(
             page: $page,
             requestContext: $requestContext,
@@ -190,6 +204,10 @@ final class CheckoutSessionCreator
             || $persistedOrder->uiMode() !== $incomingOrder->uiMode()
             || $checkoutAttempt['stripeApiVersion'] !== $this->stripeApiVersion
             || $checkoutAttempt['credentialMode'] !== $this->configuration->stripe()->secretKeyMode()->value
+            || hash_equals(
+                OrderData::text($checkoutAttempt['credentialFingerprint']),
+                $this->credentialFingerprint($persistedOrder),
+            ) === false
             || $checkoutAttempt['operation'] !== CheckoutAttempt::OPERATION
         ) {
             throw new CheckoutInputException('checkout.attempt_conflict');
@@ -268,6 +286,7 @@ final class CheckoutSessionCreator
                 page: $page,
                 failure: CheckoutSessionFailure::fromProvider(
                     type: CheckoutSessionFailureType::Incompatible,
+                    retryable: false,
                     requestId: $sessionRecord->requestId,
                 ),
                 now: $now,
@@ -304,6 +323,19 @@ final class CheckoutSessionCreator
         $data = $this->orderPageStore->data($page);
 
         if (($data['stripeCheckoutSessionId'] ?? null) !== $sessionRecord->id) {
+            throw new CheckoutSessionException(
+                errorCode: 'checkout.session_attachment_failed',
+                retryable: true,
+            );
+        }
+
+        $status = CheckoutStatus::from(OrderData::text($data['checkoutStatus']));
+
+        if (in_array($status, [CheckoutStatus::Complete, CheckoutStatus::Expired], true)) {
+            throw new CheckoutInputException('checkout.attempt_closed');
+        }
+
+        if ($status !== CheckoutStatus::Open) {
             throw new CheckoutSessionException(
                 errorCode: 'checkout.session_attachment_failed',
                 retryable: true,
@@ -391,6 +423,14 @@ final class CheckoutSessionCreator
         return $this->orderPageStore->update(
             uuid: $page->uuid()->toString(),
             reduce: static function (array $data) use ($failure, $now): array {
+                $status = CheckoutStatus::from(OrderData::text($data['checkoutStatus']));
+
+                // A concurrent request or webhook owns the stronger observation.
+                // Late local failures must not age or modify that record.
+                if (in_array($status, [CheckoutStatus::Creating, CheckoutStatus::CreationUncertain], true) === false) {
+                    return $data;
+                }
+
                 $checkoutAttempt = OrderData::map($data['checkoutAttempt']);
                 $checkoutAttempt['providerFailure'] = [
                     ...$failure->toArray(),
@@ -398,20 +438,13 @@ final class CheckoutSessionCreator
                 ];
                 $data['checkoutAttempt'] = $checkoutAttempt;
                 $data['updatedAt'] = max($data['updatedAt'], OrderData::timestamp($now));
-                $status = CheckoutStatus::from(OrderData::text($data['checkoutStatus']));
 
-                // Another request or webhook may have committed stronger evidence
-                // while this provider request was in flight. Keep that state.
-                if (in_array($status, [CheckoutStatus::Creating, CheckoutStatus::CreationUncertain], true) === false) {
-                    return $data;
-                }
-
-                // Retryable/unavailable failures leave the attempt in `creating`.
-                // Only a definitive rejection or ambiguous mutation changes state.
+                // Outcome certainty controls state; retry permission remains a
+                // separate persisted decision consulted by attempt reuse.
                 if ($failure->type() === CheckoutSessionFailureType::Uncertain || $failure->type() === CheckoutSessionFailureType::Incompatible) {
                     $data['checkoutStatus'] = CheckoutStatus::CreationUncertain->value;
                     $data['creationUncertainAt'] ??= OrderData::timestamp($now);
-                } elseif ($failure->type() === CheckoutSessionFailureType::Rejected) {
+                } elseif ($failure->isRetryable() === false) {
                     $data['checkoutStatus'] = CheckoutStatus::CreationFailed->value;
                     $data['creationFailedAt'] ??= OrderData::timestamp($now);
                 }
@@ -473,6 +506,17 @@ final class CheckoutSessionCreator
         );
     }
 
+    /** @param array<string, mixed> $providerFailure */
+    private function persistedFailureException(array $providerFailure): CheckoutSessionException
+    {
+        $type = CheckoutSessionFailureType::from(OrderData::text($providerFailure['type'] ?? null));
+
+        return new CheckoutSessionException(
+            errorCode: 'checkout.session_' . str_replace('provider_', '', $type->value),
+            retryable: false,
+        );
+    }
+
     private function presentation(
         UiMode $uiMode,
         OrderPage $page,
@@ -488,8 +532,17 @@ final class CheckoutSessionCreator
         );
     }
 
-    private function liveMode(): bool
+    private function liveMode(): ?bool
     {
-        return $this->configuration->stripe()->secretKeyMode() === CredentialMode::Live;
+        return match ($this->configuration->stripe()->secretKeyMode()) {
+            CredentialMode::Live => true,
+            CredentialMode::Test => false,
+            CredentialMode::Unknown => null,
+        };
+    }
+
+    private function credentialFingerprint(OrderCreationContext $order): string
+    {
+        return $this->configuration->stripe()->secretKeyFingerprint($order->pageUuid());
     }
 }

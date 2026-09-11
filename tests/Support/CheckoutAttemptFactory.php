@@ -77,6 +77,7 @@ final class CheckoutAttemptFactory
             guestReference: $guestReference,
             stripeApiVersion: '2026-07-29.dahlia',
             credentialMode: CredentialMode::Test,
+            credentialFingerprint: hash('sha256', 'test-credential'),
             createdAt: $createdAt,
         );
     }

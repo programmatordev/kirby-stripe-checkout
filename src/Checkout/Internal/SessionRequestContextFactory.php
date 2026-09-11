@@ -99,7 +99,8 @@ final class SessionRequestContextFactory
         $resolvedLanguageCode = $language?->code();
         $siteUrl = $this->siteUrl($resolvedLanguageCode);
         $initiatingUrl = $this->resolveInitiatingUrl($initiatingUrl, $siteUrl);
-        $isLiveMode = $configuration->stripe()->secretKeyMode() === CredentialMode::Live;
+        // Unknown/future key formats receive the stricter live transport policy.
+        $requiresHttps = $configuration->stripe()->secretKeyMode() !== CredentialMode::Test;
 
         return new SessionRequestContext(
             order: $order,
@@ -113,21 +114,21 @@ final class SessionRequestContextFactory
                 name: 'successDestination',
                 languageCode: $resolvedLanguageCode,
                 fallbackUrl: $initiatingUrl,
-                isLiveMode: $isLiveMode,
+                requiresHttps: $requiresHttps,
             ),
             cancelDestination: $this->resolveDestination(
                 value: $settings->cancelDestination(),
                 name: 'cancelDestination',
                 languageCode: $resolvedLanguageCode,
                 fallbackUrl: $initiatingUrl,
-                isLiveMode: $isLiveMode,
+                requiresHttps: $requiresHttps,
             ),
             returnDestination: $this->resolveDestination(
                 value: $settings->returnDestination(),
                 name: 'returnDestination',
                 languageCode: $resolvedLanguageCode,
                 fallbackUrl: $initiatingUrl,
-                isLiveMode: $isLiveMode,
+                requiresHttps: $requiresHttps,
             ),
         );
     }
@@ -181,7 +182,11 @@ final class SessionRequestContextFactory
     {
         $url = $this->kirby->site()->url($languageCode);
 
-        return $this->normalizeUrl($url, false, 'site.url');
+        return $this->normalizeUrl(
+            value: $url,
+            requiresHttps: false,
+            path: 'site.url',
+        );
     }
 
     private function resolveInitiatingUrl(?string $value, string $siteUrl): string
@@ -193,7 +198,12 @@ final class SessionRequestContextFactory
         // Unlike a configured destination, this optional request context can be
         // discarded safely when it is malformed or does not belong to this site.
         try {
-            $initiatingUrl = $this->normalizeUrl($value, false, 'checkout.initiatingUrl', removeResultKey: true);
+            $initiatingUrl = $this->normalizeUrl(
+                value: $value,
+                requiresHttps: false,
+                path: 'checkout.initiatingUrl',
+                removeResultKey: true,
+            );
         } catch (ConfigurationException) {
             return $siteUrl;
         }
@@ -206,7 +216,7 @@ final class SessionRequestContextFactory
         string $name,
         ?string $languageCode,
         string $fallbackUrl,
-        bool $isLiveMode,
+        bool $requiresHttps,
     ): string {
         if ($value === null) {
             return $fallbackUrl;
@@ -229,16 +239,20 @@ final class SessionRequestContextFactory
             $value = $page->url($languageCode);
         }
 
-        return $this->normalizeUrl($value, $isLiveMode, 'settings.' . $name);
+        return $this->normalizeUrl(
+            value: $value,
+            requiresHttps: $requiresHttps,
+            path: 'settings.' . $name,
+        );
     }
 
     private function normalizeUrl(
         string $value,
-        bool $isLiveMode,
+        bool $requiresHttps,
         string $path,
         bool $removeResultKey = false,
     ): string {
-        if (CheckoutUrlValidator::isDestination($value, $isLiveMode) === false) {
+        if (CheckoutUrlValidator::isDestination($value, $requiresHttps) === false) {
             throw new ConfigurationException('configuration.value_invalid', $path);
         }
 

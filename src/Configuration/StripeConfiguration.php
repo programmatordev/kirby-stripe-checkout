@@ -58,6 +58,16 @@ final class StripeConfiguration
         return $this->detectMode($this->secretKey, ['sk', 'rk']);
     }
 
+    /** Returns an opaque, scope-specific identity without exposing the credential. */
+    public function secretKeyFingerprint(string $scope): string
+    {
+        if ($this->secretKey === null || trim($scope) === '') {
+            throw new LogicException('A Stripe credential and fingerprint scope are required.');
+        }
+
+        return hash_hmac('sha256', $scope, $this->secretKey);
+    }
+
     public function publishableKeyMode(): CredentialMode
     {
         return $this->detectMode($this->publishableKey, ['pk']);

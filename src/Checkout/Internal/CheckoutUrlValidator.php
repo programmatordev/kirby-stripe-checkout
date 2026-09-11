@@ -9,7 +9,7 @@ final class CheckoutUrlValidator
 {
     public const RESULT_QUERY_KEY = '_stripe_checkout_result';
 
-    public static function isDestination(string $value, bool $liveMode): bool
+    public static function isDestination(string $value, bool $requiresHttps): bool
     {
         $parts = self::parts($value);
 
@@ -17,14 +17,14 @@ final class CheckoutUrlValidator
             return false;
         }
 
-        return self::isAllowedForMode($parts, $liveMode);
+        return self::isAllowedForHttpsPolicy($parts, $requiresHttps);
     }
 
-    public static function isPersistedDestination(string $value, bool $liveMode): bool
+    public static function isPersistedDestination(string $value, bool $requiresHttps): bool
     {
         $parts = self::parts($value);
 
-        if ($parts === null || isset($parts['fragment']) || self::isAllowedForMode($parts, $liveMode) === false) {
+        if ($parts === null || isset($parts['fragment']) || self::isAllowedForHttpsPolicy($parts, $requiresHttps) === false) {
             return false;
         }
 
@@ -82,12 +82,12 @@ final class CheckoutUrlValidator
     }
 
     /** @param array<string, int|string> $parts */
-    private static function isAllowedForMode(array $parts, bool $liveMode): bool
+    private static function isAllowedForHttpsPolicy(array $parts, bool $requiresHttps): bool
     {
         $scheme = strtolower((string) $parts['scheme']);
         $host = strtolower((string) $parts['host']);
 
-        return $liveMode === false
+        return $requiresHttps === false
             || $scheme === 'https'
             || self::isLocalHost($host);
     }

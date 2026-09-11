@@ -168,6 +168,24 @@ final class SessionRequestContextTest extends KirbyTestCase
         );
     }
 
+    public function testUnknownCredentialModeUsesTheLiveTransportPolicy(): void
+    {
+        $configuration = $this->configuration([
+            'settings' => [
+                'currency' => 'EUR',
+                'successDestination' => 'http://merchant.example/complete',
+            ],
+            'stripe' => ['secretKey' => 'opaque_future_key'],
+        ]);
+
+        $this->expectException(ConfigurationException::class);
+        (new SessionRequestContextFactory($this->kirby))->create(
+            $this->order(),
+            $configuration,
+            new DateTimeImmutable('2026-09-11T08:00:00Z'),
+        );
+    }
+
     public function testExternalOrMalformedInitiatingUrlFallsBackToTheSite(): void
     {
         $factory = new SessionRequestContextFactory($this->kirby);

@@ -296,6 +296,7 @@ final class OrderSerializer
             'idempotencyKey',
             'stripeApiVersion',
             'credentialMode',
+            'credentialFingerprint',
             'operation',
             'retryUntil',
             'source',
@@ -311,7 +312,7 @@ final class OrderSerializer
         OrderData::validateAllowedKeys($checkoutAttempt, $requiredKeys);
         OrderData::validateRequiredKeys($checkoutAttempt, $requiredKeys);
 
-        $digestFields = ['tokenHash', 'bindingFingerprint', 'requestFingerprint'];
+        $digestFields = ['tokenHash', 'bindingFingerprint', 'requestFingerprint', 'credentialFingerprint'];
 
         foreach ($digestFields as $key) {
             if (is_string($checkoutAttempt[$key]) === false || preg_match('/\A[a-f0-9]{64}\z/', $checkoutAttempt[$key]) !== 1) {
@@ -354,13 +355,14 @@ final class OrderSerializer
         }
 
         $urlFields = ['initiatingUrl', 'successUrl', 'cancelUrl', 'returnUrl'];
+        $requiresHttps = $credentialMode !== CredentialMode::Test;
 
         foreach ($urlFields as $field) {
             $url = OrderData::text($checkoutAttempt[$field]);
 
             // Reapply the mode-specific transport policy when reading content;
             // persisted snapshots are not trusted merely because creation checked them.
-            if (CheckoutUrlValidator::isPersistedDestination($url, $credentialMode === CredentialMode::Live) === false) {
+            if (CheckoutUrlValidator::isPersistedDestination($url, $requiresHttps) === false) {
                 throw new OrderDataException();
             }
         }
@@ -409,11 +411,9 @@ final class OrderSerializer
             }
         }
 
-        if (OrderData::boolean($failure['retryable']) !== in_array($type, [
-            CheckoutSessionFailureType::Retryable,
-            CheckoutSessionFailureType::Unavailable,
-            CheckoutSessionFailureType::Uncertain,
-        ], true)) {
+        $retryable = OrderData::boolean($failure['retryable']);
+
+        if ($retryable && in_array($type, [CheckoutSessionFailureType::Rejected, CheckoutSessionFailureType::Incompatible], true)) {
             throw new OrderDataException();
         }
 
