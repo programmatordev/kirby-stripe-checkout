@@ -5,15 +5,19 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Diagnostics;
 
 use Kirby\Cms\App;
+use Kirby\Uuid\Uuid;
+use Kirby\Uuid\Uuids;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderHookDispatcher;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
+use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderUuidValidator;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use Stripe\Stripe;
 
@@ -45,6 +49,7 @@ final class LocalDiagnostics
             $this->dependency('php', PHP_VERSION, version_compare(PHP_VERSION, '8.2.0', '>=')),
             $this->dependency('kirby', App::version(), version_compare((string) App::version(), '5.5.3', '>=')),
             $this->dependency('stripePhp', defined(Stripe::class . '::VERSION') ? Stripe::VERSION : null, class_exists(Stripe::class)),
+            $this->orderIdentity(),
         ];
 
         $configurationReport = (new RuntimeFactory($this->kirby))->configurationReport();
@@ -157,6 +162,39 @@ final class LocalDiagnostics
             'credential.configured',
             ['mode' => $mode->value],
         );
+    }
+
+    /** @return array{id: string, status: string, message: string, values: array<string, string>} */
+    private function orderIdentity(): array
+    {
+        if (Uuids::enabled() === false) {
+            return $this->check('orderIdentity', self::FAIL, 'orderIdentity.disabled');
+        }
+
+        // Calling a project-defined generator could consume a sequence number or
+        // trigger other project work merely by opening Diagnostics. Its concrete
+        // output is therefore checked only when Checkout issues a real token.
+        if (Uuid::$generator !== null) {
+            return $this->check('orderIdentity', self::UNKNOWN, 'orderIdentity.custom');
+        }
+
+        $option = $this->kirby->option('content.uuid');
+
+        if (is_array($option)) {
+            $option = $option['format'] ?? null;
+        }
+
+        $sample = $option === 'uuid-v4'
+            ? '00000000-0000-4000-8000-000000000000'
+            : str_repeat('a', 16);
+
+        try {
+            OrderUuidValidator::validate($sample);
+        } catch (OrderDataException) {
+            return $this->check('orderIdentity', self::FAIL, 'orderIdentity.incompatible');
+        }
+
+        return $this->check('orderIdentity', self::PASS, 'orderIdentity.ready');
     }
 
     /** @return array{id: string, status: string, message: string, values: array<string, string>} */

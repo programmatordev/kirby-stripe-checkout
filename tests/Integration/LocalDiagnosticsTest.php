@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
+use Kirby\Uuid\Uuid;
+use Kirby\Uuid\Uuids;
 use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
@@ -20,6 +22,7 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->assertSame(LocalDiagnostics::PASS, $checks['php']['status']);
         $this->assertSame(LocalDiagnostics::PASS, $checks['kirby']['status']);
         $this->assertSame(LocalDiagnostics::PASS, $checks['stripePhp']['status']);
+        $this->assertSame(LocalDiagnostics::PASS, $checks['orderIdentity']['status']);
         $this->assertSame(LocalDiagnostics::PASS, $checks['configuration']['status']);
         $this->assertSame(LocalDiagnostics::WARNING, $checks['secretKey']['status']);
         $this->assertSame(LocalDiagnostics::PASS, $checks['publishableKey']['status']);
@@ -115,6 +118,65 @@ final class LocalDiagnosticsTest extends KirbyTestCase
 
         $this->assertSame(LocalDiagnostics::PASS, $checks['currency']['status']);
         $this->assertSame(LocalDiagnostics::PASS, $checks['defaultRequiresShipping']['status']);
+    }
+
+    public function testReportsPageSlugSettingsThatWouldChangeOrderUuids(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(options: [
+            'content.uuid' => 'uuid-v4',
+            'slugs.maxlength' => 16,
+        ]);
+        $this->kirby = $this->environment->app();
+        $report = (new LocalDiagnostics($this->kirby))->report();
+        $checks = array_column($report['checks'], null, 'id');
+
+        $this->assertSame(LocalDiagnostics::FAIL, $report['status']);
+        $this->assertSame(LocalDiagnostics::FAIL, $checks['orderIdentity']['status']);
+        $this->assertSame('orderIdentity.incompatible', $checks['orderIdentity']['message']);
+    }
+
+    public function testReportsDisabledContentUuids(): void
+    {
+        $previousUuidState = Uuids::$enabled;
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(options: ['content.uuid' => false]);
+        $this->kirby = $this->environment->app();
+
+        try {
+            $report = (new LocalDiagnostics($this->kirby))->report();
+            $checks = array_column($report['checks'], null, 'id');
+
+            $this->assertSame(LocalDiagnostics::FAIL, $report['status']);
+            $this->assertSame(LocalDiagnostics::FAIL, $checks['orderIdentity']['status']);
+            $this->assertSame('orderIdentity.disabled', $checks['orderIdentity']['message']);
+        } finally {
+            Uuids::$enabled = $previousUuidState;
+        }
+    }
+
+    public function testDoesNotInvokeACustomUuidGeneratorDuringDiagnostics(): void
+    {
+        $calls = 0;
+        $previousGenerator = Uuid::$generator;
+
+        try {
+            Uuid::$generator = static function (int $length) use (&$calls): string {
+                $calls++;
+
+                return 'custom-order-identity';
+            };
+            $checks = array_column(
+                (new LocalDiagnostics($this->kirby))->report()['checks'],
+                null,
+                'id',
+            );
+
+            $this->assertSame(0, $calls);
+            $this->assertSame(LocalDiagnostics::UNKNOWN, $checks['orderIdentity']['status']);
+        } finally {
+            Uuid::$generator = $previousGenerator;
+        }
     }
 
     public function testReportsSettingsOwnershipProblemsWithoutThrowing(): void

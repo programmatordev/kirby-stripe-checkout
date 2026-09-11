@@ -7,11 +7,13 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 use Brick\Money\Money;
 use DateTimeImmutable;
 use Kirby\Uuid\Uuid;
+use Kirby\Uuid\Uuids;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptToken;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
@@ -110,6 +112,47 @@ final class OrderIdentityTest extends TestCase
         yield ['default'];
         yield ['v4'];
         yield ['custom'];
+    }
+
+    public function testAttemptTokensRejectGeneratedUuidsThatKirbyWouldChangeAsPageSlugs(): void
+    {
+        $environment = KirbyTestEnvironment::start();
+        $previousGenerator = Uuid::$generator;
+
+        try {
+            Uuid::$generator = static fn(int $length): string => 'CustomOrderIdentity';
+
+            try {
+                AttemptToken::generate(
+                    randomBytes: static fn(int $length): string => str_repeat('n', $length),
+                );
+                $this->fail('Expected the normalized Page slug to make the generated UUID incompatible.');
+            } catch (OrderDataException $error) {
+                $this->assertSame('order.uuid_slug_incompatible', $error->errorCode());
+            }
+        } finally {
+            Uuid::$generator = $previousGenerator;
+            $environment->close();
+        }
+    }
+
+    public function testAttemptTokensRequireKirbyContentUuids(): void
+    {
+        $previousUuidState = Uuids::$enabled;
+        $environment = KirbyTestEnvironment::start(options: ['content.uuid' => false]);
+
+        try {
+            AttemptToken::generate(
+                randomBytes: static fn(int $length): string => str_repeat('n', $length),
+                uuidGenerator: static fn(): string => 'order-identity',
+            );
+            $this->fail('Expected disabled content UUIDs to prevent attempt-token issuance.');
+        } catch (OrderDataException $error) {
+            $this->assertSame('order.uuid_unavailable', $error->errorCode());
+        } finally {
+            $environment->close();
+            Uuids::$enabled = $previousUuidState;
+        }
     }
 
     private function assertUuidMatchesFormat(string $format, string $uuid): void

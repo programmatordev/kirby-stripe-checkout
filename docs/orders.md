@@ -19,6 +19,8 @@ if ($user = kirby()->user()) {
 
 Singular lookups accept the full Page UUID, not a slug, page path, order number or email. A missing, malformed, invalid or differently owned order returns `null`. User queries compare the stored native `user://` reference; they never match guest orders by email. Kirby UUIDs must be enabled.
 
+The generated UUID ID is also the Order Page slug. Kirby's default short format and UUID-v4 format work directly. A custom UUID generator must return an ID that Kirby's Page-slug normalization leaves unchanged. Checkout validates every generated ID before exposing its attempt token. Diagnostics checks the bundled formats without creating content; when a custom generator is active, it reports that the concrete output will be validated when Checkout starts instead of invoking project code merely by opening Diagnostics.
+
 These are trusted server-side queries, not authorization for a public endpoint. On a customer account page, authenticate the visitor and use `ordersFor()`/`orderFor()` with that user. Do not expose site-wide results or every order field as public JSON. The order Pages themselves cannot render as frontend pages.
 
 Reads do not contact Stripe, open a cart session, create missing content, or run cleanup. Invalid children are excluded; broken container storage raises `Order\Exception\OrderQueryException` instead of silently returning an empty store. Diagnostics reports storage problems without customer data.

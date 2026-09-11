@@ -9,6 +9,7 @@ use Kirby\Uuid\Uuid;
 use LogicException;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderUuidValidator;
 use SensitiveParameter;
 use Throwable;
 
@@ -71,6 +72,10 @@ final readonly class AttemptToken
         ?Closure $uuidGenerator = null,
     ): self {
         $orderUuid = ($uuidGenerator ?? static fn(): string => Uuid::generate())();
+
+        // Page::create() normalizes every slug. Validate before exposing a token
+        // whose embedded UUID could not address its eventual Order unchanged.
+        OrderUuidValidator::validate($orderUuid);
 
         return self::forOrder($orderUuid, $randomBytes);
     }
