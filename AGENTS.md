@@ -48,6 +48,8 @@
 - Use precise role names such as `Resolver`, `Factory`, `Catalogue`, `Record`, `Reference`, and `Formatter` consistently.
 - Use `Reference` for an unresolved identifier and `Record` for untrusted provider data. Name validated domain values directly, such as `Product`, `Price`, and `StripePrice`; validation is a class guarantee, not a `Resolved` prefix.
 - Keep mapped Page values as ordinary Kirby fields. Name plugin-owned Field converters into typed product-domain values with the singular `toProduct*()` prefix, such as `toProductOptions()` and `toProductStripePrice()`; do not apply this prefix to unrelated conversions.
+- Name methods for the precise result or action visible at the call site. Qualify ambiguous names when context matters, such as `httpStatus()`, `cached()`, and `normalizeDirectInput()`.
+- Keep variable, method, type, and persisted-data terminology aligned for the same domain concept. Prefer explicit names such as `lineItem`, `requestNormalizer`, and `options` over shortened or competing terms.
 - Avoid vague names such as `Manager`, `Service`, `Helper`, and `Handler` when a more specific responsibility can be named.
 - Keep related PHP classes, Panel components, tests, factory methods, and documentation terminology aligned when a concept is renamed.
 
