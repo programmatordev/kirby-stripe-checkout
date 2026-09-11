@@ -267,7 +267,7 @@ final class OrderSerializer
         return new OrderCreationContext(
             uuid: OrderData::text($data['uuid']),
             orderNumber: OrderData::text($data['orderNumber'], 80),
-            sourceType: CheckoutSource::from(OrderData::text($checkoutAttempt['source'])),
+            checkoutSource: CheckoutSource::from(OrderData::text($checkoutAttempt['source'])),
             cartRevision: OrderData::nullableString($checkoutAttempt['cartRevision']),
             userUuid: OrderData::nullableString($data['userUuid'] ?? null),
             languageCode: OrderData::nullableString($data['languageCode'] ?? null),

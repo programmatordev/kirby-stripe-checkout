@@ -19,6 +19,7 @@ use Kirby\Filesystem\F;
 use Kirby\Form\Form;
 use Kirby\Toolkit\I18n;
 use Kirby\Uuid\Uri;
+use Kirby\Uuid\Uuid;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
@@ -705,9 +706,10 @@ final class OrderPageStoreTest extends KirbyTestCase
         $price = Money::of('16', 'EUR');
         $product = new Product(new ProductRequest('product', 2), 'Product', false, new Price($price));
         $context = (new OrderCreationContextFactory($this->kirby))->create(
+            uuid: Uuid::generate(),
             lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)],
             currency: 'EUR',
-            source: CheckoutSource::Direct,
+            checkoutSource: CheckoutSource::Direct,
             cartRevision: null,
             userUuid: $userUuid,
             languageCode: $this->kirby->languageCode(),

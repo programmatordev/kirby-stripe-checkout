@@ -189,15 +189,15 @@ final class SessionRequestCustomizerTest extends KirbyTestCase
             new Price($price),
         );
         $order = new OrderCreationContext(
-            'Order123',
-            'ORD-ORDER123',
-            CheckoutSource::Direct,
-            null,
-            null,
-            null,
-            UiMode::Hosted,
-            'EUR',
-            [OrderLineItemSnapshot::fromProduct($product, $price)],
+            uuid: 'Order123',
+            orderNumber: 'ORD-ORDER123',
+            checkoutSource: CheckoutSource::Direct,
+            cartRevision: null,
+            userUuid: null,
+            languageCode: null,
+            uiMode: UiMode::Hosted,
+            currency: 'EUR',
+            lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)],
         );
 
         return new SessionRequestContext(

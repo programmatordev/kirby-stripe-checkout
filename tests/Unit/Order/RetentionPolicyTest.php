@@ -84,7 +84,7 @@ final class RetentionPolicyTest extends TestCase
         $context = new OrderCreationContext(
             uuid: 'example',
             orderNumber: 'ORD-EXAMPLE',
-            sourceType: CheckoutSource::Direct,
+            checkoutSource: CheckoutSource::Direct,
             cartRevision: null,
             userUuid: null,
             languageCode: null,

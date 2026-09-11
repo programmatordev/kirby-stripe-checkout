@@ -18,15 +18,21 @@ use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 
 final class AttemptBindingTest extends TestCase
 {
-    public function testGenerationUsesExactly32RandomBytesAndTransportRoundTrips(): void
+    public function testGenerationCarriesAKirbyUuidAndExactly32RandomBytes(): void
     {
-        $token = AttemptToken::generate(function (int $length): string {
-            $this->assertSame(32, $length);
-            return str_repeat("\xff", $length);
-        });
-        $this->assertSame(43, strlen($token->value()));
-        $this->assertMatchesRegularExpression('/^[A-Za-z0-9_-]+$/', $token->value());
+        $token = AttemptToken::generate(
+            randomBytes: function (int $length): string {
+                $this->assertSame(32, $length);
+
+                return str_repeat("\xff", $length);
+            },
+            uuidGenerator: static fn(): string => 'kirbyorderuuid01',
+        );
+
+        $this->assertSame('kirbyorderuuid01', $token->orderUuid());
+        $this->assertMatchesRegularExpression('/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/', $token->value());
         $this->assertSame($token->hash(), (new AttemptToken($token->value()))->hash());
+        $this->assertSame($token->orderUuid(), (new AttemptToken($token->value()))->orderUuid());
         $this->assertNotSame($token->value(), $token->hash());
         $this->assertNotSame(AttemptToken::generate()->hash(), AttemptToken::generate()->hash());
     }
@@ -34,7 +40,10 @@ final class AttemptBindingTest extends TestCase
     public function testInvalidEntropyCannotSilentlyWeakenAToken(): void
     {
         $this->expectException(LogicException::class);
-        AttemptToken::generate(static fn(int $length): string => str_repeat('x', $length - 1));
+        AttemptToken::generate(
+            randomBytes: static fn(int $length): string => str_repeat('x', $length - 1),
+            uuidGenerator: static fn(): string => 'kirbyorderuuid01',
+        );
     }
 
     #[DataProvider('invalidTokens')]
@@ -49,10 +58,12 @@ final class AttemptBindingTest extends TestCase
     public static function invalidTokens(): iterable
     {
         yield 'empty' => [''];
-        yield 'short' => [str_repeat('a', 31)];
-        yield 'long' => [str_repeat('a', 129)];
-        yield 'padding' => [str_repeat('a', 42) . '='];
-        yield 'newline' => [str_repeat('a', 43) . "\n"];
+        yield 'old opaque token' => [str_repeat('a', 43)];
+        yield 'missing nonce' => ['a2lyYnlvcmRlcnV1aWQwMQ.'];
+        yield 'non-canonical UUID encoding' => ['a2lyYnlvcmRlcnV1aWQwMQ==.' . str_repeat('a', 43)];
+        yield 'short nonce' => ['a2lyYnlvcmRlcnV1aWQwMQ.' . str_repeat('a', 42)];
+        yield 'padding' => ['a2lyYnlvcmRlcnV1aWQwMQ.' . str_repeat('a', 42) . '='];
+        yield 'newline' => ['a2lyYnlvcmRlcnV1aWQwMQ.' . str_repeat('a', 43) . "\n"];
     }
 
     public function testSameBindingCanBeRetriedWhileANewActionGetsANewToken(): void
@@ -61,7 +72,7 @@ final class AttemptBindingTest extends TestCase
         $first = AttemptBinding::cart($cart, hash('sha256', 'request'), guestReference: 'guest');
         $retry = AttemptBinding::cart($cart, hash('sha256', 'request'), guestReference: 'guest');
         $first->assertMatches($retry);
-        $this->assertSame(CheckoutSource::Cart, $first->source());
+        $this->assertSame(CheckoutSource::Cart, $first->checkoutSource());
         $this->assertSame($first->fingerprint(), $retry->fingerprint());
         $this->assertNotSame(AttemptToken::generate()->hash(), AttemptToken::generate()->hash());
     }
@@ -105,7 +116,7 @@ final class AttemptBindingTest extends TestCase
             new ProductRequest('bag'),
         ], $fingerprint, guestReference: 'guest');
         $first->assertMatches($same);
-        $this->assertSame(CheckoutSource::Direct, $first->source());
+        $this->assertSame(CheckoutSource::Direct, $first->checkoutSource());
 
         foreach ([
             [new ProductRequest('bag'), new ProductRequest('shirt', 1, ['colour' => 'blue', 'size' => 'large'])],

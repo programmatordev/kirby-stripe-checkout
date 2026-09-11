@@ -14,7 +14,9 @@ The pipeline validates products, prices, configuration, and the complete request
 4. Saves the returned Session ID and changes the order to `open`.
 5. Returns either the hosted Checkout URL or the embedded client secret for the current response only.
 
-The raw attempt token, hosted URL, and client secret are not stored. Repeating the same attempt token reuses the same order. An uncertain request may be sent again only with the exact saved request and key and only within the internal 23-hour deadline; request customization is not run again. A definite provider rejection becomes `creation_failed`, while a network or incompatible-response uncertainty becomes `creation_uncertain` for later diagnosis or recovery.
+Before submission, the plugin generates an opaque attempt token containing a Kirby-generated future order UUID and an independent random nonce. The UUID lets a retry locate the Order Page directly; the nonce prevents the public order UUID from being the complete retry token. Only the hash of the complete token is stored. Repeating that exact token locates the order by its UUID, then verifies the complete token hash and initiating context before reusing it.
+
+The hosted URL and client secret are not stored either. An uncertain request may be sent again only with the exact saved request and key and only within the internal 23-hour deadline; request customization is not run again. A definite provider rejection becomes `creation_failed`, while a network or incompatible-response uncertainty becomes `creation_uncertain` for later diagnosis or recovery.
 
 ## Add safe parameters
 

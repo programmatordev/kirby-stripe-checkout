@@ -55,6 +55,12 @@ final class CheckoutSessionCreator
         DateTimeImmutable $now,
         ?string $initiatingUrl = null,
     ): CheckoutSessionPresentation {
+        // The structured token reserves the only Order identity this request
+        // may create or reuse. Reject mismatches before configuration or writes.
+        if ($token->orderUuid() !== $order->uuid()) {
+            throw new CheckoutInputException('checkout.attempt_conflict');
+        }
+
         // The preparation callback runs only when this token has no persisted
         // order. Null values therefore distinguish reuse without rebuilding the
         // request from configuration that may have changed since the first POST.
@@ -62,7 +68,7 @@ final class CheckoutSessionCreator
         $sessionRequest = null;
         $checkoutAttempt = null;
         $page = $this->orderPageStore->createAttemptOnce(
-            tokenHash: $token->hash(),
+            orderUuid: $token->orderUuid(),
             prepare: function () use ($order, $binding, $token, $guestReference, $now, $initiatingUrl, &$requestContext, &$sessionRequest, &$checkoutAttempt): array {
                 $requestContext = $this->requestContextFactory->create(
                     order: $order,
@@ -93,6 +99,7 @@ final class CheckoutSessionCreator
                 page: $page,
                 incomingOrder: $order,
                 binding: $binding,
+                token: $token,
                 guestReference: $guestReference,
                 now: $now,
             );
@@ -112,6 +119,7 @@ final class CheckoutSessionCreator
         OrderPage $page,
         OrderCreationContext $incomingOrder,
         AttemptBinding $binding,
+        AttemptToken $token,
         ?string $guestReference,
         DateTimeImmutable $now,
     ): CheckoutSessionPresentation {
@@ -131,6 +139,7 @@ final class CheckoutSessionCreator
             incomingOrder: $incomingOrder,
             checkoutAttempt: $checkoutAttempt,
             binding: $binding,
+            token: $token,
             guestReference: $guestReference,
         );
 
@@ -194,13 +203,18 @@ final class CheckoutSessionCreator
         OrderCreationContext $incomingOrder,
         array $checkoutAttempt,
         AttemptBinding $binding,
+        AttemptToken $token,
         ?string $guestReference,
     ): void {
         $binding->assertCompatible($incomingOrder, $guestReference);
         $binding->assertMatchesFingerprint(OrderData::text($checkoutAttempt['bindingFingerprint']));
 
+        // The embedded UUID locates a candidate Page; the nonce-bearing full
+        // token hash proves that candidate belongs to this exact attempt.
         if (
-            $persistedOrder->currency() !== $incomingOrder->currency()
+            hash_equals(OrderData::text($checkoutAttempt['tokenHash']), $token->hash()) === false
+            || $persistedOrder->uuid() !== $token->orderUuid()
+            || $persistedOrder->currency() !== $incomingOrder->currency()
             || $persistedOrder->uiMode() !== $incomingOrder->uiMode()
             || $checkoutAttempt['stripeApiVersion'] !== $this->stripeApiVersion
             || $checkoutAttempt['credentialMode'] !== $this->configuration->stripe()->secretKeyMode()->value

@@ -44,6 +44,12 @@ final readonly class CheckoutAttempt
             throw new OrderDataException();
         }
 
+        // The token and context must reserve the same future Kirby identity.
+        // This invariant ensures that one token can address only one Order.
+        if ($token->orderUuid() !== $order->uuid()) {
+            throw new OrderDataException();
+        }
+
         OrderData::text($stripeApiVersion, 80);
 
         if (preg_match('/\A[a-f0-9]{64}\z/', $credentialFingerprint) !== 1) {
@@ -97,7 +103,7 @@ final readonly class CheckoutAttempt
             'credentialFingerprint' => $this->credentialFingerprint,
             'operation' => self::OPERATION,
             'retryUntil' => OrderData::timestamp($this->retryUntil),
-            'source' => $this->order->sourceType()->value,
+            'source' => $this->order->checkoutSource()->value,
             'cartRevision' => $this->order->cartRevision(),
             'guestReference' => $this->guestReference,
             'uiMode' => $this->order->uiMode()->value,

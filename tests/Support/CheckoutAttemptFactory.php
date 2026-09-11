@@ -26,6 +26,7 @@ final class CheckoutAttemptFactory
         OrderCreationContext $order,
         DateTimeImmutable $createdAt,
         ?string $guestReference = 'guest',
+        ?AttemptToken $token = null,
     ): CheckoutAttempt {
         $context = new SessionRequestContext(
             order: $order,
@@ -48,7 +49,7 @@ final class CheckoutAttemptFactory
         $bindingGuestReference = $order->userUuid() === null
             ? $guestReference ?? 'binding-guest'
             : null;
-        $binding = $order->sourceType() === CheckoutSource::Cart
+        $binding = $order->checkoutSource() === CheckoutSource::Cart
             ? AttemptBinding::cart(
                 cart: new CartSnapshot(
                     id: 'cart',
@@ -67,13 +68,17 @@ final class CheckoutAttemptFactory
                 userUuid: $order->userUuid(),
                 guestReference: $bindingGuestReference,
             );
+        $token ??= AttemptToken::forOrder(
+            $order->uuid(),
+            static fn(int $length): string => str_repeat('a', $length),
+        );
 
         return new CheckoutAttempt(
             order: $order,
             context: $context,
             request: $request,
             binding: $binding,
-            token: new AttemptToken(str_repeat('a', 32)),
+            token: $token,
             guestReference: $guestReference,
             stripeApiVersion: '2026-07-29.dahlia',
             credentialMode: CredentialMode::Test,

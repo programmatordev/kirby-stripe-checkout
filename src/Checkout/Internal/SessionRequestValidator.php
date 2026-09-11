@@ -35,6 +35,8 @@ final class SessionRequestValidator
         'ui_mode',
     ];
 
+    // These parameters alter flows the current order and reconciliation models
+    // do not yet represent, so even the advanced factory cannot enable them.
     private const UNSUPPORTED_TOP_LEVEL_FIELDS = [
         'adaptive_pricing',
         'after_expiration',
@@ -57,6 +59,7 @@ final class SessionRequestValidator
         'subscription_data',
     ];
 
+    // Reject the same unsupported capabilities wherever Stripe nests them.
     private const UNSUPPORTED_NESTED_FIELDS = [
         'adjustable_quantity',
         'application_fee_amount',

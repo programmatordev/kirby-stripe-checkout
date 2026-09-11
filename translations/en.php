@@ -250,6 +250,7 @@ return [
     'programmatordev.stripe-checkout.diagnostics.configuration.invalid' => '{code} at {path}',
     'programmatordev.stripe-checkout.diagnostics.credential.configured' => 'Configured ({mode} mode detected).',
     'programmatordev.stripe-checkout.diagnostics.credential.missing' => 'Not configured yet.',
+    'programmatordev.stripe-checkout.diagnostics.credential.notRequired' => 'Not required for hosted Checkout.',
     'programmatordev.stripe-checkout.diagnostics.credential.unknown' => 'Configuration must be valid before this can be checked.',
     'programmatordev.stripe-checkout.diagnostics.hubPage.ready' => 'The protected Stripe Checkout Page is ready.',
     'programmatordev.stripe-checkout.diagnostics.hubPage.missing' => 'The Stripe Checkout Page could not be initialized automatically.',

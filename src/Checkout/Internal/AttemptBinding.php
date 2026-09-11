@@ -25,7 +25,7 @@ final readonly class AttemptBinding
 
     /** @param list<array<string, mixed>> $selection */
     private function __construct(
-        private CheckoutSource $source,
+        private CheckoutSource $checkoutSource,
         private ?string $userUuid,
         private ?string $guestReference,
         string $contextFingerprint,
@@ -57,7 +57,7 @@ final readonly class AttemptBinding
         // The caller supplies the fingerprint of fully resolved Checkout context;
         // these selection-only values cannot represent prices or navigation yet.
         $this->fingerprint = hash('sha256', json_encode([
-            $source->value,
+            $checkoutSource->value,
             $userUuid,
             $guestReference,
             $contextFingerprint,
@@ -81,7 +81,7 @@ final readonly class AttemptBinding
         // context fingerprint must still cover current commerce facts, which can change
         // without a cart mutation (for example, a merchant changing a price).
         return new self(
-            source: CheckoutSource::Cart,
+            checkoutSource: CheckoutSource::Cart,
             userUuid: $userUuid,
             guestReference: $guestReference,
             contextFingerprint: $contextFingerprint,
@@ -103,7 +103,7 @@ final readonly class AttemptBinding
         }
 
         return new self(
-            source: CheckoutSource::Direct,
+            checkoutSource: CheckoutSource::Direct,
             userUuid: $userUuid,
             guestReference: $guestReference,
             contextFingerprint: $contextFingerprint,
@@ -113,9 +113,9 @@ final readonly class AttemptBinding
         );
     }
 
-    public function source(): CheckoutSource
+    public function checkoutSource(): CheckoutSource
     {
-        return $this->source;
+        return $this->checkoutSource;
     }
 
     public function fingerprint(): string
@@ -140,7 +140,7 @@ final readonly class AttemptBinding
     public function assertCompatible(OrderCreationContext $order, ?string $guestReference): void
     {
         if (
-            $this->source !== $order->sourceType()
+            $this->checkoutSource !== $order->checkoutSource()
             || $this->userUuid !== $order->userUuid()
             || $this->guestReference !== $guestReference
         ) {

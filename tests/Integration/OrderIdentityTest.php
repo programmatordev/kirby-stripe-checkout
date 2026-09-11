@@ -10,6 +10,7 @@ use Kirby\Uuid\Uuid;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptToken;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
@@ -46,14 +47,15 @@ final class OrderIdentityTest extends TestCase
             $nativeUuid = $page->uuid();
             $id = $nativeUuid->id();
             $reference = $nativeUuid->toString();
+            $attemptToken = AttemptToken::generate(
+                randomBytes: static fn(int $length): string => str_repeat('n', $length),
+            );
 
-            if ($format === 'default') {
-                $this->assertMatchesRegularExpression('/\A[a-z0-9]{16}\z/', $id);
-            } elseif ($format === 'v4') {
-                $this->assertMatchesRegularExpression('/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/', $id);
-            } else {
-                $this->assertSame('custom-order-identity', $id);
-            }
+            $this->assertUuidMatchesFormat($format, $id);
+
+            // The attempt token reserves the future Order identity. Generate it
+            // through Kirby as well, so custom UUID formats remain authoritative.
+            $this->assertUuidMatchesFormat($format, $attemptToken->orderUuid());
 
             $number = (new OrderNumberFormatter())->format($id);
             $price = Money::of('16', 'EUR');
@@ -61,7 +63,7 @@ final class OrderIdentityTest extends TestCase
             $context = new OrderCreationContext(
                 uuid: $id,
                 orderNumber: $number,
-                sourceType: CheckoutSource::Direct,
+                checkoutSource: CheckoutSource::Direct,
                 cartRevision: null,
                 userUuid: null,
                 languageCode: null,
@@ -108,5 +110,22 @@ final class OrderIdentityTest extends TestCase
         yield ['default'];
         yield ['v4'];
         yield ['custom'];
+    }
+
+    private function assertUuidMatchesFormat(string $format, string $uuid): void
+    {
+        if ($format === 'default') {
+            $this->assertMatchesRegularExpression('/\A[a-z0-9]{16}\z/', $uuid);
+
+            return;
+        }
+
+        if ($format === 'v4') {
+            $this->assertMatchesRegularExpression('/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/', $uuid);
+
+            return;
+        }
+
+        $this->assertSame('custom-order-identity', $uuid);
     }
 }

@@ -267,15 +267,15 @@ final class SessionRequestContextTest extends KirbyTestCase
         );
 
         return new OrderCreationContext(
-            'Abc123def456GHI7',
-            'ORD-ABC123DEF456GHI7',
-            CheckoutSource::Direct,
-            null,
-            null,
-            $languageCode,
-            $uiMode,
-            'EUR',
-            [OrderLineItemSnapshot::fromProduct($product, $price)],
+            uuid: 'Abc123def456GHI7',
+            orderNumber: 'ORD-ABC123DEF456GHI7',
+            checkoutSource: CheckoutSource::Direct,
+            cartRevision: null,
+            userUuid: null,
+            languageCode: $languageCode,
+            uiMode: $uiMode,
+            currency: 'EUR',
+            lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)],
         );
     }
 

@@ -499,9 +499,10 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $price = Money::of('16', 'EUR');
         $product = new Product(new ProductRequest('product', 1), 'Product', false, new Price($price));
         $context = (new OrderCreationContextFactory($this->kirby))->create(
+            uuid: Uuid::generate(),
             lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)],
             currency: 'EUR',
-            source: CheckoutSource::Direct,
+            checkoutSource: CheckoutSource::Direct,
             cartRevision: null,
             userUuid: null,
             languageCode: $languageCode,

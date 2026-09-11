@@ -42,7 +42,7 @@ final class OrderValuesTest extends TestCase
         $this->assertSame('Abc123def456GHI7', $context->uuid());
         $this->assertSame('page://Abc123def456GHI7', $context->pageUuid());
         $this->assertSame('ORD-ABC123DEF456GHI7', $context->orderNumber());
-        $this->assertSame(CheckoutSource::Cart, $context->sourceType());
+        $this->assertSame(CheckoutSource::Cart, $context->checkoutSource());
         $this->assertSame('revision', $context->cartRevision());
         $this->assertNull($context->userUuid());
         $this->assertSame('en', $context->languageCode());
@@ -239,7 +239,7 @@ final class OrderValuesTest extends TestCase
 
     public function testDirectAndSingleLanguageFactsRemainExplicit(): void
     {
-        $context = $this->context(source: CheckoutSource::Direct, revision: null, language: null, user: 'user://customer');
+        $context = $this->context(checkoutSource: CheckoutSource::Direct, revision: null, language: null, user: 'user://customer');
         $createdAt = new DateTimeImmutable();
         $data = OrderSerializer::creation(
             context: $context,
@@ -562,7 +562,7 @@ final class OrderValuesTest extends TestCase
 
         match ($kind) {
             'cart revision' => $this->context(revision: null),
-            'direct revision' => $this->context(source: CheckoutSource::Direct),
+            'direct revision' => $this->context(checkoutSource: CheckoutSource::Direct),
             'user id' => $this->context(user: 'customer@example.com'),
             'user UUID path' => $this->context(user: 'user://customer/path'),
             'empty language' => $this->context(language: ''),
@@ -752,12 +752,12 @@ final class OrderValuesTest extends TestCase
     }
 
     /** @param array<array-key, OrderLineItemSnapshot>|null $lineItems */
-    private function context(?array $lineItems = null, CheckoutSource $source = CheckoutSource::Cart, ?string $revision = 'revision', ?string $language = 'en', ?string $user = null): OrderCreationContext
+    private function context(?array $lineItems = null, CheckoutSource $checkoutSource = CheckoutSource::Cart, ?string $revision = 'revision', ?string $language = 'en', ?string $user = null): OrderCreationContext
     {
         return new OrderCreationContext(
             uuid: 'Abc123def456GHI7',
             orderNumber: 'ORD-ABC123DEF456GHI7',
-            sourceType: $source,
+            checkoutSource: $checkoutSource,
             cartRevision: $revision,
             userUuid: $user,
             languageCode: $language,

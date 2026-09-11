@@ -24,6 +24,8 @@ use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
  */
 final class SessionRequestContextFactory
 {
+    // Stripe does not expose Checkout's supported locales through the API.
+    // Normalize Kirby locales against this documented list and fall back to auto.
     private const SUPPORTED_STRIPE_LOCALES = [
         'auto',
         'bg',

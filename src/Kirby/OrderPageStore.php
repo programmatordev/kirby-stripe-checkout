@@ -168,24 +168,26 @@ final class OrderPageStore
     }
 
     /**
-     * Serializes the token lookup with local creation, then releases the lock.
+     * Serializes the identity lookup with local creation, then releases the lock.
+     *
+     * The structured attempt token reserves this Kirby UUID before submission.
+     * Because Order slugs equal their UUID IDs, the persisted Page is also the
+     * durable lookup for retries of that attempt.
      * The callback prepares values only; post-commit lifecycle delivery and all
      * network work happen after the coordination lock is released.
      *
      * @param Closure(): array{OrderCreationContext, CheckoutAttempt, DateTimeImmutable} $prepare
      */
-    public function createAttemptOnce(string $tokenHash, Closure $prepare): OrderPage
+    public function createAttemptOnce(string $orderUuid, Closure $prepare): OrderPage
     {
-        if (preg_match('/\A[a-f0-9]{64}\z/', $tokenHash) !== 1) {
-            throw new OrderDataException();
-        }
+        $pageUuid = OrderData::uuid('page://' . $orderUuid);
 
         $created = false;
         $page = OrderWriteLock::run(
             $this->kirby,
-            'checkout-attempt:' . $tokenHash,
-            function () use ($tokenHash, $prepare, &$created): OrderPage {
-                $existing = $this->orderByAttemptTokenHash($tokenHash);
+            'checkout-attempt:' . $orderUuid,
+            function () use ($orderUuid, $pageUuid, $prepare, &$created): OrderPage {
+                $existing = $this->order($pageUuid);
 
                 if ($existing !== null) {
                     return $existing;
@@ -193,6 +195,10 @@ final class OrderPageStore
 
                 [$context, $checkoutAttempt, $createdAt] = $prepare();
                 $created = true;
+
+                if ($context->uuid() !== $orderUuid) {
+                    throw new OrderDataException();
+                }
 
                 return $this->persistCreation(
                     context: $context,
@@ -257,25 +263,6 @@ final class OrderPageStore
         } catch (OrderStorageException) {
             throw new OrderQueryException();
         }
-    }
-
-    /** Looks up one existing attempt without making malformed children authoritative. */
-    public function orderByAttemptTokenHash(string $tokenHash): ?OrderPage
-    {
-        if (preg_match('/\A[a-f0-9]{64}\z/', $tokenHash) !== 1) {
-            return null;
-        }
-
-        foreach ($this->orders() as $page) {
-            $data = $this->data($page);
-            $checkoutAttempt = OrderData::map($data['checkoutAttempt']);
-
-            if ($page instanceof OrderPage && hash_equals(OrderData::text($checkoutAttempt['tokenHash']), $tokenHash)) {
-                return $page;
-            }
-        }
-
-        return null;
     }
 
     /** @return Pages<Page> */

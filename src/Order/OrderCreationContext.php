@@ -32,7 +32,7 @@ final readonly class OrderCreationContext
     public function __construct(
         private string $uuid,
         private string $orderNumber,
-        private CheckoutSource $sourceType,
+        private CheckoutSource $checkoutSource,
         private ?string $cartRevision,
         private ?string $userUuid,
         private ?string $languageCode,
@@ -63,7 +63,7 @@ final readonly class OrderCreationContext
         }
 
         if (
-            ($sourceType === CheckoutSource::Cart) !== ($cartRevision !== null)
+            ($checkoutSource === CheckoutSource::Cart) !== ($cartRevision !== null)
             || array_is_list($lineItems) === false || $lineItems === []
             || count($lineItems) > ProductRequestNormalizer::MAX_ENTRIES
         ) {
@@ -109,9 +109,9 @@ final readonly class OrderCreationContext
         return $this->orderNumber;
     }
 
-    public function sourceType(): CheckoutSource
+    public function checkoutSource(): CheckoutSource
     {
-        return $this->sourceType;
+        return $this->checkoutSource;
     }
 
     public function cartRevision(): ?string

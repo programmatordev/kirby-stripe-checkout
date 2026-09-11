@@ -22,11 +22,27 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->assertSame(LocalDiagnostics::PASS, $checks['stripePhp']['status']);
         $this->assertSame(LocalDiagnostics::PASS, $checks['configuration']['status']);
         $this->assertSame(LocalDiagnostics::WARNING, $checks['secretKey']['status']);
-        $this->assertSame(LocalDiagnostics::WARNING, $checks['publishableKey']['status']);
+        $this->assertSame(LocalDiagnostics::PASS, $checks['publishableKey']['status']);
         $this->assertSame(LocalDiagnostics::WARNING, $checks['webhookSecret']['status']);
         $this->assertSame(LocalDiagnostics::WARNING, $checks['currency']['status']);
         $this->assertSame(LocalDiagnostics::WARNING, $checks['defaultRequiresShipping']['status']);
         $this->assertSame(LocalDiagnostics::PASS, $checks['hubPage']['status']);
+    }
+
+    public function testReportsMissingPublishableKeyOnlyForEmbeddedCheckout(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(options: [
+            'programmatordev.stripe-checkout.settings.uiMode' => 'embedded',
+        ]);
+        $this->kirby = $this->environment->app();
+        $checks = array_column(
+            (new LocalDiagnostics($this->kirby))->report()['checks'],
+            null,
+            'id',
+        );
+
+        $this->assertSame(LocalDiagnostics::WARNING, $checks['publishableKey']['status']);
     }
 
     public function testReportsCredentialPresenceAndModeWithoutTheirValues(): void

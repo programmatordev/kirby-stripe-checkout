@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Kirby;
 
 use Kirby\Cms\App;
-use Kirby\Uuid\Uuid;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
@@ -13,16 +12,20 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 
-/** Generates the native order identity before request correlation is constructed. */
+/** Constructs order facts around an identity reserved before Checkout submission. */
 final class OrderCreationContextFactory
 {
     public function __construct(private readonly App $kirby) {}
 
-    /** @param list<OrderLineItemSnapshot> $lineItems */
+    /**
+     * @param string $uuid UUID reserved by the structured Checkout attempt token
+     * @param list<OrderLineItemSnapshot> $lineItems
+     */
     public function create(
+        string $uuid,
         array $lineItems,
         string $currency,
-        CheckoutSource $source,
+        CheckoutSource $checkoutSource,
         ?string $cartRevision,
         ?string $userUuid,
         ?string $languageCode,
@@ -31,12 +34,11 @@ final class OrderCreationContextFactory
         /** @var array<string, mixed> $options */
         $options = $this->kirby->options();
         $formatter = (new ConfigurationResolver())->orderNumberFormatter($options);
-        $uuid = Uuid::generate();
 
         return new OrderCreationContext(
             uuid: $uuid,
             orderNumber: (new OrderNumberFormatter($formatter))->format($uuid),
-            sourceType: $source,
+            checkoutSource: $checkoutSource,
             cartRevision: $cartRevision,
             userUuid: $userUuid,
             languageCode: $languageCode,

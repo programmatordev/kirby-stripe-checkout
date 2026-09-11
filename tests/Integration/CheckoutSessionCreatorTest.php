@@ -44,6 +44,10 @@ use Stripe\Util\ApiVersion;
 
 final class CheckoutSessionCreatorTest extends KirbyTestCase
 {
+    private const ORDER_UUID = 'checkoutorder001';
+
+    private const SECOND_ORDER_UUID = 'checkoutorder002';
+
     #[DataProvider('sessionModesAndPriceSources')]
     public function testCreatesAValidatedSessionForBothModesAndPriceSources(UiMode $uiMode, bool $stripePrice): void
     {
@@ -114,6 +118,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         );
         $requestCalls = 0;
         $kirby = $this->kirby;
+        $token = $this->token();
         $creator = $this->creator(
             configuration: $configuration,
             gateway: $gateway,
@@ -126,14 +131,14 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $first = $creator->create(
             order: $order,
             binding: $this->binding(),
-            token: $this->token(),
+            token: $token,
             guestReference: 'guest-browser',
             now: $now,
         );
         $second = $creator->create(
             order: $this->order(UiMode::Hosted),
             binding: $this->binding(),
-            token: $this->token(),
+            token: $token,
             guestReference: 'guest-browser',
             now: $now->add(new DateInterval('PT1M')),
             initiatingUrl: 'https://kirby-stripe-checkout.test/changed',
@@ -146,6 +151,73 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $this->assertCount(1, $gateway->requests);
         $this->assertSame([$sessionRecord->id], $gateway->retrievals);
         $this->assertCount(1, (new OrderPageStore($this->kirby))->orders());
+        $this->assertSame('page://' . $token->orderUuid(), $first->orderPageUuid());
+    }
+
+    public function testAChangedNonceCannotReuseTheOrderUuid(): void
+    {
+        $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
+        $configuration = $this->configuration(UiMode::Hosted);
+        $order = $this->order(UiMode::Hosted);
+        $request = $this->request(order: $order, configuration: $configuration, now: $now);
+        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
+        $gateway = new FakeCheckoutSessionGateway(
+            results: [$sessionRecord],
+            retrievalResults: [$sessionRecord->id => $sessionRecord],
+        );
+        $creator = $this->creator($configuration, $gateway);
+        $token = $this->token();
+        $creator->create(
+            order: $order,
+            binding: $this->binding(),
+            token: $token,
+            guestReference: 'guest-browser',
+            now: $now,
+        );
+        $changedToken = $this->token(nonceByte: 'b');
+
+        try {
+            $creator->create(
+                order: $this->order(UiMode::Hosted),
+                binding: $this->binding(),
+                token: $changedToken,
+                guestReference: 'guest-browser',
+                now: $now->add(new DateInterval('PT1M')),
+            );
+            $this->fail('Expected another nonce for the same Order UUID to conflict.');
+        } catch (CheckoutInputException $error) {
+            $this->assertSame('checkout.attempt_conflict', $error->errorCode());
+        }
+
+        $this->assertCount(1, $gateway->requests);
+        $this->assertSame([], $gateway->retrievals);
+        $this->assertCount(1, (new OrderPageStore($this->kirby))->orders());
+    }
+
+    public function testAnAttemptUuidMustMatchTheProspectiveOrder(): void
+    {
+        $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
+        $configuration = $this->configuration(UiMode::Hosted);
+        $order = $this->order(UiMode::Hosted);
+        $request = $this->request(order: $order, configuration: $configuration, now: $now);
+        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
+        $gateway = new FakeCheckoutSessionGateway([$sessionRecord]);
+
+        try {
+            $this->creator($configuration, $gateway)->create(
+                order: $order,
+                binding: $this->binding(),
+                token: $this->token(orderUuid: self::SECOND_ORDER_UUID),
+                guestReference: 'guest-browser',
+                now: $now,
+            );
+            $this->fail('Expected a token reserved for another Order to conflict.');
+        } catch (CheckoutInputException $error) {
+            $this->assertSame('checkout.attempt_conflict', $error->errorCode());
+        }
+
+        $this->assertCount(0, $gateway->requests);
+        $this->assertCount(0, (new OrderPageStore($this->kirby))->orders());
     }
 
     public function testAnUncertainFailurePersistsTheExactAttemptBeforeItCanBeRetried(): void
@@ -249,7 +321,11 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $rejectedData = $store->data($store->order($rejectedOrder->pageUuid()) ?? $this->fail('Rejected order was not persisted.'));
         $this->assertSame(CheckoutStatus::CreationFailed->value, $rejectedData['checkoutStatus']);
 
-        $incompatibleOrder = $this->order(UiMode::Hosted, selectedOption: 'other');
+        $incompatibleOrder = $this->order(
+            UiMode::Hosted,
+            selectedOption: 'other',
+            uuid: self::SECOND_ORDER_UUID,
+        );
         $request = $this->request(order: $incompatibleOrder, configuration: $configuration, now: $now);
         $sessionRecord = $this->sessionRecord(
             order: $incompatibleOrder,
@@ -263,7 +339,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             $this->creator($configuration, new FakeCheckoutSessionGateway([$sessionRecord]))->create(
                 order: $incompatibleOrder,
                 binding: $this->binding(selectedOption: 'other'),
-                token: new AttemptToken(str_repeat('b', 32)),
+                token: $this->token(orderUuid: self::SECOND_ORDER_UUID, nonceByte: 'b'),
                 guestReference: 'guest-browser',
                 now: $now,
             );
@@ -797,7 +873,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
         $configuration = $this->configuration(UiMode::Hosted);
         $firstOrder = $this->order(UiMode::Hosted);
-        $secondOrder = $this->order(UiMode::Hosted);
+        $secondOrder = $this->order(UiMode::Hosted, uuid: self::SECOND_ORDER_UUID);
         $firstRequest = $this->request(order: $firstOrder, configuration: $configuration, now: $now);
         $secondRequest = $this->request(order: $secondOrder, configuration: $configuration, now: $now);
         $gateway = new FakeCheckoutSessionGateway(results: [
@@ -815,7 +891,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $second = $creator->create(
             order: $secondOrder,
             binding: $this->binding(),
-            token: new AttemptToken(str_repeat('b', 32)),
+            token: $this->token(orderUuid: self::SECOND_ORDER_UUID, nonceByte: 'b'),
             guestReference: 'guest-browser',
             now: $now,
         );
@@ -849,8 +925,12 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         ])->configurationOrFail();
     }
 
-    private function order(UiMode $uiMode, bool $stripePrice = false, string $selectedOption = 'large'): OrderCreationContext
-    {
+    private function order(
+        UiMode $uiMode,
+        bool $stripePrice = false,
+        string $selectedOption = 'large',
+        string $uuid = self::ORDER_UUID,
+    ): OrderCreationContext {
         $price = Money::of('16', 'EUR');
         $request = new ProductRequest(
             reference: 'page://product',
@@ -877,9 +957,10 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         );
 
         return (new OrderCreationContextFactory($this->kirby))->create(
+            uuid: $uuid,
             lineItems: [$lineItem],
             currency: 'EUR',
-            source: CheckoutSource::Direct,
+            checkoutSource: CheckoutSource::Direct,
             cartRevision: null,
             userUuid: null,
             languageCode: null,
@@ -955,9 +1036,14 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         );
     }
 
-    private function token(): AttemptToken
-    {
-        return new AttemptToken(str_repeat('a', 32));
+    private function token(
+        string $orderUuid = self::ORDER_UUID,
+        string $nonceByte = 'a',
+    ): AttemptToken {
+        return AttemptToken::forOrder(
+            $orderUuid,
+            static fn(int $length): string => str_repeat($nonceByte, $length),
+        );
     }
 
     private function binding(string $selectedOption = 'large'): AttemptBinding

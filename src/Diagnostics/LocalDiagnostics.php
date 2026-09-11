@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Diagnostics;
 
 use Kirby\Cms\App;
+use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderHookDispatcher;
@@ -63,10 +64,12 @@ final class LocalDiagnostics
             $checks[] = $this->check('configuration', self::PASS, 'configuration.ready');
             $configuration = $configurationReport->configurationOrFail();
             $stripe = $configuration->stripe();
-            $checks[] = $this->credential('secretKey', $stripe->hasSecretKey(), $stripe->secretKeyMode());
-            $checks[] = $this->credential('publishableKey', $stripe->hasPublishableKey(), $stripe->publishableKeyMode());
-            $checks[] = $this->credential('webhookSecret', $stripe->hasWebhookSecret(), CredentialMode::Unknown);
             $settings = $configuration->settings();
+            $checks[] = $this->credential('secretKey', $stripe->hasSecretKey(), $stripe->secretKeyMode());
+            $checks[] = $settings->uiMode() === UiMode::Embedded || $stripe->hasPublishableKey()
+                ? $this->credential('publishableKey', $stripe->hasPublishableKey(), $stripe->publishableKeyMode())
+                : $this->check('publishableKey', self::PASS, 'credential.notRequired');
+            $checks[] = $this->credential('webhookSecret', $stripe->hasWebhookSecret(), CredentialMode::Unknown);
             $housekeeping = $configuration->housekeeping();
             $checks[] = $this->check('housekeeping', self::PASS, 'housekeeping.configured', [
                 'intervalHours' => (string) $housekeeping['intervalHours'],
