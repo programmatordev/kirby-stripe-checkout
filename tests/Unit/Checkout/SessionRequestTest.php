@@ -70,6 +70,8 @@ final class SessionRequestTest extends TestCase
         yield 'empty root' => [[]];
         yield 'list root' => [[['mode' => 'payment']]];
         yield 'empty key' => [['' => 'value']];
+        yield 'invalid UTF-8 key' => [["\xB1" => 'value']];
+        yield 'invalid UTF-8 value' => [['metadata' => ['key' => "\xB1"]]];
         yield 'floating point' => [['amount' => 19.95]];
         yield 'object' => [['client' => new stdClass()]];
 

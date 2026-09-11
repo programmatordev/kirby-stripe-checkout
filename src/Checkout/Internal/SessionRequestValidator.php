@@ -73,9 +73,9 @@ final class SessionRequestValidator
     ];
 
     /** @param array<mixed, mixed> $additions */
-    public function validateAdditions(SessionRequest $builtIn, array $additions): SessionRequest
+    public function applyAdditions(SessionRequest $request, array $additions): SessionRequest
     {
-        $parameters = $builtIn->parameters();
+        $parameters = $request->parameters();
 
         foreach ($additions as $field => $value) {
             if (is_string($field) === false || $field === '') {
@@ -109,16 +109,16 @@ final class SessionRequestValidator
         }
 
         try {
-            return $this->validate($builtIn, new SessionRequest($parameters));
+            return $this->validate($request, new SessionRequest($parameters));
         } catch (InvalidArgumentException $error) {
             throw new InvalidSessionRequestException('session_request.additions_invalid', previous: $error);
         }
     }
 
-    public function validate(SessionRequest $builtIn, SessionRequest $candidate): SessionRequest
+    public function validate(SessionRequest $request, SessionRequest $customizedRequest): SessionRequest
     {
-        $expected = $builtIn->parameters();
-        $parameters = $candidate->parameters();
+        $expected = $request->parameters();
+        $parameters = $customizedRequest->parameters();
 
         foreach (self::PROTECTED_TOP_LEVEL_FIELDS as $field) {
             $this->assertSame($expected, $parameters, $field);
@@ -130,7 +130,7 @@ final class SessionRequestValidator
         $this->validateLineItems($expected, $parameters);
         $this->validatePrivateMetadataLocations($parameters);
 
-        return $candidate;
+        return $customizedRequest;
     }
 
     /** @return array<string, mixed> */
@@ -140,7 +140,7 @@ final class SessionRequestValidator
             is_array($current) === false
             || array_is_list($current)
             || is_array($additions) === false
-            || array_is_list($additions)
+            || ($additions !== [] && array_is_list($additions))
         ) {
             throw new InvalidSessionRequestException('session_request.additions_invalid', $path);
         }
@@ -177,7 +177,7 @@ final class SessionRequestValidator
             is_array($current) === false
             || array_is_list($current)
             || is_array($additions) === false
-            || array_is_list($additions)
+            || ($additions !== [] && array_is_list($additions))
         ) {
             throw new InvalidSessionRequestException(
                 'session_request.additions_invalid',
@@ -221,8 +221,9 @@ final class SessionRequestValidator
             $valueLength = grapheme_strlen($value);
 
             if (
-                $valueLength === false
-                || $field === 'statement_descriptor_suffix' && $valueLength > 22
+                $field === 'statement_descriptor_suffix'
+                && $valueLength !== false
+                && $valueLength > 22
             ) {
                 throw new InvalidSessionRequestException('session_request.additions_invalid', $path);
             }
@@ -447,12 +448,11 @@ final class SessionRequestValidator
 
             if (
                 $key === ''
-                || $keyLength > self::MAX_METADATA_KEY_LENGTH
+                || ($keyLength !== false && $keyLength > self::MAX_METADATA_KEY_LENGTH)
                 || str_contains($key, '[')
                 || str_contains($key, ']')
                 || is_string($value) === false
-                || $valueLength === false
-                || $valueLength > self::MAX_METADATA_VALUE_LENGTH
+                || ($valueLength !== false && $valueLength > self::MAX_METADATA_VALUE_LENGTH)
             ) {
                 throw new InvalidSessionRequestException($errorCode, $path . '.' . (string) $key);
             }

@@ -194,11 +194,11 @@ final class RuntimeFactory
     public function checkoutSessionRequest(SessionRequestContext $context): SessionRequest
     {
         $configuration = $this->configurationReport()->configurationOrFail();
-        $builtIn = (new SessionRequestBuilder($this->kirby))->build($context);
+        $request = (new SessionRequestBuilder($this->kirby))->build($context);
 
         return (new SessionRequestCustomizer($this->kirby))->customize(
             $context,
-            $builtIn,
+            $request,
             $configuration->sessionRequestFactory(),
         );
     }

@@ -14,7 +14,7 @@ final class SessionRequestValidatorTest extends TestCase
 {
     public function testAddsOnlyProjectMetadataAndSafePaymentIntentFields(): void
     {
-        $request = (new SessionRequestValidator())->validateAdditions($this->builtIn(), [
+        $request = (new SessionRequestValidator())->applyAdditions($this->standardRequest(), [
             'metadata' => ['customer_reference' => 'customer-42'],
             'payment_intent_data' => [
                 'description' => 'Order ORD-TEST',
@@ -43,7 +43,7 @@ final class SessionRequestValidatorTest extends TestCase
         ?string $path,
     ): void {
         try {
-            (new SessionRequestValidator())->validateAdditions($this->builtIn(), $additions);
+            (new SessionRequestValidator())->applyAdditions($this->standardRequest(), $additions);
             $this->fail('Expected the additions to be rejected.');
         } catch (InvalidSessionRequestException $error) {
             $this->assertSame($errorCode, $error->errorCode());
@@ -100,6 +100,11 @@ final class SessionRequestValidatorTest extends TestCase
             'session_request.additions_invalid',
             'metadata.project_reference',
         ];
+        yield 'invalid UTF-8 metadata key' => [
+            ['metadata' => ["\xB1" => 'value']],
+            'session_request.additions_invalid',
+            null,
+        ];
         yield 'too many metadata entries' => [
             ['metadata' => $tooManyMetadataEntries],
             'session_request.additions_invalid',
@@ -122,9 +127,20 @@ final class SessionRequestValidatorTest extends TestCase
         ];
     }
 
+    public function testTreatsEmptyNestedAdditionsAsNoOps(): void
+    {
+        $request = $this->standardRequest();
+        $customizedRequest = (new SessionRequestValidator())->applyAdditions($request, [
+            'metadata' => [],
+            'payment_intent_data' => [],
+        ]);
+
+        $this->assertSame($request->parameters(), $customizedRequest->parameters());
+    }
+
     public function testAllowsAdvancedOneTimeConstructionInsideTheSafetyFloor(): void
     {
-        $parameters = $this->builtIn()->parameters();
+        $parameters = $this->standardRequest()->parameters();
         $parameters['automatic_tax'] = ['enabled' => true];
         $parameters['invoice_creation'] = ['enabled' => true];
         $this->assertIsArray($parameters['line_items']);
@@ -134,7 +150,7 @@ final class SessionRequestValidatorTest extends TestCase
 
         $this->assertSame(
             $request,
-            (new SessionRequestValidator())->validate($this->builtIn(), $request),
+            (new SessionRequestValidator())->validate($this->standardRequest(), $request),
         );
     }
 
@@ -143,12 +159,12 @@ final class SessionRequestValidatorTest extends TestCase
         callable $change,
         string $path,
     ): void {
-        $parameters = $this->builtIn()->parameters();
+        $parameters = $this->standardRequest()->parameters();
         $change($parameters);
 
         try {
             (new SessionRequestValidator())->validate(
-                $this->builtIn(),
+                $this->standardRequest(),
                 new SessionRequest($parameters),
             );
             $this->fail('Expected the replacement request to be rejected.');
@@ -255,7 +271,7 @@ final class SessionRequestValidatorTest extends TestCase
         ];
     }
 
-    private function builtIn(): SessionRequest
+    private function standardRequest(): SessionRequest
     {
         return new SessionRequest([
             'cancel_url' => 'https://example.com/stripe-checkout/cancel',

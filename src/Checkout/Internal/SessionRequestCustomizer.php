@@ -6,8 +6,6 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
 use Closure;
 use Kirby\Cms\App;
-use Kirby\Cms\Event;
-use Kirby\Cms\Events;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\InvalidSessionRequestException;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
@@ -29,28 +27,26 @@ final class SessionRequestCustomizer
         SessionRequest $request,
         SessionRequestFactoryInterface|Closure|null $factory = null,
     ): SessionRequest {
-        $hasFilter = (new Events($this->kirby))->hooks(new Event(self::FILTER)) !== [];
-        $customizedRequest = $request;
-
-        if ($hasFilter) {
-            try {
-                $additions = $this->kirby->apply(self::FILTER, [
-                    'parameters' => [],
-                    'context' => $context,
-                ], 'parameters');
-            } catch (Throwable $error) {
-                throw new InvalidSessionRequestException(
-                    'session_request.filter_failed',
-                    previous: $error,
-                );
-            }
-
-            if (is_array($additions) === false || ($additions !== [] && array_is_list($additions))) {
-                throw new InvalidSessionRequestException('session_request.additions_invalid');
-            }
-
-            $customizedRequest = $this->validator->validateAdditions($request, $additions);
+        try {
+            $additions = $this->kirby->apply(self::FILTER, [
+                'parameters' => [],
+                'context' => $context,
+            ], 'parameters');
+        } catch (Throwable $error) {
+            throw new InvalidSessionRequestException(
+                'session_request.filter_failed',
+                previous: $error,
+            );
         }
+
+        // PHP represents both an empty map and an empty list as []; here it means no additions.
+        if (is_array($additions) === false || ($additions !== [] && array_is_list($additions))) {
+            throw new InvalidSessionRequestException('session_request.additions_invalid');
+        }
+
+        $customizedRequest = $additions === []
+            ? $request
+            : $this->validator->applyAdditions($request, $additions);
 
         if ($factory !== null) {
             try {

@@ -64,14 +64,27 @@ final readonly class SessionRequest
         $normalized = [];
 
         foreach ($values as $key => $value) {
-            if ($list === false && (is_string($key) === false || $key === '' || str_contains($key, "\0"))) {
-                throw new InvalidArgumentException('Session request map keys must be non-empty strings.');
+            // Validate strings before JSON fingerprinting can surface a less useful encoding error.
+            if (
+                $list === false
+                && (
+                    is_string($key) === false
+                    || $key === ''
+                    || str_contains($key, "\0")
+                    || mb_check_encoding($key, 'UTF-8') === false
+                )
+            ) {
+                throw new InvalidArgumentException('Session request map keys must be non-empty UTF-8 strings without null bytes.');
             }
 
             if (is_array($value)) {
                 $normalized[$key] = $this->normalize($value, $depth + 1);
 
                 continue;
+            }
+
+            if (is_string($value) && mb_check_encoding($value, 'UTF-8') === false) {
+                throw new InvalidArgumentException('Session request strings must use valid UTF-8.');
             }
 
             if (

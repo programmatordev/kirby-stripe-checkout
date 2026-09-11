@@ -48,7 +48,7 @@ final class SessionRequestCustomizerTest extends KirbyTestCase
         ]);
 
         $parameters = (new SessionRequestCustomizer($this->kirby))
-            ->customize($expectedContext, $this->builtIn())
+            ->customize($expectedContext, $this->standardRequest())
             ->parameters();
 
         $this->assertIsArray($parameters['metadata']);
@@ -58,24 +58,24 @@ final class SessionRequestCustomizerTest extends KirbyTestCase
         $this->assertSame('Project order', $parameters['payment_intent_data']['description'] ?? null);
     }
 
-    public function testAdvancedFactoryCanReplaceNonProtectedConstruction(): void
+    public function testAdvancedFactoryCanCustomizeNonProtectedConstruction(): void
     {
         $context = $this->context();
-        $builtIn = $this->builtIn();
+        $request = $this->standardRequest();
         $factory = static function (
             SessionRequestContext $receivedContext,
-            SessionRequest $request,
-        ) use ($context, $builtIn): SessionRequest {
+            SessionRequest $receivedRequest,
+        ) use ($context, $request): SessionRequest {
             self::assertSame($context, $receivedContext);
-            self::assertSame($builtIn, $request);
-            $parameters = $request->parameters();
+            self::assertSame($request, $receivedRequest);
+            $parameters = $receivedRequest->parameters();
             $parameters['automatic_tax'] = ['enabled' => true];
 
             return new SessionRequest($parameters);
         };
 
         $parameters = (new SessionRequestCustomizer($this->kirby))
-            ->customize($context, $builtIn, $factory)
+            ->customize($context, $request, $factory)
             ->parameters();
 
         $this->assertSame(['enabled' => true], $parameters['automatic_tax'] ?? null);
@@ -126,18 +126,20 @@ final class SessionRequestCustomizerTest extends KirbyTestCase
             $metadata = $parameters['metadata'] ?? null;
             self::assertIsArray($metadata);
             self::assertSame('website', $metadata['sales_channel'] ?? null);
+            $metadata['sales_channel'] = 'factory';
+            $parameters['metadata'] = $metadata;
             $parameters['branding_settings'] = ['display_name' => 'Example Store'];
 
             return new SessionRequest($parameters);
         };
 
         $parameters = (new SessionRequestCustomizer($this->kirby))
-            ->customize($this->context(), $this->builtIn(), $factory)
+            ->customize($this->context(), $this->standardRequest(), $factory)
             ->parameters();
 
         $metadata = $parameters['metadata'] ?? null;
         $this->assertIsArray($metadata);
-        $this->assertSame('website', $metadata['sales_channel'] ?? null);
+        $this->assertSame('factory', $metadata['sales_channel'] ?? null);
         $this->assertSame(
             ['display_name' => 'Example Store'],
             $parameters['branding_settings'] ?? null,
@@ -153,7 +155,7 @@ final class SessionRequestCustomizerTest extends KirbyTestCase
         try {
             (new SessionRequestCustomizer($this->kirby))->customize(
                 $this->context(),
-                $this->builtIn(),
+                $this->standardRequest(),
             );
             $this->fail('Expected the filter result to be rejected.');
         } catch (InvalidSessionRequestException $error) {
@@ -167,7 +169,7 @@ final class SessionRequestCustomizerTest extends KirbyTestCase
         try {
             (new SessionRequestCustomizer($this->kirby))->customize(
                 $this->context(),
-                $this->builtIn(),
+                $this->standardRequest(),
                 fn(): string => 'private request body',
             );
             $this->fail('Expected the factory result to be rejected.');
@@ -209,7 +211,7 @@ final class SessionRequestCustomizerTest extends KirbyTestCase
         );
     }
 
-    private function builtIn(): SessionRequest
+    private function standardRequest(): SessionRequest
     {
         return new SessionRequest([
             'cancel_url' => 'https://example.com/stripe-checkout/cancel',
