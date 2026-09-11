@@ -8,6 +8,7 @@ use Kirby\Cms\App;
 use Kirby\Content\Field;
 use Kirby\Filesystem\Dir;
 use Kirby\Plugin\Plugin;
+use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Kirby\OptionsField;
 use ProgrammatorDev\StripeCheckout\Kirby\ProductBlueprint;
@@ -236,6 +237,13 @@ try {
     }
 
     if (
+        $stripeCheckout->settings()->uiMode() !== UiMode::Hosted
+        || $stripeCheckout->settings()->checkoutExpirationMinutes() !== 1440
+    ) {
+        throw new RuntimeException('The installed package did not resolve its Checkout defaults.');
+    }
+
+    if (
         $stripeCheckout->settings()->currency() !== null
         || $stripeCheckout->settings()->defaultRequiresShipping() !== null
     ) {
@@ -251,6 +259,8 @@ try {
 
     $hubPage = (new StripeCheckoutPageStore($app))->page();
     $storedPriceSource = $hubPage?->content()->get('priceSource');
+    $storedUiMode = $hubPage?->content()->get('uiMode');
+    $storedExpiration = $hubPage?->content()->get('checkoutExpirationMinutes');
 
     if (
         $hubPage === null
@@ -259,6 +269,10 @@ try {
         || $hubPage->intendedTemplate()->name() !== StripeCheckoutPage::TEMPLATE
         || $storedPriceSource instanceof Field === false
         || $storedPriceSource->value() !== PriceSource::Kirby->value
+        || $storedUiMode instanceof Field === false
+        || $storedUiMode->value() !== UiMode::Hosted->value
+        || $storedExpiration instanceof Field === false
+        || $storedExpiration->value() !== '1440'
     ) {
         throw new RuntimeException('The installed package did not initialize its Stripe Checkout Page automatically.');
     }

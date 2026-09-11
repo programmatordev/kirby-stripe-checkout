@@ -8,6 +8,7 @@ use Brick\Money\Money;
 use Kirby\Uuid\Uri;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
+use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
@@ -63,7 +64,7 @@ final readonly class OrderCreationContext
 
         if (
             ($sourceType === CheckoutSource::Cart) !== ($cartRevision !== null)
-            || in_array($uiMode, ['hosted', 'embedded'], true) === false
+            || UiMode::tryFrom($uiMode) === null
             || array_is_list($lineItems) === false || $lineItems === []
             || count($lineItems) > ProductRequestNormalizer::MAX_ENTRIES
         ) {

@@ -375,11 +375,24 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertArrayHasKey('priceSource', $fields);
         $this->assertArrayHasKey('currency', $fields);
         $this->assertArrayHasKey('defaultRequiresShipping', $fields);
+        $this->assertArrayHasKey('uiMode', $fields);
+        $this->assertArrayHasKey('checkoutExpirationMinutes', $fields);
+        $this->assertArrayHasKey('successDestination', $fields);
+        $this->assertArrayHasKey('cancelDestination', $fields);
+        $this->assertArrayHasKey('returnDestination', $fields);
         $this->assertArrayNotHasKey('projectField', $fields);
         $priceSource = $fields['priceSource'];
+        $uiMode = $fields['uiMode'];
+        $expiration = $fields['checkoutExpirationMinutes'];
         $this->assertIsArray($priceSource);
+        $this->assertIsArray($uiMode);
+        $this->assertIsArray($expiration);
         $this->assertTrue($priceSource['required']);
         $this->assertSame('kirby', $priceSource['default']);
+        $this->assertSame('hosted', $uiMode['default']);
+        $this->assertSame(1440, $expiration['default']);
+        $this->assertSame(30, $expiration['min']);
+        $this->assertSame(1440, $expiration['max']);
         $this->assertSame(
             'programmatordev.stripe-checkout.area.label',
             $blueprint['title'],

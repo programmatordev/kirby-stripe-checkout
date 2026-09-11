@@ -128,6 +128,11 @@ final class ConfigurationResolverTest extends TestCase
         $this->assertNull($priceSource->shadowedValue());
         $this->assertNull($settings->currency());
         $this->assertNull($settings->defaultRequiresShipping());
+        $this->assertSame('hosted', $settings->uiMode()->value);
+        $this->assertSame(1440, $settings->checkoutExpirationMinutes());
+        $this->assertNull($settings->successDestination());
+        $this->assertNull($settings->cancelDestination());
+        $this->assertNull($settings->returnDestination());
         $this->assertFalse($configuration->stripe()->hasSecretKey());
         $this->assertFalse($configuration->stripe()->hasPublishableKey());
         $this->assertFalse($configuration->stripe()->hasWebhookSecret());
@@ -170,6 +175,11 @@ final class ConfigurationResolverTest extends TestCase
             self::PREFIX . '.settings.priceSource' => 'stripe',
             self::PREFIX . '.settings.currency' => 'USD',
             self::PREFIX . '.settings.defaultRequiresShipping' => true,
+            self::PREFIX . '.settings.uiMode' => 'embedded',
+            self::PREFIX . '.settings.checkoutExpirationMinutes' => 60,
+            self::PREFIX . '.settings.successDestination' => '/complete',
+            self::PREFIX . '.settings.cancelDestination' => '/cancel',
+            self::PREFIX . '.settings.returnDestination' => '/return',
             self::PREFIX . '.stripe.secretKey' => 'custom-server-key',
             self::PREFIX . '.stripe.publishableKey' => 'custom-public-key',
         ])->configurationOrFail();
@@ -177,6 +187,11 @@ final class ConfigurationResolverTest extends TestCase
         $this->assertSame(PriceSource::Stripe, $configuration->settings()->priceSource());
         $this->assertSame('USD', $configuration->settings()->currency());
         $this->assertTrue($configuration->settings()->defaultRequiresShipping());
+        $this->assertSame('embedded', $configuration->settings()->uiMode()->value);
+        $this->assertSame(60, $configuration->settings()->checkoutExpirationMinutes());
+        $this->assertSame('/complete', $configuration->settings()->successDestination());
+        $this->assertSame('/cancel', $configuration->settings()->cancelDestination());
+        $this->assertSame('/return', $configuration->settings()->returnDestination());
         $this->assertSame(CredentialMode::Unknown, $configuration->stripe()->secretKeyMode());
         $this->assertSame(CredentialMode::Unknown, $configuration->stripe()->publishableKeyMode());
     }
@@ -277,7 +292,7 @@ final class ConfigurationResolverTest extends TestCase
         $this->assertSame(PriceSource::Kirby->value, $setting->shadowedValue());
     }
 
-    public function testEveryNewSettingRetainsIndependentPageAndPhpProvenance(): void
+    public function testEveryCommerceSettingRetainsIndependentPageAndPhpProvenance(): void
     {
         $settings = (new ConfigurationResolver())->resolve(
             [
@@ -285,16 +300,25 @@ final class ConfigurationResolverTest extends TestCase
                     'settings' => [
                         'currency' => 'USD',
                         'defaultRequiresShipping' => false,
+                        'uiMode' => 'embedded',
+                        'checkoutExpirationMinutes' => 60,
+                        'successDestination' => '/php-success',
                     ],
                 ],
             ],
             new PageSettings(
                 currency: 'EUR',
                 defaultRequiresShipping: 'yes',
+                uiMode: 'hosted',
+                checkoutExpirationMinutes: '90',
+                successDestination: '/page-success',
             ),
         )->configurationOrFail()->settings();
         $currency = $settings->setting('currency');
         $shipping = $settings->setting('defaultRequiresShipping');
+        $uiMode = $settings->setting('uiMode');
+        $expiration = $settings->setting('checkoutExpirationMinutes');
+        $success = $settings->setting('successDestination');
 
         $this->assertSame('USD', $settings->currency());
         $this->assertFalse($settings->defaultRequiresShipping());
@@ -304,6 +328,18 @@ final class ConfigurationResolverTest extends TestCase
         $this->assertNotNull($shipping);
         $this->assertSame(SettingSource::Php, $shipping->source());
         $this->assertTrue($shipping->shadowedValue());
+        $this->assertSame('embedded', $settings->uiMode()->value);
+        $this->assertNotNull($uiMode);
+        $this->assertSame(SettingSource::Php, $uiMode->source());
+        $this->assertSame('hosted', $uiMode->shadowedValue());
+        $this->assertSame(60, $settings->checkoutExpirationMinutes());
+        $this->assertNotNull($expiration);
+        $this->assertSame(SettingSource::Php, $expiration->source());
+        $this->assertSame(90, $expiration->shadowedValue());
+        $this->assertSame('/php-success', $settings->successDestination());
+        $this->assertNotNull($success);
+        $this->assertSame(SettingSource::Php, $success->source());
+        $this->assertSame('/page-success', $success->shadowedValue());
     }
 
     public function testInvalidPageSettingUsesTheSafePersistenceFailure(): void
@@ -414,6 +450,41 @@ final class ConfigurationResolverTest extends TestCase
             [self::PREFIX => ['settings' => ['defaultRequiresShipping' => 'yes']]],
             'configuration.type_invalid',
             'settings.defaultRequiresShipping',
+        ];
+        yield 'UI mode must be a string' => [
+            [self::PREFIX => ['settings' => ['uiMode' => false]]],
+            'configuration.type_invalid',
+            'settings.uiMode',
+        ];
+        yield 'UI mode must be supported' => [
+            [self::PREFIX => ['settings' => ['uiMode' => 'inline']]],
+            'configuration.value_invalid',
+            'settings.uiMode',
+        ];
+        yield 'Checkout expiration must be an integer' => [
+            [self::PREFIX => ['settings' => ['checkoutExpirationMinutes' => '30']]],
+            'configuration.type_invalid',
+            'settings.checkoutExpirationMinutes',
+        ];
+        yield 'Checkout expiration must meet Stripe minimum' => [
+            [self::PREFIX => ['settings' => ['checkoutExpirationMinutes' => 29]]],
+            'configuration.value_invalid',
+            'settings.checkoutExpirationMinutes',
+        ];
+        yield 'Checkout expiration cannot exceed Stripe maximum' => [
+            [self::PREFIX => ['settings' => ['checkoutExpirationMinutes' => 1441]]],
+            'configuration.value_invalid',
+            'settings.checkoutExpirationMinutes',
+        ];
+        yield 'Checkout destination must be a string' => [
+            [self::PREFIX => ['settings' => ['successDestination' => false]]],
+            'configuration.type_invalid',
+            'settings.successDestination',
+        ];
+        yield 'Checkout destination cannot have surrounding whitespace' => [
+            [self::PREFIX => ['settings' => ['returnDestination' => ' /return ']]],
+            'configuration.value_invalid',
+            'settings.returnDestination',
         ];
         yield 'product section has wrong type' => [
             [self::PREFIX => ['products' => false]],
@@ -550,7 +621,20 @@ final class ConfigurationResolverTest extends TestCase
         ])->configurationOrFail()->settings();
 
         $this->assertSame(
-            ['priceSource', 'currency', 'defaultRequiresShipping', 'cleanupCreationFailures', 'creationFailureRetentionDays', 'cleanupUnpaidOrders', 'unpaidOrderRetentionDays'],
+            [
+                'priceSource',
+                'currency',
+                'defaultRequiresShipping',
+                'uiMode',
+                'checkoutExpirationMinutes',
+                'successDestination',
+                'cancelDestination',
+                'returnDestination',
+                'cleanupCreationFailures',
+                'creationFailureRetentionDays',
+                'cleanupUnpaidOrders',
+                'unpaidOrderRetentionDays',
+            ],
             array_keys($settings->all()),
         );
         $this->assertNull($settings->setting('settings.priceSource'));

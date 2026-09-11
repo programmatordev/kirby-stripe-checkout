@@ -3,6 +3,18 @@
 declare(strict_types=1);
 
 return [
+    'programmatordev.stripe-checkout.settings.uiMode.label' => 'Apresentação do Checkout',
+    'programmatordev.stripe-checkout.settings.uiMode.help' => 'Abra o Checkout numa página alojada pelo Stripe ou incorpore-o no site.',
+    'programmatordev.stripe-checkout.settings.uiMode.hosted' => 'Alojado',
+    'programmatordev.stripe-checkout.settings.uiMode.embedded' => 'Incorporado',
+    'programmatordev.stripe-checkout.settings.checkoutExpirationMinutes.label' => 'Duração do Checkout (minutos)',
+    'programmatordev.stripe-checkout.settings.checkoutExpirationMinutes.help' => 'Escolha durante quanto tempo um novo Checkout fica aberto, entre 30 minutos e 24 horas.',
+    'programmatordev.stripe-checkout.settings.successDestination.label' => 'Destino após conclusão',
+    'programmatordev.stripe-checkout.settings.successDestination.help' => 'Página ou URL opcional usada após a conclusão do Checkout. Se estiver vazio, é usada a página de origem.',
+    'programmatordev.stripe-checkout.settings.cancelDestination.label' => 'Destino após cancelamento',
+    'programmatordev.stripe-checkout.settings.cancelDestination.help' => 'Página ou URL opcional usada quando um cliente regressa do Checkout alojado. Se estiver vazio, é usada a página de origem.',
+    'programmatordev.stripe-checkout.settings.returnDestination.label' => 'Destino de regresso do Checkout incorporado',
+    'programmatordev.stripe-checkout.settings.returnDestination.help' => 'Página ou URL opcional usada quando o Checkout incorporado regressa antes da conclusão. Se estiver vazio, é usada a página de origem.',
     'programmatordev.stripe-checkout.settings.cleanupCreationFailures.label' => 'Limpar checkouts falhados',
     'programmatordev.stripe-checkout.settings.cleanupCreationFailures.help' => 'Permitir a limpeza de tentativas que falharam antes de abrir um Checkout.',
     'programmatordev.stripe-checkout.settings.creationFailureRetentionDays.label' => 'Manter tentativas falhadas (dias)',

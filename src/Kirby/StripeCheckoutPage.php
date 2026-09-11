@@ -42,6 +42,11 @@ final class StripeCheckoutPage extends Page
         'pricesource' => 'priceSource',
         'currency' => 'currency',
         'defaultrequiresshipping' => 'defaultRequiresShipping',
+        'uimode' => 'uiMode',
+        'checkoutexpirationminutes' => 'checkoutExpirationMinutes',
+        'successdestination' => 'successDestination',
+        'canceldestination' => 'cancelDestination',
+        'returndestination' => 'returnDestination',
         'cleanupcreationfailures' => 'cleanupCreationFailures',
         'creationfailureretentiondays' => 'creationFailureRetentionDays',
         'cleanupunpaidorders' => 'cleanupUnpaidOrders',
@@ -49,7 +54,15 @@ final class StripeCheckoutPage extends Page
     ];
 
     private const DEFAULT_LANGUAGE_FIELDS = [
-        ...self::SETTING_FIELDS,
+        'pricesource' => 'priceSource',
+        'currency' => 'currency',
+        'defaultrequiresshipping' => 'defaultRequiresShipping',
+        'uimode' => 'uiMode',
+        'checkoutexpirationminutes' => 'checkoutExpirationMinutes',
+        'cleanupcreationfailures' => 'cleanupCreationFailures',
+        'creationfailureretentiondays' => 'creationFailureRetentionDays',
+        'cleanupunpaidorders' => 'cleanupUnpaidOrders',
+        'unpaidorderretentiondays' => 'unpaidOrderRetentionDays',
         'optionpresets' => 'optionPresets',
     ];
 

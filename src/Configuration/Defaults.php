@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Configuration;
 
+use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+
 /**
  * Shared business defaults for runtime resolution and native Settings fields.
  *
@@ -11,6 +13,10 @@ namespace ProgrammatorDev\StripeCheckout\Configuration;
  */
 final class Defaults
 {
+    public const CHECKOUT_EXPIRATION_MINUTES_MIN = 30;
+    public const CHECKOUT_EXPIRATION_MINUTES_MAX = 1440;
+    public const CHECKOUT_EXPIRATION_MINUTES_DEFAULT = 1440;
+
     public const RETENTION = [
         'cleanupCreationFailures' => true,
         'creationFailureRetentionDays' => 7,
@@ -22,6 +28,11 @@ final class Defaults
         'priceSource' => 'kirby',
         'currency' => null,
         'defaultRequiresShipping' => null,
+        'uiMode' => UiMode::Hosted->value,
+        'checkoutExpirationMinutes' => self::CHECKOUT_EXPIRATION_MINUTES_DEFAULT,
+        'successDestination' => null,
+        'cancelDestination' => null,
+        'returnDestination' => null,
         ...self::RETENTION,
     ];
 

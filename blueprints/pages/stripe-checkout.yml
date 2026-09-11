@@ -59,6 +59,45 @@ tabs:
                 "*": programmatordev.stripe-checkout.settings.defaultRequiresShipping.yes
               "no":
                 "*": programmatordev.stripe-checkout.settings.defaultRequiresShipping.no
+          uiMode:
+            label: programmatordev.stripe-checkout.settings.uiMode.label
+            help: programmatordev.stripe-checkout.settings.uiMode.help
+            type: select
+            required: true
+            translate: false
+            options:
+              hosted:
+                "*": programmatordev.stripe-checkout.settings.uiMode.hosted
+              embedded:
+                "*": programmatordev.stripe-checkout.settings.uiMode.embedded
+          checkoutExpirationMinutes:
+            label: programmatordev.stripe-checkout.settings.checkoutExpirationMinutes.label
+            help: programmatordev.stripe-checkout.settings.checkoutExpirationMinutes.help
+            type: number
+            required: true
+            translate: false
+            step: 1
+          successDestination:
+            label: programmatordev.stripe-checkout.settings.successDestination.label
+            help: programmatordev.stripe-checkout.settings.successDestination.help
+            type: link
+            options:
+              - page
+              - url
+          cancelDestination:
+            label: programmatordev.stripe-checkout.settings.cancelDestination.label
+            help: programmatordev.stripe-checkout.settings.cancelDestination.help
+            type: link
+            options:
+              - page
+              - url
+          returnDestination:
+            label: programmatordev.stripe-checkout.settings.returnDestination.label
+            help: programmatordev.stripe-checkout.settings.returnDestination.help
+            type: link
+            options:
+              - page
+              - url
           cleanupCreationFailures:
             label: programmatordev.stripe-checkout.settings.cleanupCreationFailures.label
             help: programmatordev.stripe-checkout.settings.cleanupCreationFailures.help

@@ -3,6 +3,18 @@
 declare(strict_types=1);
 
 return [
+    'programmatordev.stripe-checkout.settings.uiMode.label' => 'Checkout display',
+    'programmatordev.stripe-checkout.settings.uiMode.help' => 'Open Checkout on a Stripe-hosted page or embed it in the site.',
+    'programmatordev.stripe-checkout.settings.uiMode.hosted' => 'Hosted',
+    'programmatordev.stripe-checkout.settings.uiMode.embedded' => 'Embedded',
+    'programmatordev.stripe-checkout.settings.checkoutExpirationMinutes.label' => 'Checkout lifetime (minutes)',
+    'programmatordev.stripe-checkout.settings.checkoutExpirationMinutes.help' => 'Choose how long a new Checkout remains open, from 30 minutes to 24 hours.',
+    'programmatordev.stripe-checkout.settings.successDestination.label' => 'Success destination',
+    'programmatordev.stripe-checkout.settings.successDestination.help' => 'Optional page or URL used after Checkout completes. The initiating page is used when empty.',
+    'programmatordev.stripe-checkout.settings.cancelDestination.label' => 'Cancel destination',
+    'programmatordev.stripe-checkout.settings.cancelDestination.help' => 'Optional page or URL used when a customer returns from hosted Checkout. The initiating page is used when empty.',
+    'programmatordev.stripe-checkout.settings.returnDestination.label' => 'Embedded return destination',
+    'programmatordev.stripe-checkout.settings.returnDestination.help' => 'Optional page or URL used when embedded Checkout returns before completion. The initiating page is used when empty.',
     'programmatordev.stripe-checkout.settings.cleanupCreationFailures.label' => 'Clean up failed checkouts',
     'programmatordev.stripe-checkout.settings.cleanupCreationFailures.help' => 'Allow cleanup of definitely failed attempts that never opened a Checkout.',
     'programmatordev.stripe-checkout.settings.creationFailureRetentionDays.label' => 'Keep failed attempts (days)',

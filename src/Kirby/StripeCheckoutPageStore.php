@@ -91,6 +91,11 @@ final class StripeCheckoutPageStore
             priceSource: $this->fieldValue($page, 'priceSource'),
             currency: $this->fieldValue($page, 'currency'),
             defaultRequiresShipping: $this->fieldValue($page, 'defaultRequiresShipping'),
+            uiMode: $this->fieldValue($page, 'uiMode'),
+            checkoutExpirationMinutes: $this->fieldValue($page, 'checkoutExpirationMinutes'),
+            successDestination: $this->fieldValue($page, 'successDestination', 'current'),
+            cancelDestination: $this->fieldValue($page, 'cancelDestination', 'current'),
+            returnDestination: $this->fieldValue($page, 'returnDestination', 'current'),
             cleanupCreationFailures: $this->fieldValue($page, 'cleanupCreationFailures'),
             creationFailureRetentionDays: $this->fieldValue($page, 'creationFailureRetentionDays'),
             cleanupUnpaidOrders: $this->fieldValue($page, 'cleanupUnpaidOrders'),
@@ -163,11 +168,9 @@ final class StripeCheckoutPageStore
         return $page;
     }
 
-    private function fieldValue(Page $page, string $fieldName): mixed
+    private function fieldValue(Page $page, string $fieldName, string $language = 'default'): mixed
     {
-        $field = $page->content(
-            $this->kirby->defaultLanguage()?->code(),
-        )->get($fieldName);
+        $field = $page->content($language)->get($fieldName);
 
         return $field instanceof Field ? $field->value() : null;
     }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Configuration;
 
 use Closure;
+use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
@@ -31,7 +32,20 @@ final class ConfigurationResolver
         'options',
     ];
     private const PRODUCT_KEYS = ['fields', 'resolver'];
-    private const SETTINGS_KEYS = ['priceSource', 'currency', 'defaultRequiresShipping', 'cleanupCreationFailures', 'creationFailureRetentionDays', 'cleanupUnpaidOrders', 'unpaidOrderRetentionDays'];
+    private const SETTINGS_KEYS = [
+        'priceSource',
+        'currency',
+        'defaultRequiresShipping',
+        'uiMode',
+        'checkoutExpirationMinutes',
+        'successDestination',
+        'cancelDestination',
+        'returnDestination',
+        'cleanupCreationFailures',
+        'creationFailureRetentionDays',
+        'cleanupUnpaidOrders',
+        'unpaidOrderRetentionDays',
+    ];
     private const STRIPE_KEYS = ['publishableKey', 'secretKey', 'webhookSecret'];
 
     public function __construct(
@@ -394,19 +408,78 @@ final class ConfigurationResolver
             );
         }
 
+        $uiMode = $settings['uiMode'] ?? null;
+
+        if ($uiMode !== null && is_string($uiMode) === false) {
+            throw new ConfigurationException('configuration.type_invalid', 'settings.uiMode');
+        }
+
+        if (is_string($uiMode) && UiMode::tryFrom($uiMode) === null) {
+            throw new ConfigurationException('configuration.value_invalid', 'settings.uiMode');
+        }
+
+        $expiration = $settings['checkoutExpirationMinutes'] ?? null;
+
+        if ($expiration !== null && is_int($expiration) === false) {
+            throw new ConfigurationException(
+                'configuration.type_invalid',
+                'settings.checkoutExpirationMinutes',
+            );
+        }
+
+        if (
+            is_int($expiration)
+            && (
+                $expiration < Defaults::CHECKOUT_EXPIRATION_MINUTES_MIN
+                || $expiration > Defaults::CHECKOUT_EXPIRATION_MINUTES_MAX
+            )
+        ) {
+            throw new ConfigurationException(
+                'configuration.value_invalid',
+                'settings.checkoutExpirationMinutes',
+            );
+        }
+
+        foreach (['successDestination', 'cancelDestination', 'returnDestination'] as $name) {
+            $destination = $settings[$name] ?? null;
+
+            if ($destination !== null && is_string($destination) === false) {
+                throw new ConfigurationException('configuration.type_invalid', 'settings.' . $name);
+            }
+
+            if (is_string($destination) && ($destination === '' || trim($destination) !== $destination)) {
+                throw new ConfigurationException('configuration.value_invalid', 'settings.' . $name);
+            }
+        }
+
         $resolver = new OptionsResolver();
         $resolver->setDefaults([
             'priceSource' => null,
             'currency' => null,
             'defaultRequiresShipping' => null,
+            'uiMode' => null,
+            'checkoutExpirationMinutes' => null,
+            'successDestination' => null,
+            'cancelDestination' => null,
+            'returnDestination' => null,
         ]);
         $resolver->setAllowedTypes('priceSource', ['null', 'string']);
         $resolver->setAllowedTypes('currency', ['null', 'string']);
         $resolver->setAllowedTypes('defaultRequiresShipping', ['null', 'bool']);
+        $resolver->setAllowedTypes('uiMode', ['null', 'string']);
+        $resolver->setAllowedTypes('checkoutExpirationMinutes', ['null', 'int']);
+        $resolver->setAllowedTypes('successDestination', ['null', 'string']);
+        $resolver->setAllowedTypes('cancelDestination', ['null', 'string']);
+        $resolver->setAllowedTypes('returnDestination', ['null', 'string']);
         $resolver->setAllowedValues('priceSource', [
             null,
             PriceSource::Kirby->value,
             PriceSource::Stripe->value,
+        ]);
+        $resolver->setAllowedValues('uiMode', [
+            null,
+            UiMode::Hosted->value,
+            UiMode::Embedded->value,
         ]);
 
         foreach (Defaults::RETENTION as $name => $default) {

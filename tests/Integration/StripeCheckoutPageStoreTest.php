@@ -38,6 +38,8 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $this->assertSame($page->id(), $initializedAgain->id());
         $this->assertSame('Stripe Checkout', $page->title()->value());
         $this->assertSame(PriceSource::Kirby->value, $this->fieldValue($page, 'priceSource'));
+        $this->assertSame('hosted', $this->fieldValue($page, 'uiMode'));
+        $this->assertSame('1440', $this->fieldValue($page, 'checkoutExpirationMinutes'));
 
         // Kirby creates empty Field objects for required settings without a
         // safe deterministic default; their values must remain unconfigured.
@@ -172,6 +174,36 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $this->assertSame('yes', $this->fieldValue($page, 'defaultRequiresShipping'));
         $this->assertFalse($page->translation('pt')->exists());
         $this->assertSame(PriceSource::Stripe, $this->settings()->priceSource());
+    }
+
+    public function testCheckoutDestinationsRemainTranslated(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(languages: [
+            ['code' => 'en', 'default' => true, 'locale' => 'en_GB', 'name' => 'English'],
+            ['code' => 'pt', 'locale' => 'pt_PT', 'name' => 'Português'],
+        ]);
+        $this->kirby = $this->environment->app();
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
+        $this->kirby->setCurrentLanguage('pt');
+        $page = $page->update([
+            'checkoutExpirationMinutes' => 45,
+            'successDestination' => '/pt/obrigado',
+            'uiMode' => 'embedded',
+        ]);
+
+        $this->assertSame('embedded', $this->fieldValue($page, 'uiMode'));
+        $this->assertSame('45', $this->fieldValue($page, 'checkoutExpirationMinutes'));
+        $this->assertSame(
+            '/pt/obrigado',
+            $this->languageFieldValue($page, 'successDestination', 'pt'),
+        );
+        $this->assertTrue($page->translation('pt')->exists());
+        $this->assertSame('/pt/obrigado', (new StripeCheckoutPageStore($this->kirby))->settings()->successDestination());
+
+        $this->kirby->setCurrentLanguage('en');
+
+        $this->assertNull((new StripeCheckoutPageStore($this->kirby))->settings()->successDestination());
     }
 
     public function testOptionPresetsRemainOwnedByTheDefaultLanguage(): void
@@ -463,6 +495,9 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         yield 'unsupported currency' => ['currency', 'XXX'];
         yield 'lowercase currency' => ['currency', 'eur'];
         yield 'invalid shipping default' => ['defaultRequiresShipping', 'sometimes'];
+        yield 'invalid UI mode' => ['uiMode', 'inline'];
+        yield 'expiration below Stripe minimum' => ['checkoutExpirationMinutes', '29'];
+        yield 'expiration above Stripe maximum' => ['checkoutExpirationMinutes', '1441'];
     }
 
     #[DataProvider('invalidCommerceSettingProvider')]

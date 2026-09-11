@@ -48,6 +48,9 @@ The Settings tab currently contains:
 - `priceSource`: `kirby` (the default) or `stripe`;
 - `currency`: one uppercase Stripe presentment currency, required before commerce features can run;
 - `defaultRequiresShipping`: the fallback used when a product does not declare whether it needs shipping;
+- `uiMode`: `hosted` (the default) or `embedded`;
+- `checkoutExpirationMinutes`: how long Checkout remains open, from `30` to `1440` minutes (the default);
+- translated success, cancellation, and embedded-return destinations;
 - [order retention preferences](#order-retention), with separate controls for failed attempts and unpaid orders.
 
 The protected Page is created with `kirby` as its saved price source, so a fresh installation does not require an initial save for that deterministic default. The plugin does not guess a currency or whether products are physical. It can boot with those two fields empty so the Panel and diagnostics remain available, but the Settings tab asks the operator to select both values.
@@ -63,10 +66,21 @@ return [
             'priceSource' => 'kirby',
             'currency' => 'EUR',
             'defaultRequiresShipping' => false,
+            'uiMode' => 'hosted',
+            'checkoutExpirationMinutes' => 1440,
+            'successDestination' => 'page://thanks-page-uuid',
+            'cancelDestination' => '/cart',
+            'returnDestination' => '/checkout',
         ],
     ],
 ];
 ```
+
+The three destination fields accept a published Kirby Page reference or an HTTP(S) URL. Choosing a Page in the Panel is recommended because its URL is resolved for the language in which Checkout started. Root-relative and external HTTP(S) URLs are also supported. Unsafe or unresolved values are rejected when a Checkout request is prepared. Leaving a destination empty uses the initiating same-site URL, then the language-specific site URL as a fallback.
+
+Live Stripe credentials require HTTPS destinations, except for local hosts such as DDEV. Query strings are retained and fragments are removed. Destination values come only from trusted Settings or PHP configuration; they are never accepted from the Checkout form body.
+
+These values are available through Settings now. The current package does not yet expose the Checkout creation operation that consumes them.
 
 Fully dotted Kirby option keys are accepted, but defining the same logical option in nested and dotted forms is an error.
 
@@ -89,6 +103,11 @@ $settings = $site->stripeCheckout()->settings();
 $settings->priceSource(); // PriceSource::Kirby or PriceSource::Stripe
 $settings->currency(); // "EUR" or null
 $settings->defaultRequiresShipping(); // true, false, or null
+$settings->uiMode(); // UiMode::Hosted or UiMode::Embedded
+$settings->checkoutExpirationMinutes(); // 1440 by default
+$settings->successDestination(); // Page reference, URL, or null
+$settings->cancelDestination(); // Page reference, URL, or null
+$settings->returnDestination(); // Page reference, URL, or null
 
 $priceSource = $settings->setting('priceSource');
 $priceSource?->value();
