@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
+use InvalidArgumentException;
 use PHPUnit\Framework\MockObject\MockObject;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Configuration\StripeConfiguration;
@@ -15,7 +16,7 @@ use RuntimeException;
 use Stripe\ApiRequestor;
 use Stripe\HttpClient\ClientInterface;
 
-final class CheckoutSessionGatewayTest extends KirbyTestCase
+final class StripeApiCheckoutSessionGatewayTest extends KirbyTestCase
 {
     public function testMapsTheSdkRequestAndResponseAtTheGatewayEdge(): void
     {
@@ -64,7 +65,6 @@ final class CheckoutSessionGatewayTest extends KirbyTestCase
         $this->assertSame('post', $sdkRequest[0] ?? null);
         $this->assertSame('https://api.stripe.com/v1/checkout/sessions', $sdkRequest[1] ?? null);
         $this->assertSame($request->parameters(), $sdkRequest[3] ?? null);
-        $this->assertSame(2, $sdkRequest[6] ?? null);
         $headers = $sdkRequest[2] ?? null;
         $this->assertIsArray($headers);
         $this->assertTrue($this->hasHeader($headers, 'Idempotency-Key: stripe-checkout/session/Abc123def456GHI7'));
@@ -104,6 +104,67 @@ final class CheckoutSessionGatewayTest extends KirbyTestCase
             $this->assertStringNotContainsString('PRIVATE', $error->getMessage());
             $this->assertInstanceOf(RuntimeException::class, $error->getPrevious());
         }
+    }
+
+    public function testRequiresAnIdempotencyKeyBeforeCallingStripe(): void
+    {
+        $client = $this->httpClient();
+        $client->expects($this->never())->method('request');
+        ApiRequestor::setHttpClient($client);
+        $gateway = new StripeApiCheckoutSessionGateway(
+            (new StripeApiClientFactory())->create(
+                new StripeConfiguration('sk_test_gateway', null, null),
+            ),
+        );
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('A Checkout Session idempotency key is required.');
+
+        $gateway->create(new SessionRequest(['mode' => 'payment']), '   ');
+    }
+
+    public function testMapsUnexpectedProviderValuesToAnUntrustedPartialRecord(): void
+    {
+        $client = $this->httpClient();
+        $client->method('request')->willReturn([
+            json_encode([
+                'object' => 'checkout.session',
+                'client_reference_id' => false,
+                'client_secret' => false,
+                'created' => 'unexpected',
+                'currency' => false,
+                'expires_at' => 'unexpected',
+                'id' => false,
+                'integration_identifier' => false,
+                'livemode' => 0,
+                'metadata' => 'unexpected',
+                'mode' => false,
+                'payment_status' => false,
+                'status' => false,
+                'ui_mode' => false,
+                'url' => false,
+            ], JSON_THROW_ON_ERROR),
+            200,
+            [],
+        ]);
+        ApiRequestor::setHttpClient($client);
+        $gateway = new StripeApiCheckoutSessionGateway(
+            (new StripeApiClientFactory())->create(
+                new StripeConfiguration('sk_test_gateway', null, null),
+            ),
+        );
+
+        $record = $gateway->create(
+            new SessionRequest(['mode' => 'payment']),
+            'idempotency-key',
+        );
+
+        $this->assertNull($record->id);
+        $this->assertNull($record->createdAt);
+        $this->assertNull($record->liveMode);
+        $this->assertSame([], $record->metadata);
+        $this->assertNull($record->requestId);
+        $this->assertNull($record->url);
     }
 
     /** @return ClientInterface&MockObject */

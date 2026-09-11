@@ -19,7 +19,7 @@ use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 
-final class CheckoutSessionBuilderTest extends KirbyTestCase
+final class SessionRequestBuilderTest extends KirbyTestCase
 {
     public function testBuildsTheProtectedHostedInlineRequest(): void
     {
