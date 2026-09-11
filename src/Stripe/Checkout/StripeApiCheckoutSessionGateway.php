@@ -7,14 +7,19 @@ namespace ProgrammatorDev\StripeCheckout\Stripe\Checkout;
 use InvalidArgumentException;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Exception\CheckoutSessionGatewayException;
+use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Internal\CheckoutSessionFailureClassifier;
+use Stripe\Checkout\Session;
 use Stripe\StripeClient;
 use Stripe\StripeObject;
 use Throwable;
 
-/** Adapts Checkout Session creation through the pinned Stripe API client. */
+/** Adapts Checkout Session creation and retrieval through the pinned Stripe API client. */
 final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInterface
 {
-    public function __construct(private readonly StripeClient $client) {}
+    public function __construct(
+        private readonly StripeClient $client,
+        private readonly CheckoutSessionFailureClassifier $failures = new CheckoutSessionFailureClassifier(),
+    ) {}
 
     public function create(
         SessionRequest $request,
@@ -33,15 +38,40 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
                 ['idempotency_key' => $idempotencyKey],
             );
         } catch (Throwable $error) {
-            throw new CheckoutSessionGatewayException($error);
+            throw new CheckoutSessionGatewayException(
+                failure: $this->failures->classify($error, mutation: true),
+                error: $error,
+            );
         }
 
+        return $this->sessionRecord($session);
+    }
+
+    public function retrieve(string $sessionId): CheckoutSessionRecord
+    {
+        if (preg_match('/\Acs_[A-Za-z0-9_]+\z/', $sessionId) !== 1) {
+            throw new InvalidArgumentException('A valid Checkout Session ID is required.');
+        }
+
+        try {
+            $session = $this->client->checkout->sessions->retrieve($sessionId, []);
+        } catch (Throwable $error) {
+            throw new CheckoutSessionGatewayException(
+                failure: $this->failures->classify($error, mutation: false),
+                error: $error,
+            );
+        }
+
+        return $this->sessionRecord($session);
+    }
+
+    private function sessionRecord(Session $session): CheckoutSessionRecord
+    {
         $metadata = $session->metadata;
         $lastResponse = $session->getLastResponse();
         $metadata = $metadata instanceof StripeObject ? $metadata->toArray() : [];
 
         /** @var array<string, mixed> $metadata */
-
         return new CheckoutSessionRecord(
             id: $this->nullableString($session->id),
             createdAt: $this->nullableInteger($session->created),

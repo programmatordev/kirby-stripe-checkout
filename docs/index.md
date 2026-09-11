@@ -1,6 +1,6 @@
 # Documentation
 
-Kirby Stripe Checkout is under active development and is not ready for production use. The current package provides its configuration foundation, exact money formatting, Kirby and Stripe Price product resolution, variants, a session-backed PHP cart API and HTTP routes, native order storage and queries, a native Panel area, and local diagnostics. Checkout and webhooks are not implemented yet.
+Kirby Stripe Checkout is under active development and is not ready for production use. The current package provides its configuration foundation, exact money formatting, Kirby and Stripe Price product resolution, variants, a session-backed PHP cart API and HTTP routes, native order storage and queries, protected Checkout Session creation at the service layer, a native Panel area, and local diagnostics. The public browser Checkout flow and webhooks are not implemented yet.
 
 ## Current guides
 

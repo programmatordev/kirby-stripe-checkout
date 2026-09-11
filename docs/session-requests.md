@@ -2,7 +2,19 @@
 
 The plugin builds the Stripe Checkout Session request from trusted product, order, and Settings values. The standard request is the recommended path: it fixes the store currency, presentation mode, internal return routes, and order correlation while leaving payment-method selection to the Stripe Dashboard.
 
-The current package contains and validates this request boundary, but does not yet expose the public Checkout creation route. No Stripe Session is created by the examples below in the current development version.
+The current package contains the service-level creation pipeline, but does not yet expose the public Checkout creation route. The examples below customize the request that pipeline will use once the browser route calls it; registering them alone does not create a Session.
+
+## Creation and safe retries
+
+The pipeline validates products, prices, configuration, and the complete request before creating anything. It then:
+
+1. Creates one protected Kirby order in `creating` state.
+2. Saves the exact Session request, its fingerprint, the pinned Stripe API version, and a UUID-derived idempotency key.
+3. Releases local locks before sending the request to Stripe.
+4. Saves the returned Session ID and changes the order to `open`.
+5. Returns either the hosted Checkout URL or the embedded client secret for the current response only.
+
+The raw attempt token, hosted URL, and client secret are not stored. Repeating the same attempt token reuses the same order. An uncertain request may be sent again only with the exact saved request and key and only within the internal 23-hour deadline; request customization is not run again. A definite provider rejection becomes `creation_failed`, while a network or incompatible-response uncertainty becomes `creation_uncertain` for later diagnosis or recovery.
 
 ## Add safe parameters
 

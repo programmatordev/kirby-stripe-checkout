@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Order\Internal;
 
+use DateInterval;
 use DateTimeImmutable;
 use Kirby\Data\Yaml;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutAttempt;
+use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
@@ -16,6 +19,7 @@ use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 use ProgrammatorDev\StripeCheckout\Order\RefundStatus;
+use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailureType;
 use Throwable;
 
 /**
@@ -33,9 +37,7 @@ final class OrderSerializer
      */
     public static function creation(
         OrderCreationContext $context,
-        string $tokenHash,
-        string $requestFingerprint,
-        ?string $guestReference,
+        CheckoutAttempt $checkoutAttempt,
         DateTimeImmutable $createdAt,
     ): array {
         return self::normalize([
@@ -46,14 +48,7 @@ final class OrderSerializer
                 'schemaVersion' => OrderSchema::VERSION,
             ],
             'orderNumber' => $context->orderNumber(),
-            'checkoutAttempt' => [
-                'tokenHash' => $tokenHash,
-                'requestFingerprint' => $requestFingerprint,
-                'source' => $context->sourceType()->value,
-                'cartRevision' => $context->cartRevision(),
-                'guestReference' => $guestReference,
-                'uiMode' => $context->uiMode()->value,
-            ],
+            'checkoutAttempt' => $checkoutAttempt->toArray(),
             'userUuid' => $context->userUuid(),
             'languageCode' => $context->languageCode(),
             'checkoutStatus' => CheckoutStatus::Creating->value,
@@ -66,6 +61,7 @@ final class OrderSerializer
             'refundedTotal' => '0',
             'createdAt' => OrderData::timestamp($createdAt),
             'updatedAt' => OrderData::timestamp($createdAt),
+            'checkoutExpiresAt' => OrderData::timestamp($checkoutAttempt->expiresAt()),
             'initiatingLineItems' => $context->lineItems(),
         ]);
     }
@@ -96,7 +92,7 @@ final class OrderSerializer
      */
     public static function decode(array $fields, string $template, string $slug): array
     {
-        if ($template !== OrderSchema::TEMPLATE) {
+        if ($template !== OrderSchema::ORDER_PAGE_TEMPLATE) {
             throw new OrderDataException();
         }
 
@@ -147,6 +143,17 @@ final class OrderSerializer
         return hash('sha256', OrderData::json(self::normalize($data)));
     }
 
+    /** @param array<string, mixed> $data */
+    public static function context(array $data): OrderCreationContext
+    {
+        $data = self::normalize($data);
+
+        return self::contextFromData(
+            data: $data,
+            checkoutAttempt: OrderData::map($data['checkoutAttempt']),
+        );
+    }
+
     /**
      * @param array<string, mixed> $data
      * @return array<string, mixed>
@@ -158,7 +165,7 @@ final class OrderSerializer
             // Only top-level null means an absent field. Keep explicit zero/false
             // and nested nulls, which carry different snapshot meanings.
             $data = array_filter($data, static fn(mixed $value): bool => $value !== null);
-            $required = ['title', 'uuid', 'stripeCheckout', 'orderNumber', 'checkoutAttempt', 'checkoutStatus', 'paymentStatus', 'refundStatus', 'disputeStatus', 'currency', 'subtotal', 'refundedTotal', 'createdAt', 'updatedAt', 'initiatingLineItems', ...OrderSchema::FLAGS];
+            $required = ['title', 'uuid', 'stripeCheckout', 'orderNumber', 'checkoutAttempt', 'checkoutStatus', 'paymentStatus', 'refundStatus', 'disputeStatus', 'currency', 'subtotal', 'refundedTotal', 'createdAt', 'updatedAt', 'checkoutExpiresAt', 'initiatingLineItems', ...OrderSchema::FLAGS];
 
             OrderData::validateRequiredKeys($data, $required);
 
@@ -213,18 +220,11 @@ final class OrderSerializer
                 }
             }
 
-            $attempt = self::validateCheckoutAttempt($data);
+            $checkoutAttempt = self::validateCheckoutAttempt($data);
 
-            $context = new OrderCreationContext(
-                $uuid,
-                $orderNumber,
-                CheckoutSource::from(OrderData::text($attempt['source'])),
-                OrderData::nullableString($attempt['cartRevision']),
-                OrderData::nullableString($data['userUuid'] ?? null),
-                OrderData::nullableString($data['languageCode'] ?? null),
-                UiMode::from(OrderData::text($attempt['uiMode'])),
-                $currency,
-                array_map(static fn(mixed $lineItem): OrderLineItemSnapshot => OrderLineItemSnapshot::fromArray(OrderData::map($lineItem)), OrderData::list($data['initiatingLineItems'])),
+            $context = self::contextFromData(
+                data: $data,
+                checkoutAttempt: $checkoutAttempt,
             );
             $data['initiatingLineItems'] = $context->lineItems();
 
@@ -258,25 +258,111 @@ final class OrderSerializer
 
     /**
      * @param array<string, mixed> $data
+     * @param array<string, mixed> $checkoutAttempt
+     */
+    private static function contextFromData(array $data, array $checkoutAttempt): OrderCreationContext
+    {
+        return new OrderCreationContext(
+            uuid: OrderData::text($data['uuid']),
+            orderNumber: OrderData::text($data['orderNumber'], 80),
+            sourceType: CheckoutSource::from(OrderData::text($checkoutAttempt['source'])),
+            cartRevision: OrderData::nullableString($checkoutAttempt['cartRevision']),
+            userUuid: OrderData::nullableString($data['userUuid'] ?? null),
+            languageCode: OrderData::nullableString($data['languageCode'] ?? null),
+            uiMode: UiMode::from(OrderData::text($checkoutAttempt['uiMode'])),
+            currency: OrderData::text($data['currency']),
+            lineItems: array_map(
+                static fn(mixed $lineItem): OrderLineItemSnapshot => OrderLineItemSnapshot::fromArray(OrderData::map($lineItem)),
+                OrderData::list($data['initiatingLineItems']),
+            ),
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $data
      * @return array<string, mixed>
      */
     private static function validateCheckoutAttempt(array $data): array
     {
-        $attempt = OrderData::map($data['checkoutAttempt']);
+        $checkoutAttempt = OrderData::map($data['checkoutAttempt']);
 
-        $requiredKeys = ['tokenHash', 'requestFingerprint', 'source', 'cartRevision', 'guestReference', 'uiMode'];
-        OrderData::validateAllowedKeys($attempt, $requiredKeys);
-        OrderData::validateRequiredKeys($attempt, $requiredKeys);
+        $requiredKeys = [
+            'tokenHash',
+            'requestFingerprint',
+            'sessionRequest',
+            'idempotencyKey',
+            'stripeApiVersion',
+            'operation',
+            'retryUntil',
+            'source',
+            'cartRevision',
+            'guestReference',
+            'uiMode',
+            'initiatingUrl',
+            'successUrl',
+            'cancelUrl',
+            'returnUrl',
+            'providerFailure',
+        ];
+        OrderData::validateAllowedKeys($checkoutAttempt, $requiredKeys);
+        OrderData::validateRequiredKeys($checkoutAttempt, $requiredKeys);
 
         $digestFields = ['tokenHash', 'requestFingerprint'];
 
         foreach ($digestFields as $key) {
-            if (is_string($attempt[$key]) === false || preg_match('/\A[a-f0-9]{64}\z/', $attempt[$key]) !== 1) {
+            if (is_string($checkoutAttempt[$key]) === false || preg_match('/\A[a-f0-9]{64}\z/', $checkoutAttempt[$key]) !== 1) {
                 throw new OrderDataException();
             }
         }
 
-        $hasGuest = $attempt['guestReference'] !== null;
+        $request = new SessionRequest(OrderData::map($checkoutAttempt['sessionRequest']));
+        $requestParameters = $request->parameters();
+
+        if ($request->fingerprint() !== $checkoutAttempt['requestFingerprint']) {
+            throw new OrderDataException();
+        }
+
+        $uuid = OrderData::text($data['uuid']);
+
+        if (
+            OrderData::text($checkoutAttempt['idempotencyKey'], 255) !== 'stripe-checkout/session/' . $uuid
+            || OrderData::text($checkoutAttempt['stripeApiVersion'], 80) === ''
+            || $checkoutAttempt['operation'] !== CheckoutAttempt::OPERATION
+        ) {
+            throw new OrderDataException();
+        }
+
+        $retryUntil = OrderData::date($checkoutAttempt['retryUntil']);
+        $createdAt = OrderData::date($data['createdAt']);
+        $expiresAt = OrderData::date($data['checkoutExpiresAt']);
+
+        // These intervals are part of the immutable idempotency contract, not
+        // merchant-editable retention settings.
+        if (
+            $retryUntil != $createdAt->add(new DateInterval(CheckoutAttempt::RETRY_WINDOW))
+            || $expiresAt != $createdAt->add(new DateInterval(CheckoutAttempt::SESSION_LIFETIME))
+            || ($requestParameters['expires_at'] ?? null) !== $expiresAt->getTimestamp()
+        ) {
+            throw new OrderDataException();
+        }
+
+        $urlFields = ['initiatingUrl', 'successUrl', 'cancelUrl', 'returnUrl'];
+
+        foreach ($urlFields as $field) {
+            $url = OrderData::text($checkoutAttempt[$field]);
+
+            if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+                throw new OrderDataException();
+            }
+        }
+
+        self::validateProviderFailure(
+            value: $checkoutAttempt['providerFailure'],
+            createdAt: $createdAt,
+            updatedAt: OrderData::date($data['updatedAt']),
+        );
+
+        $hasGuest = $checkoutAttempt['guestReference'] !== null;
         $hasUser = isset($data['userUuid']);
 
         // Bind the attempt to exactly one actor: a user or an anonymous browser.
@@ -284,11 +370,49 @@ final class OrderSerializer
             throw new OrderDataException();
         }
 
-        if ($attempt['guestReference'] !== null) {
-            OrderData::text($attempt['guestReference']);
+        if ($checkoutAttempt['guestReference'] !== null) {
+            OrderData::text($checkoutAttempt['guestReference'], 128);
         }
 
-        return $attempt;
+        return $checkoutAttempt;
+    }
+
+    private static function validateProviderFailure(
+        mixed $value,
+        DateTimeImmutable $createdAt,
+        DateTimeImmutable $updatedAt,
+    ): void {
+        if ($value === null) {
+            return;
+        }
+
+        $failure = OrderData::map($value);
+        $keys = ['type', 'requestId', 'providerCode', 'providerType', 'retryable', 'occurredAt'];
+        OrderData::validateAllowedKeys($failure, $keys);
+        OrderData::validateRequiredKeys($failure, $keys);
+        $type = CheckoutSessionFailureType::from(OrderData::text($failure['type']));
+
+        foreach (['requestId', 'providerCode', 'providerType'] as $field) {
+            $text = OrderData::nullableString($failure[$field]);
+
+            if ($text !== null) {
+                OrderData::text($text, 255);
+            }
+        }
+
+        if (OrderData::boolean($failure['retryable']) !== in_array($type, [
+            CheckoutSessionFailureType::Retryable,
+            CheckoutSessionFailureType::Unavailable,
+            CheckoutSessionFailureType::Uncertain,
+        ], true)) {
+            throw new OrderDataException();
+        }
+
+        $occurredAt = OrderData::date($failure['occurredAt']);
+
+        if ($occurredAt < $createdAt || $occurredAt > $updatedAt) {
+            throw new OrderDataException();
+        }
     }
 
     /** @param array<string, mixed> $data */

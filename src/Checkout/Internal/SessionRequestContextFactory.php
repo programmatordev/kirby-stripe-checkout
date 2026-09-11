@@ -26,9 +26,6 @@ final class SessionRequestContextFactory
 {
     private const RESULT_QUERY_KEY = '_stripe_checkout_result';
 
-    /** Keep the common path aligned with Stripe's default instead of exposing another store setting. */
-    private const SESSION_LIFETIME = 'PT24H';
-
     private const SUPPORTED_STRIPE_LOCALES = [
         'auto',
         'bg',
@@ -111,28 +108,28 @@ final class SessionRequestContextFactory
             locale: $this->resolveStripeLocale($language),
             expiresAt: $createdAt
                 ->setTimezone(new DateTimeZone('UTC'))
-                ->add(new DateInterval(self::SESSION_LIFETIME)),
+                ->add(new DateInterval(CheckoutAttempt::SESSION_LIFETIME)),
             initiatingUrl: $initiatingUrl,
             successDestination: $this->resolveDestination(
-                $settings->successDestination(),
-                'successDestination',
-                $resolvedLanguageCode,
-                $initiatingUrl,
-                $isLiveMode,
+                value: $settings->successDestination(),
+                name: 'successDestination',
+                languageCode: $resolvedLanguageCode,
+                fallbackUrl: $initiatingUrl,
+                isLiveMode: $isLiveMode,
             ),
             cancelDestination: $this->resolveDestination(
-                $settings->cancelDestination(),
-                'cancelDestination',
-                $resolvedLanguageCode,
-                $initiatingUrl,
-                $isLiveMode,
+                value: $settings->cancelDestination(),
+                name: 'cancelDestination',
+                languageCode: $resolvedLanguageCode,
+                fallbackUrl: $initiatingUrl,
+                isLiveMode: $isLiveMode,
             ),
             returnDestination: $this->resolveDestination(
-                $settings->returnDestination(),
-                'returnDestination',
-                $resolvedLanguageCode,
-                $initiatingUrl,
-                $isLiveMode,
+                value: $settings->returnDestination(),
+                name: 'returnDestination',
+                languageCode: $resolvedLanguageCode,
+                fallbackUrl: $initiatingUrl,
+                isLiveMode: $isLiveMode,
             ),
         );
     }

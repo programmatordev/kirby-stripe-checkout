@@ -2,7 +2,7 @@
 
 The plugin uses [Brick Money](https://github.com/brick/money) for exact amounts. It never uses PHP floating-point values for prices, calculations, or Stripe amounts. Locale-aware formatting requires PHP's Intl extension linked against ICU 62.1 or newer.
 
-Kirby product resolution uses these exact values now. Checkout is not implemented yet.
+Kirby product resolution and the internal Checkout Session pipeline use these exact values now. The public browser Checkout route is not implemented yet.
 
 ## Store currency
 

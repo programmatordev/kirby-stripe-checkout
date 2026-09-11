@@ -30,6 +30,7 @@ use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
+use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
 use RuntimeException;
 use stdClass;
 
@@ -61,7 +62,7 @@ final class OrderValuesTest extends TestCase
     {
         $data = $this->data();
         $fields = OrderSerializer::encode($data);
-        $decoded = OrderSerializer::decode(OrderData::map(Txt::decode(Txt::encode($fields))), OrderSchema::TEMPLATE, 'Abc123def456GHI7');
+        $decoded = OrderSerializer::decode(OrderData::map(Txt::decode(Txt::encode($fields))), OrderSchema::ORDER_PAGE_TEMPLATE, 'Abc123def456GHI7');
         $this->assertSame($data, $decoded);
         $this->assertSame('0', $fields['refundedTotal']);
         $this->assertSame('false', $fields['refundHasActive']);
@@ -120,9 +121,19 @@ final class OrderValuesTest extends TestCase
             [new SelectedOption('size', 'Tamanho', 'large', 'Grande — 大')],
             variantId: 'large-variant',
         );
-        $data = OrderSerializer::creation($this->context(lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)]), hash('sha256', 'token'), hash('sha256', 'request'), 'guest', new DateTimeImmutable());
+        $context = $this->context(lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)]);
+        $createdAt = new DateTimeImmutable();
+        $data = OrderSerializer::creation(
+            context: $context,
+            checkoutAttempt: CheckoutAttemptFactory::create(
+                order: $context,
+                createdAt: $createdAt,
+                guestReference: 'guest',
+            ),
+            createdAt: $createdAt,
+        );
         $fields = OrderData::map(Txt::decode(Txt::encode(OrderSerializer::encode($data))));
-        $this->assertSame($data, OrderSerializer::decode($fields, OrderSchema::TEMPLATE, 'Abc123def456GHI7'));
+        $this->assertSame($data, OrderSerializer::decode($fields, OrderSchema::ORDER_PAGE_TEMPLATE, 'Abc123def456GHI7'));
     }
 
     #[DataProvider('inconsistentTimestamps')]
@@ -229,7 +240,16 @@ final class OrderValuesTest extends TestCase
     public function testDirectAndSingleLanguageFactsRemainExplicit(): void
     {
         $context = $this->context(source: CheckoutSource::Direct, revision: null, language: null, user: 'user://customer');
-        $data = OrderSerializer::creation($context, hash('sha256', 'token'), hash('sha256', 'request'), null, new DateTimeImmutable());
+        $createdAt = new DateTimeImmutable();
+        $data = OrderSerializer::creation(
+            context: $context,
+            checkoutAttempt: CheckoutAttemptFactory::create(
+                order: $context,
+                createdAt: $createdAt,
+                guestReference: null,
+            ),
+            createdAt: $createdAt,
+        );
         $this->assertSame('user://customer', $data['userUuid']);
         $this->assertIsArray($data['checkoutAttempt']);
         $this->assertNull($data['checkoutAttempt']['guestReference']);
@@ -255,12 +275,12 @@ final class OrderValuesTest extends TestCase
     public function testRequiredSnapshotKeysCannotBeOmittedOrReplaced(string $scope, string $key, bool $replace): void
     {
         $data = $this->data();
-        $attempt = OrderData::map($data['checkoutAttempt']);
+        $checkoutAttempt = OrderData::map($data['checkoutAttempt']);
         $lineItem = $this->lineItem()->toArray();
         $options = OrderData::list($lineItem['options']);
         $option = OrderData::map($options[0]);
         $snapshot = match ($scope) {
-            'attempt' => $attempt,
+            'attempt' => $checkoutAttempt,
             'line' => $lineItem,
             'option' => $option,
             default => $this->fail('Unknown snapshot fixture.'),
@@ -291,7 +311,24 @@ final class OrderValuesTest extends TestCase
     public static function invalidSnapshotKeys(): iterable
     {
         $fields = [
-            'attempt' => ['tokenHash', 'requestFingerprint', 'source', 'cartRevision', 'guestReference', 'uiMode'],
+            'attempt' => [
+                'tokenHash',
+                'requestFingerprint',
+                'sessionRequest',
+                'idempotencyKey',
+                'stripeApiVersion',
+                'operation',
+                'retryUntil',
+                'source',
+                'cartRevision',
+                'guestReference',
+                'uiMode',
+                'initiatingUrl',
+                'successUrl',
+                'cancelUrl',
+                'returnUrl',
+                'providerFailure',
+            ],
             'line' => ['description', 'sku', 'variantId', 'stripePriceId', 'stripeProductId'],
             'option' => ['optionId', 'optionName', 'valueId', 'valueName'],
         ];
@@ -353,7 +390,7 @@ final class OrderValuesTest extends TestCase
         $fields = OrderSerializer::encode($this->data());
         $fields['stripeCheckout'] = 'owner: [';
         $this->expectException(OrderDataException::class);
-        OrderSerializer::decode($fields, OrderSchema::TEMPLATE, 'Abc123def456GHI7');
+        OrderSerializer::decode($fields, OrderSchema::ORDER_PAGE_TEMPLATE, 'Abc123def456GHI7');
     }
 
     #[DataProvider('identities')]
@@ -367,7 +404,7 @@ final class OrderValuesTest extends TestCase
     public static function identities(): iterable
     {
         yield ['product', 'Abc123def456GHI7'];
-        yield [OrderSchema::TEMPLATE, 'different'];
+        yield [OrderSchema::ORDER_PAGE_TEMPLATE, 'different'];
     }
 
     #[DataProvider('checkoutStates')]
@@ -556,7 +593,17 @@ final class OrderValuesTest extends TestCase
 
         foreach ($contexts as $context) {
             try {
-                OrderSerializer::creation($context, hash('sha256', 'token'), hash('sha256', 'request'), $context->userUuid() === null ? null : 'guest', new DateTimeImmutable());
+                $createdAt = new DateTimeImmutable();
+                $guestReference = $context->userUuid() === null ? null : 'guest';
+                OrderSerializer::creation(
+                    context: $context,
+                    checkoutAttempt: CheckoutAttemptFactory::create(
+                        order: $context,
+                        createdAt: $createdAt,
+                        guestReference: $guestReference,
+                    ),
+                    createdAt: $createdAt,
+                );
                 $this->fail('Expected actor conflict.');
             } catch (OrderDataException $error) {
                 $this->assertSame('order.data_invalid', $error->errorCode());
@@ -569,10 +616,10 @@ final class OrderValuesTest extends TestCase
         $data = $this->data();
         $fields = OrderSerializer::encode($data);
         $fields['customNote'] = 'Keep me';
-        $this->assertSame($data, OrderSerializer::decode($fields, OrderSchema::TEMPLATE, 'Abc123def456GHI7'));
+        $this->assertSame($data, OrderSerializer::decode($fields, OrderSchema::ORDER_PAGE_TEMPLATE, 'Abc123def456GHI7'));
         $fields['UUID'] = 'other';
         $this->expectException(OrderDataException::class);
-        OrderSerializer::decode($fields, OrderSchema::TEMPLATE, 'Abc123def456GHI7');
+        OrderSerializer::decode($fields, OrderSchema::ORDER_PAGE_TEMPLATE, 'Abc123def456GHI7');
     }
 
     public function testResourcesAreNotCustomFieldData(): void
@@ -704,7 +751,17 @@ final class OrderValuesTest extends TestCase
     /** @param array<array-key, OrderLineItemSnapshot>|null $lineItems */
     private function context(?array $lineItems = null, CheckoutSource $source = CheckoutSource::Cart, ?string $revision = 'revision', ?string $language = 'en', ?string $user = null): OrderCreationContext
     {
-        return new OrderCreationContext('Abc123def456GHI7', 'ORD-ABC123DEF456GHI7', $source, $revision, $user, $language, UiMode::Hosted, 'EUR', $lineItems ?? [$this->lineItem()]);
+        return new OrderCreationContext(
+            uuid: 'Abc123def456GHI7',
+            orderNumber: 'ORD-ABC123DEF456GHI7',
+            sourceType: $source,
+            cartRevision: $revision,
+            userUuid: $user,
+            languageCode: $language,
+            uiMode: UiMode::Hosted,
+            currency: 'EUR',
+            lineItems: $lineItems ?? [$this->lineItem()],
+        );
     }
 
     private function lineItem(): OrderLineItemSnapshot
@@ -718,7 +775,18 @@ final class OrderValuesTest extends TestCase
     /** @return array<string, mixed> */
     private function data(): array
     {
-        return OrderSerializer::creation($this->context(), hash('sha256', 'token'), hash('sha256', 'request'), 'guest', new DateTimeImmutable('2026-09-05T11:20:30+01:00'));
+        $context = $this->context();
+        $createdAt = new DateTimeImmutable('2026-09-05T11:20:30+01:00');
+
+        return OrderSerializer::creation(
+            context: $context,
+            checkoutAttempt: CheckoutAttemptFactory::create(
+                order: $context,
+                createdAt: $createdAt,
+                guestReference: 'guest',
+            ),
+            createdAt: $createdAt,
+        );
     }
 
     /** @return array<string, mixed> */

@@ -1,6 +1,6 @@
 # Orders
 
-Orders are stored as native Kirby draft Pages under the protected `stripe-checkout-orders` container, which is initialized automatically. The package includes guarded internal creation and updates, developer queries, local lifecycle hooks, and an extendable order blueprint. Checkout does not yet create orders automatically; Checkout Sessions, payment synchronization and automatic cleanup are not implemented yet.
+Orders are stored as native Kirby draft Pages under the protected `stripe-checkout-orders` container, which is initialized automatically. The package includes guarded internal creation and updates, developer queries, local lifecycle hooks, and an extendable order blueprint. The internal Checkout pipeline now creates an order before its Stripe Session; the public browser Checkout flow, payment synchronization, and automatic cleanup are not implemented yet.
 
 ## Query orders
 
@@ -152,7 +152,7 @@ Kirby stops calling listeners when one throws. Retrying the whole hook can there
 
 The controlled, single-order deletion primitive emits `programmatordev.stripe-checkout.order.deleted` with Kirby's final in-memory Page after deletion. A failed deletion hook **cannot be retried**: only the last sanitized outcome is retained, not the deleted customer's snapshot. Durable deletion integrations must enqueue successfully during the first invocation. No public deletion route or automatic cleanup runner is available yet.
 
-Session, payment, refund and dispute event types are defined, but their provider flows do not emit hooks yet.
+The Session-creation pipeline emits `programmatordev.stripe-checkout.session.created` after the Session ID is committed. Payment, refund and dispute event types are defined, but their provider flows do not emit hooks yet.
 
 ### Event values
 
@@ -180,6 +180,8 @@ Known zero totals are explicit; final totals are absent before completion rather
 
 Recorded timestamps must agree with the order state and fall between creation and the last update. The Checkout expiration deadline may be in the future. Earlier observations, such as uncertainty before a Session opens, are retained; contradictory completion and expiration facts are rejected.
 
+Before the Stripe request, the order stores the exact normalized Session request, request fingerprint, UUID-derived idempotency key, pinned Stripe API version, destinations, and a 23-hour retry deadline. Only the attempt-token hash is stored. Stripe's redirect URL and embedded client secret are returned for the current request and are never written to order content. A definite rejection marks creation as failed; an indeterminate result remains recoverable with exactly the saved request and key until the deadline.
+
 Writes reload and validate the current record before persisting through Kirby's Page/content APIs. Failed or corrupt records are never replaced with empty orders. Custom fields survive canonical updates. Successful canonical changes also clear Kirby's page cache so cached output does not retain the old state; no-op updates leave the cache intact.
 
-The site needs writable content and `site/storage/stripe-checkout`. Empty files in its `order-locks` subdirectory coordinate concurrent read/update/write operations, with a bounded two-second wait (`persistence.busy` on contention). These are not cache files: do not clear them while writers are running. They contain no order data. The separate `lifecycle-last-deletion.json` keeps only a delivery ID, timestamp, status and safe error code for the last deleted-order notification. Multi-server installations must share this directory and content storage on a filesystem that supports reliable file locking.
+The site needs writable content and `site/storage/stripe-checkout`. Empty files in its `order-locks` subdirectory coordinate concurrent order writes and the short attempt-token lookup/create boundary, with a bounded two-second wait (`persistence.busy` on contention). No lock is held while contacting Stripe. These are not cache files: do not clear them while writers are running. They contain no order data. The separate `lifecycle-last-deletion.json` keeps only a delivery ID, timestamp, status and safe error code for the last deleted-order notification. Multi-server installations must share this directory and content storage on a filesystem that supports reliable file locking.

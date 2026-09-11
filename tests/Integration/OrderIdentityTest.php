@@ -18,6 +18,7 @@ use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
+use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 
 final class OrderIdentityTest extends TestCase
@@ -57,8 +58,27 @@ final class OrderIdentityTest extends TestCase
             $number = (new OrderNumberFormatter())->format($id);
             $price = Money::of('16', 'EUR');
             $product = new Product(new ProductRequest('product'), 'Product', false, new Price($price));
-            $context = new OrderCreationContext($id, $number, CheckoutSource::Direct, null, null, null, UiMode::Hosted, 'EUR', [OrderLineItemSnapshot::fromProduct($product, $price)]);
-            $content = OrderSerializer::creation($context, hash('sha256', 'token'), hash('sha256', 'request'), 'guest', new DateTimeImmutable());
+            $context = new OrderCreationContext(
+                uuid: $id,
+                orderNumber: $number,
+                sourceType: CheckoutSource::Direct,
+                cartRevision: null,
+                userUuid: null,
+                languageCode: null,
+                uiMode: UiMode::Hosted,
+                currency: 'EUR',
+                lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)],
+            );
+            $createdAt = new DateTimeImmutable();
+            $content = OrderSerializer::creation(
+                context: $context,
+                checkoutAttempt: CheckoutAttemptFactory::create(
+                    order: $context,
+                    createdAt: $createdAt,
+                    guestReference: 'guest',
+                ),
+                createdAt: $createdAt,
+            );
 
             $this->assertSame($id, $content['uuid']);
             $this->assertSame($id, $context->uuid());

@@ -13,8 +13,10 @@ use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutator;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartViewFactory;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\KirbySessionCartStore;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionCreator;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestBuilder;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestContextFactory;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestCustomizer;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
@@ -23,6 +25,7 @@ use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Internal\ClosureProductResolver;
@@ -46,6 +49,7 @@ use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 use ProgrammatorDev\StripeCheckout\Stripe\StripeApiClientFactory;
 use ProgrammatorDev\StripeCheckout\Translation\LocaleResolver;
 use Stripe\StripeClient;
+use Stripe\Util\ApiVersion;
 
 /**
  * Builds and owns the service graph for one public plugin operation.
@@ -200,6 +204,20 @@ final class RuntimeFactory
             $context,
             $request,
             $configuration->sessionRequestFactory(),
+        );
+    }
+
+    public function checkoutSessionCreator(): CheckoutSessionCreator
+    {
+        $configuration = $this->configurationReport()->configurationOrFail();
+
+        return new CheckoutSessionCreator(
+            configuration: $configuration,
+            requestContextFactory: new SessionRequestContextFactory($this->kirby),
+            orderPageStore: new OrderPageStore($this->kirby),
+            sessionGateway: $this->checkoutSessionGateway(),
+            sessionRequestFactory: fn(SessionRequestContext $context): SessionRequest => $this->checkoutSessionRequest($context),
+            stripeApiVersion: ApiVersion::CURRENT,
         );
     }
 

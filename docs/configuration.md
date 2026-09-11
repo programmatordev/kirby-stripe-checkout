@@ -1,6 +1,6 @@
 # Configuration
 
-This guide covers the configuration behavior available in the current package. Checkout creation is not implemented yet.
+This guide covers the configuration behavior available in the current package. Protected Checkout Session creation is implemented internally, but the public browser Checkout route is not available yet.
 
 ## Stripe credentials
 

@@ -8,6 +8,8 @@ use InvalidArgumentException;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartSnapshot;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
 
@@ -22,7 +24,7 @@ final readonly class AttemptBinding
 {
     private string $fingerprint;
 
-    /** @param list<ProductRequest> $items */
+    /** @param list<array<string, mixed>> $selection */
     private function __construct(
         private CheckoutSource $source,
         ?string $userUuid,
@@ -30,7 +32,7 @@ final readonly class AttemptBinding
         string $requestFingerprint,
         ?string $cartId,
         ?string $cartRevision,
-        array $items,
+        array $selection,
     ) {
         if (($userUuid === null) === ($guestReference === null)) {
             throw new InvalidArgumentException('An attempt requires exactly one actor.');
@@ -62,7 +64,7 @@ final readonly class AttemptBinding
             $requestFingerprint,
             $cartId,
             $cartRevision,
-            array_map(ProductRequestData::toArray(...), $items),
+            $selection,
         ], JSON_THROW_ON_ERROR));
     }
 
@@ -79,7 +81,15 @@ final readonly class AttemptBinding
         // Cart identity/revision identify selection state. The separate request
         // fingerprint must still cover current commerce facts, which can change
         // without a cart mutation (for example, a merchant changing a price).
-        return new self(CheckoutSource::Cart, $userUuid, $guestReference, $requestFingerprint, $cart->id(), $cart->revision(), []);
+        return new self(
+            source: CheckoutSource::Cart,
+            userUuid: $userUuid,
+            guestReference: $guestReference,
+            requestFingerprint: $requestFingerprint,
+            cartId: $cart->id(),
+            cartRevision: $cart->revision(),
+            selection: [],
+        );
     }
 
     /** @param array<array-key, ProductRequest> $items Canonical output from ProductRequestNormalizer. */
@@ -93,7 +103,39 @@ final readonly class AttemptBinding
             throw new CheckoutInputException('selection.invalid');
         }
 
-        return new self(CheckoutSource::Direct, $userUuid, $guestReference, $requestFingerprint, null, null, $items);
+        return new self(
+            source: CheckoutSource::Direct,
+            userUuid: $userUuid,
+            guestReference: $guestReference,
+            requestFingerprint: $requestFingerprint,
+            cartId: null,
+            cartRevision: null,
+            selection: array_map(ProductRequestData::toArray(...), $items),
+        );
+    }
+
+    public static function order(
+        OrderCreationContext $order,
+        string $requestFingerprint,
+        ?string $guestReference = null,
+    ): self {
+        $selection = $order->sourceType() === CheckoutSource::Direct
+            ? array_map(static fn(array $lineItem): array => [
+                'reference' => OrderData::text($lineItem['reference'] ?? null),
+                'quantity' => OrderData::integer($lineItem['quantity'] ?? null),
+                'selectedOptions' => self::selectedOptions($lineItem['options'] ?? null),
+            ], $order->lineItems())
+            : [];
+
+        return new self(
+            source: $order->sourceType(),
+            userUuid: $order->userUuid(),
+            guestReference: $guestReference,
+            requestFingerprint: $requestFingerprint,
+            cartId: null,
+            cartRevision: $order->cartRevision(),
+            selection: $selection,
+        );
     }
 
     public function source(): CheckoutSource
@@ -111,5 +153,20 @@ final readonly class AttemptBinding
         if (hash_equals($this->fingerprint, $binding->fingerprint) === false) {
             throw new CheckoutInputException('checkout.attempt_conflict');
         }
+    }
+
+    /** @return array<string, string> */
+    private static function selectedOptions(mixed $values): array
+    {
+        $selection = [];
+
+        foreach (OrderData::list($values) as $value) {
+            $value = OrderData::map($value);
+            $selection[OrderData::text($value['optionId'] ?? null)] = OrderData::text($value['valueId'] ?? null);
+        }
+
+        ksort($selection);
+
+        return $selection;
     }
 }

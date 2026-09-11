@@ -15,6 +15,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderCreationContextFactory;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderHookDispatcher;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
@@ -29,6 +30,7 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
+use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
@@ -496,18 +498,25 @@ final class OrderHookDispatcherTest extends KirbyTestCase
     {
         $price = Money::of('16', 'EUR');
         $product = new Product(new ProductRequest('product', 1), 'Product', false, new Price($price));
+        $context = (new OrderCreationContextFactory($this->kirby))->create(
+            lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)],
+            currency: 'EUR',
+            source: CheckoutSource::Direct,
+            cartRevision: null,
+            userUuid: null,
+            languageCode: $languageCode,
+            uiMode: UiMode::Hosted,
+        );
+        $createdAt = new DateTimeImmutable();
 
         return (new OrderPageStore($this->kirby))->create(
-            [OrderLineItemSnapshot::fromProduct($product, $price)],
-            'EUR',
-            CheckoutSource::Direct,
-            null,
-            null,
-            $languageCode,
-            UiMode::Hosted,
-            hash('sha256', 'token'),
-            hash('sha256', 'request'),
-            'guest',
+            context: $context,
+            checkoutAttempt: CheckoutAttemptFactory::create(
+                order: $context,
+                createdAt: $createdAt,
+                guestReference: 'guest',
+            ),
+            createdAt: $createdAt,
         );
     }
 }

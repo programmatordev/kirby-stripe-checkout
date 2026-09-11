@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use PHPUnit\Framework\MockObject\MockObject;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Configuration\StripeConfiguration;
+use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailureType;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Exception\CheckoutSessionGatewayException;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\StripeApiCheckoutSessionGateway;
 use ProgrammatorDev\StripeCheckout\Stripe\StripeApiClientFactory;
@@ -103,7 +104,68 @@ final class StripeApiCheckoutSessionGatewayTest extends KirbyTestCase
             $this->assertSame('The Stripe Checkout Session request failed.', $error->getMessage());
             $this->assertStringNotContainsString('PRIVATE', $error->getMessage());
             $this->assertInstanceOf(RuntimeException::class, $error->getPrevious());
+            $this->assertSame(CheckoutSessionFailureType::Uncertain, $error->failure()->type());
         }
+    }
+
+    public function testRetrievesAnExistingSessionWithoutAnIdempotencyKey(): void
+    {
+        $requests = [];
+        $client = $this->httpClient();
+        $client->method('request')->willReturnCallback(
+            static function (...$arguments) use (&$requests): array {
+                $requests[] = $arguments;
+
+                return [json_encode([
+                    'id' => 'cs_test_session',
+                    'object' => 'checkout.session',
+                    'client_reference_id' => 'page://Abc123def456GHI7',
+                    'client_secret' => null,
+                    'created' => 1_789_084_800,
+                    'currency' => 'eur',
+                    'expires_at' => 1_789_171_200,
+                    'integration_identifier' => 'kirby_stripe_checkout_abcdefgh',
+                    'livemode' => false,
+                    'metadata' => [],
+                    'mode' => 'payment',
+                    'payment_status' => 'unpaid',
+                    'status' => 'open',
+                    'ui_mode' => 'hosted_page',
+                    'url' => 'https://checkout.stripe.com/c/pay/cs_test_session',
+                ], JSON_THROW_ON_ERROR), 200, ['request-id' => 'req_retrieve']];
+            },
+        );
+        ApiRequestor::setHttpClient($client);
+        $gateway = new StripeApiCheckoutSessionGateway(
+            (new StripeApiClientFactory())->create(
+                new StripeConfiguration('sk_test_gateway', null, null),
+            ),
+        );
+        $record = $gateway->retrieve('cs_test_session');
+
+        $this->assertCount(1, $requests);
+        $this->assertSame('get', $requests[0][0] ?? null);
+        $this->assertSame('https://api.stripe.com/v1/checkout/sessions/cs_test_session', $requests[0][1] ?? null);
+        $headers = $requests[0][2] ?? null;
+        $this->assertIsArray($headers);
+        $this->assertFalse((bool) array_filter($headers, static fn(mixed $header): bool => is_string($header) && str_starts_with($header, 'Idempotency-Key:')));
+        $this->assertSame('cs_test_session', $record->id);
+        $this->assertSame('req_retrieve', $record->requestId);
+    }
+
+    public function testRejectsAnInvalidSessionIdBeforeRetrieval(): void
+    {
+        $client = $this->httpClient();
+        $client->expects($this->never())->method('request');
+        ApiRequestor::setHttpClient($client);
+        $gateway = new StripeApiCheckoutSessionGateway(
+            (new StripeApiClientFactory())->create(
+                new StripeConfiguration('sk_test_gateway', null, null),
+            ),
+        );
+
+        $this->expectException(InvalidArgumentException::class);
+        $gateway->retrieve('not-a-session');
     }
 
     public function testRequiresAnIdempotencyKeyBeforeCallingStripe(): void

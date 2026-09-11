@@ -12,11 +12,8 @@ use Kirby\Cms\Pages;
 use Kirby\Cms\User;
 use Kirby\Data\Yaml;
 use Kirby\Uuid\Uri;
-use Kirby\Uuid\Uuid;
 use Kirby\Uuid\Uuids;
-use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
-use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
-use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutAttempt;
 use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
@@ -25,8 +22,6 @@ use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderCustomFieldsValidator;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
-use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
-use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
 use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
@@ -48,8 +43,8 @@ final class OrderPageStore
 
         try {
             $this->kirby->impersonate('kirby', fn(): Page => Page::create([
-                'slug' => OrderSchema::CONTAINER,
-                'template' => OrderSchema::CONTAINER,
+                'slug' => OrderSchema::ORDERS_PAGE_ID,
+                'template' => OrderSchema::ORDERS_PAGE_TEMPLATE,
                 'isDraft' => true,
                 'site' => $this->kirby->site()->clone(),
                 'content' => [
@@ -77,13 +72,13 @@ final class OrderPageStore
     {
         // A fresh native inventory must not reuse an earlier request-scoped
         // collection or the temporary model left by a failed Page creation.
-        $page = $this->kirby->site()->clone()->findPageOrDraft(OrderSchema::CONTAINER);
+        $page = $this->kirby->site()->clone()->findPageOrDraft(OrderSchema::ORDERS_PAGE_ID);
 
         if ($page === null) {
             return null;
         }
 
-        if ($page instanceof OrdersPage === false || $page->isDraft() === false || $page->intendedTemplate()->name() !== OrderSchema::CONTAINER) {
+        if ($page instanceof OrdersPage === false || $page->isDraft() === false || $page->intendedTemplate()->name() !== OrderSchema::ORDERS_PAGE_TEMPLATE) {
             throw new OrderStorageException('persistence.model_mismatch');
         }
 
@@ -106,36 +101,26 @@ final class OrderPageStore
         return $page;
     }
 
-    /** @param list<OrderLineItemSnapshot> $lineItems */
     public function create(
-        array $lineItems,
-        string $currency,
-        CheckoutSource $sourceType,
-        ?string $cartRevision,
-        ?string $userUuid,
-        ?string $languageCode,
-        UiMode $uiMode,
-        string $tokenHash,
-        string $requestFingerprint,
-        ?string $guestReference,
+        OrderCreationContext $context,
+        CheckoutAttempt $checkoutAttempt,
+        DateTimeImmutable $createdAt,
+    ): OrderPage {
+        return $this->dispatchCreated($this->persistCreation($context, $checkoutAttempt, $createdAt));
+    }
+
+    private function persistCreation(
+        OrderCreationContext $context,
+        CheckoutAttempt $checkoutAttempt,
+        DateTimeImmutable $createdAt,
     ): OrderPage {
         $this->requireUuids();
-        /** @var array<string, mixed> $options */
-        $options = $this->kirby->options();
-        $formatter = (new ConfigurationResolver())->orderNumberFormatter($options);
-        $uuid = Uuid::generate();
-        $context = new OrderCreationContext(
-            uuid: $uuid,
-            orderNumber: (new OrderNumberFormatter($formatter))->format($uuid),
-            sourceType: $sourceType,
-            cartRevision: $cartRevision,
-            userUuid: $userUuid,
-            languageCode: $languageCode,
-            uiMode: $uiMode,
-            currency: $currency,
-            lineItems: $lineItems,
+        $uuid = $context->uuid();
+        $data = OrderSerializer::creation(
+            context: $context,
+            checkoutAttempt: $checkoutAttempt,
+            createdAt: $createdAt,
         );
-        $data = OrderSerializer::creation($context, $tokenHash, $requestFingerprint, $guestReference, new DateTimeImmutable());
 
         try {
             // Custom-field filters run before content creation and outside impersonation.
@@ -154,7 +139,7 @@ final class OrderPageStore
                 'parent' => $container,
                 'site' => $this->kirby->site(),
                 'slug' => $uuid,
-                'template' => OrderSchema::TEMPLATE,
+                'template' => OrderSchema::ORDER_PAGE_TEMPLATE,
                 'isDraft' => true,
                 'content' => [...$fields, ...OrderSerializer::encode($data)],
             ]));
@@ -165,17 +150,59 @@ final class OrderPageStore
 
         // The Order Page commit captures and verifies the final native creation
         // content, including defaults and before-hook edits, before returning.
-        $created = $this->requirePage(OrderSchema::CONTAINER . '/' . $uuid);
-        $deliveries = OrderData::list($this->data($created)['lifecycleDeliveries']);
+        return $this->requirePage(OrderSchema::ORDERS_PAGE_ID . '/' . $uuid);
+    }
+
+    private function dispatchCreated(OrderPage $page): OrderPage
+    {
+        $deliveries = OrderData::list($this->data($page)['lifecycleDeliveries']);
         // Creation writes and verifies one initial event. Restore its saved ID
         // rather than generating a different identity for the first delivery.
         $entry = OrderData::map($deliveries[0]);
         $event = HookDeliveryLedger::restoreEvent(OrderData::map($entry['event']));
-        (new OrderHookDispatcher($this->kirby))->dispatch($created->uuid()->toString(), $event->deliveryId());
+        (new OrderHookDispatcher($this->kirby))->dispatch($page->uuid()->toString(), $event->deliveryId());
 
         // Listeners may update custom fields; return the post-hook Page rather
         // than the model read before dispatch and outcome persistence.
-        return $this->requirePage($created->id());
+        return $this->requirePage($page->id());
+    }
+
+    /**
+     * Serializes the token lookup with local creation, then releases the lock.
+     * The callback prepares values only; post-commit lifecycle delivery and all
+     * network work happen after the coordination lock is released.
+     *
+     * @param Closure(): array{OrderCreationContext, CheckoutAttempt, DateTimeImmutable} $prepare
+     */
+    public function createAttemptOnce(string $tokenHash, Closure $prepare): OrderPage
+    {
+        if (preg_match('/\A[a-f0-9]{64}\z/', $tokenHash) !== 1) {
+            throw new OrderDataException();
+        }
+
+        $created = false;
+        $page = OrderWriteLock::run(
+            $this->kirby,
+            'checkout-attempt:' . $tokenHash,
+            function () use ($tokenHash, $prepare, &$created): OrderPage {
+                $existing = $this->orderByAttemptTokenHash($tokenHash);
+
+                if ($existing !== null) {
+                    return $existing;
+                }
+
+                [$context, $checkoutAttempt, $createdAt] = $prepare();
+                $created = true;
+
+                return $this->persistCreation(
+                    context: $context,
+                    checkoutAttempt: $checkoutAttempt,
+                    createdAt: $createdAt,
+                );
+            },
+        );
+
+        return $created ? $this->dispatchCreated($page) : $page;
     }
 
     /** @return Pages<Page> */
@@ -232,6 +259,25 @@ final class OrderPageStore
         }
     }
 
+    /** Looks up one existing attempt without making malformed children authoritative. */
+    public function orderByAttemptTokenHash(string $tokenHash): ?OrderPage
+    {
+        if (preg_match('/\A[a-f0-9]{64}\z/', $tokenHash) !== 1) {
+            return null;
+        }
+
+        foreach ($this->orders() as $page) {
+            $data = $this->data($page);
+            $checkoutAttempt = OrderData::map($data['checkoutAttempt']);
+
+            if ($page instanceof OrderPage && hash_equals(OrderData::text($checkoutAttempt['tokenHash']), $tokenHash)) {
+                return $page;
+            }
+        }
+
+        return null;
+    }
+
     /** @return Pages<Page> */
     public function ordersFor(User $user): Pages
     {
@@ -275,7 +321,7 @@ final class OrderPageStore
     /** @return array<string, mixed> */
     public function data(Page $page): array
     {
-        if ($page instanceof OrderPage === false || $page->isDraft() === false || $page->parent()?->id() !== OrderSchema::CONTAINER) {
+        if ($page instanceof OrderPage === false || $page->isDraft() === false || $page->parent()?->id() !== OrderSchema::ORDERS_PAGE_ID) {
             throw new OrderStorageException('persistence.model_mismatch');
         }
 
@@ -309,7 +355,7 @@ final class OrderPageStore
     public function update(string $uuid, Closure $reduce, array $events = [], ?string $triggerType = null, ?string $triggerId = null): OrderPage
     {
         OrderData::uuid($uuid);
-        $pageId = OrderSchema::CONTAINER . '/' . (new Uri($uuid))->host();
+        $pageId = OrderSchema::ORDERS_PAGE_ID . '/' . (new Uri($uuid))->host();
 
         $deliveryIds = [];
         $updated = OrderWriteLock::run($this->kirby, $pageId, function () use ($pageId, $reduce, $events, $triggerType, $triggerId, &$deliveryIds): OrderPage {
@@ -398,7 +444,7 @@ final class OrderPageStore
     public function deleteEligible(string $uuid, RetentionPolicy $policy, DateTimeImmutable $now): bool
     {
         OrderData::uuid($uuid);
-        $pageId = OrderSchema::CONTAINER . '/' . (new Uri($uuid))->host();
+        $pageId = OrderSchema::ORDERS_PAGE_ID . '/' . (new Uri($uuid))->host();
         $deletion = OrderWriteLock::run($this->kirby, $pageId, function () use ($pageId, $policy, $now): ?array {
             // An earlier cleanup candidate may since have been paid. Eligibility
             // must be checked again against the record protected by this lock.
@@ -480,12 +526,20 @@ final class OrderPageStore
         $deliveries = $after['lifecycleDeliveries'] ?? [];
         HookDeliveryLedger::validateTransition($previousDeliveries, $deliveries);
 
-        $immutableFields = ['uuid', 'title', 'orderNumber', 'stripeCheckout', 'checkoutAttempt', 'userUuid', 'languageCode', 'currency', 'createdAt', 'initiatingLineItems'];
+        $immutableFields = ['uuid', 'title', 'orderNumber', 'stripeCheckout', 'userUuid', 'languageCode', 'currency', 'createdAt', 'checkoutExpiresAt', 'initiatingLineItems'];
 
         foreach ($immutableFields as $field) {
             if (($before[$field] ?? null) !== ($after[$field] ?? null)) {
                 throw new OrderDataException();
             }
+        }
+
+        $beforeAttempt = OrderData::map($before['checkoutAttempt']);
+        $afterAttempt = OrderData::map($after['checkoutAttempt']);
+        unset($beforeAttempt['providerFailure'], $afterAttempt['providerFailure']);
+
+        if ($beforeAttempt !== $afterAttempt) {
+            throw new OrderDataException();
         }
 
         // These record the first observation; repeated evidence must not move

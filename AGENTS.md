@@ -37,6 +37,7 @@
 - In templates and snippets, add PHPDoc types for implicit Kirby or passed variables only when those variables are used.
 - Use the project's PHP-CS-Fixer and PHPStan configuration as the source of truth for formatting and static analysis.
 - Write multi-entry associative arrays with one keyed entry per line. Define literal arrays before `foreach` instead of declaring them inline in the loop header.
+- Prefer named arguments for project-owned calls with several parameters and whenever a call would otherwise use positional `null` placeholders. Keep positional arguments for short calls whose meaning remains immediately clear.
 - Separate complete control blocks from surrounding statements with blank lines, except at enclosing block boundaries. Keep `else`/`elseif`, `catch`/`finally`, and a do-while's trailing condition attached. PHP-CS-Fixer enforces this with its before-statement rule and the development-only after-control-structure fixer.
 - Add translatable labels and messages instead of hard-coded user-facing Panel text.
 

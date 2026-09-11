@@ -11,8 +11,9 @@ final class OrderSchema
 {
     public const OWNER = PluginMetadata::NAME;
     public const VERSION = 1;
-    public const TEMPLATE = 'stripe-checkout-order';
-    public const CONTAINER = 'stripe-checkout-orders';
+    public const ORDER_PAGE_TEMPLATE = 'stripe-checkout-order';
+    public const ORDERS_PAGE_ID = 'stripe-checkout-orders';
+    public const ORDERS_PAGE_TEMPLATE = self::ORDERS_PAGE_ID;
 
     /** @var list<string> */
     public const FINAL_AMOUNTS = ['discountTotal', 'shippingTotal', 'taxTotal', 'total'];

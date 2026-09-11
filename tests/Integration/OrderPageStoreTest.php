@@ -23,6 +23,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderCreationContextFactory;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\OrdersPage;
@@ -36,6 +37,7 @@ use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
+use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
@@ -631,12 +633,8 @@ final class OrderPageStoreTest extends KirbyTestCase
 
     public function testCanonicalUpdateAdvancesTimeBeforeValidatingObservations(): void
     {
-        $page = $this->createOrder();
         $earlier = '2025-01-01T00:00:00Z';
-        $page->version('latest')->update([
-            'createdAt' => $earlier,
-            'updatedAt' => $earlier,
-        ], 'default');
+        $page = $this->createOrder(createdAt: new DateTimeImmutable($earlier));
         $now = OrderData::timestamp(new DateTimeImmutable());
         $updated = (new OrderPageStore($this->kirby))->update($page->uuid()->toString(), static fn(array $data): array => [
             ...$data,
@@ -702,22 +700,29 @@ final class OrderPageStoreTest extends KirbyTestCase
         return $page?->content('default')->data()[strtolower($field)] ?? null;
     }
 
-    private function createOrder(?string $userUuid = null): OrderPage
+    private function createOrder(?string $userUuid = null, ?DateTimeImmutable $createdAt = null): OrderPage
     {
         $price = Money::of('16', 'EUR');
         $product = new Product(new ProductRequest('product', 2), 'Product', false, new Price($price));
+        $context = (new OrderCreationContextFactory($this->kirby))->create(
+            lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)],
+            currency: 'EUR',
+            source: CheckoutSource::Direct,
+            cartRevision: null,
+            userUuid: $userUuid,
+            languageCode: $this->kirby->languageCode(),
+            uiMode: UiMode::Hosted,
+        );
+        $createdAt ??= new DateTimeImmutable();
 
         return (new OrderPageStore($this->kirby))->create(
-            [OrderLineItemSnapshot::fromProduct($product, $price)],
-            'EUR',
-            CheckoutSource::Direct,
-            null,
-            $userUuid,
-            $this->kirby->languageCode(),
-            UiMode::Hosted,
-            hash('sha256', 'token'),
-            hash('sha256', 'request'),
-            $userUuid === null ? 'guest' : null,
+            context: $context,
+            checkoutAttempt: CheckoutAttemptFactory::create(
+                order: $context,
+                createdAt: $createdAt,
+                guestReference: $userUuid === null ? 'guest' : null,
+            ),
+            createdAt: $createdAt,
         );
     }
 }

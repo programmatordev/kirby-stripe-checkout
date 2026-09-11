@@ -52,7 +52,6 @@ final class OrderBlueprint
         ];
         $members = match ($handle) {
             'stripeCheckout' => ['owner', 'schemaVersion'],
-            'checkoutAttempt' => ['tokenHash', 'requestFingerprint', 'source', 'cartRevision', 'guestReference', 'uiMode'],
             'initiatingLineItems', 'lineItems' => ['reference', 'name', 'quantity', 'price', 'subtotal', 'currency', 'sku', 'variantId', 'stripePriceId', 'stripeProductId'],
             default => [],
         };

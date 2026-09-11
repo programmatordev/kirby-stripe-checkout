@@ -18,6 +18,7 @@ use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
+use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
 
 final class RetentionPolicyTest extends TestCase
 {
@@ -80,8 +81,27 @@ final class RetentionPolicyTest extends TestCase
     {
         $price = Money::of('16', 'EUR');
         $product = new Product(new ProductRequest('product', 1), 'Product', false, new Price($price));
-        $context = new OrderCreationContext('example', 'ORD-EXAMPLE', CheckoutSource::Direct, null, null, null, UiMode::Hosted, 'EUR', [OrderLineItemSnapshot::fromProduct($product, $price)]);
-        $data = OrderSerializer::creation($context, hash('sha256', 'token'), hash('sha256', 'request'), 'guest', new DateTimeImmutable('2026-09-01T00:00:00Z'));
+        $context = new OrderCreationContext(
+            uuid: 'example',
+            orderNumber: 'ORD-EXAMPLE',
+            sourceType: CheckoutSource::Direct,
+            cartRevision: null,
+            userUuid: null,
+            languageCode: null,
+            uiMode: UiMode::Hosted,
+            currency: 'EUR',
+            lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)],
+        );
+        $createdAt = new DateTimeImmutable('2026-09-01T00:00:00Z');
+        $data = OrderSerializer::creation(
+            context: $context,
+            checkoutAttempt: CheckoutAttemptFactory::create(
+                order: $context,
+                createdAt: $createdAt,
+                guestReference: 'guest',
+            ),
+            createdAt: $createdAt,
+        );
         $data['checkoutStatus'] = $checkout;
         $data['paymentStatus'] = $payment;
         $timestamp = match ($checkout) {

@@ -24,12 +24,12 @@ final class OrderWriteLock
      * @param Closure(): T $operation
      * @return T
      */
-    public static function run(App $kirby, string $pageId, Closure $operation): mixed
+    public static function run(App $kirby, string $lockKey, Closure $operation): mixed
     {
         // Not a cache: deleting/recreating a locked file would give concurrent
         // writers different lock identities. Empty lock files remain in place.
         $directory = $kirby->root('site') . '/storage/stripe-checkout/order-locks';
-        $path = $directory . '/' . hash('sha256', $pageId) . '.lock';
+        $path = $directory . '/' . hash('sha256', $lockKey) . '.lock';
 
         if (isset(self::$held[$path])) {
             throw new OrderStorageException('persistence.reentrant_write');
