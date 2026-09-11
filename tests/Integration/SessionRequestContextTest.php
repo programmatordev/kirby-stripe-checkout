@@ -70,7 +70,7 @@ final class SessionRequestContextTest extends KirbyTestCase
         $this->assertSame('pt', $context->languageCode());
         $this->assertSame('pt', $context->locale());
         $this->assertSame('2026-09-12T08:00:00+00:00', $context->expiresAt()->format('c'));
-        $this->assertSame('https://kirby-stripe-checkout.test/pt/product?keep=1', $context->originUrl());
+        $this->assertSame('https://kirby-stripe-checkout.test/pt/product?keep=1', $context->initiatingUrl());
         $this->assertSame($destination->url('pt'), $context->successDestination());
         $this->assertSame('https://merchant.example/cancel?keep=1', $context->cancelDestination());
         $this->assertSame('https://kirby-stripe-checkout.test/pt/account', $context->returnDestination());
@@ -96,10 +96,10 @@ final class SessionRequestContextTest extends KirbyTestCase
 
         $this->assertSame('removed', $context->languageCode());
         $this->assertSame('en-GB', $context->locale());
-        $this->assertSame('https://kirby-stripe-checkout.test/en', $context->originUrl());
-        $this->assertSame($context->originUrl(), $context->successDestination());
-        $this->assertSame($context->originUrl(), $context->cancelDestination());
-        $this->assertSame($context->originUrl(), $context->returnDestination());
+        $this->assertSame('https://kirby-stripe-checkout.test/en', $context->initiatingUrl());
+        $this->assertSame($context->initiatingUrl(), $context->successDestination());
+        $this->assertSame($context->initiatingUrl(), $context->cancelDestination());
+        $this->assertSame($context->initiatingUrl(), $context->returnDestination());
     }
 
     public function testUnsupportedLocaleUsesStripeAutomaticDetection(): void
@@ -173,14 +173,14 @@ final class SessionRequestContextTest extends KirbyTestCase
         $factory = new SessionRequestContextFactory($this->kirby);
         $configuration = $this->configuration(['settings' => ['currency' => 'EUR']]);
 
-        foreach (['https://external.example/product', 'not a URL'] as $origin) {
+        foreach (['https://external.example/product', 'not a URL'] as $initiatingUrl) {
             $context = $factory->create(
                 $this->order(),
                 $configuration,
                 new DateTimeImmutable('2026-09-11T08:00:00Z'),
-                $origin,
+                $initiatingUrl,
             );
-            $this->assertSame('https://kirby-stripe-checkout.test', $context->originUrl());
+            $this->assertSame('https://kirby-stripe-checkout.test', $context->initiatingUrl());
         }
     }
 
@@ -255,7 +255,7 @@ final class SessionRequestContextTest extends KirbyTestCase
             null,
             null,
             $languageCode,
-            $uiMode->value,
+            $uiMode,
             'EUR',
             [OrderLineItemSnapshot::fromProduct($product, $price)],
         );

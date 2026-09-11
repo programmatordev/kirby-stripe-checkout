@@ -19,18 +19,16 @@ final readonly class SessionRequestContext
     /** @internal Constructed after Checkout context normalization. */
     public function __construct(
         private OrderCreationContext $order,
-        private UiMode $uiMode,
         private string $locale,
         private DateTimeImmutable $expiresAt,
-        private string $originUrl,
+        private string $initiatingUrl,
         private string $successDestination,
         private string $cancelDestination,
         private string $returnDestination,
     ) {
         if (
-            $order->uiMode() !== $uiMode->value
-            || $locale === ''
-            || $originUrl === ''
+            $locale === ''
+            || $initiatingUrl === ''
             || $successDestination === ''
             || $cancelDestination === ''
             || $returnDestination === ''
@@ -46,7 +44,7 @@ final readonly class SessionRequestContext
 
     public function uiMode(): UiMode
     {
-        return $this->uiMode;
+        return $this->order->uiMode();
     }
 
     public function languageCode(): ?string
@@ -64,9 +62,9 @@ final readonly class SessionRequestContext
         return $this->expiresAt;
     }
 
-    public function originUrl(): string
+    public function initiatingUrl(): string
     {
-        return $this->originUrl;
+        return $this->initiatingUrl;
     }
 
     public function successDestination(): string

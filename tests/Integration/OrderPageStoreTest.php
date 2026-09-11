@@ -21,6 +21,7 @@ use Kirby\Toolkit\I18n;
 use Kirby\Uuid\Uri;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
@@ -713,7 +714,7 @@ final class OrderPageStoreTest extends KirbyTestCase
             null,
             $userUuid,
             $this->kirby->languageCode(),
-            'hosted',
+            UiMode::Hosted,
             hash('sha256', 'token'),
             hash('sha256', 'request'),
             $userUuid === null ? 'guest' : null,

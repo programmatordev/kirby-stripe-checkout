@@ -7,7 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Checkout;
 use InvalidArgumentException;
 
 /**
- * Immutable provider-neutral parameters for one Checkout Session creation.
+ * Immutable SDK-independent parameters for one Checkout Session creation.
  *
  * Values stay limited to Stripe's scalar/list/map request vocabulary. The
  * gateway is the only boundary that converts this value into an SDK request.

@@ -110,7 +110,8 @@ Completing Checkout does not mean a delayed payment has succeeded. A refund also
 - `orderNumber()` — the display label, not a separate identity.
 - `sourceType()` and `cartRevision()` — cart or direct purchase and the initiating cart revision, if applicable.
 - `userUuid()` and `languageCode()` — the initiating user and language, when present.
-- `uiMode()` and `currency()` — the Checkout mode and store currency.
+- `uiMode()` — the `UiMode` used for the attempt.
+- `currency()` — the store currency.
 - `subtotal()` — an exact Brick Money value.
 - `lineItems()` — the frozen initiating product, option, quantity and price facts.
 

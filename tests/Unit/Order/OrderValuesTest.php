@@ -10,6 +10,7 @@ use Kirby\Data\Txt;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEvent;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
@@ -44,7 +45,7 @@ final class OrderValuesTest extends TestCase
         $this->assertSame('revision', $context->cartRevision());
         $this->assertNull($context->userUuid());
         $this->assertSame('en', $context->languageCode());
-        $this->assertSame('hosted', $context->uiMode());
+        $this->assertSame(UiMode::Hosted, $context->uiMode());
         $this->assertSame('EUR', $context->currency());
         $this->assertSame('32.00', (string) $context->subtotal()->getAmount());
         $lineItems = $context->lineItems();
@@ -703,7 +704,7 @@ final class OrderValuesTest extends TestCase
     /** @param array<array-key, OrderLineItemSnapshot>|null $lineItems */
     private function context(?array $lineItems = null, CheckoutSource $source = CheckoutSource::Cart, ?string $revision = 'revision', ?string $language = 'en', ?string $user = null): OrderCreationContext
     {
-        return new OrderCreationContext('Abc123def456GHI7', 'ORD-ABC123DEF456GHI7', $source, $revision, $user, $language, 'hosted', 'EUR', $lineItems ?? [$this->lineItem()]);
+        return new OrderCreationContext('Abc123def456GHI7', 'ORD-ABC123DEF456GHI7', $source, $revision, $user, $language, UiMode::Hosted, 'EUR', $lineItems ?? [$this->lineItem()]);
     }
 
     private function lineItem(): OrderLineItemSnapshot

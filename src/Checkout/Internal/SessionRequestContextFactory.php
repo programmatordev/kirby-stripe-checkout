@@ -18,18 +18,18 @@ use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 
 /**
- * Normalizes language, expiry, origin, and configured navigation destinations.
+ * Normalizes language, expiry, the initiating URL, and configured destinations.
  *
  * @internal
  */
 final class SessionRequestContextFactory
 {
-    public const RESULT_QUERY_KEY = '_stripe_checkout_result';
+    private const RESULT_QUERY_KEY = '_stripe_checkout_result';
 
     /** Keep the common path aligned with Stripe's default instead of exposing another store setting. */
-    private const SESSION_EXPIRATION_INTERVAL = 'PT24H';
+    private const SESSION_LIFETIME = 'PT24H';
 
-    private const STRIPE_LOCALES = [
+    private const SUPPORTED_STRIPE_LOCALES = [
         'auto',
         'bg',
         'cs',
@@ -83,7 +83,7 @@ final class SessionRequestContextFactory
     ): SessionRequestContext {
         $settings = $configuration->settings();
 
-        if ($order->uiMode() !== $settings->uiMode()->value) {
+        if ($order->uiMode() !== $settings->uiMode()) {
             throw new CheckoutInputException('checkout.attempt_conflict');
         }
 
@@ -100,45 +100,44 @@ final class SessionRequestContextFactory
             throw new CheckoutInputException('checkout.attempt_conflict');
         }
 
-        $language = $this->language($order->languageCode());
-        $languageCode = $language?->code();
-        $fallback = $this->siteUrl($languageCode);
-        $origin = $this->origin($initiatingUrl, $fallback);
-        $live = $configuration->stripe()->secretKeyMode() === CredentialMode::Live;
+        $language = $this->resolveLanguage($order->languageCode());
+        $resolvedLanguageCode = $language?->code();
+        $siteUrl = $this->siteUrl($resolvedLanguageCode);
+        $initiatingUrl = $this->resolveInitiatingUrl($initiatingUrl, $siteUrl);
+        $isLiveMode = $configuration->stripe()->secretKeyMode() === CredentialMode::Live;
 
         return new SessionRequestContext(
             order: $order,
-            uiMode: $settings->uiMode(),
-            locale: $this->locale($language),
+            locale: $this->resolveStripeLocale($language),
             expiresAt: $createdAt
                 ->setTimezone(new DateTimeZone('UTC'))
-                ->add(new DateInterval(self::SESSION_EXPIRATION_INTERVAL)),
-            originUrl: $origin,
-            successDestination: $this->destination(
+                ->add(new DateInterval(self::SESSION_LIFETIME)),
+            initiatingUrl: $initiatingUrl,
+            successDestination: $this->resolveDestination(
                 $settings->successDestination(),
                 'successDestination',
-                $languageCode,
-                $origin,
-                $live,
+                $resolvedLanguageCode,
+                $initiatingUrl,
+                $isLiveMode,
             ),
-            cancelDestination: $this->destination(
+            cancelDestination: $this->resolveDestination(
                 $settings->cancelDestination(),
                 'cancelDestination',
-                $languageCode,
-                $origin,
-                $live,
+                $resolvedLanguageCode,
+                $initiatingUrl,
+                $isLiveMode,
             ),
-            returnDestination: $this->destination(
+            returnDestination: $this->resolveDestination(
                 $settings->returnDestination(),
                 'returnDestination',
-                $languageCode,
-                $origin,
-                $live,
+                $resolvedLanguageCode,
+                $initiatingUrl,
+                $isLiveMode,
             ),
         );
     }
 
-    private function language(?string $languageCode): ?Language
+    private function resolveLanguage(?string $languageCode): ?Language
     {
         if ($this->kirby->multilang() === false) {
             return null;
@@ -148,7 +147,7 @@ final class SessionRequestContextFactory
             ?? $this->kirby->defaultLanguage();
     }
 
-    private function locale(?Language $language): string
+    private function resolveStripeLocale(?Language $language): string
     {
         $locale = $language?->locale(LC_ALL) ?? $language?->code();
 
@@ -168,11 +167,11 @@ final class SessionRequestContextFactory
 
         $locale = preg_replace('/[.@].*$/', '', trim($locale));
         $locale = is_string($locale) ? str_replace('_', '-', $locale) : '';
-        $supported = array_combine(
-            array_map('strtolower', self::STRIPE_LOCALES),
-            self::STRIPE_LOCALES,
+        $supportedLocales = array_combine(
+            array_map('strtolower', self::SUPPORTED_STRIPE_LOCALES),
+            self::SUPPORTED_STRIPE_LOCALES,
         );
-        $exact = $supported[strtolower($locale)] ?? null;
+        $exact = $supportedLocales[strtolower($locale)] ?? null;
 
         if (is_string($exact)) {
             return $exact;
@@ -180,7 +179,7 @@ final class SessionRequestContextFactory
 
         $primary = explode('-', $locale)[0];
 
-        return $supported[strtolower($primary)] ?? 'auto';
+        return $supportedLocales[strtolower($primary)] ?? 'auto';
     }
 
     private function siteUrl(?string $languageCode): string
@@ -190,30 +189,32 @@ final class SessionRequestContextFactory
         return $this->normalizeUrl($url, false, 'site.url');
     }
 
-    private function origin(?string $value, string $fallback): string
+    private function resolveInitiatingUrl(?string $value, string $siteUrl): string
     {
         if ($value === null) {
-            return $fallback;
+            return $siteUrl;
         }
 
+        // Unlike a configured destination, this optional request context can be
+        // discarded safely when it is malformed or does not belong to this site.
         try {
-            $origin = $this->normalizeUrl($value, false, 'checkout.originUrl', removeResultKey: true);
+            $initiatingUrl = $this->normalizeUrl($value, false, 'checkout.initiatingUrl', removeResultKey: true);
         } catch (ConfigurationException) {
-            return $fallback;
+            return $siteUrl;
         }
 
-        return $this->sameOrigin($origin, $fallback) ? $origin : $fallback;
+        return $this->sameOrigin($initiatingUrl, $siteUrl) ? $initiatingUrl : $siteUrl;
     }
 
-    private function destination(
+    private function resolveDestination(
         ?string $value,
         string $name,
         ?string $languageCode,
-        string $fallback,
-        bool $live,
+        string $fallbackUrl,
+        bool $isLiveMode,
     ): string {
         if ($value === null) {
-            return $fallback;
+            return $fallbackUrl;
         }
 
         if (str_starts_with($value, '//')) {
@@ -223,21 +224,22 @@ final class SessionRequestContextFactory
         if (str_starts_with($value, '/')) {
             $value = Url::makeAbsolute($value, $this->siteUrl($languageCode));
         } elseif (preg_match('~^https?://~i', $value) !== 1) {
+            // Kirby returns null for draft-only locators when drafts are disabled.
             $page = $this->kirby->page($value, drafts: false);
 
-            if ($page === null || $page->isDraft()) {
+            if ($page === null) {
                 throw new ConfigurationException('configuration.value_invalid', 'settings.' . $name);
             }
 
             $value = $page->url($languageCode);
         }
 
-        return $this->normalizeUrl($value, $live, 'settings.' . $name);
+        return $this->normalizeUrl($value, $isLiveMode, 'settings.' . $name);
     }
 
     private function normalizeUrl(
         string $value,
-        bool $live,
+        bool $isLiveMode,
         string $path,
         bool $removeResultKey = false,
     ): string {
@@ -253,7 +255,7 @@ final class SessionRequestContextFactory
             || $host === ''
             || isset($parts['user'])
             || isset($parts['pass'])
-            || $live && $scheme !== 'https' && $this->isLocalHost($host) === false
+            || $isLiveMode && $scheme !== 'https' && $this->isLocalHost($host) === false
         ) {
             throw new ConfigurationException('configuration.value_invalid', $path);
         }
@@ -278,16 +280,16 @@ final class SessionRequestContextFactory
 
     private function sameOrigin(string $url, string $siteUrl): bool
     {
-        $origin = parse_url($url);
-        $site = parse_url($siteUrl);
+        $urlParts = parse_url($url);
+        $siteUrlParts = parse_url($siteUrl);
 
-        if (is_array($origin) === false || is_array($site) === false) {
+        if (is_array($urlParts) === false || is_array($siteUrlParts) === false) {
             return false;
         }
 
-        return strtolower((string) ($origin['scheme'] ?? '')) === strtolower((string) ($site['scheme'] ?? ''))
-            && strtolower((string) ($origin['host'] ?? '')) === strtolower((string) ($site['host'] ?? ''))
-            && $this->port($origin) === $this->port($site);
+        return strtolower((string) ($urlParts['scheme'] ?? '')) === strtolower((string) ($siteUrlParts['scheme'] ?? ''))
+            && strtolower((string) ($urlParts['host'] ?? '')) === strtolower((string) ($siteUrlParts['host'] ?? ''))
+            && $this->port($urlParts) === $this->port($siteUrlParts);
     }
 
     /** @param array<string, mixed> $parts */

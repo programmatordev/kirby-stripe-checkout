@@ -36,7 +36,7 @@ final readonly class OrderCreationContext
         private ?string $cartRevision,
         private ?string $userUuid,
         private ?string $languageCode,
-        private string $uiMode,
+        private UiMode $uiMode,
         private string $currency,
         array $lineItems,
     ) {
@@ -64,7 +64,6 @@ final readonly class OrderCreationContext
 
         if (
             ($sourceType === CheckoutSource::Cart) !== ($cartRevision !== null)
-            || UiMode::tryFrom($uiMode) === null
             || array_is_list($lineItems) === false || $lineItems === []
             || count($lineItems) > ProductRequestNormalizer::MAX_ENTRIES
         ) {
@@ -130,7 +129,7 @@ final readonly class OrderCreationContext
         return $this->languageCode;
     }
 
-    public function uiMode(): string
+    public function uiMode(): UiMode
     {
         return $this->uiMode;
     }

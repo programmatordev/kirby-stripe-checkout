@@ -15,6 +15,7 @@ use Kirby\Uuid\Uri;
 use Kirby\Uuid\Uuid;
 use Kirby\Uuid\Uuids;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
@@ -113,7 +114,7 @@ final class OrderPageStore
         ?string $cartRevision,
         ?string $userUuid,
         ?string $languageCode,
-        string $uiMode,
+        UiMode $uiMode,
         string $tokenHash,
         string $requestFingerprint,
         ?string $guestReference,

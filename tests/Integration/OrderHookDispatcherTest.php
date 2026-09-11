@@ -12,6 +12,7 @@ use Kirby\Exception\PermissionException;
 use Kirby\Uuid\Uuid;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderHookDispatcher;
@@ -503,7 +504,7 @@ final class OrderHookDispatcherTest extends KirbyTestCase
             null,
             null,
             $languageCode,
-            'hosted',
+            UiMode::Hosted,
             hash('sha256', 'token'),
             hash('sha256', 'request'),
             'guest',

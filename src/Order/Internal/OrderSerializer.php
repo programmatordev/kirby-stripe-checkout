@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Order\Internal;
 use DateTimeImmutable;
 use Kirby\Data\Yaml;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
@@ -51,7 +52,7 @@ final class OrderSerializer
                 'source' => $context->sourceType()->value,
                 'cartRevision' => $context->cartRevision(),
                 'guestReference' => $guestReference,
-                'uiMode' => $context->uiMode(),
+                'uiMode' => $context->uiMode()->value,
             ],
             'userUuid' => $context->userUuid(),
             'languageCode' => $context->languageCode(),
@@ -221,7 +222,7 @@ final class OrderSerializer
                 OrderData::nullableString($attempt['cartRevision']),
                 OrderData::nullableString($data['userUuid'] ?? null),
                 OrderData::nullableString($data['languageCode'] ?? null),
-                OrderData::text($attempt['uiMode']),
+                UiMode::from(OrderData::text($attempt['uiMode'])),
                 $currency,
                 array_map(static fn(mixed $lineItem): OrderLineItemSnapshot => OrderLineItemSnapshot::fromArray(OrderData::map($lineItem)), OrderData::list($data['initiatingLineItems'])),
             );
