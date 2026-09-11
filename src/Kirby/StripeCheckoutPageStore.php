@@ -92,7 +92,6 @@ final class StripeCheckoutPageStore
             currency: $this->fieldValue($page, 'currency'),
             defaultRequiresShipping: $this->fieldValue($page, 'defaultRequiresShipping'),
             uiMode: $this->fieldValue($page, 'uiMode'),
-            checkoutExpirationMinutes: $this->fieldValue($page, 'checkoutExpirationMinutes'),
             successDestination: $this->fieldValue($page, 'successDestination', 'current'),
             cancelDestination: $this->fieldValue($page, 'cancelDestination', 'current'),
             returnDestination: $this->fieldValue($page, 'returnDestination', 'current'),

@@ -51,7 +51,6 @@ final class SessionRequestContextTest extends KirbyTestCase
         $this->kirby->setCurrentLanguage('pt');
         $store->initialize()->update([
             'currency' => 'EUR',
-            'checkoutExpirationMinutes' => 30,
             'successDestination' => $destination->uuid()->toString(),
             'cancelDestination' => 'https://merchant.example/cancel?keep=1#section',
             'returnDestination' => '/account',
@@ -70,7 +69,7 @@ final class SessionRequestContextTest extends KirbyTestCase
         $this->assertSame(UiMode::Hosted, $context->uiMode());
         $this->assertSame('pt', $context->languageCode());
         $this->assertSame('pt', $context->locale());
-        $this->assertSame('2026-09-11T08:30:00+00:00', $context->expiresAt()->format('c'));
+        $this->assertSame('2026-09-12T08:00:00+00:00', $context->expiresAt()->format('c'));
         $this->assertSame('https://kirby-stripe-checkout.test/pt/product?keep=1', $context->originUrl());
         $this->assertSame($destination->url('pt'), $context->successDestination());
         $this->assertSame('https://merchant.example/cancel?keep=1', $context->cancelDestination());

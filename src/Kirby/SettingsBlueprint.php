@@ -41,8 +41,6 @@ final class SettingsBlueprint
         // The provider registry and active Panel locale make these options
         // runtime data; the YAML blueprint supplies only their static field.
         $settingsFields['currency']['options'] = self::currencyOptions();
-        $settingsFields['checkoutExpirationMinutes']['min'] = Defaults::CHECKOUT_EXPIRATION_MINUTES_MIN;
-        $settingsFields['checkoutExpirationMinutes']['max'] = Defaults::CHECKOUT_EXPIRATION_MINUTES_MAX;
 
         // Use the same defaults for native Page creation and runtime fallbacks.
         foreach (Defaults::SETTINGS as $name => $default) {

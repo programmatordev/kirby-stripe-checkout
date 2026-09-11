@@ -376,23 +376,38 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertArrayHasKey('currency', $fields);
         $this->assertArrayHasKey('defaultRequiresShipping', $fields);
         $this->assertArrayHasKey('uiMode', $fields);
-        $this->assertArrayHasKey('checkoutExpirationMinutes', $fields);
         $this->assertArrayHasKey('successDestination', $fields);
         $this->assertArrayHasKey('cancelDestination', $fields);
         $this->assertArrayHasKey('returnDestination', $fields);
         $this->assertArrayNotHasKey('projectField', $fields);
         $priceSource = $fields['priceSource'];
         $uiMode = $fields['uiMode'];
-        $expiration = $fields['checkoutExpirationMinutes'];
+        $successDestination = $fields['successDestination'];
+        $cancelDestination = $fields['cancelDestination'];
+        $returnDestination = $fields['returnDestination'];
+        $creationFailureRetentionDays = $fields['creationFailureRetentionDays'];
+        $unpaidOrderRetentionDays = $fields['unpaidOrderRetentionDays'];
         $this->assertIsArray($priceSource);
         $this->assertIsArray($uiMode);
-        $this->assertIsArray($expiration);
+        $this->assertIsArray($successDestination);
+        $this->assertIsArray($cancelDestination);
+        $this->assertIsArray($returnDestination);
+        $this->assertIsArray($creationFailureRetentionDays);
+        $this->assertIsArray($unpaidOrderRetentionDays);
         $this->assertTrue($priceSource['required']);
         $this->assertSame('kirby', $priceSource['default']);
         $this->assertSame('hosted', $uiMode['default']);
-        $this->assertSame(1440, $expiration['default']);
-        $this->assertSame(30, $expiration['min']);
-        $this->assertSame(1440, $expiration['max']);
+        $this->assertSame(['uiMode' => 'hosted'], $successDestination['when']);
+        $this->assertSame(['uiMode' => 'hosted'], $cancelDestination['when']);
+        $this->assertSame(['uiMode' => 'embedded'], $returnDestination['when']);
+        $this->assertSame(
+            ['cleanupCreationFailures' => true],
+            $creationFailureRetentionDays['when'],
+        );
+        $this->assertSame(
+            ['cleanupUnpaidOrders' => true],
+            $unpaidOrderRetentionDays['when'],
+        );
         $this->assertSame(
             'programmatordev.stripe-checkout.area.label',
             $blueprint['title'],

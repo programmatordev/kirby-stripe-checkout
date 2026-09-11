@@ -13,10 +13,6 @@ use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
  */
 final class Defaults
 {
-    public const CHECKOUT_EXPIRATION_MINUTES_MIN = 30;
-    public const CHECKOUT_EXPIRATION_MINUTES_MAX = 1440;
-    public const CHECKOUT_EXPIRATION_MINUTES_DEFAULT = 1440;
-
     public const RETENTION = [
         'cleanupCreationFailures' => true,
         'creationFailureRetentionDays' => 7,
@@ -29,7 +25,6 @@ final class Defaults
         'currency' => null,
         'defaultRequiresShipping' => null,
         'uiMode' => UiMode::Hosted->value,
-        'checkoutExpirationMinutes' => self::CHECKOUT_EXPIRATION_MINUTES_DEFAULT,
         'successDestination' => null,
         'cancelDestination' => null,
         'returnDestination' => null,

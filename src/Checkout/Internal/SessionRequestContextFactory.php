@@ -26,6 +26,8 @@ final class SessionRequestContextFactory
 {
     public const RESULT_QUERY_KEY = '_stripe_checkout_result';
 
+    private const SESSION_EXPIRATION_INTERVAL = 'PT24H';
+
     private const STRIPE_LOCALES = [
         'auto',
         'bg',
@@ -109,7 +111,7 @@ final class SessionRequestContextFactory
             locale: $this->locale($language),
             expiresAt: $createdAt
                 ->setTimezone(new DateTimeZone('UTC'))
-                ->add(new DateInterval('PT' . $settings->checkoutExpirationMinutes() . 'M')),
+                ->add(new DateInterval(self::SESSION_EXPIRATION_INTERVAL)),
             originUrl: $origin,
             successDestination: $this->destination(
                 $settings->successDestination(),

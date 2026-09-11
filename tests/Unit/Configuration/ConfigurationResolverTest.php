@@ -129,7 +129,6 @@ final class ConfigurationResolverTest extends TestCase
         $this->assertNull($settings->currency());
         $this->assertNull($settings->defaultRequiresShipping());
         $this->assertSame('hosted', $settings->uiMode()->value);
-        $this->assertSame(1440, $settings->checkoutExpirationMinutes());
         $this->assertNull($settings->successDestination());
         $this->assertNull($settings->cancelDestination());
         $this->assertNull($settings->returnDestination());
@@ -176,7 +175,6 @@ final class ConfigurationResolverTest extends TestCase
             self::PREFIX . '.settings.currency' => 'USD',
             self::PREFIX . '.settings.defaultRequiresShipping' => true,
             self::PREFIX . '.settings.uiMode' => 'embedded',
-            self::PREFIX . '.settings.checkoutExpirationMinutes' => 60,
             self::PREFIX . '.settings.successDestination' => '/complete',
             self::PREFIX . '.settings.cancelDestination' => '/cancel',
             self::PREFIX . '.settings.returnDestination' => '/return',
@@ -188,7 +186,6 @@ final class ConfigurationResolverTest extends TestCase
         $this->assertSame('USD', $configuration->settings()->currency());
         $this->assertTrue($configuration->settings()->defaultRequiresShipping());
         $this->assertSame('embedded', $configuration->settings()->uiMode()->value);
-        $this->assertSame(60, $configuration->settings()->checkoutExpirationMinutes());
         $this->assertSame('/complete', $configuration->settings()->successDestination());
         $this->assertSame('/cancel', $configuration->settings()->cancelDestination());
         $this->assertSame('/return', $configuration->settings()->returnDestination());
@@ -301,7 +298,6 @@ final class ConfigurationResolverTest extends TestCase
                         'currency' => 'USD',
                         'defaultRequiresShipping' => false,
                         'uiMode' => 'embedded',
-                        'checkoutExpirationMinutes' => 60,
                         'successDestination' => '/php-success',
                     ],
                 ],
@@ -310,14 +306,12 @@ final class ConfigurationResolverTest extends TestCase
                 currency: 'EUR',
                 defaultRequiresShipping: 'yes',
                 uiMode: 'hosted',
-                checkoutExpirationMinutes: '90',
                 successDestination: '/page-success',
             ),
         )->configurationOrFail()->settings();
         $currency = $settings->setting('currency');
         $shipping = $settings->setting('defaultRequiresShipping');
         $uiMode = $settings->setting('uiMode');
-        $expiration = $settings->setting('checkoutExpirationMinutes');
         $success = $settings->setting('successDestination');
 
         $this->assertSame('USD', $settings->currency());
@@ -332,10 +326,6 @@ final class ConfigurationResolverTest extends TestCase
         $this->assertNotNull($uiMode);
         $this->assertSame(SettingSource::Php, $uiMode->source());
         $this->assertSame('hosted', $uiMode->shadowedValue());
-        $this->assertSame(60, $settings->checkoutExpirationMinutes());
-        $this->assertNotNull($expiration);
-        $this->assertSame(SettingSource::Php, $expiration->source());
-        $this->assertSame(90, $expiration->shadowedValue());
         $this->assertSame('/php-success', $settings->successDestination());
         $this->assertNotNull($success);
         $this->assertSame(SettingSource::Php, $success->source());
@@ -395,6 +385,11 @@ final class ConfigurationResolverTest extends TestCase
             [self::PREFIX => ['settings' => ['other' => true]]],
             'configuration.option_unknown',
             'settings.other',
+        ];
+        yield 'removed expiration setting' => [
+            [self::PREFIX => ['settings' => ['checkoutExpirationMinutes' => 60]]],
+            'configuration.option_unknown',
+            'settings.checkoutExpirationMinutes',
         ];
         yield 'unknown dotted option' => [
             [self::PREFIX . '.settings.other' => true],
@@ -460,21 +455,6 @@ final class ConfigurationResolverTest extends TestCase
             [self::PREFIX => ['settings' => ['uiMode' => 'inline']]],
             'configuration.value_invalid',
             'settings.uiMode',
-        ];
-        yield 'Checkout expiration must be an integer' => [
-            [self::PREFIX => ['settings' => ['checkoutExpirationMinutes' => '30']]],
-            'configuration.type_invalid',
-            'settings.checkoutExpirationMinutes',
-        ];
-        yield 'Checkout expiration must meet Stripe minimum' => [
-            [self::PREFIX => ['settings' => ['checkoutExpirationMinutes' => 29]]],
-            'configuration.value_invalid',
-            'settings.checkoutExpirationMinutes',
-        ];
-        yield 'Checkout expiration cannot exceed Stripe maximum' => [
-            [self::PREFIX => ['settings' => ['checkoutExpirationMinutes' => 1441]]],
-            'configuration.value_invalid',
-            'settings.checkoutExpirationMinutes',
         ];
         yield 'Checkout destination must be a string' => [
             [self::PREFIX => ['settings' => ['successDestination' => false]]],
@@ -626,7 +606,6 @@ final class ConfigurationResolverTest extends TestCase
                 'currency',
                 'defaultRequiresShipping',
                 'uiMode',
-                'checkoutExpirationMinutes',
                 'successDestination',
                 'cancelDestination',
                 'returnDestination',

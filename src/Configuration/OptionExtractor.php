@@ -35,7 +35,6 @@ final class OptionExtractor
         'settings.currency',
         'settings.defaultRequiresShipping',
         'settings.uiMode',
-        'settings.checkoutExpirationMinutes',
         'settings.successDestination',
         'settings.cancelDestination',
         'settings.returnDestination',

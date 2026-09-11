@@ -23,7 +23,6 @@ final class PageSettings
         mixed $currency = null,
         mixed $defaultRequiresShipping = null,
         mixed $uiMode = null,
-        mixed $checkoutExpirationMinutes = null,
         mixed $successDestination = null,
         mixed $cancelDestination = null,
         mixed $returnDestination = null,
@@ -78,7 +77,6 @@ final class PageSettings
         $this->currency = $currency;
         $this->defaultRequiresShipping = $defaultRequiresShipping;
         $this->uiMode = $this->normalizeUiMode($uiMode);
-        $this->checkoutExpirationMinutes = $this->normalizeExpiration($checkoutExpirationMinutes);
         $this->successDestination = $this->normalizeDestination($successDestination, 'successDestination');
         $this->cancelDestination = $this->normalizeDestination($cancelDestination, 'cancelDestination');
         $this->returnDestination = $this->normalizeDestination($returnDestination, 'returnDestination');
@@ -117,7 +115,6 @@ final class PageSettings
     private readonly ?string $currency;
     private readonly ?bool $defaultRequiresShipping;
     private readonly ?string $uiMode;
-    private readonly ?int $checkoutExpirationMinutes;
     private readonly ?string $successDestination;
     private readonly ?string $cancelDestination;
     private readonly ?string $returnDestination;
@@ -142,11 +139,6 @@ final class PageSettings
         return $this->uiMode;
     }
 
-    public function checkoutExpirationMinutes(): ?int
-    {
-        return $this->checkoutExpirationMinutes;
-    }
-
     public function successDestination(): ?string
     {
         return $this->successDestination;
@@ -169,7 +161,6 @@ final class PageSettings
             'currency' => $this->currency(),
             'defaultRequiresShipping' => $this->defaultRequiresShipping(),
             'uiMode' => $this->uiMode(),
-            'checkoutExpirationMinutes' => $this->checkoutExpirationMinutes(),
             'successDestination' => $this->successDestination(),
             'cancelDestination' => $this->cancelDestination(),
             'returnDestination' => $this->returnDestination(),
@@ -186,29 +177,6 @@ final class PageSettings
         }
 
         return $value;
-    }
-
-    private function normalizeExpiration(mixed $value): ?int
-    {
-        if ($value === '' || $value === null) {
-            return null;
-        }
-
-        $expiration = filter_var($value, FILTER_VALIDATE_INT, [
-            'options' => [
-                'min_range' => Defaults::CHECKOUT_EXPIRATION_MINUTES_MIN,
-                'max_range' => Defaults::CHECKOUT_EXPIRATION_MINUTES_MAX,
-            ],
-        ]);
-
-        if ($expiration === false || is_float($value) || is_bool($value)) {
-            throw new ConfigurationException(
-                'persistence.content_invalid',
-                'settings.checkoutExpirationMinutes',
-            );
-        }
-
-        return $expiration;
     }
 
     private function normalizeDestination(mixed $value, string $name): ?string

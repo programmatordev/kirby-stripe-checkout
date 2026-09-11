@@ -70,17 +70,12 @@ tabs:
                 "*": programmatordev.stripe-checkout.settings.uiMode.hosted
               embedded:
                 "*": programmatordev.stripe-checkout.settings.uiMode.embedded
-          checkoutExpirationMinutes:
-            label: programmatordev.stripe-checkout.settings.checkoutExpirationMinutes.label
-            help: programmatordev.stripe-checkout.settings.checkoutExpirationMinutes.help
-            type: number
-            required: true
-            translate: false
-            step: 1
           successDestination:
             label: programmatordev.stripe-checkout.settings.successDestination.label
             help: programmatordev.stripe-checkout.settings.successDestination.help
             type: link
+            when:
+              uiMode: hosted
             options:
               - page
               - url
@@ -88,6 +83,8 @@ tabs:
             label: programmatordev.stripe-checkout.settings.cancelDestination.label
             help: programmatordev.stripe-checkout.settings.cancelDestination.help
             type: link
+            when:
+              uiMode: hosted
             options:
               - page
               - url
@@ -95,6 +92,8 @@ tabs:
             label: programmatordev.stripe-checkout.settings.returnDestination.label
             help: programmatordev.stripe-checkout.settings.returnDestination.help
             type: link
+            when:
+              uiMode: embedded
             options:
               - page
               - url
@@ -111,6 +110,8 @@ tabs:
             required: true
             min: 1
             step: 1
+            when:
+              cleanupCreationFailures: true
           cleanupUnpaidOrders:
             label: programmatordev.stripe-checkout.settings.cleanupUnpaidOrders.label
             help: programmatordev.stripe-checkout.settings.cleanupUnpaidOrders.help
@@ -124,6 +125,8 @@ tabs:
             required: true
             min: 1
             step: 1
+            when:
+              cleanupUnpaidOrders: true
           optionPresets:
             label: programmatordev.stripe-checkout.settings.optionPresets.label
             help: programmatordev.stripe-checkout.settings.optionPresets.help

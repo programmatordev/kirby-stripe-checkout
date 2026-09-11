@@ -236,10 +236,7 @@ try {
         throw new RuntimeException('The installed package did not resolve its default Settings.');
     }
 
-    if (
-        $stripeCheckout->settings()->uiMode() !== UiMode::Hosted
-        || $stripeCheckout->settings()->checkoutExpirationMinutes() !== 1440
-    ) {
+    if ($stripeCheckout->settings()->uiMode() !== UiMode::Hosted) {
         throw new RuntimeException('The installed package did not resolve its Checkout defaults.');
     }
 
@@ -260,7 +257,6 @@ try {
     $hubPage = (new StripeCheckoutPageStore($app))->page();
     $storedPriceSource = $hubPage?->content()->get('priceSource');
     $storedUiMode = $hubPage?->content()->get('uiMode');
-    $storedExpiration = $hubPage?->content()->get('checkoutExpirationMinutes');
 
     if (
         $hubPage === null
@@ -271,8 +267,6 @@ try {
         || $storedPriceSource->value() !== PriceSource::Kirby->value
         || $storedUiMode instanceof Field === false
         || $storedUiMode->value() !== UiMode::Hosted->value
-        || $storedExpiration instanceof Field === false
-        || $storedExpiration->value() !== '1440'
     ) {
         throw new RuntimeException('The installed package did not initialize its Stripe Checkout Page automatically.');
     }

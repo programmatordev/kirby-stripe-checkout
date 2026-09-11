@@ -151,7 +151,6 @@ final class RetentionSettingsTest extends KirbyTestCase
         $this->assertTrue($versions['latest']['cleanupcreationfailures']);
         $this->assertTrue($versions['latest']['cleanupunpaidorders']);
         $this->assertSame('hosted', $versions['latest']['uimode']);
-        $this->assertSame(1440.0, $versions['latest']['checkoutexpirationminutes']);
         $this->assertSame($before, $page->version('latest')->read('default'));
         $this->assertFalse($page->version('changes')->exists('current'));
         $settings = (new ConfigurationResolver())->resolve([], $store->settings())->configurationOrFail()->settings();

@@ -39,7 +39,6 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $this->assertSame('Stripe Checkout', $page->title()->value());
         $this->assertSame(PriceSource::Kirby->value, $this->fieldValue($page, 'priceSource'));
         $this->assertSame('hosted', $this->fieldValue($page, 'uiMode'));
-        $this->assertSame('1440', $this->fieldValue($page, 'checkoutExpirationMinutes'));
 
         // Kirby creates empty Field objects for required settings without a
         // safe deterministic default; their values must remain unconfigured.
@@ -187,13 +186,11 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
         $this->kirby->setCurrentLanguage('pt');
         $page = $page->update([
-            'checkoutExpirationMinutes' => 45,
             'successDestination' => '/pt/obrigado',
             'uiMode' => 'embedded',
         ]);
 
         $this->assertSame('embedded', $this->fieldValue($page, 'uiMode'));
-        $this->assertSame('45', $this->fieldValue($page, 'checkoutExpirationMinutes'));
         $this->assertSame(
             '/pt/obrigado',
             $this->languageFieldValue($page, 'successDestination', 'pt'),
@@ -496,8 +493,6 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         yield 'lowercase currency' => ['currency', 'eur'];
         yield 'invalid shipping default' => ['defaultRequiresShipping', 'sometimes'];
         yield 'invalid UI mode' => ['uiMode', 'inline'];
-        yield 'expiration below Stripe minimum' => ['checkoutExpirationMinutes', '29'];
-        yield 'expiration above Stripe maximum' => ['checkoutExpirationMinutes', '1441'];
     }
 
     #[DataProvider('invalidCommerceSettingProvider')]

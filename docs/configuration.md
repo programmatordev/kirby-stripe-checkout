@@ -49,7 +49,6 @@ The Settings tab currently contains:
 - `currency`: one uppercase Stripe presentment currency, required before commerce features can run;
 - `defaultRequiresShipping`: the fallback used when a product does not declare whether it needs shipping;
 - `uiMode`: `hosted` (the default) or `embedded`;
-- `checkoutExpirationMinutes`: how long Checkout remains open, from `30` to `1440` minutes (the default);
 - translated success, cancellation, and embedded-return destinations;
 - [order retention preferences](#order-retention), with separate controls for failed attempts and unpaid orders.
 
@@ -67,7 +66,6 @@ return [
             'currency' => 'EUR',
             'defaultRequiresShipping' => false,
             'uiMode' => 'hosted',
-            'checkoutExpirationMinutes' => 1440,
             'successDestination' => 'page://thanks-page-uuid',
             'cancelDestination' => '/cart',
             'returnDestination' => '/checkout',
@@ -77,6 +75,8 @@ return [
 ```
 
 The three destination fields accept a published Kirby Page reference or an HTTP(S) URL. Choosing a Page in the Panel is recommended because its URL is resolved for the language in which Checkout started. Root-relative and external HTTP(S) URLs are also supported. Unsafe or unresolved values are rejected when a Checkout request is prepared. Leaving a destination empty uses the initiating same-site URL, then the language-specific site URL as a fallback.
+
+The Panel shows success and cancellation destinations for hosted Checkout, and the return destination for embedded Checkout. Checkout Sessions use a fixed 24-hour lifetime. Retention-day fields are shown only when their corresponding cleanup option is enabled.
 
 Live Stripe credentials require HTTPS destinations, except for local hosts such as DDEV. Query strings are retained and fragments are removed. Destination values come only from trusted Settings or PHP configuration; they are never accepted from the Checkout form body.
 
@@ -104,7 +104,6 @@ $settings->priceSource(); // PriceSource::Kirby or PriceSource::Stripe
 $settings->currency(); // "EUR" or null
 $settings->defaultRequiresShipping(); // true, false, or null
 $settings->uiMode(); // UiMode::Hosted or UiMode::Embedded
-$settings->checkoutExpirationMinutes(); // 1440 by default
 $settings->successDestination(); // Page reference, URL, or null
 $settings->cancelDestination(); // Page reference, URL, or null
 $settings->returnDestination(); // Page reference, URL, or null

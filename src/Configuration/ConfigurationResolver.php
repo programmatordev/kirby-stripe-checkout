@@ -37,7 +37,6 @@ final class ConfigurationResolver
         'currency',
         'defaultRequiresShipping',
         'uiMode',
-        'checkoutExpirationMinutes',
         'successDestination',
         'cancelDestination',
         'returnDestination',
@@ -418,28 +417,6 @@ final class ConfigurationResolver
             throw new ConfigurationException('configuration.value_invalid', 'settings.uiMode');
         }
 
-        $expiration = $settings['checkoutExpirationMinutes'] ?? null;
-
-        if ($expiration !== null && is_int($expiration) === false) {
-            throw new ConfigurationException(
-                'configuration.type_invalid',
-                'settings.checkoutExpirationMinutes',
-            );
-        }
-
-        if (
-            is_int($expiration)
-            && (
-                $expiration < Defaults::CHECKOUT_EXPIRATION_MINUTES_MIN
-                || $expiration > Defaults::CHECKOUT_EXPIRATION_MINUTES_MAX
-            )
-        ) {
-            throw new ConfigurationException(
-                'configuration.value_invalid',
-                'settings.checkoutExpirationMinutes',
-            );
-        }
-
         foreach (['successDestination', 'cancelDestination', 'returnDestination'] as $name) {
             $destination = $settings[$name] ?? null;
 
@@ -458,7 +435,6 @@ final class ConfigurationResolver
             'currency' => null,
             'defaultRequiresShipping' => null,
             'uiMode' => null,
-            'checkoutExpirationMinutes' => null,
             'successDestination' => null,
             'cancelDestination' => null,
             'returnDestination' => null,
@@ -467,7 +443,6 @@ final class ConfigurationResolver
         $resolver->setAllowedTypes('currency', ['null', 'string']);
         $resolver->setAllowedTypes('defaultRequiresShipping', ['null', 'bool']);
         $resolver->setAllowedTypes('uiMode', ['null', 'string']);
-        $resolver->setAllowedTypes('checkoutExpirationMinutes', ['null', 'int']);
         $resolver->setAllowedTypes('successDestination', ['null', 'string']);
         $resolver->setAllowedTypes('cancelDestination', ['null', 'string']);
         $resolver->setAllowedTypes('returnDestination', ['null', 'string']);

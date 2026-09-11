@@ -73,25 +73,6 @@ final class Settings
         return UiMode::from($value);
     }
 
-    public function checkoutExpirationMinutes(): int
-    {
-        $value = $this->settings['checkoutExpirationMinutes']->value();
-
-        if (
-            is_int($value) === false
-            || $value < Defaults::CHECKOUT_EXPIRATION_MINUTES_MIN
-            || $value > Defaults::CHECKOUT_EXPIRATION_MINUTES_MAX
-        ) {
-            throw new LogicException(sprintf(
-                'The resolved Checkout expiration must be between %d and %d minutes.',
-                Defaults::CHECKOUT_EXPIRATION_MINUTES_MIN,
-                Defaults::CHECKOUT_EXPIRATION_MINUTES_MAX,
-            ));
-        }
-
-        return $value;
-    }
-
     public function successDestination(): ?string
     {
         return $this->destination('successDestination');

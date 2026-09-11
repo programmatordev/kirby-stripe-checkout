@@ -7,8 +7,6 @@ return [
     'programmatordev.stripe-checkout.settings.uiMode.help' => 'Abra o Checkout numa página alojada pelo Stripe ou incorpore-o no site.',
     'programmatordev.stripe-checkout.settings.uiMode.hosted' => 'Alojado',
     'programmatordev.stripe-checkout.settings.uiMode.embedded' => 'Incorporado',
-    'programmatordev.stripe-checkout.settings.checkoutExpirationMinutes.label' => 'Duração do Checkout (minutos)',
-    'programmatordev.stripe-checkout.settings.checkoutExpirationMinutes.help' => 'Escolha durante quanto tempo um novo Checkout fica aberto, entre 30 minutos e 24 horas.',
     'programmatordev.stripe-checkout.settings.successDestination.label' => 'Destino após conclusão',
     'programmatordev.stripe-checkout.settings.successDestination.help' => 'Página ou URL opcional usada após a conclusão do Checkout. Se estiver vazio, é usada a página de origem.',
     'programmatordev.stripe-checkout.settings.cancelDestination.label' => 'Destino após cancelamento',
