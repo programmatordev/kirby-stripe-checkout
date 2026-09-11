@@ -10,6 +10,9 @@ use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 
 /**
  * Immutable, credential-free context exposed to Session request customization.
+ *
+ * Destinations are effective URLs: empty settings have already fallen back to
+ * the safe initiating URL or the language-specific site URL.
  */
 final readonly class SessionRequestContext
 {

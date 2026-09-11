@@ -9,6 +9,6 @@ interface SessionRequestFactoryInterface
 {
     public function create(
         SessionRequestContext $context,
-        SessionRequest $standard,
+        SessionRequest $request,
     ): SessionRequest;
 }

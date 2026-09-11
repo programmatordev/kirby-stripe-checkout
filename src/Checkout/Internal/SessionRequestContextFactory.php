@@ -26,6 +26,7 @@ final class SessionRequestContextFactory
 {
     public const RESULT_QUERY_KEY = '_stripe_checkout_result';
 
+    /** Keep the common path aligned with Stripe's default instead of exposing another store setting. */
     private const SESSION_EXPIRATION_INTERVAL = 'PT24H';
 
     private const STRIPE_LOCALES = [
