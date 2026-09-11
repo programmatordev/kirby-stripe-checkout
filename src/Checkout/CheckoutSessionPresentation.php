@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Checkout;
 
 use InvalidArgumentException;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutUrlValidator;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 
 /** @internal Ephemeral hosted redirect or embedded client secret returned after orchestration. */
@@ -22,7 +23,7 @@ final readonly class CheckoutSessionPresentation
         if (
             ($uiMode === UiMode::Hosted) !== ($redirectUrl !== null)
             || ($uiMode === UiMode::Embedded) !== ($clientSecret !== null)
-            || ($redirectUrl !== null && $this->isHttpUrl($redirectUrl) === false)
+            || ($redirectUrl !== null && CheckoutUrlValidator::isHostedPresentation($redirectUrl) === false)
             || (
                 $clientSecret !== null
                 && (
@@ -61,11 +62,5 @@ final readonly class CheckoutSessionPresentation
     public function clientSecret(): ?string
     {
         return $this->clientSecret;
-    }
-
-    private function isHttpUrl(string $value): bool
-    {
-        return filter_var($value, FILTER_VALIDATE_URL) !== false
-            && in_array(parse_url($value, PHP_URL_SCHEME), ['http', 'https'], true);
     }
 }

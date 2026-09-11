@@ -9,8 +9,10 @@ use DateTimeImmutable;
 use Kirby\Data\Yaml;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutAttempt;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutUrlValidator;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
@@ -288,10 +290,12 @@ final class OrderSerializer
 
         $requiredKeys = [
             'tokenHash',
+            'bindingFingerprint',
             'requestFingerprint',
             'sessionRequest',
             'idempotencyKey',
             'stripeApiVersion',
+            'credentialMode',
             'operation',
             'retryUntil',
             'source',
@@ -307,7 +311,7 @@ final class OrderSerializer
         OrderData::validateAllowedKeys($checkoutAttempt, $requiredKeys);
         OrderData::validateRequiredKeys($checkoutAttempt, $requiredKeys);
 
-        $digestFields = ['tokenHash', 'requestFingerprint'];
+        $digestFields = ['tokenHash', 'bindingFingerprint', 'requestFingerprint'];
 
         foreach ($digestFields as $key) {
             if (is_string($checkoutAttempt[$key]) === false || preg_match('/\A[a-f0-9]{64}\z/', $checkoutAttempt[$key]) !== 1) {
@@ -324,9 +328,12 @@ final class OrderSerializer
 
         $uuid = OrderData::text($data['uuid']);
 
+        $credentialMode = CredentialMode::tryFrom(OrderData::text($checkoutAttempt['credentialMode']));
+
         if (
             OrderData::text($checkoutAttempt['idempotencyKey'], 255) !== 'stripe-checkout/session/' . $uuid
             || OrderData::text($checkoutAttempt['stripeApiVersion'], 80) === ''
+            || $credentialMode === null
             || $checkoutAttempt['operation'] !== CheckoutAttempt::OPERATION
         ) {
             throw new OrderDataException();
@@ -351,7 +358,9 @@ final class OrderSerializer
         foreach ($urlFields as $field) {
             $url = OrderData::text($checkoutAttempt[$field]);
 
-            if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+            // Reapply the mode-specific transport policy when reading content;
+            // persisted snapshots are not trusted merely because creation checked them.
+            if (CheckoutUrlValidator::isPersistedDestination($url, $credentialMode === CredentialMode::Live) === false) {
                 throw new OrderDataException();
             }
         }

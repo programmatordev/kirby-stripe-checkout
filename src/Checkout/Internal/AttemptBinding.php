@@ -8,7 +8,6 @@ use InvalidArgumentException;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartSnapshot;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
-use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
@@ -27,9 +26,9 @@ final readonly class AttemptBinding
     /** @param list<array<string, mixed>> $selection */
     private function __construct(
         private CheckoutSource $source,
-        ?string $userUuid,
-        ?string $guestReference,
-        string $requestFingerprint,
+        private ?string $userUuid,
+        private ?string $guestReference,
+        string $contextFingerprint,
         ?string $cartId,
         ?string $cartRevision,
         array $selection,
@@ -50,8 +49,8 @@ final readonly class AttemptBinding
             ProductData::identifier($guestReference);
         }
 
-        if (preg_match('/\A[a-f0-9]{64}\z/', $requestFingerprint) !== 1) {
-            throw new InvalidArgumentException('The request fingerprint must be a SHA-256 digest.');
+        if (preg_match('/\A[a-f0-9]{64}\z/', $contextFingerprint) !== 1) {
+            throw new InvalidArgumentException('The context fingerprint must be a SHA-256 digest.');
         }
 
         // Ordered tuples avoid delimiter ambiguity and preserve direct-item order.
@@ -61,7 +60,7 @@ final readonly class AttemptBinding
             $source->value,
             $userUuid,
             $guestReference,
-            $requestFingerprint,
+            $contextFingerprint,
             $cartId,
             $cartRevision,
             $selection,
@@ -70,7 +69,7 @@ final readonly class AttemptBinding
 
     public static function cart(
         CartSnapshot $cart,
-        string $requestFingerprint,
+        string $contextFingerprint,
         ?string $userUuid = null,
         ?string $guestReference = null,
     ): self {
@@ -79,13 +78,13 @@ final readonly class AttemptBinding
         }
 
         // Cart identity/revision identify selection state. The separate request
-        // fingerprint must still cover current commerce facts, which can change
+        // context fingerprint must still cover current commerce facts, which can change
         // without a cart mutation (for example, a merchant changing a price).
         return new self(
             source: CheckoutSource::Cart,
             userUuid: $userUuid,
             guestReference: $guestReference,
-            requestFingerprint: $requestFingerprint,
+            contextFingerprint: $contextFingerprint,
             cartId: $cart->id(),
             cartRevision: $cart->revision(),
             selection: [],
@@ -95,7 +94,7 @@ final readonly class AttemptBinding
     /** @param array<array-key, ProductRequest> $items Canonical output from ProductRequestNormalizer. */
     public static function direct(
         array $items,
-        string $requestFingerprint,
+        string $contextFingerprint,
         ?string $userUuid = null,
         ?string $guestReference = null,
     ): self {
@@ -107,34 +106,10 @@ final readonly class AttemptBinding
             source: CheckoutSource::Direct,
             userUuid: $userUuid,
             guestReference: $guestReference,
-            requestFingerprint: $requestFingerprint,
+            contextFingerprint: $contextFingerprint,
             cartId: null,
             cartRevision: null,
             selection: array_map(ProductRequestData::toArray(...), $items),
-        );
-    }
-
-    public static function order(
-        OrderCreationContext $order,
-        string $requestFingerprint,
-        ?string $guestReference = null,
-    ): self {
-        $selection = $order->sourceType() === CheckoutSource::Direct
-            ? array_map(static fn(array $lineItem): array => [
-                'reference' => OrderData::text($lineItem['reference'] ?? null),
-                'quantity' => OrderData::integer($lineItem['quantity'] ?? null),
-                'selectedOptions' => self::selectedOptions($lineItem['options'] ?? null),
-            ], $order->lineItems())
-            : [];
-
-        return new self(
-            source: $order->sourceType(),
-            userUuid: $order->userUuid(),
-            guestReference: $guestReference,
-            requestFingerprint: $requestFingerprint,
-            cartId: null,
-            cartRevision: $order->cartRevision(),
-            selection: $selection,
         );
     }
 
@@ -155,18 +130,21 @@ final readonly class AttemptBinding
         }
     }
 
-    /** @return array<string, string> */
-    private static function selectedOptions(mixed $values): array
+    public function assertMatchesFingerprint(string $fingerprint): void
     {
-        $selection = [];
-
-        foreach (OrderData::list($values) as $value) {
-            $value = OrderData::map($value);
-            $selection[OrderData::text($value['optionId'] ?? null)] = OrderData::text($value['valueId'] ?? null);
+        if (preg_match('/\A[a-f0-9]{64}\z/', $fingerprint) !== 1 || hash_equals($fingerprint, $this->fingerprint) === false) {
+            throw new CheckoutInputException('checkout.attempt_conflict');
         }
+    }
 
-        ksort($selection);
-
-        return $selection;
+    public function assertCompatible(OrderCreationContext $order, ?string $guestReference): void
+    {
+        if (
+            $this->source !== $order->sourceType()
+            || $this->userUuid !== $order->userUuid()
+            || $this->guestReference !== $guestReference
+        ) {
+            throw new CheckoutInputException('checkout.attempt_conflict');
+        }
     }
 }

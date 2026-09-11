@@ -313,10 +313,12 @@ final class OrderValuesTest extends TestCase
         $fields = [
             'attempt' => [
                 'tokenHash',
+                'bindingFingerprint',
                 'requestFingerprint',
                 'sessionRequest',
                 'idempotencyKey',
                 'stripeApiVersion',
+                'credentialMode',
                 'operation',
                 'retryUntil',
                 'source',

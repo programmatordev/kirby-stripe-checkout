@@ -22,7 +22,7 @@ final class CheckoutSessionRecordValidator
         bool $liveMode,
     ): void {
         $parameters = $request->parameters();
-        // Project metadata is an escape hatch. Only the private keys establish
+        // Custom metadata is an escape hatch. Only the private keys establish
         // ownership and correlation, so those are the keys this boundary requires.
         $expectedMetadata = array_filter(
             is_array($parameters['metadata'] ?? null) ? $parameters['metadata'] : [],
@@ -35,7 +35,7 @@ final class CheckoutSessionRecordValidator
             UiMode::Embedded => 'embedded_page',
         };
         $hasPresentation = match ($context->uiMode()) {
-            UiMode::Hosted => $this->isHttpUrl($sessionRecord->url) && $sessionRecord->clientSecret === null,
+            UiMode::Hosted => CheckoutUrlValidator::isHostedPresentation($sessionRecord->url) && $sessionRecord->clientSecret === null,
             UiMode::Embedded => is_string($sessionRecord->clientSecret)
                 && trim($sessionRecord->clientSecret) !== ''
                 && $sessionRecord->url === null,
@@ -55,7 +55,7 @@ final class CheckoutSessionRecordValidator
             || strtolower((string) $sessionRecord->currency) !== strtolower($context->order()->currency())
             || $sessionRecord->clientReferenceId !== $context->order()->pageUuid()
             || $sessionRecord->integrationIdentifier !== ($parameters['integration_identifier'] ?? null)
-            || array_intersect_key($sessionRecord->metadata, $expectedMetadata) !== $expectedMetadata
+            || $this->hasExpectedMetadata($sessionRecord->metadata, $expectedMetadata) === false
             || $hasPresentation === false
             || ($sessionRecord->requestId !== null && trim($sessionRecord->requestId) === '')
         ) {
@@ -63,10 +63,20 @@ final class CheckoutSessionRecordValidator
         }
     }
 
-    private function isHttpUrl(?string $value): bool
+    /**
+     * Provider map ordering is not part of the metadata contract.
+     *
+     * @param array<string, mixed> $actual
+     * @param array<string, mixed> $expected
+     */
+    private function hasExpectedMetadata(array $actual, array $expected): bool
     {
-        return is_string($value)
-            && filter_var($value, FILTER_VALIDATE_URL) !== false
-            && in_array(parse_url($value, PHP_URL_SCHEME), ['http', 'https'], true);
+        foreach ($expected as $key => $value) {
+            if (array_key_exists($key, $actual) === false || $actual[$key] !== $value) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

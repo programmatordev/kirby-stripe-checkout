@@ -24,8 +24,6 @@ use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
  */
 final class SessionRequestContextFactory
 {
-    private const RESULT_QUERY_KEY = '_stripe_checkout_result';
-
     private const SUPPORTED_STRIPE_LOCALES = [
         'auto',
         'bg',
@@ -240,32 +238,25 @@ final class SessionRequestContextFactory
         string $path,
         bool $removeResultKey = false,
     ): string {
-        $parts = parse_url($value);
-        $scheme = is_array($parts) ? strtolower((string) ($parts['scheme'] ?? '')) : '';
-        $host = is_array($parts) ? strtolower((string) ($parts['host'] ?? '')) : '';
+        if (CheckoutUrlValidator::isDestination($value, $isLiveMode) === false) {
+            throw new ConfigurationException('configuration.value_invalid', $path);
+        }
 
-        if (
-            $parts === false
-            || strlen($value) > 2048
-            || filter_var($value, FILTER_VALIDATE_URL) === false
-            || in_array($scheme, ['http', 'https'], true) === false
-            || $host === ''
-            || isset($parts['user'])
-            || isset($parts['pass'])
-            || $isLiveMode && $scheme !== 'https' && $this->isLocalHost($host) === false
-        ) {
+        $parts = parse_url($value);
+
+        if (is_array($parts) === false) {
             throw new ConfigurationException('configuration.value_invalid', $path);
         }
 
         $query = [];
         parse_str((string) ($parts['query'] ?? ''), $query);
 
-        if (array_key_exists(self::RESULT_QUERY_KEY, $query)) {
+        if (array_key_exists(CheckoutUrlValidator::RESULT_QUERY_KEY, $query)) {
             if ($removeResultKey === false) {
                 throw new ConfigurationException('configuration.value_invalid', $path);
             }
 
-            unset($query[self::RESULT_QUERY_KEY]);
+            unset($query[CheckoutUrlValidator::RESULT_QUERY_KEY]);
             $value = Url::build([
                 'fragment' => null,
                 'query' => $query,
@@ -301,17 +292,5 @@ final class SessionRequestContextFactory
         $scheme = $parts['scheme'] ?? null;
 
         return is_string($scheme) && strtolower($scheme) === 'https' ? 443 : 80;
-    }
-
-    private function isLocalHost(string $host): bool
-    {
-        $host = trim($host, '[]');
-
-        return $host === 'localhost'
-            || $host === '::1'
-            || str_starts_with($host, '127.')
-            || str_ends_with($host, '.localhost')
-            || str_ends_with($host, '.test')
-            || str_ends_with($host, '.ddev.site');
     }
 }

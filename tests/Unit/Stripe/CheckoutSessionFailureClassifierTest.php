@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Test\Unit\Stripe;
 
 use PHPUnit\Framework\TestCase;
+use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailure;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailureType;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Internal\CheckoutSessionFailureClassifier;
 use RuntimeException;
@@ -68,6 +69,23 @@ final class CheckoutSessionFailureClassifierTest extends TestCase
         );
     }
 
+    public function testConflictRemainsRetryableAfterStripeClientRetriesAreExhausted(): void
+    {
+        $conflict = InvalidRequestException::factory(
+            'PRIVATE conflict detail',
+            409,
+            null,
+            ['error' => ['type' => 'invalid_request_error']],
+            ['Request-Id' => 'req_conflict'],
+            'idempotency_error',
+        );
+
+        $failure = (new CheckoutSessionFailureClassifier())->classify($conflict, mutation: true);
+
+        $this->assertSame(CheckoutSessionFailureType::Retryable, $failure->type());
+        $this->assertTrue($failure->isRetryable());
+    }
+
     public function testUnsafeProviderFactsAreDiscarded(): void
     {
         $classifier = new CheckoutSessionFailureClassifier();
@@ -84,5 +102,19 @@ final class CheckoutSessionFailureClassifierTest extends TestCase
         $this->assertNull($classified->requestId());
         $this->assertNull($classified->providerCode());
         $this->assertNull($classified->providerType());
+    }
+
+    public function testSurroundingWhitespaceAndUnicodeSeparatorsAreDiscarded(): void
+    {
+        $failure = CheckoutSessionFailure::fromProvider(
+            type: CheckoutSessionFailureType::Rejected,
+            requestId: ' req_space ',
+            providerCode: "code\u{2028}unsafe",
+            providerType: 'invalid_request_error',
+        );
+
+        $this->assertNull($failure->requestId());
+        $this->assertNull($failure->providerCode());
+        $this->assertSame('invalid_request_error', $failure->providerType());
     }
 }

@@ -8,6 +8,7 @@ use DateInterval;
 use DateTimeImmutable;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
+use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
@@ -31,9 +32,11 @@ final readonly class CheckoutAttempt
         private OrderCreationContext $order,
         private SessionRequestContext $context,
         private SessionRequest $request,
+        private AttemptBinding $binding,
         private AttemptToken $token,
         private ?string $guestReference,
         private string $stripeApiVersion,
+        private CredentialMode $credentialMode,
         DateTimeImmutable $createdAt,
     ) {
         if ($context->order() !== $order) {
@@ -45,6 +48,8 @@ final readonly class CheckoutAttempt
         if (($order->userUuid() === null) === ($guestReference === null)) {
             throw new OrderDataException();
         }
+
+        $binding->assertCompatible($order, $guestReference);
 
         if ($guestReference !== null) {
             OrderData::text($guestReference, 128);
@@ -73,11 +78,16 @@ final readonly class CheckoutAttempt
     {
         return [
             'tokenHash' => $this->token->hash(),
+            // The binding identifies the customer action before an Order exists;
+            // the request fingerprint protects the exact later Stripe mutation.
+            'bindingFingerprint' => $this->binding->fingerprint(),
             'requestFingerprint' => $this->request->fingerprint(),
             'sessionRequest' => $this->request->parameters(),
             'idempotencyKey' => $this->idempotencyKey,
             // An exact retry must retain the API semantics used for the first POST.
             'stripeApiVersion' => $this->stripeApiVersion,
+            // Stripe idempotency is scoped by account mode; never cross test/live.
+            'credentialMode' => $this->credentialMode->value,
             'operation' => self::OPERATION,
             'retryUntil' => OrderData::timestamp($this->retryUntil),
             'source' => $this->order->sourceType()->value,

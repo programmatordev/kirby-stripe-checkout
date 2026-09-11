@@ -49,6 +49,7 @@ final class CheckoutSessionCreator
 
     public function create(
         OrderCreationContext $order,
+        AttemptBinding $binding,
         AttemptToken $token,
         ?string $guestReference,
         DateTimeImmutable $now,
@@ -62,7 +63,7 @@ final class CheckoutSessionCreator
         $checkoutAttempt = null;
         $page = $this->orderPageStore->createAttemptOnce(
             tokenHash: $token->hash(),
-            prepare: function () use ($order, $token, $guestReference, $now, $initiatingUrl, &$requestContext, &$sessionRequest, &$checkoutAttempt): array {
+            prepare: function () use ($order, $binding, $token, $guestReference, $now, $initiatingUrl, &$requestContext, &$sessionRequest, &$checkoutAttempt): array {
                 $requestContext = $this->requestContextFactory->create(
                     order: $order,
                     configuration: $this->configuration,
@@ -74,9 +75,11 @@ final class CheckoutSessionCreator
                     order: $order,
                     context: $requestContext,
                     request: $sessionRequest,
+                    binding: $binding,
                     token: $token,
                     guestReference: $guestReference,
                     stripeApiVersion: $this->stripeApiVersion,
+                    credentialMode: $this->configuration->stripe()->secretKeyMode(),
                     createdAt: $now,
                 );
 
@@ -88,6 +91,7 @@ final class CheckoutSessionCreator
             return $this->reuse(
                 page: $page,
                 incomingOrder: $order,
+                binding: $binding,
                 guestReference: $guestReference,
                 now: $now,
             );
@@ -106,6 +110,7 @@ final class CheckoutSessionCreator
     private function reuse(
         OrderPage $page,
         OrderCreationContext $incomingOrder,
+        AttemptBinding $binding,
         ?string $guestReference,
         DateTimeImmutable $now,
     ): CheckoutSessionPresentation {
@@ -124,6 +129,7 @@ final class CheckoutSessionCreator
             persistedOrder: $persistedOrder,
             incomingOrder: $incomingOrder,
             checkoutAttempt: $checkoutAttempt,
+            binding: $binding,
             guestReference: $guestReference,
         );
 
@@ -144,7 +150,16 @@ final class CheckoutSessionCreator
         }
 
         if ($now >= OrderData::date($checkoutAttempt['retryUntil'])) {
-            $this->markRetryExpired($page, $now);
+            $page = $this->markRetryExpired($page, $now);
+            $presentation = $this->presentationFromConcurrentAssociation(
+                page: $page,
+                requestContext: $requestContext,
+                sessionRequest: $sessionRequest,
+            );
+
+            if ($presentation !== null) {
+                return $presentation;
+            }
 
             throw new CheckoutSessionException('checkout.attempt_retry_expired');
         }
@@ -164,25 +179,17 @@ final class CheckoutSessionCreator
         OrderCreationContext $persistedOrder,
         OrderCreationContext $incomingOrder,
         array $checkoutAttempt,
+        AttemptBinding $binding,
         ?string $guestReference,
     ): void {
-        $persistedFingerprint = OrderData::text($checkoutAttempt['requestFingerprint']);
-        $persistedBinding = AttemptBinding::order(
-            order: $persistedOrder,
-            requestFingerprint: $persistedFingerprint,
-            guestReference: OrderData::nullableString($checkoutAttempt['guestReference']),
-        );
-        $candidateBinding = AttemptBinding::order(
-            order: $incomingOrder,
-            requestFingerprint: $persistedFingerprint,
-            guestReference: $guestReference,
-        );
-        $persistedBinding->assertMatches($candidateBinding);
+        $binding->assertCompatible($incomingOrder, $guestReference);
+        $binding->assertMatchesFingerprint(OrderData::text($checkoutAttempt['bindingFingerprint']));
 
         if (
             $persistedOrder->currency() !== $incomingOrder->currency()
             || $persistedOrder->uiMode() !== $incomingOrder->uiMode()
             || $checkoutAttempt['stripeApiVersion'] !== $this->stripeApiVersion
+            || $checkoutAttempt['credentialMode'] !== $this->configuration->stripe()->secretKeyMode()->value
             || $checkoutAttempt['operation'] !== CheckoutAttempt::OPERATION
         ) {
             throw new CheckoutInputException('checkout.attempt_conflict');
@@ -229,17 +236,22 @@ final class CheckoutSessionCreator
                 idempotencyKey: $idempotencyKey,
             );
         } catch (CheckoutSessionGatewayException $error) {
-            $this->recordFailure(
+            $page = $this->recordFailure(
                 page: $page,
                 failure: $error->failure(),
                 now: $now,
             );
-
-            throw new CheckoutSessionException(
-                errorCode: 'checkout.session_' . str_replace('provider_', '', $error->failure()->type()->value),
-                retryable: $error->failure()->isRetryable(),
-                previous: $error,
+            $presentation = $this->presentationFromConcurrentAssociation(
+                page: $page,
+                requestContext: $requestContext,
+                sessionRequest: $sessionRequest,
             );
+
+            if ($presentation !== null) {
+                return $presentation;
+            }
+
+            throw $this->sessionException($error);
         }
 
         try {
@@ -252,7 +264,7 @@ final class CheckoutSessionCreator
                 liveMode: $this->liveMode(),
             );
         } catch (CheckoutSessionException $error) {
-            $this->recordFailure(
+            $page = $this->recordFailure(
                 page: $page,
                 failure: CheckoutSessionFailure::fromProvider(
                     type: CheckoutSessionFailureType::Incompatible,
@@ -260,6 +272,15 @@ final class CheckoutSessionCreator
                 ),
                 now: $now,
             );
+            $presentation = $this->presentationFromConcurrentAssociation(
+                page: $page,
+                requestContext: $requestContext,
+                sessionRequest: $sessionRequest,
+            );
+
+            if ($presentation !== null) {
+                return $presentation;
+            }
 
             throw $error;
         }
@@ -314,11 +335,7 @@ final class CheckoutSessionCreator
                 liveMode: $this->liveMode(),
             );
         } catch (CheckoutSessionGatewayException $error) {
-            throw new CheckoutSessionException(
-                errorCode: 'checkout.session_unavailable',
-                retryable: true,
-                previous: $error,
-            );
+            throw $this->sessionException($error);
         }
 
         return $this->presentation(
@@ -370,8 +387,8 @@ final class CheckoutSessionCreator
         OrderPage $page,
         CheckoutSessionFailure $failure,
         DateTimeImmutable $now,
-    ): void {
-        $this->orderPageStore->update(
+    ): OrderPage {
+        return $this->orderPageStore->update(
             uuid: $page->uuid()->toString(),
             reduce: static function (array $data) use ($failure, $now): array {
                 $checkoutAttempt = OrderData::map($data['checkoutAttempt']);
@@ -381,6 +398,13 @@ final class CheckoutSessionCreator
                 ];
                 $data['checkoutAttempt'] = $checkoutAttempt;
                 $data['updatedAt'] = max($data['updatedAt'], OrderData::timestamp($now));
+                $status = CheckoutStatus::from(OrderData::text($data['checkoutStatus']));
+
+                // Another request or webhook may have committed stronger evidence
+                // while this provider request was in flight. Keep that state.
+                if (in_array($status, [CheckoutStatus::Creating, CheckoutStatus::CreationUncertain], true) === false) {
+                    return $data;
+                }
 
                 // Retryable/unavailable failures leave the attempt in `creating`.
                 // Only a definitive rejection or ambiguous mutation changes state.
@@ -397,17 +421,55 @@ final class CheckoutSessionCreator
         );
     }
 
-    private function markRetryExpired(OrderPage $page, DateTimeImmutable $now): void
+    private function markRetryExpired(OrderPage $page, DateTimeImmutable $now): OrderPage
     {
-        $this->orderPageStore->update(
+        return $this->orderPageStore->update(
             uuid: $page->uuid()->toString(),
             reduce: static function (array $data) use ($now): array {
+                $status = CheckoutStatus::from(OrderData::text($data['checkoutStatus']));
+
+                if (in_array($status, [CheckoutStatus::Creating, CheckoutStatus::CreationUncertain], true) === false) {
+                    return $data;
+                }
+
                 $data['checkoutStatus'] = CheckoutStatus::CreationFailed->value;
                 $data['creationFailedAt'] ??= OrderData::timestamp($now);
                 $data['updatedAt'] = max($data['updatedAt'], OrderData::timestamp($now));
 
                 return $data;
             },
+        );
+    }
+
+    /** Returns the presentation established by a concurrent successful observer. */
+    private function presentationFromConcurrentAssociation(
+        OrderPage $page,
+        SessionRequestContext $requestContext,
+        SessionRequest $sessionRequest,
+    ): ?CheckoutSessionPresentation {
+        $status = CheckoutStatus::from(OrderData::text($this->orderPageStore->data($page)['checkoutStatus']));
+
+        if ($status === CheckoutStatus::Open) {
+            return $this->retrievePresentation(
+                page: $page,
+                requestContext: $requestContext,
+                sessionRequest: $sessionRequest,
+            );
+        }
+
+        if (in_array($status, [CheckoutStatus::Complete, CheckoutStatus::Expired], true)) {
+            throw new CheckoutInputException('checkout.attempt_closed');
+        }
+
+        return null;
+    }
+
+    private function sessionException(CheckoutSessionGatewayException $error): CheckoutSessionException
+    {
+        return new CheckoutSessionException(
+            errorCode: 'checkout.session_' . str_replace('provider_', '', $error->failure()->type()->value),
+            retryable: $error->failure()->isRetryable(),
+            previous: $error,
         );
     }
 

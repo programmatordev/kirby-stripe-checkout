@@ -16,15 +16,7 @@ final readonly class CheckoutSessionFailure
         private ?string $providerType = null,
     ) {
         foreach ([$requestId, $providerCode, $providerType] as $value) {
-            if (
-                $value !== null
-                && (
-                    trim($value) === ''
-                    || strlen($value) > 255
-                    || mb_check_encoding($value, 'UTF-8') === false
-                    || preg_match('/[\x00-\x1F\x7F]/', $value) === 1
-                )
-            ) {
+            if ($value !== null && self::isSafeText($value) === false) {
                 throw new InvalidArgumentException('Provider failure facts must be safe text.');
             }
         }
@@ -37,10 +29,10 @@ final readonly class CheckoutSessionFailure
         mixed $providerType = null,
     ): self {
         return new self(
-            $type,
-            self::safeText($requestId),
-            self::safeText($providerCode),
-            self::safeText($providerType),
+            type: $type,
+            requestId: self::safeText($requestId),
+            providerCode: self::safeText($providerCode),
+            providerType: self::safeText($providerType),
         );
     }
 
@@ -89,14 +81,20 @@ final readonly class CheckoutSessionFailure
     {
         if (
             is_string($value) === false
-            || trim($value) === ''
-            || strlen($value) > 255
-            || mb_check_encoding($value, 'UTF-8') === false
-            || preg_match('/[\x00-\x1F\x7F]/', $value) === 1
+            || self::isSafeText($value) === false
         ) {
             return null;
         }
 
         return $value;
+    }
+
+    private static function isSafeText(string $value): bool
+    {
+        return trim($value) !== ''
+            && trim($value) === $value
+            && mb_strlen($value) <= 255
+            && mb_check_encoding($value, 'UTF-8')
+            && preg_match('/[\p{Cc}\p{Zl}\p{Zp}]/u', $value) !== 1;
     }
 }

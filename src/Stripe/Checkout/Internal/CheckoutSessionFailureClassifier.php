@@ -20,6 +20,9 @@ final class CheckoutSessionFailureClassifier
         // during creation is uncertain because Stripe may have accepted the POST.
         $type = match (true) {
             $error instanceof RateLimitException => CheckoutSessionFailureType::Retryable,
+            // stripe-php retries HTTP 409 conflicts. If all client retries are
+            // exhausted, repeating the exact idempotent request remains safe.
+            $error instanceof ApiErrorException && $error->getHttpStatus() === 409 => CheckoutSessionFailureType::Retryable,
             $error instanceof ApiConnectionException => $mutation
                 ? CheckoutSessionFailureType::Uncertain
                 : CheckoutSessionFailureType::Unavailable,
