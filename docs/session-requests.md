@@ -54,7 +54,7 @@ The final request is stored on the Order exactly as submitted. Do not place secr
 
 Every filter result passes final validation before an order or Stripe Session can be created. The validator has three responsibilities:
 
-1. Parameters the plugin officially supports through Settings are fully validated when present. This currently covers billing-address, name, phone, tax-ID and consent collection, custom fields, and promotion-code entry.
+1. Fields the plugin officially models through Settings are validated when present. This currently covers billing-address, name, phone, tax-ID and consent collection, custom fields, and promotion-code entry. Additional Stripe-owned fields inside those parameter maps remain Stripe's responsibility.
 2. Values required by the order and payment lifecycle are protected from changes.
 3. Other serializable Stripe parameters pass through without the plugin duplicating Stripe's semantic validation. A malformed or incompatible provider-owned value is rejected by Stripe and the Order records a safe `creation_failed` outcome.
 
@@ -66,7 +66,7 @@ The protected lifecycle values are:
 - the order reference and private Session, PaymentIntent, and line-item metadata;
 - the original line count, quantities, price source, Price IDs or inline amounts, and currencies.
 
-The validator also rejects lifecycle shapes the current order model cannot represent: subscriptions and setup mode, Connect transfers or fees, manual capture, saved/future payment methods, adjustable quantities, optional items, Adaptive Pricing, Managed Payments, recovery Sessions, and server-controlled dynamic shipping updates. Provider hints such as `origin_context`, explicit customer references, payment-method configuration, discounts, invoice creation, and other Stripe-owned parameters are allowed when they do not change those guarantees.
+The validator also rejects lifecycle shapes the current order model cannot represent: subscriptions and setup mode, Connect transfers or fees or invoice issuers, manual capture, saved/future payment methods, adjustable quantities, optional items, Adaptive Pricing, Managed Payments, recovery Sessions, and server-controlled dynamic shipping updates. Static `payment_method_types` is also rejected so that Stripe's [dynamic payment methods](https://docs.stripe.com/payments/payment-methods/dynamic-payment-methods) remain authoritative. Provider hints such as `origin_context`, explicit customer references, dynamic payment-method controls and configurations, discounts, invoice creation, and other Stripe-owned parameters are allowed when they do not change those guarantees.
 
 Stripe remains the authority for unsupported parameters and payment-method-specific combinations. A project can therefore use newly available Stripe values through the filter without waiting for a plugin release, but errors for those values surface only when Stripe receives the request. The plugin validates a parameter itself only when it officially supports that parameter or needs to protect an architectural invariant.
 

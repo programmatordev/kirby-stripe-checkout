@@ -40,7 +40,7 @@ final class SessionRequestValidatorTest extends TestCase
         $parameters['discounts'] = [['promotion_code' => 'promo_test']];
         $parameters['invoice_creation'] = ['enabled' => true];
         $parameters['origin_context'] = 'mobile_app';
-        $parameters['payment_method_types'] = ['card'];
+        $parameters['payment_method_configuration'] = 'pmc_test';
         $parameters['payment_method_options'] = [
             'card' => ['request_three_d_secure' => 'automatic'],
         ];
@@ -335,6 +335,28 @@ final class SessionRequestValidatorTest extends TestCase
             },
             'session_request.parameter_protected',
             'optional_items',
+        ];
+        yield 'static payment method types' => [
+            static function (array &$parameters): void {
+                $parameters['payment_method_types'] = ['card'];
+            },
+            'session_request.parameter_protected',
+            'payment_method_types',
+        ];
+        yield 'connected-account invoice issuer' => [
+            static function (array &$parameters): void {
+                $parameters['invoice_creation'] = [
+                    'enabled' => true,
+                    'invoice_data' => [
+                        'issuer' => [
+                            'account' => 'acct_test',
+                            'type' => 'account',
+                        ],
+                    ],
+                ];
+            },
+            'session_request.parameter_protected',
+            'invoice_creation.invoice_data.issuer',
         ];
     }
 

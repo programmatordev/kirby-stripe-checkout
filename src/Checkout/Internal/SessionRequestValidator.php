@@ -29,6 +29,8 @@ final class SessionRequestValidator
      * Session; optional items can change saved lines; server-only shipping needs
      * a Session update flow; and saved methods need an explicit customer/consent
      * contract. Managed Payments changes the merchant-of-record model entirely.
+     * A static payment-method list bypasses Stripe's Dashboard-managed dynamic
+     * selection.
      *
      * @see https://docs.stripe.com/payments/currencies/localize-prices/adaptive-pricing
      * @see https://docs.stripe.com/payments/checkout/abandoned-carts
@@ -36,12 +38,14 @@ final class SessionRequestValidator
      * @see https://docs.stripe.com/payments/checkout/custom-shipping-options
      * @see https://docs.stripe.com/payments/checkout/save-during-payment
      * @see https://docs.stripe.com/payments/managed-payments
+     * @see https://docs.stripe.com/payments/payment-methods/dynamic-payment-methods
      */
     private const PROHIBITED_TOP_LEVEL_FIELDS = [
         'adaptive_pricing',
         'after_expiration',
         'managed_payments',
         'optional_items',
+        'payment_method_types',
         'permissions',
         'saved_payment_method_options',
     ];
@@ -64,7 +68,7 @@ final class SessionRequestValidator
     ];
 
     public function __construct(
-        private readonly SupportedSessionParametersValidator $supportedParameters = new SupportedSessionParametersValidator(),
+        private readonly SupportedSessionParametersValidator $supportedParametersValidator = new SupportedSessionParametersValidator(),
     ) {}
 
     public function validate(SessionRequest $request, SessionRequest $customizedRequest): SessionRequest
@@ -81,7 +85,7 @@ final class SessionRequestValidator
         $this->validateMetadata($expected, $parameters);
         $this->validateLineItems($expected, $parameters);
         $this->validatePrivateMetadataLocations($parameters);
-        $this->supportedParameters->validate($parameters);
+        $this->supportedParametersValidator->validate($parameters);
 
         return $customizedRequest;
     }
@@ -135,6 +139,23 @@ final class SessionRequestValidator
 
         if (is_array($automaticTax) && array_is_list($automaticTax) === false) {
             $this->assertAbsent($automaticTax, 'liability', 'automatic_tax.liability');
+        }
+
+        $invoiceCreation = $parameters['invoice_creation'] ?? null;
+
+        if (is_array($invoiceCreation) && array_is_list($invoiceCreation) === false) {
+            $invoiceData = $invoiceCreation['invoice_data'] ?? null;
+
+            if (is_array($invoiceData) && array_is_list($invoiceData) === false) {
+                // Stripe can assign invoice branding and support details to a
+                // connected account, which is outside the one-merchant model.
+                // https://docs.stripe.com/api/checkout/sessions/create?query=invoice_creation.invoice_data.issuer
+                $this->assertAbsent(
+                    $invoiceData,
+                    'issuer',
+                    'invoice_creation.invoice_data.issuer',
+                );
+            }
         }
 
         $paymentMethodOptions = $parameters['payment_method_options'] ?? null;

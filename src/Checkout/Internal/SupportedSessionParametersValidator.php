@@ -18,7 +18,7 @@ final class SupportedSessionParametersValidator
     {
         $this->validateBillingAddressCollection($parameters);
         $this->validateNameCollection($parameters);
-        $this->validateEnabledCollection($parameters, 'phone_number_collection');
+        $this->validatePhoneNumberCollection($parameters);
         $this->validateTaxIdCollection($parameters);
         $this->validateConsentCollection($parameters);
         $this->validateCustomFields($parameters);
@@ -48,14 +48,15 @@ final class SupportedSessionParametersValidator
         }
 
         $collection = $this->map($parameters['name_collection'], 'name_collection');
+        $nameTypes = ['individual', 'business'];
 
-        foreach (['individual', 'business'] as $name) {
-            if (array_key_exists($name, $collection) === false) {
+        foreach ($nameTypes as $nameType) {
+            if (array_key_exists($nameType, $collection) === false) {
                 continue;
             }
 
-            $path = 'name_collection.' . $name;
-            $definition = $this->map($collection[$name], $path);
+            $path = 'name_collection.' . $nameType;
+            $definition = $this->map($collection[$nameType], $path);
             $this->requiredBoolean($definition, 'enabled', $path . '.enabled');
 
             if (array_key_exists('optional', $definition)) {
@@ -65,14 +66,21 @@ final class SupportedSessionParametersValidator
     }
 
     /** @param array<string, mixed> $parameters */
-    private function validateEnabledCollection(array $parameters, string $field): void
+    private function validatePhoneNumberCollection(array $parameters): void
     {
-        if (array_key_exists($field, $parameters) === false) {
+        if (array_key_exists('phone_number_collection', $parameters) === false) {
             return;
         }
 
-        $collection = $this->map($parameters[$field], $field);
-        $this->requiredBoolean($collection, 'enabled', $field . '.enabled');
+        $collection = $this->map(
+            $parameters['phone_number_collection'],
+            'phone_number_collection',
+        );
+        $this->requiredBoolean(
+            $collection,
+            'enabled',
+            'phone_number_collection.enabled',
+        );
     }
 
     /** @param array<string, mixed> $parameters */
