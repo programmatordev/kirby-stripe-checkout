@@ -13,6 +13,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
+use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
@@ -24,7 +25,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
     public function testBuildsTheProtectedHostedInlineRequest(): void
     {
         $context = $this->context(UiMode::Hosted, $this->inlineOrder());
-        $request = (new SessionRequestBuilder($this->kirby))->build($context);
+        $request = $this->builder()->build($context);
         $parameters = $request->parameters();
 
         $this->assertSame('payment', $parameters['mode']);
@@ -55,6 +56,18 @@ final class SessionRequestBuilderTest extends KirbyTestCase
         $this->assertArrayNotHasKey('return_url', $parameters);
         $this->assertArrayNotHasKey('redirect_on_completion', $parameters);
         $this->assertArrayNotHasKey('payment_method_types', $parameters);
+        $this->assertSame('auto', $parameters['billing_address_collection']);
+        $this->assertSame([
+            'individual' => [
+                'enabled' => true,
+                'optional' => true,
+            ],
+        ], $parameters['name_collection']);
+        $this->assertArrayNotHasKey('phone_number_collection', $parameters);
+        $this->assertArrayNotHasKey('tax_id_collection', $parameters);
+        $this->assertArrayNotHasKey('consent_collection', $parameters);
+        $this->assertArrayNotHasKey('custom_fields', $parameters);
+        $this->assertArrayNotHasKey('allow_promotion_codes', $parameters);
 
         $this->assertIsArray($parameters['line_items']);
         $lineItem = $parameters['line_items'][0] ?? null;
@@ -79,7 +92,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
     public function testBuildsTheProtectedEmbeddedStripePriceRequest(): void
     {
         $context = $this->context(UiMode::Embedded, $this->stripePriceOrder());
-        $parameters = (new SessionRequestBuilder($this->kirby))
+        $parameters = $this->builder()
             ->build($context)
             ->parameters();
 
@@ -100,10 +113,10 @@ final class SessionRequestBuilderTest extends KirbyTestCase
 
     public function testKeepsTheInstallationIdentifierStable(): void
     {
-        $builder = new SessionRequestBuilder($this->kirby);
+        $builder = $this->builder();
         $context = $this->context(UiMode::Hosted, $this->inlineOrder());
         $first = $builder->build($context)->parameters()['integration_identifier'];
-        $second = (new SessionRequestBuilder($this->kirby))
+        $second = $this->builder()
             ->build($context)
             ->parameters()['integration_identifier'];
 
@@ -112,7 +125,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
 
     public function testAllowsAZeroAmountInlineOrderWithoutChangingThePaymentMode(): void
     {
-        $parameters = (new SessionRequestBuilder($this->kirby))
+        $parameters = $this->builder()
             ->build($this->context(UiMode::Hosted, $this->inlineOrder(amount: '0')))
             ->parameters();
         $this->assertIsArray($parameters['line_items']);
@@ -142,7 +155,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
             ],
         ]);
         $order = $this->inlineOrder(languageCode: 'pt', uiMode: $mode);
-        $parameters = (new SessionRequestBuilder($this->kirby))
+        $parameters = $this->builder()
             ->build($this->context($mode, $order))
             ->parameters();
         $this->assertIsString($parameters[$routeKey]);
@@ -158,6 +171,219 @@ final class SessionRequestBuilderTest extends KirbyTestCase
     {
         yield 'hosted' => [UiMode::Hosted, 'success_url'];
         yield 'embedded' => [UiMode::Embedded, 'return_url'];
+    }
+
+    public function testMapsEnabledCollectionAndPromotionSettings(): void
+    {
+        $this->restart(options: [
+            'programmatordev.stripe-checkout' => [
+                'settings' => [
+                    'allowPromotionCodes' => true,
+                    'billingAddressCollection' => 'required',
+                    'businessNameCollection' => 'optional',
+                    'customFields' => [
+                        [
+                            'key' => 'reference',
+                            'label' => 'Order reference',
+                            'required' => true,
+                            'type' => 'text',
+                        ],
+                        [
+                            'defaultValue' => '25',
+                            'key' => 'age',
+                            'label' => 'Age',
+                            'maximumLength' => 3,
+                            'minimumLength' => 1,
+                            'type' => 'numeric',
+                        ],
+                        [
+                            'defaultValue' => 'gift',
+                            'key' => 'purpose',
+                            'label' => 'Purpose',
+                            'options' => [
+                                [
+                                    'label' => 'Gift',
+                                    'value' => 'gift',
+                                ],
+                                [
+                                    'label' => 'Personal',
+                                    'value' => 'personal',
+                                ],
+                            ],
+                            'required' => true,
+                            'type' => 'dropdown',
+                        ],
+                    ],
+                    'individualNameCollection' => 'required',
+                    'phoneNumberCollection' => true,
+                    'promotionsConsent' => true,
+                    'taxIdCollection' => 'required_if_supported',
+                    'termsOfServiceConsent' => true,
+                ],
+            ],
+        ]);
+
+        $parameters = $this->builder()
+            ->build($this->context(UiMode::Hosted, $this->inlineOrder()))
+            ->parameters();
+
+        $this->assertSame('required', $parameters['billing_address_collection']);
+        $this->assertSame([
+            'business' => [
+                'enabled' => true,
+                'optional' => true,
+            ],
+            'individual' => [
+                'enabled' => true,
+                'optional' => false,
+            ],
+        ], $parameters['name_collection']);
+        $this->assertSame(['enabled' => true], $parameters['phone_number_collection']);
+        $this->assertSame([
+            'enabled' => true,
+            'required' => 'if_supported',
+        ], $parameters['tax_id_collection']);
+        $this->assertSame([
+            'promotions' => 'auto',
+            'terms_of_service' => 'required',
+        ], $parameters['consent_collection']);
+        $this->assertSame([
+            [
+                'key' => 'reference',
+                'label' => [
+                    'custom' => 'Order reference',
+                    'type' => 'custom',
+                ],
+                'optional' => false,
+                'type' => 'text',
+            ],
+            [
+                'key' => 'age',
+                'label' => [
+                    'custom' => 'Age',
+                    'type' => 'custom',
+                ],
+                'numeric' => [
+                    'default_value' => '25',
+                    'maximum_length' => 3,
+                    'minimum_length' => 1,
+                ],
+                'optional' => true,
+                'type' => 'numeric',
+            ],
+            [
+                'dropdown' => [
+                    'default_value' => 'gift',
+                    'options' => [
+                        [
+                            'label' => 'Gift',
+                            'value' => 'gift',
+                        ],
+                        [
+                            'label' => 'Personal',
+                            'value' => 'personal',
+                        ],
+                    ],
+                ],
+                'key' => 'purpose',
+                'label' => [
+                    'custom' => 'Purpose',
+                    'type' => 'custom',
+                ],
+                'optional' => false,
+                'type' => 'dropdown',
+            ],
+        ], $parameters['custom_fields']);
+        $this->assertTrue($parameters['allow_promotion_codes']);
+        $this->assertArrayNotHasKey('payment_method_types', $parameters);
+    }
+
+    public function testOmitsDisabledNamesAndMapsOptionalTaxIds(): void
+    {
+        $this->restart(options: [
+            'programmatordev.stripe-checkout' => [
+                'settings' => [
+                    'individualNameCollection' => 'off',
+                    'businessNameCollection' => 'off',
+                    'taxIdCollection' => 'optional',
+                ],
+            ],
+        ]);
+
+        $parameters = $this->builder()
+            ->build($this->context(UiMode::Embedded, $this->stripePriceOrder()))
+            ->parameters();
+
+        $this->assertArrayNotHasKey('name_collection', $parameters);
+        $this->assertSame([
+            'enabled' => true,
+            'required' => 'never',
+        ], $parameters['tax_id_collection']);
+    }
+
+    public function testMapsCustomFieldsWithTheActiveLanguageLabels(): void
+    {
+        $this->restart(
+            options: [
+                'programmatordev.stripe-checkout' => [
+                    'settings' => [
+                        'customFields' => [[
+                            'key' => 'purpose',
+                            'label' => 'Purpose',
+                            'labels' => ['pt' => 'Finalidade'],
+                            'options' => [[
+                                'label' => 'Gift',
+                                'labels' => ['pt' => 'Presente'],
+                                'value' => 'gift',
+                            ]],
+                            'type' => 'dropdown',
+                        ]],
+                    ],
+                ],
+            ],
+            languages: [
+                [
+                    'code' => 'en',
+                    'default' => true,
+                    'locale' => 'en_GB',
+                    'name' => 'English',
+                ],
+                [
+                    'code' => 'pt',
+                    'locale' => 'pt_PT',
+                    'name' => 'Português',
+                ],
+            ],
+        );
+        $this->kirby->setCurrentLanguage('pt');
+
+        $parameters = $this->builder()
+            ->build($this->context(UiMode::Hosted, $this->inlineOrder(languageCode: 'pt')))
+            ->parameters();
+        $customFields = $parameters['custom_fields'] ?? null;
+
+        $this->assertIsArray($customFields);
+        $customField = $customFields[0] ?? null;
+        $this->assertIsArray($customField);
+        $label = $customField['label'] ?? null;
+        $dropdown = $customField['dropdown'] ?? null;
+        $this->assertIsArray($label);
+        $this->assertIsArray($dropdown);
+        $options = $dropdown['options'] ?? null;
+        $this->assertIsArray($options);
+        $option = $options[0] ?? null;
+        $this->assertIsArray($option);
+
+        $this->assertSame('Finalidade', $label['custom'] ?? null);
+        $this->assertSame('Presente', $option['label'] ?? null);
+    }
+
+    private function builder(): SessionRequestBuilder
+    {
+        return new SessionRequestBuilder(
+            kirby: $this->kirby,
+            settings: (new RuntimeFactory($this->kirby))->settings(),
+        );
     }
 
     private function context(
@@ -231,11 +457,17 @@ final class SessionRequestBuilderTest extends KirbyTestCase
         );
     }
 
-    /** @param list<array<string, mixed>>|null $languages */
-    private function restart(?array $languages = null): void
+    /**
+     * @param array<string, mixed> $options
+     * @param list<array<string, mixed>>|null $languages
+     */
+    private function restart(array $options = [], ?array $languages = null): void
     {
         $this->environment->close();
-        $this->environment = \ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment::start(languages: $languages);
+        $this->environment = \ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment::start(
+            options: $options,
+            languages: $languages,
+        );
         $this->kirby = $this->environment->app();
     }
 }

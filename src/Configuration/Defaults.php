@@ -6,7 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Configuration;
 
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Collection\BillingAddressCollection;
-use ProgrammatorDev\StripeCheckout\Collection\CollectionMode;
+use ProgrammatorDev\StripeCheckout\Collection\NameCollectionMode;
 use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
 
 /**
@@ -32,8 +32,8 @@ final class Defaults
         'cancelDestination' => null,
         'returnDestination' => null,
         'billingAddressCollection' => BillingAddressCollection::Auto->value,
-        'individualNameCollection' => CollectionMode::Optional->value,
-        'businessNameCollection' => CollectionMode::Off->value,
+        'individualNameCollection' => NameCollectionMode::Optional->value,
+        'businessNameCollection' => NameCollectionMode::Off->value,
         'phoneNumberCollection' => false,
         'taxIdCollection' => TaxIdCollection::Off->value,
         'termsOfServiceConsent' => false,

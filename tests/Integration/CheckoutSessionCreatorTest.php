@@ -118,14 +118,18 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         );
         $requestCalls = 0;
         $kirby = $this->kirby;
+        $settings = $configuration->settings();
         $token = $this->token();
         $creator = $this->creator(
             configuration: $configuration,
             gateway: $gateway,
-            sessionRequestFactory: static function (SessionRequestContext $context) use (&$requestCalls, $kirby): SessionRequest {
+            sessionRequestFactory: static function (SessionRequestContext $context) use (&$requestCalls, $kirby, $settings): SessionRequest {
                 $requestCalls++;
 
-                return (new SessionRequestBuilder($kirby))->build($context);
+                return (new SessionRequestBuilder(
+                    kirby: $kirby,
+                    settings: $settings,
+                ))->build($context);
             },
         );
         $first = $creator->create(
@@ -980,7 +984,10 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             initiatingUrl: 'https://kirby-stripe-checkout.test/product',
         );
 
-        return (new SessionRequestBuilder($this->kirby))->build($context);
+        return (new SessionRequestBuilder(
+            kirby: $this->kirby,
+            settings: $configuration->settings(),
+        ))->build($context);
     }
 
     /** @param array{clientReferenceId?: string, metadata?: array<string, string>, liveMode?: bool} $overrides */
@@ -1024,7 +1031,10 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         FakeCheckoutSessionGateway $gateway,
         ?callable $sessionRequestFactory = null,
     ): CheckoutSessionCreator {
-        $sessionRequestFactory ??= fn(SessionRequestContext $context): SessionRequest => (new SessionRequestBuilder($this->kirby))->build($context);
+        $sessionRequestFactory ??= fn(SessionRequestContext $context): SessionRequest => (new SessionRequestBuilder(
+            kirby: $this->kirby,
+            settings: $configuration->settings(),
+        ))->build($context);
 
         return new CheckoutSessionCreator(
             configuration: $configuration,

@@ -9,7 +9,13 @@ use LogicException;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Collection\CustomField;
+use ProgrammatorDev\StripeCheckout\Collection\CustomFieldOption;
+use ProgrammatorDev\StripeCheckout\Collection\CustomFieldType;
+use ProgrammatorDev\StripeCheckout\Collection\NameCollectionMode;
+use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
+use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 use Stripe\Checkout\Session;
@@ -31,7 +37,10 @@ final class SessionRequestBuilder
 
     private const STRIPE_METADATA_LINE = 'kirby_stripe_checkout_line';
 
-    public function __construct(private readonly App $kirby) {}
+    public function __construct(
+        private readonly App $kirby,
+        private readonly Settings $settings,
+    ) {}
 
     public function build(SessionRequestContext $context): SessionRequest
     {
@@ -44,6 +53,7 @@ final class SessionRequestBuilder
             self::STRIPE_METADATA_ORDER => $order->pageUuid(),
         ];
         $parameters = [
+            ...$this->settingsParameters(),
             'client_reference_id' => $order->pageUuid(),
             'currency' => strtolower($order->currency()),
             'expires_at' => $context->expiresAt()->getTimestamp(),
@@ -70,6 +80,159 @@ final class SessionRequestBuilder
         }
 
         return new SessionRequest($parameters);
+    }
+
+    /** @return array<string, mixed> */
+    private function settingsParameters(): array
+    {
+        $parameters = [
+            'billing_address_collection' => $this->settings->billingAddressCollection()->value,
+        ];
+        $nameCollection = [];
+        $individualName = $this->nameCollection($this->settings->individualNameCollection());
+        $businessName = $this->nameCollection($this->settings->businessNameCollection());
+
+        if ($individualName !== null) {
+            $nameCollection['individual'] = $individualName;
+        }
+
+        if ($businessName !== null) {
+            $nameCollection['business'] = $businessName;
+        }
+
+        if ($nameCollection !== []) {
+            $parameters['name_collection'] = $nameCollection;
+        }
+
+        if ($this->settings->phoneNumberCollection()) {
+            $parameters['phone_number_collection'] = ['enabled' => true];
+        }
+
+        $taxIdCollection = $this->taxIdCollection();
+
+        if ($taxIdCollection !== null) {
+            $parameters['tax_id_collection'] = $taxIdCollection;
+        }
+
+        $consentCollection = $this->consentCollection();
+
+        if ($consentCollection !== []) {
+            $parameters['consent_collection'] = $consentCollection;
+        }
+
+        $customFields = $this->customFields();
+
+        if ($customFields !== []) {
+            $parameters['custom_fields'] = $customFields;
+        }
+
+        if ($this->settings->allowPromotionCodes()) {
+            $parameters['allow_promotion_codes'] = true;
+        }
+
+        return $parameters;
+    }
+
+    /** @return array{enabled: true, optional: bool}|null */
+    private function nameCollection(NameCollectionMode $mode): ?array
+    {
+        if ($mode === NameCollectionMode::Off) {
+            return null;
+        }
+
+        return [
+            'enabled' => true,
+            'optional' => $mode === NameCollectionMode::Optional,
+        ];
+    }
+
+    /** @return array{enabled: true, required: string}|null */
+    private function taxIdCollection(): ?array
+    {
+        // Stripe owns location-aware tax-ID support; its required mode only
+        // applies where Checkout supports a relevant tax-ID type.
+        // https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-tax_id_collection-required
+        return match ($this->settings->taxIdCollection()) {
+            TaxIdCollection::Off => null,
+            TaxIdCollection::Optional => [
+                'enabled' => true,
+                'required' => 'never',
+            ],
+            TaxIdCollection::RequiredIfSupported => [
+                'enabled' => true,
+                'required' => 'if_supported',
+            ],
+        };
+    }
+
+    /** @return array<string, string> */
+    private function consentCollection(): array
+    {
+        $collection = [];
+
+        if ($this->settings->termsOfServiceConsent()) {
+            $collection['terms_of_service'] = 'required';
+        }
+
+        if ($this->settings->promotionsConsent()) {
+            // Stripe exposes promotional-email consent as an automatic mode
+            // whose availability it decides from the merchant and customer.
+            // https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-consent_collection-promotions
+            $collection['promotions'] = 'auto';
+        }
+
+        return $collection;
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function customFields(): array
+    {
+        return array_map(
+            fn(CustomField $field): array => $this->customField($field),
+            $this->settings->customFields(),
+        );
+    }
+
+    /** @return array<string, mixed> */
+    private function customField(CustomField $field): array
+    {
+        $parameters = [
+            'key' => $field->key(),
+            'label' => [
+                'custom' => $field->label(),
+                'type' => 'custom',
+            ],
+            'optional' => $field->isRequired() === false,
+            'type' => $field->type()->value,
+        ];
+        $typeParameters = match ($field->type()) {
+            CustomFieldType::Dropdown => [
+                'options' => array_map(
+                    static fn(CustomFieldOption $option): array => $option->toArray(),
+                    $field->options(),
+                ),
+            ],
+            CustomFieldType::Numeric,
+            CustomFieldType::Text => [],
+        };
+
+        if ($field->defaultValue() !== null) {
+            $typeParameters['default_value'] = $field->defaultValue();
+        }
+
+        if ($field->minimumLength() !== null) {
+            $typeParameters['minimum_length'] = $field->minimumLength();
+        }
+
+        if ($field->maximumLength() !== null) {
+            $typeParameters['maximum_length'] = $field->maximumLength();
+        }
+
+        if ($typeParameters !== []) {
+            $parameters[$field->type()->value] = $typeParameters;
+        }
+
+        return $parameters;
     }
 
     /** @return list<array<string, mixed>> */

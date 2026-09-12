@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Collection;
 
-/** Controls whether a supported customer detail is omitted, optional or required. */
-enum CollectionMode: string
+/** Controls whether Checkout omits, optionally collects or requires a customer name. */
+enum NameCollectionMode: string
 {
     case Off = 'off';
     case Optional = 'optional';

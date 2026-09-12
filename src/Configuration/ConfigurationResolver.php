@@ -8,7 +8,7 @@ use Closure;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestFactoryInterface;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Collection\BillingAddressCollection;
-use ProgrammatorDev\StripeCheckout\Collection\CollectionMode;
+use ProgrammatorDev\StripeCheckout\Collection\NameCollectionMode;
 use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
@@ -445,8 +445,8 @@ final class ConfigurationResolver
 
         $choiceSettings = [
             'billingAddressCollection' => array_column(BillingAddressCollection::cases(), 'value'),
-            'individualNameCollection' => array_column(CollectionMode::cases(), 'value'),
-            'businessNameCollection' => array_column(CollectionMode::cases(), 'value'),
+            'individualNameCollection' => array_column(NameCollectionMode::cases(), 'value'),
+            'businessNameCollection' => array_column(NameCollectionMode::cases(), 'value'),
             'taxIdCollection' => array_column(TaxIdCollection::cases(), 'value'),
         ];
 

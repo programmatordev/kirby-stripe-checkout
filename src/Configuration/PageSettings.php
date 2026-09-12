@@ -6,7 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Configuration;
 
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Collection\BillingAddressCollection;
-use ProgrammatorDev\StripeCheckout\Collection\CollectionMode;
+use ProgrammatorDev\StripeCheckout\Collection\NameCollectionMode;
 use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
@@ -99,12 +99,12 @@ final class PageSettings
         );
         $this->individualNameCollection = $this->normalizeChoice(
             $individualNameCollection,
-            array_column(CollectionMode::cases(), 'value'),
+            array_column(NameCollectionMode::cases(), 'value'),
             'individualNameCollection',
         );
         $this->businessNameCollection = $this->normalizeChoice(
             $businessNameCollection,
-            array_column(CollectionMode::cases(), 'value'),
+            array_column(NameCollectionMode::cases(), 'value'),
             'businessNameCollection',
         );
         $this->phoneNumberCollection = $this->normalizeToggle($phoneNumberCollection, 'phoneNumberCollection');

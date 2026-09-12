@@ -7,8 +7,8 @@ namespace ProgrammatorDev\StripeCheckout\Configuration;
 use LogicException;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Collection\BillingAddressCollection;
-use ProgrammatorDev\StripeCheckout\Collection\CollectionMode;
 use ProgrammatorDev\StripeCheckout\Collection\CustomField;
+use ProgrammatorDev\StripeCheckout\Collection\NameCollectionMode;
 use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
 
 /**
@@ -113,14 +113,14 @@ final class Settings
         return BillingAddressCollection::from($this->string('billingAddressCollection'));
     }
 
-    public function individualNameCollection(): CollectionMode
+    public function individualNameCollection(): NameCollectionMode
     {
-        return CollectionMode::from($this->string('individualNameCollection'));
+        return NameCollectionMode::from($this->string('individualNameCollection'));
     }
 
-    public function businessNameCollection(): CollectionMode
+    public function businessNameCollection(): NameCollectionMode
     {
-        return CollectionMode::from($this->string('businessNameCollection'));
+        return NameCollectionMode::from($this->string('businessNameCollection'));
     }
 
     public function phoneNumberCollection(): bool

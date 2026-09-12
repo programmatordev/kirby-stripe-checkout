@@ -116,7 +116,7 @@ Supported types are `text`, `numeric`, and `dropdown`. Dropdowns require between
 
 On multi-language sites, create, remove, and order fields and dropdown options in the default language. Other languages can translate only customer-facing labels. Stable internal row IDs connect those translations without appearing in the public Settings API. Missing translations use the default-language label, and removing a default-language row also removes it from the effective translated list. A secondary-language Page/API update cannot add fields, reorder them, or change their keys, types, bounds, defaults, requirements, or dropdown values.
 
-The collection and promotion settings are validated and available through the Settings API. They are not added to Checkout Session requests by the current implementation yet.
+The effective collection and promotion settings are added to every Checkout Session request. Disabled values are omitted, while billing-address collection is always explicit. Optional and required names map to Stripe's corresponding name controls; phone collection is enabled only when requested; tax-ID collection maps to Stripe's optional or location-aware required mode; and consent settings map to Stripe's terms and promotional-email controls. Custom fields use their active-language labels and customer-entered promotion codes are enabled only when configured. Payment-method types remain managed by Stripe rather than being fixed by the plugin.
 
 Fully dotted Kirby option keys are accepted, but defining the same logical option in nested and dotted forms is an error.
 
@@ -144,8 +144,8 @@ $settings->successDestination(); // Page reference, URL, or null
 $settings->cancelDestination(); // Page reference, URL, or null
 $settings->returnDestination(); // Page reference, URL, or null
 $settings->billingAddressCollection(); // BillingAddressCollection enum
-$settings->individualNameCollection(); // CollectionMode enum
-$settings->businessNameCollection(); // CollectionMode enum
+$settings->individualNameCollection(); // NameCollectionMode enum
+$settings->businessNameCollection(); // NameCollectionMode enum
 $settings->phoneNumberCollection(); // boolean
 $settings->taxIdCollection(); // TaxIdCollection enum
 $settings->termsOfServiceConsent(); // boolean
