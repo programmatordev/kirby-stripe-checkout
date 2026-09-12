@@ -410,6 +410,8 @@ final class OrderHookDispatcherTest extends KirbyTestCase
             'checkoutCompletedAt' => $data['createdAt'],
             'paymentFailedAt' => $data['createdAt'],
             'discountTotal' => '0',
+            'customFields' => [],
+            'discounts' => [],
             'shippingTotal' => '0',
             'taxTotal' => '0',
             'total' => '16.00',

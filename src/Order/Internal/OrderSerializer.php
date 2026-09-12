@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Order\Internal;
 
+use Brick\Money\Money;
 use DateInterval;
 use DateTimeImmutable;
 use Kirby\Data\Yaml;
@@ -244,7 +245,51 @@ final class OrderSerializer
                 $data['lifecycleDeliveries'] = HookDeliveryLedger::normalize($data['lifecycleDeliveries'], $uuid);
             }
 
-            $deferredSnapshots = array_diff(OrderSchema::SNAPSHOTS, ['stripeCheckout', 'checkoutAttempt', 'initiatingLineItems', 'lifecycleDeliveries']);
+            // Page content is an untrusted persistence boundary. Rebuild every
+            // provider snapshot through the same values used at normalization.
+            if (isset($data['customer'])) {
+                $data['customer'] = CustomerSnapshot::fromArray(OrderData::map($data['customer']))->toArray();
+            }
+
+            foreach (['billingAddress', 'shippingAddress'] as $field) {
+                if (isset($data[$field])) {
+                    $data[$field] = AddressSnapshot::fromArray(OrderData::map($data[$field]))->toArray();
+                }
+            }
+
+            if (isset($data['customFields'])) {
+                $data['customFields'] = array_map(
+                    static fn(mixed $customField): array => CustomFieldSnapshot::fromArray(OrderData::map($customField))->toArray(),
+                    OrderData::list($data['customFields']),
+                );
+            }
+
+            if (isset($data['consent'])) {
+                $data['consent'] = ConsentSnapshot::fromArray(OrderData::map($data['consent']))->toArray();
+            }
+
+            if (isset($data['discounts'])) {
+                $data['discounts'] = array_map(
+                    static fn(mixed $discount): array => DiscountSnapshot::fromArray(OrderData::map($discount))->toArray(),
+                    OrderData::list($data['discounts']),
+                );
+            }
+
+            self::validateDiscountSnapshots($data, $currency, $registry);
+
+            $acceptedSnapshots = [
+                'stripeCheckout',
+                'checkoutAttempt',
+                'initiatingLineItems',
+                'customer',
+                'billingAddress',
+                'shippingAddress',
+                'customFields',
+                'consent',
+                'discounts',
+                'lifecycleDeliveries',
+            ];
+            $deferredSnapshots = array_diff(OrderSchema::SNAPSHOTS, $acceptedSnapshots);
 
             foreach ($deferredSnapshots as $field) {
                 if (isset($data[$field]) && $data[$field] !== []) {
@@ -254,6 +299,43 @@ final class OrderSerializer
 
             return $data;
         } catch (Throwable) {
+            throw new OrderDataException();
+        }
+    }
+
+    /** @param array<string, mixed> $data */
+    private static function validateDiscountSnapshots(
+        array $data,
+        string $currency,
+        StripeCurrencyRegistry $registry,
+    ): void {
+        $hasTotal = array_key_exists('discountTotal', $data);
+        $hasDiscounts = array_key_exists('discounts', $data);
+
+        if ($hasTotal !== $hasDiscounts) {
+            throw new OrderDataException();
+        }
+
+        if ($hasTotal === false) {
+            return;
+        }
+
+        $total = $registry->toMoney($registry->fromDecimal(OrderData::text($data['discountTotal']), $currency));
+        $calculated = Money::zero($currency);
+
+        foreach (OrderData::list($data['discounts']) as $discount) {
+            $discount = OrderData::map($discount);
+
+            if (($discount['currency'] ?? null) !== $currency) {
+                throw new OrderDataException();
+            }
+
+            $calculated = $calculated->plus(
+                $registry->toMoney($registry->fromDecimal(OrderData::text($discount['amount'] ?? null), $currency)),
+            );
+        }
+
+        if ($calculated->isEqualTo($total) === false) {
             throw new OrderDataException();
         }
     }
@@ -495,7 +577,13 @@ final class OrderSerializer
                 throw new OrderDataException();
             }
 
-            OrderData::validateRequiredKeys($data, OrderSchema::FINAL_AMOUNTS);
+            // Explicit empty lists distinguish an authoritative absence from a
+            // snapshot that reconciliation has not populated yet.
+            OrderData::validateRequiredKeys($data, [
+                ...OrderSchema::FINAL_AMOUNTS,
+                'customFields',
+                'discounts',
+            ]);
         }
 
         $successfulPayment = in_array($paymentStatus, [PaymentStatus::Paid, PaymentStatus::NoPaymentRequired], true);

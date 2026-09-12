@@ -153,6 +153,68 @@ final class StripeApiCheckoutSessionGatewayTest extends KirbyTestCase
         $this->assertSame('req_retrieve', $record->requestId);
     }
 
+    public function testRetainsOnlyTheProviderFieldsOwnedByAcceptedSnapshots(): void
+    {
+        $client = $this->httpClient();
+        $client->method('request')->willReturn([
+            json_encode([
+                'id' => 'cs_test_session',
+                'object' => 'checkout.session',
+                'client_reference_id' => 'page://Abc123def456GHI7',
+                'client_secret' => null,
+                'created' => 1_789_084_800,
+                'currency' => 'eur',
+                'customer' => [
+                    'id' => 'cus_test',
+                    'email' => 'must-not-cross-this-edge@example.test',
+                    'object' => 'customer',
+                ],
+                'customer_details' => [
+                    'address' => null,
+                    'email' => 'buyer@example.test',
+                ],
+                'custom_fields' => [],
+                'expires_at' => 1_789_171_200,
+                'integration_identifier' => 'kirby_stripe_checkout_abcdefgh',
+                'livemode' => false,
+                'metadata' => [],
+                'mode' => 'payment',
+                'payment_intent' => 'pi_must_not_be_copied_here',
+                'payment_status' => 'paid',
+                'status' => 'complete',
+                'total_details' => [
+                    'amount_discount' => 0,
+                    'breakdown' => ['discounts' => []],
+                ],
+                'ui_mode' => 'hosted_page',
+                'url' => null,
+            ], JSON_THROW_ON_ERROR),
+            200,
+            [],
+        ]);
+        ApiRequestor::setHttpClient($client);
+        $gateway = new StripeApiCheckoutSessionGateway(
+            (new StripeApiClientFactory())->create(
+                new StripeConfiguration('sk_test_gateway', null, null),
+            ),
+        );
+        $record = $gateway->retrieve('cs_test_session');
+
+        $this->assertSame([
+            'customer' => ['id' => 'cus_test'],
+            'customer_details' => [
+                'address' => null,
+                'email' => 'buyer@example.test',
+            ],
+            'custom_fields' => [],
+            'total_details' => [
+                'amount_discount' => 0,
+                'breakdown' => ['discounts' => []],
+            ],
+        ], $record->orderSnapshotSource);
+        $this->assertArrayNotHasKey('payment_intent', $record->orderSnapshotSource);
+    }
+
     public function testRejectsAnInvalidSessionIdBeforeRetrieval(): void
     {
         $client = $this->httpClient();

@@ -11,7 +11,10 @@ namespace ProgrammatorDev\StripeCheckout\Stripe\Checkout;
  */
 final readonly class CheckoutSessionRecord
 {
-    /** @param array<string, mixed> $metadata */
+    /**
+     * @param array<string, mixed> $metadata
+     * @param array<string, mixed> $orderSnapshotSource Selected raw Session fields for strict order-snapshot normalization.
+     */
     public function __construct(
         public ?string $id,
         public ?int $createdAt,
@@ -28,5 +31,6 @@ final readonly class CheckoutSessionRecord
         public ?string $requestId,
         public ?string $url,
         public ?string $clientSecret,
+        public array $orderSnapshotSource = [],
     ) {}
 }

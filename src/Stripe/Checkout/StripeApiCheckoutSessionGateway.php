@@ -72,6 +72,33 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
         $metadata = $session->metadata;
         $lastResponse = $session->getLastResponse();
         $metadata = $metadata instanceof StripeObject ? $metadata->toArray() : [];
+        $sessionData = $session->toArray();
+        $orderSnapshotSource = [];
+        $snapshotFields = [
+            'customer',
+            'customer_details',
+            'collected_information',
+            'custom_fields',
+            'consent',
+            'total_details',
+        ];
+
+        // Keep only the provider fields owned by the accepted order snapshots.
+        // The strict normalizer deliberately sees malformed nested values instead
+        // of silently treating them as absent, while SDK objects stop at this edge.
+        foreach ($snapshotFields as $field) {
+            if (array_key_exists($field, $sessionData)) {
+                $value = $sessionData[$field];
+
+                // An expanded Customer can contain far more than the one stable
+                // reference owned by the order. Keep only that ID at this edge.
+                if ($field === 'customer' && is_array($value)) {
+                    $value = ['id' => $value['id'] ?? null];
+                }
+
+                $orderSnapshotSource[$field] = $value;
+            }
+        }
 
         /** @var array<string, mixed> $metadata */
         return new CheckoutSessionRecord(
@@ -90,6 +117,7 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
             requestId: $this->nullableString($lastResponse?->headers['request-id'] ?? null),
             url: $this->nullableString($session->url),
             clientSecret: $this->nullableString($session->client_secret),
+            orderSnapshotSource: $orderSnapshotSource,
         );
     }
 

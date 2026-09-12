@@ -112,6 +112,85 @@ final class OrderPageStoreTest extends KirbyTestCase
         });
     }
 
+    public function testPersistsAndRehydratesCollectionAndDiscountSnapshots(): void
+    {
+        $page = $this->createOrder();
+        $store = new OrderPageStore($this->kirby);
+        $updated = $store->update($page->uuid()->toString(), static fn(array $data): array => [
+            ...$data,
+            'checkoutStatus' => 'complete',
+            'paymentStatus' => 'paid',
+            'stripeCheckoutSessionId' => 'cs_test',
+            'stripeCustomerId' => 'cus_test',
+            'checkoutCompletedAt' => $data['createdAt'],
+            'paidAt' => $data['createdAt'],
+            'discountTotal' => '5.00',
+            'shippingTotal' => '0',
+            'taxTotal' => '0',
+            'total' => '27.00',
+            'customer' => [
+                'email' => 'buyer@example.test',
+                'individualName' => 'Ana Silva',
+                'businessName' => null,
+                'phone' => null,
+                'taxIds' => [],
+            ],
+            'billingAddress' => [
+                'name' => 'Ana Silva',
+                'line1' => 'Rua Um, 10',
+                'line2' => null,
+                'postalCode' => '1000-001',
+                'city' => 'Lisboa',
+                'state' => null,
+                'country' => 'PT',
+            ],
+            'customFields' => [[
+                'key' => 'note',
+                'type' => 'text',
+                'label' => 'Order note',
+                'required' => false,
+                'configured' => true,
+                'answered' => false,
+                'value' => null,
+            ]],
+            'consent' => [
+                'termsOfService' => 'accepted',
+                'promotions' => null,
+            ],
+            'discounts' => [[
+                'discountId' => 'di_test',
+                'couponId' => 'coupon-test',
+                'promotionCodeId' => null,
+                'couponName' => 'Five euros',
+                'promotionCode' => null,
+                'amount' => '5.00',
+                'currency' => 'EUR',
+                'providerAmount' => 500,
+                'percentOff' => null,
+                'appliesToProducts' => [],
+                'firstTimeTransaction' => null,
+                'minimumAmount' => null,
+                'minimumAmountCurrency' => null,
+                'providerMinimumAmount' => null,
+            ]],
+        ]);
+        $data = $store->data($updated);
+        $customer = OrderData::map($data['customer']);
+        $billingAddress = OrderData::map($data['billingAddress']);
+        $customFields = OrderData::list($data['customFields']);
+        $customField = OrderData::map($customFields[0]);
+        $consent = OrderData::map($data['consent']);
+        $discounts = OrderData::list($data['discounts']);
+        $discount = OrderData::map($discounts[0]);
+
+        $this->assertSame('buyer@example.test', $customer['email'] ?? null);
+        $this->assertSame('PT', $billingAddress['country'] ?? null);
+        $this->assertFalse($customField['answered'] ?? true);
+        $this->assertSame('accepted', $consent['termsOfService'] ?? null);
+        $this->assertSame('5.00', $discount['amount'] ?? null);
+        $this->assertSame('cus_test', $data['stripeCustomerId']);
+    }
+
     public function testStaleOrderPageDoesNotOverwriteCanonicalUpdates(): void
     {
         $old = $this->createOrder();

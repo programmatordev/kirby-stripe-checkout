@@ -123,6 +123,8 @@ final class RetentionPolicyTest extends TestCase
             $data = [
                 ...$data,
                 'discountTotal' => '0',
+                'customFields' => [],
+                'discounts' => [],
                 'shippingTotal' => '0',
                 'taxTotal' => '0',
                 'total' => $payment === 'no_payment_required' ? '0' : '16.00',

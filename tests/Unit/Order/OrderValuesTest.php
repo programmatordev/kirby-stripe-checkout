@@ -460,10 +460,29 @@ final class OrderValuesTest extends TestCase
             $data[$field] = '0.00';
         }
 
+        $data['discounts'] = [];
+        $data['customFields'] = [];
+
         $this->assertSame('0', OrderSerializer::normalize($data)['total']);
         unset($data['taxTotal']);
         $this->expectException(OrderDataException::class);
         OrderSerializer::normalize($data);
+    }
+
+    #[DataProvider('requiredCompletedSnapshots')]
+    public function testCompletedOrdersRequireExplicitCollectionSnapshots(string $field): void
+    {
+        $data = $this->dataWithCheckoutStatus(CheckoutStatus::Complete);
+        unset($data[$field]);
+        $this->expectException(OrderDataException::class);
+        OrderSerializer::normalize($data);
+    }
+
+    /** @return iterable<array{string}> */
+    public static function requiredCompletedSnapshots(): iterable
+    {
+        yield ['customFields'];
+        yield ['discounts'];
     }
 
     /** @return iterable<array{PaymentStatus}> */
@@ -814,6 +833,8 @@ final class OrderValuesTest extends TestCase
         if ($state === CheckoutStatus::Complete) {
             $data['paymentStatus'] = 'pending';
             $data['discountTotal'] = '0';
+            $data['customFields'] = [];
+            $data['discounts'] = [];
             $data['shippingTotal'] = '0';
             $data['taxTotal'] = '0';
             $data['total'] = '32.00';

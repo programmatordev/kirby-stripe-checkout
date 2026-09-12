@@ -121,6 +121,24 @@ Each line retains its name, selected `options`, SKU, images and shipping require
 
 The initiating snapshot contains no live product Page, File, cart, credentials or raw attempt token. Reading it does not re-fetch product information. Customer-facing text keeps the language used when the purchase began. A single-language site uses `null` for `languageCode`; a locale is not duplicated alongside it.
 
+## Authoritative Checkout details
+
+The protected order schema accepts normalized customer, address, Checkout custom-field, consent and discount results. These values come from the current Stripe Checkout Session—not from current Settings or from the request that originally asked Stripe to collect them. This matters when a Session filter changes collection for one order, Settings change later, or Stripe returns a value through another Checkout feature.
+
+The stored shapes are:
+
+- `customer`: nullable `email`, `individualName`, `businessName` and `phone`, plus ordered `taxIds` containing `type` and nullable `value`.
+- `billingAddress` and `shippingAddress`: separate nullable values with `name`, `line1`, `line2`, `postalCode`, `city`, `state` and uppercase two-letter `country`.
+- `customFields`: ordered fields with stable `key`, `type`, presented `label`, `required`, `configured`, `answered` and nullable string `value`. An unanswered optional field remains in the list with `answered: false`; a returned empty string is an answer.
+- `consent`: nullable `termsOfService` and `promotions` provider outcomes. Missing results stay `null` and are not interpreted as refusal.
+- `discounts`: ordered applied discounts with known Discount, Coupon and Promotion Code references; customer-facing names/codes; exact amount and currency; and safe product/minimum/first-transaction restrictions when Stripe returns them.
+
+`stripeCustomerId` remains a separate protected provider reference. Each discount stores both its decimal `amount` and exact Stripe `providerAmount`; the sum must equal `discountTotal` in the order currency. A completed order has explicit `customFields` and `discounts` lists, including empty lists when nothing was collected or applied.
+
+These schemas and their Stripe-response normalization are available now. Automatic authoritative retrieval and order reconciliation are not implemented yet, so the plugin does not populate these fields during the public payment lifecycle yet.
+
+Only the selected facts above cross the stripe-php boundary. The order never stores a complete Session, Stripe SDK object, payment credentials, client secret, hosted URL or raw provider response. Customer, address, tax-ID and custom-field values are private order data.
+
 ## Lifecycle hooks
 
 Register normal Kirby hooks in `site/config/config.php`. The internal order creator emits `programmatordev.stripe-checkout.order.created` after verifying the saved order:

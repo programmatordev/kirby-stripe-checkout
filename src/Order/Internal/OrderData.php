@@ -28,6 +28,25 @@ final class OrderData
         return $value === null ? null : self::string($value);
     }
 
+    /** Preserves meaningful whitespace and empty provider answers; text() does not. */
+    public static function singleLine(mixed $value, int $max = 2048): string
+    {
+        if (
+            is_string($value) === false
+            || TextValidator::isSingleLine($value) === false
+            || mb_strlen($value) > $max
+        ) {
+            throw new OrderDataException();
+        }
+
+        return $value;
+    }
+
+    public static function nullableSingleLine(mixed $value, int $max = 2048): ?string
+    {
+        return $value === null ? null : self::singleLine($value, $max);
+    }
+
     public static function integer(mixed $value): int
     {
         if (is_int($value) === false) {
