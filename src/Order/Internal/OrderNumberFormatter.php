@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Order\Internal;
 use Closure;
 use Kirby\Uuid\Uri;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
+use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 use Throwable;
 
 /** @internal Formats display labels only; never generates an order's identity. */
@@ -31,7 +32,7 @@ final class OrderNumberFormatter
             // Check controls before trimming so a trailing newline isn't accepted.
             $number = OrderData::string($number);
 
-            if (preg_match('/[\p{Cc}\p{Zl}\p{Zp}]/u', $number) !== 0) {
+            if (TextValidator::isSingleLine($number) === false) {
                 throw new OrderDataException();
             }
 

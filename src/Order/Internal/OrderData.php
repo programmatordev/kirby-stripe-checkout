@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use DateTimeZone;
 use Kirby\Uuid\Uri;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
+use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 use Throwable;
 
 /** @internal Scalar boundaries shared by order content and immutable hook snapshots. */
@@ -15,7 +16,7 @@ final class OrderData
 {
     public static function string(mixed $value): string
     {
-        if (is_string($value) === false || mb_check_encoding($value, 'UTF-8') === false) {
+        if (is_string($value) === false || TextValidator::isUtf8($value) === false) {
             throw new OrderDataException();
         }
 
@@ -83,8 +84,7 @@ final class OrderData
     {
         if (
             is_string($value) === false || $value === '' || trim($value) !== $value
-            || mb_check_encoding($value, 'UTF-8') === false || mb_strlen($value) > $max
-            || preg_match('/[\p{Cc}\p{Zl}\p{Zp}]/u', $value) !== 0
+            || TextValidator::isSingleLine($value) === false || mb_strlen($value) > $max
         ) {
             throw new OrderDataException();
         }
@@ -150,7 +150,7 @@ final class OrderData
             $result = [];
 
             foreach ($value as $key => $item) {
-                if (is_string($key) && mb_check_encoding($key, 'UTF-8') === false) {
+                if (is_string($key) && TextValidator::isUtf8($key) === false) {
                     throw new OrderDataException();
                 }
 
@@ -164,7 +164,7 @@ final class OrderData
             return $result;
         }
 
-        if (is_string($value) && mb_check_encoding($value, 'UTF-8') === false) {
+        if (is_string($value) && TextValidator::isUtf8($value) === false) {
             throw new OrderDataException();
         }
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Stripe\Checkout;
 
 use InvalidArgumentException;
+use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 
 /** @internal Sanitized provider outcome and its independent retry decision. */
 final readonly class CheckoutSessionFailure
@@ -96,8 +97,7 @@ final readonly class CheckoutSessionFailure
     {
         return trim($value) !== ''
             && trim($value) === $value
-            && mb_strlen($value) <= 255
-            && mb_check_encoding($value, 'UTF-8')
-            && preg_match('/[\p{Cc}\p{Zl}\p{Zp}]/u', $value) !== 1;
+            && TextValidator::isSingleLine($value)
+            && mb_strlen($value) <= 255;
     }
 }

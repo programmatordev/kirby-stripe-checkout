@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Product\Internal;
 
 use InvalidArgumentException;
 use Kirby\Data\Yaml;
+use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 
 /**
  * Normalizes canonical variant data and translated label overlays.
@@ -299,7 +300,7 @@ final class VariantSchema
             || trim($value) === ''
             || trim($value) !== $value
             || strlen($value) > 500
-            || preg_match('/[\x00-\x1F\x7F]/', $value) === 1
+            || TextValidator::isSingleLine($value) === false
         ) {
             throw new InvalidArgumentException(sprintf('Each %s requires a label.', $kind));
         }
@@ -315,6 +316,10 @@ final class VariantSchema
 
         if (is_string($value) === false) {
             throw new InvalidArgumentException('A translated name must be a string.');
+        }
+
+        if (TextValidator::isSingleLine($value) === false) {
+            throw new InvalidArgumentException('A translated name must be safe single-line text.');
         }
 
         $value = trim($value);
@@ -335,7 +340,7 @@ final class VariantSchema
         if (
             trim($value) !== $value
             || strlen($value) > 500
-            || preg_match('/[\x00-\x1F\x7F]/', $value) === 1
+            || TextValidator::isSingleLine($value) === false
         ) {
             throw new InvalidArgumentException('A variant has an invalid commerce value.');
         }

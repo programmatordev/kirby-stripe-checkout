@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Checkout;
 
 use InvalidArgumentException;
+use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 
 /**
  * Immutable SDK-independent parameters for one Checkout Session creation.
@@ -71,7 +72,7 @@ final readonly class SessionRequest
                     is_string($key) === false
                     || $key === ''
                     || str_contains($key, "\0")
-                    || mb_check_encoding($key, 'UTF-8') === false
+                    || TextValidator::isUtf8($key) === false
                 )
             ) {
                 throw new InvalidArgumentException('Session request map keys must be non-empty UTF-8 strings without null bytes.');
@@ -83,7 +84,7 @@ final readonly class SessionRequest
                 continue;
             }
 
-            if (is_string($value) && mb_check_encoding($value, 'UTF-8') === false) {
+            if (is_string($value) && TextValidator::isUtf8($value) === false) {
                 throw new InvalidArgumentException('Session request strings must use valid UTF-8.');
             }
 

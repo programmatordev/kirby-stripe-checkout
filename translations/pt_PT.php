@@ -175,7 +175,7 @@ return [
     'programmatordev.stripe-checkout.settings.termsOfServiceConsent.label' => 'Aceitação dos termos',
     'programmatordev.stripe-checkout.settings.termsOfServiceConsent.help' => 'Exija que os clientes aceitem os termos configurados no Stripe.',
     'programmatordev.stripe-checkout.settings.promotionsConsent.label' => 'Comunicações promocionais',
-    'programmatordev.stripe-checkout.settings.promotionsConsent.help' => 'Peça aos clientes elegíveis autorização para receber emails promocionais. Atualmente, o Stripe limita esta opção a comerciantes elegíveis dos EUA.',
+    'programmatordev.stripe-checkout.settings.promotionsConsent.help' => 'Peça aos clientes elegíveis autorização para receber emails promocionais. Atualmente, o Stripe limita esta opção a comerciantes e clientes dos EUA.',
     'programmatordev.stripe-checkout.settings.allowPromotionCodes.label' => 'Códigos promocionais',
     'programmatordev.stripe-checkout.settings.allowPromotionCodes.help' => 'Permita que os clientes introduzam códigos promocionais geridos no Stripe.',
     'programmatordev.stripe-checkout.settings.locked' => 'Configurado em PHP em <code>{path}</code>. O valor guardado na página é preservado, mas ignorado enquanto este bloqueio estiver ativo.',

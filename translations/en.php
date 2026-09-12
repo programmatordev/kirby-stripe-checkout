@@ -175,7 +175,7 @@ return [
     'programmatordev.stripe-checkout.settings.termsOfServiceConsent.label' => 'Terms acceptance',
     'programmatordev.stripe-checkout.settings.termsOfServiceConsent.help' => 'Require customers to accept the terms configured in Stripe.',
     'programmatordev.stripe-checkout.settings.promotionsConsent.label' => 'Promotional emails',
-    'programmatordev.stripe-checkout.settings.promotionsConsent.help' => 'Ask eligible customers to consent to promotional emails. Stripe currently limits this option to eligible US merchants.',
+    'programmatordev.stripe-checkout.settings.promotionsConsent.help' => 'Ask eligible customers to consent to promotional emails. Stripe currently limits this option to US merchants and US customers.',
     'programmatordev.stripe-checkout.settings.allowPromotionCodes.label' => 'Promotion codes',
     'programmatordev.stripe-checkout.settings.allowPromotionCodes.help' => 'Allow customers to enter promotion codes managed in Stripe.',
     'programmatordev.stripe-checkout.settings.locked' => 'Configured in PHP at <code>{path}</code>. The stored Page value is preserved but ignored while this lock is active.',

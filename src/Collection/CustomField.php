@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Collection;
 
-use InvalidArgumentException;
+use ProgrammatorDev\StripeCheckout\Collection\Exception\InvalidCustomFieldException;
+use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 
 /**
  * Exposes one validated, localized Stripe Checkout custom field.
  *
- * Length and dropdown limits follow Stripe's Checkout Session schema.
+ * Provider-facing labels, input bounds and dropdown sizes follow Stripe's
+ * Checkout Session schema. Stable identifiers use the plugin's narrower limit.
  *
  * @see https://docs.stripe.com/api/checkout/sessions/create?query=custom_fields
  */
@@ -30,50 +32,69 @@ final readonly class CustomField
         array $options = [],
     ) {
         if (preg_match('/\A[a-z0-9]{1,64}\z/D', $key) !== 1) {
-            throw new InvalidArgumentException('A custom field requires a lowercase alphanumeric key.');
+            throw new InvalidCustomFieldException('key', 'A custom field requires a lowercase alphanumeric key.');
         }
 
-        if ($label === '' || trim($label) !== $label || mb_strlen($label) > 50) {
-            throw new InvalidArgumentException('A custom field requires a valid label.');
+        if (
+            $label === ''
+            || trim($label) !== $label
+            || TextValidator::isSingleLine($label) === false
+            || mb_strlen($label) > 50
+        ) {
+            throw new InvalidCustomFieldException('label', 'A custom field requires a valid label.');
         }
 
-        foreach ([$minimumLength, $maximumLength] as $length) {
-            if ($length !== null && ($length < 1 || $length > 255)) {
-                throw new InvalidArgumentException('Custom-field length bounds must be between 1 and 255.');
-            }
+        if ($minimumLength !== null && ($minimumLength < 1 || $minimumLength > 255)) {
+            throw new InvalidCustomFieldException('minimumLength', 'Custom-field length bounds must be between 1 and 255.');
+        }
+
+        if ($maximumLength !== null && ($maximumLength < 1 || $maximumLength > 255)) {
+            throw new InvalidCustomFieldException('maximumLength', 'Custom-field length bounds must be between 1 and 255.');
         }
 
         if ($minimumLength !== null && $maximumLength !== null && $minimumLength > $maximumLength) {
-            throw new InvalidArgumentException('The custom-field minimum length cannot exceed its maximum length.');
+            throw new InvalidCustomFieldException('maximumLength', 'The custom-field minimum length cannot exceed its maximum length.');
         }
 
         if (array_is_list($options) === false) {
-            throw new InvalidArgumentException('A custom field requires a list of options.');
+            throw new InvalidCustomFieldException('options', 'A custom field requires a list of options.');
         }
 
         $optionValues = [];
 
         foreach ($options as $option) {
             if ($option instanceof CustomFieldOption === false || isset($optionValues[$option->value()])) {
-                throw new InvalidArgumentException('A custom field requires unique valid options.');
+                throw new InvalidCustomFieldException('options', 'A custom field requires unique valid options.');
             }
 
             $optionValues[$option->value()] = true;
         }
 
         if ($type === CustomFieldType::Dropdown) {
-            if ($minimumLength !== null || $maximumLength !== null || $options === [] || count($options) > 200) {
-                throw new InvalidArgumentException('A dropdown custom field requires between 1 and 200 options and no length bounds.');
+            if ($minimumLength !== null) {
+                throw new InvalidCustomFieldException('minimumLength', 'Dropdown custom fields do not accept length bounds.');
+            }
+
+            if ($maximumLength !== null) {
+                throw new InvalidCustomFieldException('maximumLength', 'Dropdown custom fields do not accept length bounds.');
+            }
+
+            if ($options === [] || count($options) > 200) {
+                throw new InvalidCustomFieldException('options', 'A dropdown custom field requires between 1 and 200 options and no length bounds.');
             }
 
             if ($defaultValue !== null && isset($optionValues[$defaultValue]) === false) {
-                throw new InvalidArgumentException('A dropdown default must reference one of its options.');
+                throw new InvalidCustomFieldException('defaultValue', 'A dropdown default must reference one of its options.');
             }
         } elseif ($options !== []) {
-            throw new InvalidArgumentException('Only dropdown custom fields accept options.');
+            throw new InvalidCustomFieldException('options', 'Only dropdown custom fields accept options.');
         }
 
         if ($defaultValue !== null) {
+            if (TextValidator::isSingleLine($defaultValue) === false) {
+                throw new InvalidCustomFieldException('defaultValue', 'The custom-field default does not satisfy its definition.');
+            }
+
             $length = mb_strlen($defaultValue);
 
             if (
@@ -83,7 +104,7 @@ final readonly class CustomField
                 || ($maximumLength !== null && $length > $maximumLength)
                 || ($type === CustomFieldType::Numeric && preg_match('/\A[0-9]+\z/D', $defaultValue) !== 1)
             ) {
-                throw new InvalidArgumentException('The custom-field default does not satisfy its definition.');
+                throw new InvalidCustomFieldException('defaultValue', 'The custom-field default does not satisfy its definition.');
             }
         }
 

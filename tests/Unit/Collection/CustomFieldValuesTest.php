@@ -84,6 +84,20 @@ final class CustomFieldValuesTest extends TestCase
                 CustomFieldType::Text,
             ),
         ];
+        yield 'invalid UTF-8 label' => [
+            static fn(): CustomField => new CustomField(
+                'reference',
+                "Invalid\xff",
+                CustomFieldType::Text,
+            ),
+        ];
+        yield 'control character in label' => [
+            static fn(): CustomField => new CustomField(
+                'reference',
+                "Invalid\nlabel",
+                CustomFieldType::Text,
+            ),
+        ];
         yield 'invalid minimum' => [
             static fn(): CustomField => new CustomField(
                 'reference',
@@ -149,6 +163,22 @@ final class CustomFieldValuesTest extends TestCase
                 defaultValue: str_repeat('a', 256),
             ),
         ];
+        yield 'invalid UTF-8 default' => [
+            static fn(): CustomField => new CustomField(
+                'reference',
+                'Reference',
+                CustomFieldType::Text,
+                defaultValue: "Invalid\xff",
+            ),
+        ];
+        yield 'control character in default' => [
+            static fn(): CustomField => new CustomField(
+                'reference',
+                'Reference',
+                CustomFieldType::Text,
+                defaultValue: "Invalid\ndefault",
+            ),
+        ];
     }
 
     #[DataProvider('invalidOptionProvider')]
@@ -166,5 +196,7 @@ final class CustomFieldValuesTest extends TestCase
         yield 'blank value' => ['', 'Morning'];
         yield 'blank label' => ['morning', ''];
         yield 'padded label' => ['morning', ' Morning '];
+        yield 'invalid UTF-8 label' => ['morning', "Invalid\xff"];
+        yield 'control character in label' => ['morning', "Invalid\nlabel"];
     }
 }

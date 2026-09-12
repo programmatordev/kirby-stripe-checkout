@@ -4,17 +4,15 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Configuration;
 
-use InvalidArgumentException;
 use ProgrammatorDev\StripeCheckout\Collection\CustomField;
 use ProgrammatorDev\StripeCheckout\Collection\CustomFieldOption;
 use ProgrammatorDev\StripeCheckout\Collection\CustomFieldType;
+use ProgrammatorDev\StripeCheckout\Collection\Exception\InvalidCustomFieldException;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
+use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 
 /**
  * Normalizes configured custom fields and creates their localized public values.
- *
- * @see https://docs.stripe.com/api/checkout/sessions/create?query=custom_fields
- *
  * @internal
  */
 final class CustomFieldFactory
@@ -191,8 +189,8 @@ final class CustomFieldFactory
                 defaultValue: $defaultValue,
                 options: $this->createOptions($rawOptions, $path . '.options'),
             );
-        } catch (InvalidArgumentException) {
-            throw new ConfigurationException('configuration.value_invalid', $path);
+        } catch (InvalidCustomFieldException $error) {
+            throw new ConfigurationException('configuration.value_invalid', $path . '.' . $error->attribute());
         }
     }
 
@@ -264,10 +262,18 @@ final class CustomFieldFactory
 
             /** @var array<string, string> $labels */
             $labels = $option['labels'];
-            $values[] = new CustomFieldOption(
-                value: $option['value'],
-                label: $this->localizedLabel($option['label'], $labels),
-            );
+
+            try {
+                $values[] = new CustomFieldOption(
+                    value: $option['value'],
+                    label: $this->localizedLabel($option['label'], $labels),
+                );
+            } catch (InvalidCustomFieldException $error) {
+                throw new ConfigurationException(
+                    'configuration.value_invalid',
+                    $path . '.' . $index . '.' . $error->attribute(),
+                );
+            }
         }
 
         return $values;
@@ -292,7 +298,12 @@ final class CustomFieldFactory
             throw new ConfigurationException('configuration.type_invalid', $path);
         }
 
-        if ($value === '' || trim($value) !== $value || mb_strlen($value) > $maximumLength) {
+        if (
+            $value === ''
+            || trim($value) !== $value
+            || TextValidator::isSingleLine($value) === false
+            || mb_strlen($value) > $maximumLength
+        ) {
             throw new ConfigurationException('configuration.value_invalid', $path);
         }
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Product\Support;
 
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
+use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 
 /**
  * Centralizes the bounded scalar rules shared by public product values.
@@ -46,8 +47,7 @@ final class ProductData
             || $value === ''
             || trim($value) !== $value
             || strlen($value) > $maximum
-            || mb_check_encoding($value, 'UTF-8') === false
-            || preg_match('/[\p{Cc}\p{Zl}\p{Zp}]/u', $value) !== 0
+            || TextValidator::isSingleLine($value) === false
         ) {
             throw new InvalidProductException();
         }

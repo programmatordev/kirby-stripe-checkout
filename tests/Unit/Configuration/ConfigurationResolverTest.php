@@ -368,17 +368,17 @@ final class ConfigurationResolverTest extends TestCase
 
     /** @param array<mixed, mixed> $customFields */
     #[DataProvider('invalidCustomFieldsProvider')]
-    public function testRejectsInvalidCustomFieldConfiguration(array $customFields): void
+    public function testRejectsInvalidCustomFieldConfiguration(array $customFields, string $path): void
     {
         $report = $this->resolve([
             self::PREFIX => ['settings' => ['customFields' => $customFields]],
         ]);
 
         $this->assertFalse($report->isValid());
-        $this->assertStringStartsWith('settings.customFields', $report->error()?->path() ?? '');
+        $this->assertSame($path, $report->error()?->path());
     }
 
-    /** @return iterable<string, array{array<mixed, mixed>}> */
+    /** @return iterable<string, array{array<mixed, mixed>, string}> */
     public static function invalidCustomFieldsProvider(): iterable
     {
         $text = [
@@ -398,24 +398,32 @@ final class ConfigurationResolverTest extends TestCase
             ],
         ];
 
-        yield 'map instead of list' => [['field' => $text]];
+        yield 'map instead of list' => [['field' => $text], 'settings.customFields'];
         yield 'more than three' => [[
             $text,
             [...$text, 'key' => 'second'],
             [...$text, 'key' => 'third'],
             [...$text, 'key' => 'fourth'],
-        ]];
-        yield 'missing key' => [[array_diff_key($text, ['key' => true])]];
-        yield 'uppercase key' => [[[...$text, 'key' => 'Reference']]];
-        yield 'duplicate key' => [[$text, $text]];
-        yield 'unknown type' => [[[...$text, 'type' => 'date']]];
-        yield 'invalid required type' => [[[...$text, 'required' => 'yes']]];
-        yield 'reversed bounds' => [[[...$text, 'minimumLength' => 10, 'maximumLength' => 5]]];
-        yield 'options on text' => [[[...$text, 'options' => $dropdown['options']]]];
-        yield 'empty dropdown' => [[[...$dropdown, 'options' => []]]];
-        yield 'unknown default' => [[[...$dropdown, 'defaultValue' => 'evening']]];
-        yield 'invalid translated labels' => [[[...$text, 'labels' => ['invalid code' => 'Referência']]]];
-        yield 'unknown property' => [[[...$text, 'placeholder' => 'Optional']]];
+        ], 'settings.customFields'];
+        yield 'missing key' => [[array_diff_key($text, ['key' => true])], 'settings.customFields.0.key'];
+        yield 'uppercase key' => [[[...$text, 'key' => 'Reference']], 'settings.customFields.0.key'];
+        yield 'duplicate key' => [[$text, $text], 'settings.customFields.1.key'];
+        yield 'unknown type' => [[[...$text, 'type' => 'date']], 'settings.customFields.0.type'];
+        yield 'invalid required type' => [[[...$text, 'required' => 'yes']], 'settings.customFields.0.required'];
+        yield 'reversed bounds' => [[[...$text, 'minimumLength' => 10, 'maximumLength' => 5]], 'settings.customFields.0.maximumLength'];
+        yield 'options on text' => [[[...$text, 'options' => $dropdown['options']]], 'settings.customFields.0.options'];
+        yield 'empty dropdown' => [[[...$dropdown, 'options' => []]], 'settings.customFields.0.options'];
+        yield 'length bound on dropdown' => [[[...$dropdown, 'minimumLength' => 1]], 'settings.customFields.0.minimumLength'];
+        yield 'unknown default' => [[[...$dropdown, 'defaultValue' => 'evening']], 'settings.customFields.0.defaultValue'];
+        yield 'invalid translated labels' => [[[...$text, 'labels' => ['invalid code' => 'Referência']]], 'settings.customFields.0.labels'];
+        yield 'unknown property' => [[[...$text, 'placeholder' => 'Optional']], 'settings.customFields.0.placeholder'];
+        yield 'invalid UTF-8 label' => [[[...$text, 'label' => "Invalid\xff"]], 'settings.customFields.0.label'];
+        yield 'invalid UTF-8 translated label' => [[[...$text, 'labels' => ['pt' => "Invalid\xff"]]], 'settings.customFields.0.labels.pt'];
+        yield 'invalid UTF-8 default' => [[[...$text, 'defaultValue' => "Invalid\xff"]], 'settings.customFields.0.defaultValue'];
+        yield 'invalid UTF-8 option label' => [[[...$dropdown, 'options' => [[
+            'value' => 'morning',
+            'label' => "Invalid\xff",
+        ]]]], 'settings.customFields.0.options.0.label'];
     }
 
     public function testResolvesProductDefaultsAndDottedFieldOverrides(): void
@@ -749,6 +757,16 @@ final class ConfigurationResolverTest extends TestCase
         ];
         yield 'translation value cannot be blank' => [
             [self::PREFIX => ['translations' => ['en' => ['label' => ' ']]]],
+            'configuration.translation_invalid',
+            'translations.en.label',
+        ];
+        yield 'translation value must use valid UTF-8' => [
+            [self::PREFIX => ['translations' => ['en' => ['label' => "Invalid\xff"]]]],
+            'configuration.translation_invalid',
+            'translations.en.label',
+        ];
+        yield 'translation value must be single-line text' => [
+            [self::PREFIX => ['translations' => ['en' => ['label' => "Invalid\nlabel"]]]],
             'configuration.translation_invalid',
             'translations.en.label',
         ];

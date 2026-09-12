@@ -8,6 +8,7 @@ use Kirby\Cms\App;
 use Kirby\Content\Field;
 use Kirby\Data\Yaml;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
+use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 use Throwable;
 
 /**
@@ -136,7 +137,12 @@ final class OptionPresetLibrary
 
     private function requiredLabel(mixed $value): string
     {
-        if (is_string($value) === false || trim($value) === '' || strlen(trim($value)) > 500) {
+        if (
+            is_string($value) === false
+            || trim($value) === ''
+            || strlen(trim($value)) > 500
+            || TextValidator::isSingleLine($value) === false
+        ) {
             throw new ConfigurationException('persistence.content_invalid', 'optionPresets');
         }
 

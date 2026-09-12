@@ -13,6 +13,7 @@ use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
+use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 use SensitiveParameter;
 use Symfony\Component\OptionsResolver\OptionsResolver;
@@ -634,7 +635,11 @@ final class ConfigurationResolver
                     throw new ConfigurationException('configuration.translation_invalid', $path);
                 }
 
-                if (is_string($value) === false || trim($value) === '') {
+                if (
+                    is_string($value) === false
+                    || trim($value) === ''
+                    || TextValidator::isSingleLine($value) === false
+                ) {
                     throw new ConfigurationException('configuration.translation_invalid', $path);
                 }
 

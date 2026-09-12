@@ -216,7 +216,7 @@ final class ProductOptionsStorageTest extends TestCase
         $schema = new VariantSchema();
         $canonical = $schema->canonical(['options' => self::fixtureOptions(), 'variants' => []]);
 
-        foreach ([str_repeat('a', 501), "Invalid\nname", 123] as $name) {
+        foreach ([str_repeat('a', 501), "Invalid\nname", "Invalid\xff", 123] as $name) {
             try {
                 $schema->overlay($canonical, [
                     'options' => [[

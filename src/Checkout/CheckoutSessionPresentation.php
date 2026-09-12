@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Checkout;
 use InvalidArgumentException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutUrlValidator;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 
 /** @internal Ephemeral hosted redirect or embedded client secret returned after orchestration. */
 final readonly class CheckoutSessionPresentation
@@ -30,8 +31,7 @@ final readonly class CheckoutSessionPresentation
                     trim($clientSecret) === ''
                     || trim($clientSecret) !== $clientSecret
                     || strlen($clientSecret) > 2048
-                    || mb_check_encoding($clientSecret, 'UTF-8') === false
-                    || preg_match('/[\x00-\x1F\x7F]/', $clientSecret) === 1
+                    || TextValidator::isSingleLine($clientSecret) === false
                 )
             )
         ) {

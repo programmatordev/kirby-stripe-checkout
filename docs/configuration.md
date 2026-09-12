@@ -92,7 +92,7 @@ Live Stripe credentials require HTTPS destinations, except for local hosts such 
 
 These destination values are available through Settings now. The current package does not yet expose a public Checkout endpoint that consumes them.
 
-The collection controls are independent. Tax-ID collection does not enable Automatic Tax, and billing-address collection set to `auto` does not promise a complete address. The defaults match Stripe's disabled or automatic behavior except for the individual name, which this plugin asks for optionally by default. Enabling phone collection makes the field required in Stripe Checkout. Terms acceptance requires the store's terms URL to be configured in Stripe. Stripe currently restricts promotional-email consent to eligible US merchants.
+The collection controls are independent. Tax-ID collection does not enable Automatic Tax, and billing-address collection set to `auto` does not promise a complete address. The defaults match Stripe's disabled or automatic behavior except for the individual name, which this plugin asks for optionally by default. Enabling phone collection makes the field required in Stripe Checkout. Terms acceptance requires the store's terms URL to be configured in Stripe. Stripe currently restricts promotional-email consent to US merchants and US customers.
 
 Stripe Checkout supports at most three custom fields. They can currently be defined through PHP. Their stable keys and dropdown values use lowercase letters and numbers; labels can provide language-specific overrides keyed by Kirby language code:
 

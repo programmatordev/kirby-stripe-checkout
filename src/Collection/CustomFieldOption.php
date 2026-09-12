@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Collection;
 
-use InvalidArgumentException;
+use ProgrammatorDev\StripeCheckout\Collection\Exception\InvalidCustomFieldException;
+use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 
 /** Exposes one stable value and localized label in a dropdown custom field. */
 final readonly class CustomFieldOption
@@ -14,11 +15,16 @@ final readonly class CustomFieldOption
         private string $label,
     ) {
         if (preg_match('/\A[a-z0-9]{1,64}\z/D', $value) !== 1) {
-            throw new InvalidArgumentException('A custom-field option requires a lowercase alphanumeric value.');
+            throw new InvalidCustomFieldException('value', 'A custom-field option requires a lowercase alphanumeric value.');
         }
 
-        if ($label === '' || trim($label) !== $label || mb_strlen($label) > 100) {
-            throw new InvalidArgumentException('A custom-field option requires a valid label.');
+        if (
+            $label === ''
+            || trim($label) !== $label
+            || TextValidator::isSingleLine($label) === false
+            || mb_strlen($label) > 100
+        ) {
+            throw new InvalidCustomFieldException('label', 'A custom-field option requires a valid label.');
         }
     }
 
