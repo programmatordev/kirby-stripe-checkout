@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Kirby;
 
-use InvalidArgumentException as DataException;
+use InvalidArgumentException;
 use Kirby\Content\Field as ContentField;
-use Kirby\Exception\InvalidArgumentException;
+use Kirby\Exception\InvalidArgumentException as KirbyInvalidArgumentException;
 use Kirby\Form\FieldClass;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
@@ -89,8 +89,10 @@ final class OptionsField extends FieldClass
             }
 
             return $schema->localized($this->canonicalValue(), $value);
-        } catch (DataException $error) {
-            throw new InvalidArgumentException(message: $error->getMessage());
+        } catch (InvalidArgumentException $error) {
+            // Keep the product schema framework-neutral and translate its
+            // validation failure only at Kirby's Field boundary.
+            throw new KirbyInvalidArgumentException(message: $error->getMessage());
         }
     }
 
@@ -106,8 +108,8 @@ final class OptionsField extends FieldClass
             }
 
             return $schema->overlay($this->canonicalValue(), $value);
-        } catch (DataException $error) {
-            throw new InvalidArgumentException(message: $error->getMessage());
+        } catch (InvalidArgumentException $error) {
+            throw new KirbyInvalidArgumentException(message: $error->getMessage());
         }
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Kirby;
 
+use InvalidArgumentException;
 use Kirby\Cms\App;
 use Kirby\Cms\Page;
 use Kirby\Content\Field;
@@ -102,6 +103,7 @@ final class StripeCheckoutPageStore
             taxIdCollection: $this->fieldValue($page, 'taxIdCollection'),
             termsOfServiceConsent: $this->fieldValue($page, 'termsOfServiceConsent'),
             promotionsConsent: $this->fieldValue($page, 'promotionsConsent'),
+            customFields: $this->customFieldDefinitions($page),
             allowPromotionCodes: $this->fieldValue($page, 'allowPromotionCodes'),
             cleanupCreationFailures: $this->fieldValue($page, 'cleanupCreationFailures'),
             creationFailureRetentionDays: $this->fieldValue($page, 'creationFailureRetentionDays'),
@@ -180,5 +182,43 @@ final class StripeCheckoutPageStore
         $field = $page->content($language)->get($fieldName);
 
         return $field instanceof Field ? $field->value() : null;
+    }
+
+    /** @return list<array<string, mixed>>|null */
+    private function customFieldDefinitions(Page $page): ?array
+    {
+        $canonicalValue = $this->fieldValue($page, 'customFields');
+
+        if ($canonicalValue === null || $canonicalValue === '') {
+            return null;
+        }
+
+        try {
+            $adapter = new CustomFieldStructureAdapter();
+            $canonical = $adapter->canonical($canonicalValue);
+            $defaultLanguageCode = $this->kirby->defaultLanguage()?->code();
+            $currentLanguageCode = $this->kirby->languageCode();
+
+            if (
+                $defaultLanguageCode !== null
+                && $currentLanguageCode !== null
+                && $currentLanguageCode !== $defaultLanguageCode
+            ) {
+                $localized = $adapter->localized(
+                    $canonical,
+                    $this->fieldValue($page, 'customFields', 'current'),
+                );
+
+                return $adapter->definitions($localized);
+            }
+
+            return $adapter->definitions($canonical);
+        } catch (InvalidArgumentException $error) {
+            throw new ConfigurationException(
+                'persistence.content_invalid',
+                'settings.customFields',
+                previous: $error,
+            );
+        }
     }
 }

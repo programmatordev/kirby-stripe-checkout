@@ -6,9 +6,7 @@ import {
 	combinations,
 	formatAmount,
 	importPreset,
-	reconcile,
-	resolveStableId,
-	stableId
+	reconcile
 } from "../src/product-options.js";
 
 const options = [
@@ -29,24 +27,6 @@ const options = [
 		]
 	}
 ];
-
-test("generates compact stable identifiers without collisions", () => {
-	const ids = Array.from({ length: 100 }, stableId);
-
-	assert.ok(ids.every(id => /^[a-z0-9]{16}$/.test(id)));
-	assert.equal(new Set(ids).size, ids.length);
-});
-
-test("maps Kirby Structure helper IDs to stable plugin IDs", () => {
-	const ids = new Map([["existing", "existing"]]);
-	let generated = 0;
-	const createId = () => `generated-${++generated}`;
-
-	assert.equal(resolveStableId("existing", ids, createId), "existing");
-	assert.equal(resolveStableId("temporary-uuid", ids, createId), "generated-1");
-	assert.equal(resolveStableId("temporary-uuid", ids, createId), "generated-1");
-	assert.equal(generated, 1);
-});
 
 test("formats table amounts with the currency's standard decimal digits", () => {
 	assert.equal(formatAmount("16", "EUR"), "16.00");

@@ -9,6 +9,7 @@ use Kirby\Exception\PermissionException;
 use Kirby\Form\Fields;
 use Kirby\Panel\Panel;
 use Kirby\Toolkit\I18n;
+use ProgrammatorDev\StripeCheckout\Collection\CustomField;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\PluginPermissions;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
@@ -106,6 +107,8 @@ final class StripeCheckoutArea
             return $view;
         }
 
+        $settings = $report->configurationOrFail()->settings();
+
         /** @var array<string, \stdClass> $versions */
         $versions = $props['versions'];
         $fields = Fields::for($page);
@@ -117,7 +120,7 @@ final class StripeCheckoutArea
         // neither backfill content nor erase an intentionally blank pending edit.
         // Keep both versions aligned where no edit exists, otherwise defaults
         // alone would make Kirby show an unsaved-change state on opening.
-        foreach ($report->configurationOrFail()->settings()->all() as $name => $setting) {
+        foreach ($settings->all() as $name => $setting) {
             $field = $fields->get(strtolower($name));
 
             if ($field === null || $setting->value() === null) {
@@ -125,7 +128,19 @@ final class StripeCheckoutArea
             }
 
             $key = strtolower($name);
+            $storedValue = $latestContent[$key] ?? null;
             $value = $setting->value();
+
+            if ($name === 'customFields') {
+                // Page values carry the stable Panel row IDs. PHP definitions
+                // use their localized public projection and get view-only IDs.
+                $value = $setting->isLocked()
+                    ? array_map(
+                        static fn(CustomField $customField): array => $customField->toArray(),
+                        $settings->customFields(),
+                    )
+                    : $storedValue ?? [];
+            }
 
             // This select uses yes/no option IDs; native toggles use booleans.
             if ($name === 'defaultRequiresShipping' && is_bool($value)) {
@@ -133,7 +148,6 @@ final class StripeCheckoutArea
             }
 
             $panelValue = $field->fill($value)->toFormValue();
-            $storedValue = $latestContent[$key] ?? null;
 
             if (isset($versions['latest']) && ($setting->isLocked() || $storedValue === null || $storedValue === '')) {
                 $versions['latest']->{$key} = $panelValue;

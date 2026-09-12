@@ -36,6 +36,7 @@ final class PageSettings
         mixed $taxIdCollection = null,
         mixed $termsOfServiceConsent = null,
         mixed $promotionsConsent = null,
+        mixed $customFields = null,
         mixed $allowPromotionCodes = null,
         mixed $cleanupCreationFailures = null,
         mixed $creationFailureRetentionDays = null,
@@ -114,6 +115,7 @@ final class PageSettings
         );
         $this->termsOfServiceConsent = $this->normalizeToggle($termsOfServiceConsent, 'termsOfServiceConsent');
         $this->promotionsConsent = $this->normalizeToggle($promotionsConsent, 'promotionsConsent');
+        $this->customFields = $this->normalizeCustomFields($customFields);
         $this->allowPromotionCodes = $this->normalizeToggle($allowPromotionCodes, 'allowPromotionCodes');
         $retention = compact('cleanupCreationFailures', 'creationFailureRetentionDays', 'cleanupUnpaidOrders', 'unpaidOrderRetentionDays');
 
@@ -160,6 +162,8 @@ final class PageSettings
     private readonly ?string $taxIdCollection;
     private readonly ?bool $termsOfServiceConsent;
     private readonly ?bool $promotionsConsent;
+    /** @var list<array<string, mixed>>|null */
+    private readonly ?array $customFields;
     private readonly ?bool $allowPromotionCodes;
 
     public function priceSource(): ?string
@@ -232,12 +236,19 @@ final class PageSettings
         return $this->promotionsConsent;
     }
 
+    /** @return list<array<string, mixed>>|null */
+    public function customFields(): ?array
+    {
+        return $this->customFields;
+    }
+
     public function allowPromotionCodes(): ?bool
     {
         return $this->allowPromotionCodes;
     }
 
-    public function value(string $name): string|bool|int|null
+    /** @return string|bool|int|list<array<string, mixed>>|null */
+    public function value(string $name): string|bool|int|array|null
     {
         return match ($name) {
             'priceSource' => $this->priceSource(),
@@ -254,6 +265,7 @@ final class PageSettings
             'taxIdCollection' => $this->taxIdCollection(),
             'termsOfServiceConsent' => $this->termsOfServiceConsent(),
             'promotionsConsent' => $this->promotionsConsent(),
+            'customFields' => $this->customFields(),
             'allowPromotionCodes' => $this->allowPromotionCodes(),
             default => $this->retention[$name] ?? null,
         };
@@ -308,5 +320,30 @@ final class PageSettings
                 'settings.' . $name,
             ),
         };
+    }
+
+    /** @return list<array<string, mixed>>|null */
+    private function normalizeCustomFields(mixed $value): ?array
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_array($value) === false) {
+            throw new ConfigurationException(
+                'persistence.content_invalid',
+                'settings.customFields',
+            );
+        }
+
+        try {
+            return (new CustomFieldFactory())->normalize($value);
+        } catch (ConfigurationException $error) {
+            throw new ConfigurationException(
+                'persistence.content_invalid',
+                $error->path(),
+                previous: $error,
+            );
+        }
     }
 }

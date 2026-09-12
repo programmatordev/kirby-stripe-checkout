@@ -1,7 +1,7 @@
 <script>
 /**
- * Reuses Kirby's Structure table while limiting translated option values to
- * label edits. Kirby has no membership-locked mode for editable nested fields.
+ * Keeps a nested Structure list fixed while allowing its translated fields to
+ * use Kirby's native editor and drawer behavior.
  */
 export default {
 	extends: "k-structure-field",
@@ -26,7 +26,7 @@ export default {
 
 			this.stopSelecting();
 			this.$panel.drawer.open({
-				component: "k-stripe-checkout-options-drawer",
+				component: "k-stripe-checkout-synchronized-structure-drawer",
 				id: this.id,
 				on: {
 					input: value => {
@@ -45,8 +45,6 @@ export default {
 				props: {
 					disabled: this.disabled,
 					icon: this.icon ?? "list-bullet",
-					// Our shared drawer expects explicit booleans so navigation reaches
-					// a disabled state at the first and last translated values.
 					next: this.items[index + 1] !== undefined,
 					prev: this.items[index - 1] !== undefined,
 					tabs: {
@@ -65,7 +63,7 @@ export default {
 </script>
 
 <style>
-.k-field-type-stripe-checkout-option-translation-values > .k-field-header > .k-button-group {
+.k-field-type-stripe-checkout-synchronized-structure-rows > .k-field-header > .k-button-group {
 	display: none;
 }
 </style>

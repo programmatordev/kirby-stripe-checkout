@@ -100,10 +100,9 @@
 import {
 	formatAmount,
 	importPreset,
-	reconcile,
-	resolveStableId,
-	stableId
+	reconcile
 } from "../product-options.js";
+import { resolveStableId, stableId } from "../synchronized-structure.js";
 
 const emptyValue = () => ({ options: [], variants: [] });
 
@@ -422,7 +421,7 @@ export default {
 				fields.values.max = option.values.length;
 				fields.values.min = option.values.length;
 				fields.values.sortable = false;
-				fields.values.type = "stripe-checkout-option-translation-values";
+				fields.values.type = "stripe-checkout-synchronized-structure-rows";
 			}
 
 			return this.$helper.field.subfields(this, fields);
@@ -468,7 +467,7 @@ export default {
 			const valueIds = new Map(option.values.map(value => [value.id, value.id]));
 
 			this.$panel.drawer.open({
-				component: "k-stripe-checkout-options-drawer",
+				component: "k-stripe-checkout-synchronized-structure-drawer",
 				id: this.optionDrawerId,
 				on: {
 					input: value => this.updateOptionFromForm(option, value, valueIds),
@@ -549,7 +548,7 @@ export default {
 			const next = index >= 0 ? this.localValue.variants[index + 1] ?? null : null;
 
 			this.$panel.drawer.open({
-				component: "k-stripe-checkout-options-drawer",
+				component: "k-stripe-checkout-synchronized-structure-drawer",
 				id: this.variantDrawerId,
 				on: {
 					input: value => this.updateVariantFromForm(variant, value),

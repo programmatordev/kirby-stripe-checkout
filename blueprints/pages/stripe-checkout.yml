@@ -1,6 +1,7 @@
 title: programmatordev.stripe-checkout.area.label
 icon: settings
-buttons: false
+buttons:
+  - languages
 
 options:
   changeSlug: false
@@ -217,6 +218,10 @@ tabs:
             help: programmatordev.stripe-checkout.settings.promotionsConsent.help
             type: toggle
             translate: false
+          customFields:
+            label: programmatordev.stripe-checkout.customFields.label
+            help: programmatordev.stripe-checkout.customFields.help
+            type: stripe-checkout-custom-fields
           allowPromotionCodes:
             label: programmatordev.stripe-checkout.settings.allowPromotionCodes.label
             help: programmatordev.stripe-checkout.settings.allowPromotionCodes.help

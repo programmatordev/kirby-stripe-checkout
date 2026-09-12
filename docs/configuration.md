@@ -94,7 +94,7 @@ These destination values are available through Settings now. The current package
 
 The collection controls are independent. Tax-ID collection does not enable Automatic Tax, and billing-address collection set to `auto` does not promise a complete address. The defaults match Stripe's disabled or automatic behavior except for the individual name, which this plugin asks for optionally by default. Enabling phone collection makes the field required in Stripe Checkout. Terms acceptance requires the store's terms URL to be configured in Stripe. Stripe currently restricts promotional-email consent to US merchants and US customers.
 
-Stripe Checkout supports at most three custom fields. They can currently be defined through PHP. Their stable keys and dropdown values use lowercase letters and numbers; labels can provide language-specific overrides keyed by Kirby language code:
+Stripe Checkout supports at most three custom fields. Configure them in the Settings tab or lock the complete list through PHP. Their stable keys and dropdown values use lowercase letters and numbers; PHP labels can provide language-specific overrides keyed by Kirby language code:
 
 ```php
 'settings' => [
@@ -112,7 +112,9 @@ Stripe Checkout supports at most three custom fields. They can currently be defi
 ],
 ```
 
-Supported types are `text`, `numeric`, and `dropdown`. Dropdowns require between one and 200 options, each with a stable `value`, fallback `label`, and optional `labels`. Custom fields must not request card or bank details, passwords, health information, or other sensitive data prohibited by Stripe or applicable law. The Settings Panel exposes the scalar collection controls; custom-field definitions currently use PHP configuration and do not appear in the Panel.
+Supported types are `text`, `numeric`, and `dropdown`. Dropdowns require between one and 200 options, each with a stable `value`, fallback `label`, and optional `labels`. Custom fields must not request card or bank details, passwords, health information, or other sensitive data prohibited by Stripe or applicable law.
+
+On multi-language sites, create, remove, and order fields and dropdown options in the default language. Other languages can translate only customer-facing labels. Stable internal row IDs connect those translations without appearing in the public Settings API. Missing translations use the default-language label, and removing a default-language row also removes it from the effective translated list. A secondary-language Page/API update cannot add fields, reorder them, or change their keys, types, bounds, defaults, requirements, or dropdown values.
 
 The collection and promotion settings are validated and available through the Settings API. They are not added to Checkout Session requests by the current implementation yet.
 

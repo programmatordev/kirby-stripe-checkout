@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Kirby;
 use Kirby\Cms\App;
 use Kirby\Data\Data;
 use Kirby\Toolkit\I18n;
+use ProgrammatorDev\StripeCheckout\Collection\CustomField;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Configuration\Defaults;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
@@ -84,13 +85,26 @@ final class SettingsBlueprint
 
         /** @var array<string, mixed> $options */
         $options = $kirby->options();
-        $report = (new ConfigurationResolver())->resolve($options);
+        $report = (new ConfigurationResolver(
+            languageCode: $kirby->language()?->code(),
+        ))->resolve($options);
 
         if ($report->isValid() === true) {
-            foreach ($report->configurationOrFail()->settings()->all() as $name => $setting) {
+            $settings = $report->configurationOrFail()->settings();
+
+            foreach ($settings->all() as $name => $setting) {
                 if ($setting->isLocked() === true) {
                     /** @var array<string, mixed> $blueprint */
-                    $blueprint = self::applyLock($blueprint, $name);
+                    $blueprint = self::applyLock(
+                        blueprint: $blueprint,
+                        fieldName: $name,
+                        lockedValue: $name === 'customFields'
+                            ? array_map(
+                                static fn(CustomField $customField): array => $customField->toArray(),
+                                $settings->customFields(),
+                            )
+                            : null,
+                    );
                 }
             }
         }
@@ -120,8 +134,11 @@ final class SettingsBlueprint
      * @param array<mixed, mixed> $blueprint
      * @return array<mixed, mixed>
      */
-    private static function applyLock(array $blueprint, string $fieldName): array
-    {
+    private static function applyLock(
+        array $blueprint,
+        string $fieldName,
+        mixed $lockedValue = null,
+    ): array {
         foreach ($blueprint as $key => $value) {
             if (is_array($value) === false) {
                 continue;
@@ -133,12 +150,17 @@ final class SettingsBlueprint
                     'programmatordev.stripe-checkout.settings.locked',
                     ['path' => 'programmatordev.stripe-checkout.settings.' . $fieldName],
                 );
+
+                if ($lockedValue !== null) {
+                    $value[$fieldName]['lockedValue'] = $lockedValue;
+                }
+
                 $blueprint[$key] = $value;
 
                 continue;
             }
 
-            $blueprint[$key] = self::applyLock($value, $fieldName);
+            $blueprint[$key] = self::applyLock($value, $fieldName, $lockedValue);
         }
 
         return $blueprint;

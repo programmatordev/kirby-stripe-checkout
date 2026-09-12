@@ -80,7 +80,10 @@ final class PanelAreaTest extends KirbyTestCase
 
         $this->assertTrue($view['menu']);
         $this->assertSame('k-page-view', $view['component']);
-        $this->assertSame([], $props['buttons']);
+        $this->assertCount(1, $props['buttons']);
+        $languageButton = $props['buttons'][0] ?? null;
+        $this->assertIsArray($languageButton);
+        $this->assertSame('k-languages-view-button', $languageButton['component'] ?? null);
     }
 
     public function testRegisteredAreaRendersNativeTranslatedTabsThroughKirbysRouter(): void
@@ -145,7 +148,7 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertFalse($options['list']);
         $this->assertTrue($options['read']);
         $this->assertFalse($options['update']);
-        $this->assertFalse($blueprint['buttons']);
+        $this->assertSame(['languages'], $blueprint['buttons']);
     }
 
     public function testDiagnosticsReaderGetsNativeDiagnosticSectionsWithoutUpdateAccess(): void
@@ -387,6 +390,7 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertArrayHasKey('taxIdCollection', $fields);
         $this->assertArrayHasKey('termsOfServiceConsent', $fields);
         $this->assertArrayHasKey('promotionsConsent', $fields);
+        $this->assertArrayHasKey('customFields', $fields);
         $this->assertArrayHasKey('allowPromotionCodes', $fields);
         $this->assertArrayNotHasKey('projectField', $fields);
         $priceSource = $fields['priceSource'];
@@ -401,6 +405,7 @@ final class PanelAreaTest extends KirbyTestCase
         $taxIdCollection = $fields['taxIdCollection'];
         $termsOfServiceConsent = $fields['termsOfServiceConsent'];
         $promotionsConsent = $fields['promotionsConsent'];
+        $customFields = $fields['customFields'];
         $allowPromotionCodes = $fields['allowPromotionCodes'];
         $creationFailureRetentionDays = $fields['creationFailureRetentionDays'];
         $unpaidOrderRetentionDays = $fields['unpaidOrderRetentionDays'];
@@ -416,6 +421,7 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertIsArray($taxIdCollection);
         $this->assertIsArray($termsOfServiceConsent);
         $this->assertIsArray($promotionsConsent);
+        $this->assertIsArray($customFields);
         $this->assertIsArray($allowPromotionCodes);
         $this->assertIsArray($creationFailureRetentionDays);
         $this->assertIsArray($unpaidOrderRetentionDays);
@@ -429,6 +435,8 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertSame('off', $taxIdCollection['default']);
         $this->assertFalse($termsOfServiceConsent['default']);
         $this->assertFalse($promotionsConsent['default']);
+        $this->assertSame([], $customFields['default']);
+        $this->assertSame('stripe-checkout-custom-fields', $customFields['type']);
         $this->assertFalse($allowPromotionCodes['default']);
         $this->assertSame(['uiMode' => 'hosted'], $successDestination['when']);
         $this->assertSame(['uiMode' => 'hosted'], $cancelDestination['when']);

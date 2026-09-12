@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Kirby;
 
+use InvalidArgumentException;
 use Kirby\Cms\Page;
 use Kirby\Cms\PageBlueprint;
 use Kirby\Cms\Site;
 use Kirby\Content\Field;
 use Kirby\Content\Version;
 use Kirby\Content\VersionId;
+use Kirby\Exception\InvalidArgumentException as KirbyInvalidArgumentException;
 use Kirby\Exception\NotFoundException;
 use Kirby\Exception\PermissionException;
 use Kirby\Toolkit\I18n;
@@ -54,6 +56,7 @@ final class StripeCheckoutPage extends Page
         'taxidcollection' => 'taxIdCollection',
         'termsofserviceconsent' => 'termsOfServiceConsent',
         'promotionsconsent' => 'promotionsConsent',
+        'customfields' => 'customFields',
         'allowpromotioncodes' => 'allowPromotionCodes',
         'cleanupcreationfailures' => 'cleanupCreationFailures',
         'creationfailureretentiondays' => 'creationFailureRetentionDays',
@@ -96,6 +99,7 @@ final class StripeCheckoutPage extends Page
         $context = implode(':', [
             $this->kirby()->user()?->id() ?? 'guest',
             I18n::locale(),
+            $this->kirby()->languageCode() ?? 'single-language',
             PluginPermissions::allows($this->kirby(), 'settings.read') ? '1' : '0',
             PluginPermissions::allows($this->kirby(), 'settings.update') ? '1' : '0',
             PluginPermissions::allows($this->kirby(), 'diagnostics.read') ? '1' : '0',
@@ -133,18 +137,31 @@ final class StripeCheckoutPage extends Page
         // Panel, but removes it again before writing the latest version.
         unset($input['lock']);
 
+        $defaultLanguageCode = $this->kirby()->defaultLanguage()?->code();
+        $targetLanguageCode = $languageCode ?? $this->kirby()->languageCode();
+
+        if (array_key_exists('customfields', $input)) {
+            try {
+                $input['customfields'] = $this->normalizeCustomFieldStorage(
+                    value: $input['customfields'],
+                    defaultLanguageCode: $defaultLanguageCode,
+                    targetLanguageCode: $targetLanguageCode,
+                );
+            } catch (InvalidArgumentException $error) {
+                throw new KirbyInvalidArgumentException(message: $error->getMessage());
+            }
+        }
+
         $this->assertProtectedFieldsRemainUnchanged($input);
         $this->assertOnlySettingsFieldsAreUpdated($input, $languageCode);
 
         $settingInput = array_intersect_key($input, self::SETTING_FIELDS);
 
         if ($settingInput !== []) {
-            $this->assertSettingUpdates($settingInput);
+            $this->assertSettingUpdates($settingInput, $languageCode);
         }
 
         $defaultLanguageInput = array_intersect_key($input, self::DEFAULT_LANGUAGE_FIELDS);
-        $defaultLanguageCode = $this->kirby()->defaultLanguage()?->code();
-        $targetLanguageCode = $languageCode ?? $this->kirby()->languageCode();
 
         if (
             $defaultLanguageInput !== []
@@ -285,14 +302,23 @@ final class StripeCheckoutPage extends Page
     }
 
     /** @param array<string, mixed> $input */
-    private function assertSettingUpdates(array $input): void
+    private function assertSettingUpdates(array $input, ?string $languageCode): void
     {
         $storedValues = [];
         $candidateValues = [];
 
         foreach (self::SETTING_FIELDS as $field => $name) {
+            if ($name === 'customFields') {
+                $storedValues[$name] = null;
+                $candidateValues[$name] = null;
+
+                continue;
+            }
+
             $storedValues[$name] = $this->fieldValue($name);
-            $candidateValues[$name] = array_key_exists($field, $input) ? $input[$field] : $storedValues[$name];
+            $candidateValues[$name] = array_key_exists($field, $input)
+                ? $input[$field]
+                : $storedValues[$name];
         }
 
         $stored = new PageSettings(...$storedValues);
@@ -313,7 +339,11 @@ final class StripeCheckoutPage extends Page
                 continue;
             }
 
-            if ($candidate->value($name) !== $stored->value($name)) {
+            $changed = $name === 'customFields'
+                ? $this->customFieldStorageChanged($input[$field], $languageCode)
+                : $candidate->value($name) !== $stored->value($name);
+
+            if ($changed) {
                 throw new PermissionException(
                     message: 'The Stripe Checkout setting is locked by PHP configuration.',
                 );
@@ -335,5 +365,49 @@ final class StripeCheckoutPage extends Page
         )->get($fieldName);
 
         return $field instanceof Field ? $field->value() : null;
+    }
+
+    private function customFieldStorageChanged(mixed $value, ?string $languageCode): bool
+    {
+        $adapter = new CustomFieldStructureAdapter();
+        $defaultLanguageCode = $this->kirby()->defaultLanguage()?->code();
+        $targetLanguageCode = $languageCode ?? $this->kirby()->languageCode();
+        $canonical = $adapter->canonical($this->fieldValue('customFields'));
+
+        if (
+            $defaultLanguageCode !== null
+            && $targetLanguageCode !== null
+            && $targetLanguageCode !== $defaultLanguageCode
+        ) {
+            $storedField = $this->content($targetLanguageCode)->get('customFields');
+            $storedValue = $storedField instanceof Field ? $storedField->value() : null;
+
+            return $adapter->overlay($canonical, $value)
+                !== $adapter->overlay($canonical, $storedValue);
+        }
+
+        return $adapter->canonical($value) !== $canonical;
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function normalizeCustomFieldStorage(
+        mixed $value,
+        ?string $defaultLanguageCode,
+        ?string $targetLanguageCode,
+    ): array {
+        $adapter = new CustomFieldStructureAdapter();
+
+        if (
+            $defaultLanguageCode !== null
+            && $targetLanguageCode !== null
+            && $targetLanguageCode !== $defaultLanguageCode
+        ) {
+            return $adapter->overlay(
+                $adapter->canonical($this->fieldValue('customFields')),
+                $value,
+            );
+        }
+
+        return $adapter->canonical($value);
     }
 }

@@ -7,6 +7,7 @@ use Kirby\Cms\Page;
 use Kirby\Content\Field;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\CartRoutes;
+use ProgrammatorDev\StripeCheckout\Kirby\CustomFieldsField;
 use ProgrammatorDev\StripeCheckout\Kirby\OptionsField;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
@@ -59,6 +60,7 @@ App::plugin(
             'stripe-checkout-orders' => OrdersPage::class,
         ],
         'fields' => [
+            'stripe-checkout-custom-fields' => CustomFieldsField::class,
             'stripe-checkout-options' => OptionsField::class,
             'stripe-checkout-price' => StripePriceField::class,
         ],
