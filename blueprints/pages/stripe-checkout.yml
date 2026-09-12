@@ -152,6 +152,76 @@ tabs:
                     type: tags
                     required: true
                     min: 1
+          billingAddressCollection:
+            label: programmatordev.stripe-checkout.settings.billingAddressCollection.label
+            help: programmatordev.stripe-checkout.settings.billingAddressCollection.help
+            type: select
+            required: true
+            translate: false
+            options:
+              auto:
+                "*": programmatordev.stripe-checkout.settings.billingAddressCollection.auto
+              required:
+                "*": programmatordev.stripe-checkout.settings.billingAddressCollection.required
+          individualNameCollection:
+            label: programmatordev.stripe-checkout.settings.individualNameCollection.label
+            help: programmatordev.stripe-checkout.settings.individualNameCollection.help
+            type: select
+            required: true
+            translate: false
+            options:
+              "off":
+                "*": programmatordev.stripe-checkout.settings.collectionMode.off
+              optional:
+                "*": programmatordev.stripe-checkout.settings.collectionMode.optional
+              required:
+                "*": programmatordev.stripe-checkout.settings.collectionMode.required
+          businessNameCollection:
+            label: programmatordev.stripe-checkout.settings.businessNameCollection.label
+            help: programmatordev.stripe-checkout.settings.businessNameCollection.help
+            type: select
+            required: true
+            translate: false
+            options:
+              "off":
+                "*": programmatordev.stripe-checkout.settings.collectionMode.off
+              optional:
+                "*": programmatordev.stripe-checkout.settings.collectionMode.optional
+              required:
+                "*": programmatordev.stripe-checkout.settings.collectionMode.required
+          phoneNumberCollection:
+            label: programmatordev.stripe-checkout.settings.phoneNumberCollection.label
+            help: programmatordev.stripe-checkout.settings.phoneNumberCollection.help
+            type: toggle
+            translate: false
+          taxIdCollection:
+            label: programmatordev.stripe-checkout.settings.taxIdCollection.label
+            help: programmatordev.stripe-checkout.settings.taxIdCollection.help
+            type: select
+            required: true
+            translate: false
+            options:
+              "off":
+                "*": programmatordev.stripe-checkout.settings.taxIdCollection.off
+              optional:
+                "*": programmatordev.stripe-checkout.settings.taxIdCollection.optional
+              required_if_supported:
+                "*": programmatordev.stripe-checkout.settings.taxIdCollection.requiredIfSupported
+          termsOfServiceConsent:
+            label: programmatordev.stripe-checkout.settings.termsOfServiceConsent.label
+            help: programmatordev.stripe-checkout.settings.termsOfServiceConsent.help
+            type: toggle
+            translate: false
+          promotionsConsent:
+            label: programmatordev.stripe-checkout.settings.promotionsConsent.label
+            help: programmatordev.stripe-checkout.settings.promotionsConsent.help
+            type: toggle
+            translate: false
+          allowPromotionCodes:
+            label: programmatordev.stripe-checkout.settings.allowPromotionCodes.label
+            help: programmatordev.stripe-checkout.settings.allowPromotionCodes.help
+            type: toggle
+            translate: false
   diagnostics:
     label: programmatordev.stripe-checkout.tabs.diagnostics
     icon: info

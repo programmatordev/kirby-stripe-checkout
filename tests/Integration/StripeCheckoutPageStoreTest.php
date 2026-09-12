@@ -39,6 +39,14 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $this->assertSame('Stripe Checkout', $page->title()->value());
         $this->assertSame(PriceSource::Kirby->value, $this->fieldValue($page, 'priceSource'));
         $this->assertSame('hosted', $this->fieldValue($page, 'uiMode'));
+        $this->assertSame('auto', $this->fieldValue($page, 'billingAddressCollection'));
+        $this->assertSame('optional', $this->fieldValue($page, 'individualNameCollection'));
+        $this->assertSame('off', $this->fieldValue($page, 'businessNameCollection'));
+        $this->assertSame('false', $this->fieldValue($page, 'phoneNumberCollection'));
+        $this->assertSame('off', $this->fieldValue($page, 'taxIdCollection'));
+        $this->assertSame('false', $this->fieldValue($page, 'termsOfServiceConsent'));
+        $this->assertSame('false', $this->fieldValue($page, 'promotionsConsent'));
+        $this->assertSame('false', $this->fieldValue($page, 'allowPromotionCodes'));
 
         // Kirby creates empty Field objects for required settings without a
         // safe deterministic default; their values must remain unconfigured.
@@ -163,6 +171,10 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
             'priceSource' => PriceSource::Stripe->value,
             'currency' => 'EUR',
             'defaultRequiresShipping' => 'yes',
+            'billingAddressCollection' => 'required',
+            'individualNameCollection' => 'off',
+            'phoneNumberCollection' => 'true',
+            'allowPromotionCodes' => 'true',
         ]);
 
         $this->assertSame(
@@ -171,8 +183,14 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         );
         $this->assertSame('EUR', $this->fieldValue($page, 'currency'));
         $this->assertSame('yes', $this->fieldValue($page, 'defaultRequiresShipping'));
+        $this->assertSame('required', $this->fieldValue($page, 'billingAddressCollection'));
+        $this->assertSame('off', $this->fieldValue($page, 'individualNameCollection'));
+        $this->assertSame('true', $this->fieldValue($page, 'phoneNumberCollection'));
+        $this->assertSame('true', $this->fieldValue($page, 'allowPromotionCodes'));
         $this->assertFalse($page->translation('pt')->exists());
         $this->assertSame(PriceSource::Stripe, $this->settings()->priceSource());
+        $this->assertTrue($this->settings()->phoneNumberCollection());
+        $this->assertTrue($this->settings()->allowPromotionCodes());
     }
 
     public function testCheckoutDestinationsRemainTranslated(): void
@@ -493,6 +511,14 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         yield 'lowercase currency' => ['currency', 'eur'];
         yield 'invalid shipping default' => ['defaultRequiresShipping', 'sometimes'];
         yield 'invalid UI mode' => ['uiMode', 'inline'];
+        yield 'invalid billing collection' => ['billingAddressCollection', 'optional'];
+        yield 'invalid individual name collection' => ['individualNameCollection', 'auto'];
+        yield 'invalid business name collection' => ['businessNameCollection', 'auto'];
+        yield 'invalid phone collection' => ['phoneNumberCollection', 'yes'];
+        yield 'invalid tax ID collection' => ['taxIdCollection', 'required'];
+        yield 'invalid terms consent' => ['termsOfServiceConsent', 'yes'];
+        yield 'invalid promotions consent' => ['promotionsConsent', 'yes'];
+        yield 'invalid promotion codes' => ['allowPromotionCodes', 'yes'];
     }
 
     #[DataProvider('invalidCommerceSettingProvider')]

@@ -6,6 +6,10 @@ namespace ProgrammatorDev\StripeCheckout\Configuration;
 
 use LogicException;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Collection\BillingAddressCollection;
+use ProgrammatorDev\StripeCheckout\Collection\CollectionMode;
+use ProgrammatorDev\StripeCheckout\Collection\CustomField;
+use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
 
 /**
  * Provides the immutable, sanitized public view of effective store settings.
@@ -15,18 +19,34 @@ final class Settings
     /** @var array<string, Setting> */
     private readonly array $settings;
 
+    /** @var list<CustomField> */
+    private readonly array $customFields;
+
     /**
      * @internal Constructed from the public-setting whitelist.
      *
      * @param array<string, Setting> $settings
+     * @param array<mixed> $customFields
      */
-    public function __construct(array $settings)
+    public function __construct(array $settings, array $customFields)
     {
         if (array_keys($settings) !== array_keys(Defaults::SETTINGS)) {
             throw new LogicException('The public Settings view contains an unexpected schema.');
         }
 
+        if (array_is_list($customFields) === false) {
+            throw new LogicException('The public Settings view requires a list of custom fields.');
+        }
+
+        foreach ($customFields as $customField) {
+            if ($customField instanceof CustomField === false) {
+                throw new LogicException('The public Settings view contains an invalid custom field.');
+            }
+        }
+
         $this->settings = $settings;
+        /** @var list<CustomField> $customFields */
+        $this->customFields = $customFields;
     }
 
     public function priceSource(): PriceSource
@@ -88,6 +108,52 @@ final class Settings
         return $this->destination('returnDestination');
     }
 
+    public function billingAddressCollection(): BillingAddressCollection
+    {
+        return BillingAddressCollection::from($this->string('billingAddressCollection'));
+    }
+
+    public function individualNameCollection(): CollectionMode
+    {
+        return CollectionMode::from($this->string('individualNameCollection'));
+    }
+
+    public function businessNameCollection(): CollectionMode
+    {
+        return CollectionMode::from($this->string('businessNameCollection'));
+    }
+
+    public function phoneNumberCollection(): bool
+    {
+        return $this->boolean('phoneNumberCollection');
+    }
+
+    public function taxIdCollection(): TaxIdCollection
+    {
+        return TaxIdCollection::from($this->string('taxIdCollection'));
+    }
+
+    public function termsOfServiceConsent(): bool
+    {
+        return $this->boolean('termsOfServiceConsent');
+    }
+
+    public function promotionsConsent(): bool
+    {
+        return $this->boolean('promotionsConsent');
+    }
+
+    /** @return list<CustomField> */
+    public function customFields(): array
+    {
+        return $this->customFields;
+    }
+
+    public function allowPromotionCodes(): bool
+    {
+        return $this->boolean('allowPromotionCodes');
+    }
+
     public function setting(string $path): ?Setting
     {
         return $this->settings[$path] ?? null;
@@ -119,6 +185,28 @@ final class Settings
 
         if (is_int($value) === false || $value < 1) {
             throw new LogicException('Resolved retention days must be a positive integer.');
+        }
+
+        return $value;
+    }
+
+    private function string(string $name): string
+    {
+        $value = $this->settings[$name]->value();
+
+        if (is_string($value) === false) {
+            throw new LogicException('The resolved setting must be a string.');
+        }
+
+        return $value;
+    }
+
+    private function boolean(string $name): bool
+    {
+        $value = $this->settings[$name]->value();
+
+        if (is_bool($value) === false) {
+            throw new LogicException('The resolved setting must be a boolean.');
         }
 
         return $value;

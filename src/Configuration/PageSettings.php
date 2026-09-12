@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Configuration;
 
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Collection\BillingAddressCollection;
+use ProgrammatorDev\StripeCheckout\Collection\CollectionMode;
+use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 
@@ -26,6 +29,14 @@ final class PageSettings
         mixed $successDestination = null,
         mixed $cancelDestination = null,
         mixed $returnDestination = null,
+        mixed $billingAddressCollection = null,
+        mixed $individualNameCollection = null,
+        mixed $businessNameCollection = null,
+        mixed $phoneNumberCollection = null,
+        mixed $taxIdCollection = null,
+        mixed $termsOfServiceConsent = null,
+        mixed $promotionsConsent = null,
+        mixed $allowPromotionCodes = null,
         mixed $cleanupCreationFailures = null,
         mixed $creationFailureRetentionDays = null,
         mixed $cleanupUnpaidOrders = null,
@@ -80,6 +91,30 @@ final class PageSettings
         $this->successDestination = $this->normalizeDestination($successDestination, 'successDestination');
         $this->cancelDestination = $this->normalizeDestination($cancelDestination, 'cancelDestination');
         $this->returnDestination = $this->normalizeDestination($returnDestination, 'returnDestination');
+        $this->billingAddressCollection = $this->normalizeChoice(
+            $billingAddressCollection,
+            array_column(BillingAddressCollection::cases(), 'value'),
+            'billingAddressCollection',
+        );
+        $this->individualNameCollection = $this->normalizeChoice(
+            $individualNameCollection,
+            array_column(CollectionMode::cases(), 'value'),
+            'individualNameCollection',
+        );
+        $this->businessNameCollection = $this->normalizeChoice(
+            $businessNameCollection,
+            array_column(CollectionMode::cases(), 'value'),
+            'businessNameCollection',
+        );
+        $this->phoneNumberCollection = $this->normalizeToggle($phoneNumberCollection, 'phoneNumberCollection');
+        $this->taxIdCollection = $this->normalizeChoice(
+            $taxIdCollection,
+            array_column(TaxIdCollection::cases(), 'value'),
+            'taxIdCollection',
+        );
+        $this->termsOfServiceConsent = $this->normalizeToggle($termsOfServiceConsent, 'termsOfServiceConsent');
+        $this->promotionsConsent = $this->normalizeToggle($promotionsConsent, 'promotionsConsent');
+        $this->allowPromotionCodes = $this->normalizeToggle($allowPromotionCodes, 'allowPromotionCodes');
         $retention = compact('cleanupCreationFailures', 'creationFailureRetentionDays', 'cleanupUnpaidOrders', 'unpaidOrderRetentionDays');
 
         foreach (Defaults::RETENTION as $name => $default) {
@@ -118,6 +153,14 @@ final class PageSettings
     private readonly ?string $successDestination;
     private readonly ?string $cancelDestination;
     private readonly ?string $returnDestination;
+    private readonly ?string $billingAddressCollection;
+    private readonly ?string $individualNameCollection;
+    private readonly ?string $businessNameCollection;
+    private readonly ?bool $phoneNumberCollection;
+    private readonly ?string $taxIdCollection;
+    private readonly ?bool $termsOfServiceConsent;
+    private readonly ?bool $promotionsConsent;
+    private readonly ?bool $allowPromotionCodes;
 
     public function priceSource(): ?string
     {
@@ -154,6 +197,46 @@ final class PageSettings
         return $this->returnDestination;
     }
 
+    public function billingAddressCollection(): ?string
+    {
+        return $this->billingAddressCollection;
+    }
+
+    public function individualNameCollection(): ?string
+    {
+        return $this->individualNameCollection;
+    }
+
+    public function businessNameCollection(): ?string
+    {
+        return $this->businessNameCollection;
+    }
+
+    public function phoneNumberCollection(): ?bool
+    {
+        return $this->phoneNumberCollection;
+    }
+
+    public function taxIdCollection(): ?string
+    {
+        return $this->taxIdCollection;
+    }
+
+    public function termsOfServiceConsent(): ?bool
+    {
+        return $this->termsOfServiceConsent;
+    }
+
+    public function promotionsConsent(): ?bool
+    {
+        return $this->promotionsConsent;
+    }
+
+    public function allowPromotionCodes(): ?bool
+    {
+        return $this->allowPromotionCodes;
+    }
+
     public function value(string $name): string|bool|int|null
     {
         return match ($name) {
@@ -164,6 +247,14 @@ final class PageSettings
             'successDestination' => $this->successDestination(),
             'cancelDestination' => $this->cancelDestination(),
             'returnDestination' => $this->returnDestination(),
+            'billingAddressCollection' => $this->billingAddressCollection(),
+            'individualNameCollection' => $this->individualNameCollection(),
+            'businessNameCollection' => $this->businessNameCollection(),
+            'phoneNumberCollection' => $this->phoneNumberCollection(),
+            'taxIdCollection' => $this->taxIdCollection(),
+            'termsOfServiceConsent' => $this->termsOfServiceConsent(),
+            'promotionsConsent' => $this->promotionsConsent(),
+            'allowPromotionCodes' => $this->allowPromotionCodes(),
             default => $this->retention[$name] ?? null,
         };
     }
@@ -190,5 +281,32 @@ final class PageSettings
         }
 
         return $value;
+    }
+
+    /** @param list<string> $allowed */
+    private function normalizeChoice(mixed $value, array $allowed, string $name): ?string
+    {
+        if ($value === '' || $value === null) {
+            return null;
+        }
+
+        if (is_string($value) === false || in_array($value, $allowed, true) === false) {
+            throw new ConfigurationException('persistence.content_invalid', 'settings.' . $name);
+        }
+
+        return $value;
+    }
+
+    private function normalizeToggle(mixed $value, string $name): ?bool
+    {
+        return match ($value) {
+            null, '' => null,
+            true, 'true' => true,
+            false, 'false' => false,
+            default => throw new ConfigurationException(
+                'persistence.content_invalid',
+                'settings.' . $name,
+            ),
+        };
     }
 }

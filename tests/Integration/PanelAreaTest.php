@@ -305,6 +305,7 @@ final class PanelAreaTest extends KirbyTestCase
                     'priceSource' => 'stripe',
                     'currency' => 'USD',
                     'defaultRequiresShipping' => false,
+                    'phoneNumberCollection' => true,
                 ],
             ],
         ]);
@@ -320,6 +321,7 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertSame('stripe', $props['versions']['latest']->pricesource);
         $this->assertSame('USD', $props['versions']['latest']->currency);
         $this->assertSame('no', $props['versions']['latest']->defaultrequiresshipping);
+        $this->assertTrue($props['versions']['latest']->phonenumbercollection);
         $this->assertNotNull($blueprint);
         $field = $blueprint->field('priceSource');
         $this->assertIsArray($field);
@@ -330,7 +332,7 @@ final class PanelAreaTest extends KirbyTestCase
             $field['help'],
         );
 
-        foreach (['currency', 'defaultRequiresShipping'] as $fieldName) {
+        foreach (['currency', 'defaultRequiresShipping', 'phoneNumberCollection'] as $fieldName) {
             $lockedField = $blueprint->field($fieldName);
             $this->assertIsArray($lockedField);
             $this->assertTrue($lockedField['disabled']);
@@ -371,7 +373,6 @@ final class PanelAreaTest extends KirbyTestCase
         $settings = $sections['settings'];
         /** @var array<string, mixed> $fields */
         $fields = $settings['fields'];
-
         $this->assertArrayHasKey('priceSource', $fields);
         $this->assertArrayHasKey('currency', $fields);
         $this->assertArrayHasKey('defaultRequiresShipping', $fields);
@@ -379,12 +380,28 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertArrayHasKey('successDestination', $fields);
         $this->assertArrayHasKey('cancelDestination', $fields);
         $this->assertArrayHasKey('returnDestination', $fields);
+        $this->assertArrayHasKey('billingAddressCollection', $fields);
+        $this->assertArrayHasKey('individualNameCollection', $fields);
+        $this->assertArrayHasKey('businessNameCollection', $fields);
+        $this->assertArrayHasKey('phoneNumberCollection', $fields);
+        $this->assertArrayHasKey('taxIdCollection', $fields);
+        $this->assertArrayHasKey('termsOfServiceConsent', $fields);
+        $this->assertArrayHasKey('promotionsConsent', $fields);
+        $this->assertArrayHasKey('allowPromotionCodes', $fields);
         $this->assertArrayNotHasKey('projectField', $fields);
         $priceSource = $fields['priceSource'];
         $uiMode = $fields['uiMode'];
         $successDestination = $fields['successDestination'];
         $cancelDestination = $fields['cancelDestination'];
         $returnDestination = $fields['returnDestination'];
+        $billingAddressCollection = $fields['billingAddressCollection'];
+        $individualNameCollection = $fields['individualNameCollection'];
+        $businessNameCollection = $fields['businessNameCollection'];
+        $phoneNumberCollection = $fields['phoneNumberCollection'];
+        $taxIdCollection = $fields['taxIdCollection'];
+        $termsOfServiceConsent = $fields['termsOfServiceConsent'];
+        $promotionsConsent = $fields['promotionsConsent'];
+        $allowPromotionCodes = $fields['allowPromotionCodes'];
         $creationFailureRetentionDays = $fields['creationFailureRetentionDays'];
         $unpaidOrderRetentionDays = $fields['unpaidOrderRetentionDays'];
         $this->assertIsArray($priceSource);
@@ -392,11 +409,27 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertIsArray($successDestination);
         $this->assertIsArray($cancelDestination);
         $this->assertIsArray($returnDestination);
+        $this->assertIsArray($billingAddressCollection);
+        $this->assertIsArray($individualNameCollection);
+        $this->assertIsArray($businessNameCollection);
+        $this->assertIsArray($phoneNumberCollection);
+        $this->assertIsArray($taxIdCollection);
+        $this->assertIsArray($termsOfServiceConsent);
+        $this->assertIsArray($promotionsConsent);
+        $this->assertIsArray($allowPromotionCodes);
         $this->assertIsArray($creationFailureRetentionDays);
         $this->assertIsArray($unpaidOrderRetentionDays);
         $this->assertTrue($priceSource['required']);
         $this->assertSame('kirby', $priceSource['default']);
         $this->assertSame('hosted', $uiMode['default']);
+        $this->assertSame('auto', $billingAddressCollection['default']);
+        $this->assertSame('optional', $individualNameCollection['default']);
+        $this->assertSame('off', $businessNameCollection['default']);
+        $this->assertFalse($phoneNumberCollection['default']);
+        $this->assertSame('off', $taxIdCollection['default']);
+        $this->assertFalse($termsOfServiceConsent['default']);
+        $this->assertFalse($promotionsConsent['default']);
+        $this->assertFalse($allowPromotionCodes['default']);
         $this->assertSame(['uiMode' => 'hosted'], $successDestination['when']);
         $this->assertSame(['uiMode' => 'hosted'], $cancelDestination['when']);
         $this->assertSame(['uiMode' => 'embedded'], $returnDestination['when']);
@@ -458,10 +491,16 @@ final class PanelAreaTest extends KirbyTestCase
         $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
         $currency = Fields::for($page)->field('currency')->toArray();
         $shipping = Fields::for($page)->field('defaultRequiresShipping')->toArray();
+        $individualName = Fields::for($page)->field('individualNameCollection')->toArray();
+        $taxId = Fields::for($page)->field('taxIdCollection')->toArray();
         /** @var list<array{text: string, value: string}> $currencyOptions */
         $currencyOptions = $currency['options'];
         /** @var list<array{text: string, value: string}> $shippingOptions */
         $shippingOptions = $shipping['options'];
+        /** @var list<array{text: string, value: string}> $individualNameOptions */
+        $individualNameOptions = $individualName['options'];
+        /** @var list<array{text: string, value: string}> $taxIdOptions */
+        $taxIdOptions = $taxId['options'];
         $eur = array_values(array_filter(
             $currencyOptions,
             static fn(array $option): bool => $option['value'] === 'EUR',
@@ -471,6 +510,10 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertStringStartsWith('EUR — ', $eur[0]['text']);
         $this->assertSame(['Sim', 'Não'], array_column($shippingOptions, 'text'));
         $this->assertSame(['yes', 'no'], array_column($shippingOptions, 'value'));
+        $this->assertSame(['Desativado', 'Opcional', 'Obrigatório'], array_column($individualNameOptions, 'text'));
+        $this->assertSame(['off', 'optional', 'required'], array_column($individualNameOptions, 'value'));
+        $this->assertSame(['Desativada', 'Opcional', 'Obrigatória quando suportada'], array_column($taxIdOptions, 'text'));
+        $this->assertSame(['off', 'optional', 'required_if_supported'], array_column($taxIdOptions, 'value'));
     }
 
     /**

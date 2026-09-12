@@ -34,6 +34,7 @@
 - Keep runtime code independent from development-site fixtures and test support.
 - Do not add a new abstraction, adapter, dependency, or configuration option without a concrete use case.
 - Add concise class documentation when a class's responsibility is not immediately clear. Add inline comments only for non-obvious constraints, decisions, or edge cases.
+- When code enforces or depends on a non-obvious Stripe-owned limit or behavior, document the reason beside that code with a direct link to the relevant official Stripe reference. Avoid links for routine SDK mappings and avoid repeating the same reference without additional value.
 - In templates and snippets, add PHPDoc types for implicit Kirby or passed variables only when those variables are used.
 - Use the project's PHP-CS-Fixer and PHPStan configuration as the source of truth for formatting and static analysis.
 - Write multi-entry associative arrays with one keyed entry per line. Define literal arrays before `foreach` instead of declaring them inline in the loop header.

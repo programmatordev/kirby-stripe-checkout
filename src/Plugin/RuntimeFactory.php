@@ -230,7 +230,9 @@ final class RuntimeFactory
             return $this->configurationReport;
         }
 
-        $resolver = new ConfigurationResolver();
+        $resolver = new ConfigurationResolver(
+            languageCode: $this->kirby->language()?->code(),
+        );
         $phpReport = $resolver->resolve($options);
 
         if ($phpReport->isValid() === false) {

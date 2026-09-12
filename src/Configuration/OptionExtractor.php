@@ -16,7 +16,7 @@ final class OptionExtractor
 {
     private const PREFIX = 'programmatordev.stripe-checkout';
 
-    private const DOTTED_LEAVES = [
+    private const NON_SETTING_DOTTED_LEAVES = [
         'cart.enabled',
         'cart.renderer',
         'checkout.sessionRequestFactory',
@@ -32,17 +32,6 @@ final class OptionExtractor
         'products.fields.stripePrice',
         'products.fields.options',
         'products.resolver',
-        'settings.priceSource',
-        'settings.currency',
-        'settings.defaultRequiresShipping',
-        'settings.uiMode',
-        'settings.successDestination',
-        'settings.cancelDestination',
-        'settings.returnDestination',
-        'settings.cleanupCreationFailures',
-        'settings.creationFailureRetentionDays',
-        'settings.cleanupUnpaidOrders',
-        'settings.unpaidOrderRetentionDays',
         'stripe.publishableKey',
         'stripe.secretKey',
         'stripe.webhookSecret',
@@ -55,6 +44,7 @@ final class OptionExtractor
      */
     public function extract(#[SensitiveParameter] array $options): array
     {
+        $dottedLeaves = self::dottedLeaves();
         $root = array_key_exists(self::PREFIX, $options)
             ? $options[self::PREFIX]
             : [];
@@ -83,7 +73,7 @@ final class OptionExtractor
                 continue;
             }
 
-            if (in_array($path, self::DOTTED_LEAVES, true) === false) {
+            if (in_array($path, $dottedLeaves, true) === false) {
                 throw new ConfigurationException('configuration.option_unknown', $path);
             }
 
@@ -109,7 +99,7 @@ final class OptionExtractor
 
             $path = substr($key, strlen(self::PREFIX) + 1);
 
-            if (in_array($path, self::DOTTED_LEAVES, true) === false) {
+            if (in_array($path, $dottedLeaves, true) === false) {
                 throw new ConfigurationException('configuration.option_unknown', $path);
             }
 
@@ -122,6 +112,17 @@ final class OptionExtractor
         }
 
         return $root;
+    }
+
+    /** @return list<string> */
+    private static function dottedLeaves(): array
+    {
+        $settingLeaves = array_map(
+            static fn(string $name): string => 'settings.' . $name,
+            array_keys(Defaults::SETTINGS),
+        );
+
+        return [...self::NON_SETTING_DOTTED_LEAVES, ...$settingLeaves];
     }
 
     /**

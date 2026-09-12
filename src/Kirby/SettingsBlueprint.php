@@ -44,7 +44,7 @@ final class SettingsBlueprint
 
         // Use the same defaults for native Page creation and runtime fallbacks.
         foreach (Defaults::SETTINGS as $name => $default) {
-            if ($default !== null) {
+            if ($default !== null && is_array($settingsFields[$name] ?? null)) {
                 $settingsFields[$name]['default'] = $default;
             }
         }

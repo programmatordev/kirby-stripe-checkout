@@ -7,6 +7,9 @@ namespace ProgrammatorDev\StripeCheckout\Configuration;
 use Closure;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestFactoryInterface;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Collection\BillingAddressCollection;
+use ProgrammatorDev\StripeCheckout\Collection\CollectionMode;
+use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
@@ -33,24 +36,12 @@ final class ConfigurationResolver
         'options',
     ];
     private const PRODUCT_KEYS = ['fields', 'resolver'];
-    private const SETTINGS_KEYS = [
-        'priceSource',
-        'currency',
-        'defaultRequiresShipping',
-        'uiMode',
-        'successDestination',
-        'cancelDestination',
-        'returnDestination',
-        'cleanupCreationFailures',
-        'creationFailureRetentionDays',
-        'cleanupUnpaidOrders',
-        'unpaidOrderRetentionDays',
-    ];
     private const STRIPE_KEYS = ['publishableKey', 'secretKey', 'webhookSecret'];
 
     public function __construct(
         private readonly OptionExtractor $extractor = new OptionExtractor(),
         private readonly StripeCurrencyRegistry $currencies = new StripeCurrencyRegistry(),
+        private readonly ?string $languageCode = null,
     ) {}
 
     /**
@@ -384,7 +375,7 @@ final class ConfigurationResolver
         array $settings,
         ?PageSettings $pageSettings,
     ): Settings {
-        $this->assertKnownKeys($settings, self::SETTINGS_KEYS, 'settings');
+        $this->assertKnownKeys($settings, array_keys(Defaults::SETTINGS), 'settings');
 
         if (
             array_key_exists('priceSource', $settings)
@@ -451,6 +442,51 @@ final class ConfigurationResolver
             }
         }
 
+        $choiceSettings = [
+            'billingAddressCollection' => array_column(BillingAddressCollection::cases(), 'value'),
+            'individualNameCollection' => array_column(CollectionMode::cases(), 'value'),
+            'businessNameCollection' => array_column(CollectionMode::cases(), 'value'),
+            'taxIdCollection' => array_column(TaxIdCollection::cases(), 'value'),
+        ];
+
+        foreach ($choiceSettings as $name => $allowedValues) {
+            $value = $settings[$name] ?? null;
+
+            if ($value !== null && is_string($value) === false) {
+                throw new ConfigurationException('configuration.type_invalid', 'settings.' . $name);
+            }
+
+            if (is_string($value) && in_array($value, $allowedValues, true) === false) {
+                throw new ConfigurationException('configuration.value_invalid', 'settings.' . $name);
+            }
+        }
+
+        $booleanSettings = [
+            'phoneNumberCollection',
+            'termsOfServiceConsent',
+            'promotionsConsent',
+            'allowPromotionCodes',
+        ];
+
+        foreach ($booleanSettings as $name) {
+            if (
+                array_key_exists($name, $settings)
+                && $settings[$name] !== null
+                && is_bool($settings[$name]) === false
+            ) {
+                throw new ConfigurationException('configuration.type_invalid', 'settings.' . $name);
+            }
+        }
+
+        if (array_key_exists('customFields', $settings) && $settings['customFields'] !== null) {
+            if (is_array($settings['customFields']) === false) {
+                throw new ConfigurationException('configuration.type_invalid', 'settings.customFields');
+            }
+
+            $settings['customFields'] = (new CustomFieldFactory($this->languageCode))
+                ->normalize($settings['customFields']);
+        }
+
         $resolver = new OptionsResolver();
         $resolver->setDefaults([
             'priceSource' => null,
@@ -460,6 +496,15 @@ final class ConfigurationResolver
             'successDestination' => null,
             'cancelDestination' => null,
             'returnDestination' => null,
+            'billingAddressCollection' => null,
+            'individualNameCollection' => null,
+            'businessNameCollection' => null,
+            'phoneNumberCollection' => null,
+            'taxIdCollection' => null,
+            'termsOfServiceConsent' => null,
+            'promotionsConsent' => null,
+            'customFields' => null,
+            'allowPromotionCodes' => null,
         ]);
         $resolver->setAllowedTypes('priceSource', ['null', 'string']);
         $resolver->setAllowedTypes('currency', ['null', 'string']);
@@ -468,6 +513,15 @@ final class ConfigurationResolver
         $resolver->setAllowedTypes('successDestination', ['null', 'string']);
         $resolver->setAllowedTypes('cancelDestination', ['null', 'string']);
         $resolver->setAllowedTypes('returnDestination', ['null', 'string']);
+        $resolver->setAllowedTypes('billingAddressCollection', ['null', 'string']);
+        $resolver->setAllowedTypes('individualNameCollection', ['null', 'string']);
+        $resolver->setAllowedTypes('businessNameCollection', ['null', 'string']);
+        $resolver->setAllowedTypes('phoneNumberCollection', ['null', 'bool']);
+        $resolver->setAllowedTypes('taxIdCollection', ['null', 'string']);
+        $resolver->setAllowedTypes('termsOfServiceConsent', ['null', 'bool']);
+        $resolver->setAllowedTypes('promotionsConsent', ['null', 'bool']);
+        $resolver->setAllowedTypes('customFields', ['null', 'array']);
+        $resolver->setAllowedTypes('allowPromotionCodes', ['null', 'bool']);
         $resolver->setAllowedValues('priceSource', [
             null,
             PriceSource::Kirby->value,
@@ -478,6 +532,10 @@ final class ConfigurationResolver
             UiMode::Hosted->value,
             UiMode::Embedded->value,
         ]);
+
+        foreach ($choiceSettings as $name => $allowedValues) {
+            $resolver->setAllowedValues($name, [null, ...$allowedValues]);
+        }
 
         foreach (Defaults::RETENTION as $name => $default) {
             $value = $settings[$name] ?? null;
@@ -497,13 +555,25 @@ final class ConfigurationResolver
         /** @var array<string, mixed> $phpSettings */
         $phpSettings = $resolver->resolve($settings);
 
+        /** @var array<string, Setting> $effective */
         $effective = [];
 
         foreach (Defaults::SETTINGS as $name => $default) {
             $effective[$name] = $this->resolveSetting($phpSettings[$name], $pageSettings?->value($name), $default);
         }
 
-        return new Settings($effective);
+        $customFields = $effective['customFields']->value();
+
+        if (is_array($customFields) === false) {
+            throw new ConfigurationException('configuration.type_invalid', 'settings.customFields');
+        }
+
+        $customFieldFactory = new CustomFieldFactory($this->languageCode);
+
+        return new Settings(
+            settings: $effective,
+            customFields: $customFieldFactory->createAll($customFields),
+        );
     }
 
     private function resolveSetting(

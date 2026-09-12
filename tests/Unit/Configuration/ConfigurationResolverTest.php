@@ -8,6 +8,10 @@ use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestFactoryInterface;
+use ProgrammatorDev\StripeCheckout\Collection\BillingAddressCollection;
+use ProgrammatorDev\StripeCheckout\Collection\CollectionMode;
+use ProgrammatorDev\StripeCheckout\Collection\CustomFieldType;
+use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationReport;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
@@ -151,6 +155,15 @@ final class ConfigurationResolverTest extends TestCase
         $this->assertNull($settings->successDestination());
         $this->assertNull($settings->cancelDestination());
         $this->assertNull($settings->returnDestination());
+        $this->assertSame(BillingAddressCollection::Auto, $settings->billingAddressCollection());
+        $this->assertSame(CollectionMode::Optional, $settings->individualNameCollection());
+        $this->assertSame(CollectionMode::Off, $settings->businessNameCollection());
+        $this->assertFalse($settings->phoneNumberCollection());
+        $this->assertSame(TaxIdCollection::Off, $settings->taxIdCollection());
+        $this->assertFalse($settings->termsOfServiceConsent());
+        $this->assertFalse($settings->promotionsConsent());
+        $this->assertSame([], $settings->customFields());
+        $this->assertFalse($settings->allowPromotionCodes());
         $this->assertFalse($configuration->stripe()->hasSecretKey());
         $this->assertFalse($configuration->stripe()->hasPublishableKey());
         $this->assertFalse($configuration->stripe()->hasWebhookSecret());
@@ -197,6 +210,19 @@ final class ConfigurationResolverTest extends TestCase
             self::PREFIX . '.settings.successDestination' => '/complete',
             self::PREFIX . '.settings.cancelDestination' => '/cancel',
             self::PREFIX . '.settings.returnDestination' => '/return',
+            self::PREFIX . '.settings.billingAddressCollection' => 'required',
+            self::PREFIX . '.settings.individualNameCollection' => 'required',
+            self::PREFIX . '.settings.businessNameCollection' => 'optional',
+            self::PREFIX . '.settings.phoneNumberCollection' => true,
+            self::PREFIX . '.settings.taxIdCollection' => 'required_if_supported',
+            self::PREFIX . '.settings.termsOfServiceConsent' => true,
+            self::PREFIX . '.settings.promotionsConsent' => true,
+            self::PREFIX . '.settings.allowPromotionCodes' => true,
+            self::PREFIX . '.settings.customFields' => [[
+                'key' => 'reference',
+                'label' => 'Reference',
+                'type' => 'text',
+            ]],
             self::PREFIX . '.stripe.secretKey' => 'custom-server-key',
             self::PREFIX . '.stripe.publishableKey' => 'custom-public-key',
         ])->configurationOrFail();
@@ -208,6 +234,15 @@ final class ConfigurationResolverTest extends TestCase
         $this->assertSame('/complete', $configuration->settings()->successDestination());
         $this->assertSame('/cancel', $configuration->settings()->cancelDestination());
         $this->assertSame('/return', $configuration->settings()->returnDestination());
+        $this->assertSame(BillingAddressCollection::Required, $configuration->settings()->billingAddressCollection());
+        $this->assertSame(CollectionMode::Required, $configuration->settings()->individualNameCollection());
+        $this->assertSame(CollectionMode::Optional, $configuration->settings()->businessNameCollection());
+        $this->assertTrue($configuration->settings()->phoneNumberCollection());
+        $this->assertSame(TaxIdCollection::RequiredIfSupported, $configuration->settings()->taxIdCollection());
+        $this->assertTrue($configuration->settings()->termsOfServiceConsent());
+        $this->assertTrue($configuration->settings()->promotionsConsent());
+        $this->assertTrue($configuration->settings()->allowPromotionCodes());
+        $this->assertSame('reference', $configuration->settings()->customFields()[0]->key());
         $this->assertSame(CredentialMode::Unknown, $configuration->stripe()->secretKeyMode());
         $this->assertSame(CredentialMode::Unknown, $configuration->stripe()->publishableKeyMode());
     }
@@ -246,6 +281,141 @@ final class ConfigurationResolverTest extends TestCase
         $this->assertNotNull($setting);
         $this->assertSame(SettingSource::InternalDefault, $setting->source());
         $this->assertFalse($setting->isLocked());
+    }
+
+    public function testResolvesLocalizedCustomFieldsFromPhpConfiguration(): void
+    {
+        $settings = (new ConfigurationResolver(languageCode: 'pt'))->resolve([
+            self::PREFIX => [
+                'settings' => [
+                    'customFields' => [
+                        [
+                            'key' => 'nif',
+                            'label' => 'Tax number',
+                            'labels' => ['pt' => 'NIF'],
+                            'type' => 'text',
+                            'minimumLength' => 9,
+                            'maximumLength' => 9,
+                        ],
+                        [
+                            'key' => 'delivery',
+                            'label' => 'Delivery preference',
+                            'type' => 'dropdown',
+                            'required' => true,
+                            'defaultValue' => 'morning',
+                            'options' => [
+                                [
+                                    'value' => 'morning',
+                                    'label' => 'Morning',
+                                    'labels' => ['pt' => 'Manhã'],
+                                ],
+                                [
+                                    'value' => 'afternoon',
+                                    'label' => 'Afternoon',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ])->configurationOrFail()->settings();
+        $fields = $settings->customFields();
+
+        $this->assertCount(2, $fields);
+        $this->assertSame('nif', $fields[0]->key());
+        $this->assertSame('NIF', $fields[0]->label());
+        $this->assertSame(CustomFieldType::Text, $fields[0]->type());
+        $this->assertFalse($fields[0]->isRequired());
+        $this->assertSame(9, $fields[0]->minimumLength());
+        $this->assertSame(9, $fields[0]->maximumLength());
+        $this->assertSame('Manhã', $fields[1]->options()[0]->label());
+        $this->assertSame('Afternoon', $fields[1]->options()[1]->label());
+        $this->assertSame('morning', $fields[1]->defaultValue());
+        $customFieldSetting = $settings->setting('customFields');
+        $this->assertNotNull($customFieldSetting);
+        $this->assertTrue($customFieldSetting->isLocked());
+        $rawFields = $customFieldSetting->value();
+        $this->assertIsArray($rawFields);
+        $rawField = $rawFields[0] ?? null;
+        $this->assertIsArray($rawField);
+        $this->assertSame('Tax number', $rawField['label'] ?? null);
+    }
+
+    #[DataProvider('invalidCollectionSettingProvider')]
+    public function testRejectsInvalidCollectionSettings(string $name, mixed $value): void
+    {
+        $report = $this->resolve([
+            self::PREFIX => ['settings' => [$name => $value]],
+        ]);
+
+        $this->assertFalse($report->isValid());
+        $this->assertSame('settings.' . $name, $report->error()?->path());
+    }
+
+    /** @return iterable<string, array{string, mixed}> */
+    public static function invalidCollectionSettingProvider(): iterable
+    {
+        yield 'billing type' => ['billingAddressCollection', true];
+        yield 'billing value' => ['billingAddressCollection', 'optional'];
+        yield 'individual name' => ['individualNameCollection', 'auto'];
+        yield 'business name' => ['businessNameCollection', 1];
+        yield 'phone' => ['phoneNumberCollection', 'true'];
+        yield 'tax ID' => ['taxIdCollection', 'required'];
+        yield 'terms' => ['termsOfServiceConsent', 1];
+        yield 'promotions consent' => ['promotionsConsent', 'false'];
+        yield 'promotion codes' => ['allowPromotionCodes', 0];
+    }
+
+    /** @param array<mixed, mixed> $customFields */
+    #[DataProvider('invalidCustomFieldsProvider')]
+    public function testRejectsInvalidCustomFieldConfiguration(array $customFields): void
+    {
+        $report = $this->resolve([
+            self::PREFIX => ['settings' => ['customFields' => $customFields]],
+        ]);
+
+        $this->assertFalse($report->isValid());
+        $this->assertStringStartsWith('settings.customFields', $report->error()?->path() ?? '');
+    }
+
+    /** @return iterable<string, array{array<mixed, mixed>}> */
+    public static function invalidCustomFieldsProvider(): iterable
+    {
+        $text = [
+            'key' => 'reference',
+            'label' => 'Reference',
+            'type' => 'text',
+        ];
+        $dropdown = [
+            'key' => 'delivery',
+            'label' => 'Delivery',
+            'type' => 'dropdown',
+            'options' => [
+                [
+                    'value' => 'morning',
+                    'label' => 'Morning',
+                ],
+            ],
+        ];
+
+        yield 'map instead of list' => [['field' => $text]];
+        yield 'more than three' => [[
+            $text,
+            [...$text, 'key' => 'second'],
+            [...$text, 'key' => 'third'],
+            [...$text, 'key' => 'fourth'],
+        ]];
+        yield 'missing key' => [[array_diff_key($text, ['key' => true])]];
+        yield 'uppercase key' => [[[...$text, 'key' => 'Reference']]];
+        yield 'duplicate key' => [[$text, $text]];
+        yield 'unknown type' => [[[...$text, 'type' => 'date']]];
+        yield 'invalid required type' => [[[...$text, 'required' => 'yes']]];
+        yield 'reversed bounds' => [[[...$text, 'minimumLength' => 10, 'maximumLength' => 5]]];
+        yield 'options on text' => [[[...$text, 'options' => $dropdown['options']]]];
+        yield 'empty dropdown' => [[[...$dropdown, 'options' => []]]];
+        yield 'unknown default' => [[[...$dropdown, 'defaultValue' => 'evening']]];
+        yield 'invalid translated labels' => [[[...$text, 'labels' => ['invalid code' => 'Referência']]]];
+        yield 'unknown property' => [[[...$text, 'placeholder' => 'Optional']]];
     }
 
     public function testResolvesProductDefaultsAndDottedFieldOverrides(): void
@@ -643,6 +813,15 @@ final class ConfigurationResolverTest extends TestCase
                 'successDestination',
                 'cancelDestination',
                 'returnDestination',
+                'billingAddressCollection',
+                'individualNameCollection',
+                'businessNameCollection',
+                'phoneNumberCollection',
+                'taxIdCollection',
+                'termsOfServiceConsent',
+                'promotionsConsent',
+                'customFields',
+                'allowPromotionCodes',
                 'cleanupCreationFailures',
                 'creationFailureRetentionDays',
                 'cleanupUnpaidOrders',

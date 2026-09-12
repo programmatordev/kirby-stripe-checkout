@@ -50,6 +50,8 @@ The Settings tab currently contains:
 - `defaultRequiresShipping`: the fallback used when a product does not declare whether it needs shipping;
 - `uiMode`: `hosted` (the default) or `embedded`;
 - translated success, cancellation, and embedded-return destinations;
+- billing-address, individual-name, business-name, phone, tax-ID and consent collection;
+- customer-entered promotion codes;
 - [order retention preferences](#order-retention), with separate controls for failed attempts and unpaid orders.
 
 The protected Page is created with `kirby` as its saved price source, so a fresh installation does not require an initial save for that deterministic default. The plugin does not guess a currency or whether products are physical. It can boot with those two fields empty so the Panel and diagnostics remain available, but the Settings tab asks the operator to select both values.
@@ -69,6 +71,14 @@ return [
             'successDestination' => 'page://thanks-page-uuid',
             'cancelDestination' => '/cart',
             'returnDestination' => '/checkout',
+            'billingAddressCollection' => 'auto',
+            'individualNameCollection' => 'optional',
+            'businessNameCollection' => 'off',
+            'phoneNumberCollection' => false,
+            'taxIdCollection' => 'off',
+            'termsOfServiceConsent' => false,
+            'promotionsConsent' => false,
+            'allowPromotionCodes' => false,
         ],
     ],
 ];
@@ -80,7 +90,31 @@ The Panel shows success and cancellation destinations for hosted Checkout, and t
 
 Live Stripe credentials require HTTPS destinations, except for local hosts such as DDEV. Query strings are retained and fragments are removed. Destination values come only from trusted Settings or PHP configuration; they are never accepted from the Checkout form body.
 
-These values are available through Settings now. The current package does not yet expose the Checkout creation operation that consumes them.
+These destination values are available through Settings now. The current package does not yet expose a public Checkout endpoint that consumes them.
+
+The collection controls are independent. Tax-ID collection does not enable Automatic Tax, and billing-address collection set to `auto` does not promise a complete address. The defaults match Stripe's disabled or automatic behavior except for the individual name, which this plugin asks for optionally by default. Enabling phone collection makes the field required in Stripe Checkout. Terms acceptance requires the store's terms URL to be configured in Stripe. Stripe currently restricts promotional-email consent to eligible US merchants.
+
+Stripe Checkout supports at most three custom fields. They can currently be defined through PHP. Their stable keys and dropdown values use lowercase letters and numbers; labels can provide language-specific overrides keyed by Kirby language code:
+
+```php
+'settings' => [
+    'customFields' => [
+        [
+            'key' => 'nif',
+            'label' => 'Tax number',
+            'labels' => ['pt' => 'NIF'],
+            'type' => 'text',
+            'required' => false,
+            'minimumLength' => 9,
+            'maximumLength' => 9,
+        ],
+    ],
+],
+```
+
+Supported types are `text`, `numeric`, and `dropdown`. Dropdowns require between one and 200 options, each with a stable `value`, fallback `label`, and optional `labels`. Custom fields must not request card or bank details, passwords, health information, or other sensitive data prohibited by Stripe or applicable law. The Settings Panel exposes the scalar collection controls; custom-field definitions currently use PHP configuration and do not appear in the Panel.
+
+The collection and promotion settings are validated and available through the Settings API. They are not added to Checkout Session requests by the current implementation yet.
 
 Fully dotted Kirby option keys are accepted, but defining the same logical option in nested and dotted forms is an error.
 
@@ -107,6 +141,15 @@ $settings->uiMode(); // UiMode::Hosted or UiMode::Embedded
 $settings->successDestination(); // Page reference, URL, or null
 $settings->cancelDestination(); // Page reference, URL, or null
 $settings->returnDestination(); // Page reference, URL, or null
+$settings->billingAddressCollection(); // BillingAddressCollection enum
+$settings->individualNameCollection(); // CollectionMode enum
+$settings->businessNameCollection(); // CollectionMode enum
+$settings->phoneNumberCollection(); // boolean
+$settings->taxIdCollection(); // TaxIdCollection enum
+$settings->termsOfServiceConsent(); // boolean
+$settings->promotionsConsent(); // boolean
+$settings->customFields(); // list of CustomField values
+$settings->allowPromotionCodes(); // boolean
 
 $priceSource = $settings->setting('priceSource');
 $priceSource?->value();
