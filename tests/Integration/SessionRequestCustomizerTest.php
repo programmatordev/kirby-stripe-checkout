@@ -20,27 +20,41 @@ use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
+use RuntimeException;
 
 final class SessionRequestCustomizerTest extends KirbyTestCase
 {
-    public function testKirbyAppliesMultipleParameterFiltersSequentially(): void
+    public function testKirbyAppliesCompleteParameterFiltersSequentially(): void
     {
         $expectedContext = $this->context();
         $seenContext = null;
+        $secondHandlerValue = null;
         $this->restart(hooks: [
             SessionRequestCustomizer::FILTER => [
                 function (array $parameters, SessionRequestContext $context) use (&$seenContext): array {
                     $seenContext = $context;
+                    $metadata = $parameters['metadata'] ?? null;
 
-                    return [
-                        ...$parameters,
-                        'metadata' => ['warehouse' => 'west'],
-                    ];
+                    if (is_array($metadata) === false) {
+                        throw new RuntimeException('Expected Session metadata.');
+                    }
+
+                    $metadata['sales_channel'] = 'website';
+                    $parameters['metadata'] = $metadata;
+
+                    return $parameters;
                 },
-                function (array $parameters): array {
-                    $parameters['payment_intent_data'] = [
-                        'description' => 'Project order',
-                    ];
+                function (array $parameters) use (&$secondHandlerValue): array {
+                    $metadata = $parameters['metadata'] ?? null;
+                    $paymentIntentData = $parameters['payment_intent_data'] ?? null;
+
+                    if (is_array($metadata) === false || is_array($paymentIntentData) === false) {
+                        throw new RuntimeException('Expected Session request maps.');
+                    }
+
+                    $secondHandlerValue = $metadata['sales_channel'] ?? null;
+                    $paymentIntentData['description'] = 'Project order';
+                    $parameters['payment_intent_data'] = $paymentIntentData;
 
                     return $parameters;
                 },
@@ -51,53 +65,49 @@ final class SessionRequestCustomizerTest extends KirbyTestCase
             ->customize($expectedContext, $this->standardRequest())
             ->parameters();
 
-        $this->assertIsArray($parameters['metadata']);
-        $this->assertIsArray($parameters['payment_intent_data']);
         $this->assertSame($expectedContext, $seenContext);
-        $this->assertSame('west', $parameters['metadata']['warehouse'] ?? null);
-        $this->assertSame('Project order', $parameters['payment_intent_data']['description'] ?? null);
+        $this->assertSame('website', $secondHandlerValue);
+        $metadata = $parameters['metadata'] ?? null;
+        $paymentIntentData = $parameters['payment_intent_data'] ?? null;
+        $this->assertIsArray($metadata);
+        $this->assertIsArray($paymentIntentData);
+        $this->assertSame('website', $metadata['sales_channel'] ?? null);
+        $this->assertSame('Project order', $paymentIntentData['description'] ?? null);
     }
 
-    public function testAdvancedFactoryCanCustomizeNonProtectedConstruction(): void
+    public function testFilterCanChangeSettingsValuesAndStripeOwnedParameters(): void
     {
-        $context = $this->context();
-        $request = $this->standardRequest();
-        $factory = static function (
-            SessionRequestContext $receivedContext,
-            SessionRequest $receivedRequest,
-        ) use ($context, $request): SessionRequest {
-            self::assertSame($context, $receivedContext);
-            self::assertSame($request, $receivedRequest);
-            $parameters = $receivedRequest->parameters();
-            $parameters['automatic_tax'] = ['enabled' => true];
+        $this->restart(hooks: [
+            SessionRequestCustomizer::FILTER => function (array $parameters): array {
+                $parameters['billing_address_collection'] = 'required';
+                $parameters['discounts'] = [['promotion_code' => 'promo_test']];
+                unset($parameters['allow_promotion_codes']);
 
-            return new SessionRequest($parameters);
-        };
+                return $parameters;
+            },
+        ]);
+        $request = $this->standardRequest([
+            'allow_promotion_codes' => true,
+            'billing_address_collection' => 'auto',
+        ]);
 
         $parameters = (new SessionRequestCustomizer($this->kirby))
-            ->customize($context, $request, $factory)
+            ->customize($this->context(), $request)
             ->parameters();
 
-        $this->assertSame(['enabled' => true], $parameters['automatic_tax'] ?? null);
+        $this->assertSame('required', $parameters['billing_address_collection'] ?? null);
+        $this->assertSame([['promotion_code' => 'promo_test']], $parameters['discounts'] ?? null);
+        $this->assertArrayNotHasKey('allow_promotion_codes', $parameters);
     }
 
-    public function testRuntimeUsesTheConfiguredSessionRequestFactory(): void
+    public function testRuntimeUsesTheRegisteredSessionParametersFilter(): void
     {
-        $factory = static function (
-            SessionRequestContext $context,
-            SessionRequest $request,
-        ): SessionRequest {
-            $parameters = $request->parameters();
-            $parameters['branding_settings'] = [
-                'display_name' => 'Example Store',
-            ];
+        $this->restart(hooks: [
+            SessionRequestCustomizer::FILTER => function (array $parameters): array {
+                $parameters['branding_settings'] = ['display_name' => 'Example Store'];
 
-            return new SessionRequest($parameters);
-        };
-        $this->restart(options: [
-            'programmatordev.stripe-checkout' => [
-                'checkout' => ['sessionRequestFactory' => $factory],
-            ],
+                return $parameters;
+            },
         ]);
 
         $parameters = (new RuntimeFactory($this->kirby))
@@ -110,46 +120,10 @@ final class SessionRequestCustomizerTest extends KirbyTestCase
         );
     }
 
-    public function testFactoryReceivesParametersFromAdditiveFilters(): void
-    {
-        $this->restart(hooks: [
-            SessionRequestCustomizer::FILTER => fn(array $parameters): array => [
-                ...$parameters,
-                'metadata' => ['sales_channel' => 'website'],
-            ],
-        ]);
-        $factory = static function (
-            SessionRequestContext $context,
-            SessionRequest $request,
-        ): SessionRequest {
-            $parameters = $request->parameters();
-            $metadata = $parameters['metadata'] ?? null;
-            self::assertIsArray($metadata);
-            self::assertSame('website', $metadata['sales_channel'] ?? null);
-            $metadata['sales_channel'] = 'factory';
-            $parameters['metadata'] = $metadata;
-            $parameters['branding_settings'] = ['display_name' => 'Example Store'];
-
-            return new SessionRequest($parameters);
-        };
-
-        $parameters = (new SessionRequestCustomizer($this->kirby))
-            ->customize($this->context(), $this->standardRequest(), $factory)
-            ->parameters();
-
-        $metadata = $parameters['metadata'] ?? null;
-        $this->assertIsArray($metadata);
-        $this->assertSame('factory', $metadata['sales_channel'] ?? null);
-        $this->assertSame(
-            ['display_name' => 'Example Store'],
-            $parameters['branding_settings'] ?? null,
-        );
-    }
-
     public function testInvalidFilterResultIsWrappedSafely(): void
     {
         $this->restart(hooks: [
-            SessionRequestCustomizer::FILTER => fn(): string => 'invalid',
+            SessionRequestCustomizer::FILTER => fn(): string => 'private request body',
         ]);
 
         try {
@@ -159,23 +133,28 @@ final class SessionRequestCustomizerTest extends KirbyTestCase
             );
             $this->fail('Expected the filter result to be rejected.');
         } catch (InvalidSessionRequestException $error) {
-            $this->assertSame('session_request.additions_invalid', $error->errorCode());
+            $this->assertSame('session_request.filter_invalid', $error->errorCode());
             $this->assertNull($error->path());
+            $this->assertStringNotContainsString('private request body', $error->getMessage());
         }
     }
 
-    public function testInvalidFactoryResultIsRejectedSafely(): void
+    public function testFilterExceptionIsWrappedSafely(): void
     {
+        $this->restart(hooks: [
+            SessionRequestCustomizer::FILTER => fn(array $parameters): never => throw new RuntimeException('private value'),
+        ]);
+
         try {
             (new SessionRequestCustomizer($this->kirby))->customize(
                 $this->context(),
                 $this->standardRequest(),
-                fn(): string => 'private request body',
             );
-            $this->fail('Expected the factory result to be rejected.');
+            $this->fail('Expected the filter exception to be wrapped.');
         } catch (InvalidSessionRequestException $error) {
-            $this->assertSame('session_request.factory_invalid', $error->errorCode());
-            $this->assertStringNotContainsString('private request body', $error->getMessage());
+            $this->assertSame('session_request.filter_failed', $error->errorCode());
+            $this->assertNull($error->path());
+            $this->assertStringNotContainsString('private value', $error->getMessage());
         }
     }
 
@@ -211,7 +190,8 @@ final class SessionRequestCustomizerTest extends KirbyTestCase
         );
     }
 
-    private function standardRequest(): SessionRequest
+    /** @param array<string, mixed> $overrides */
+    private function standardRequest(array $overrides = []): SessionRequest
     {
         return new SessionRequest([
             'cancel_url' => 'https://example.com/stripe-checkout/cancel',
@@ -246,6 +226,7 @@ final class SessionRequestCustomizerTest extends KirbyTestCase
             ],
             'success_url' => 'https://example.com/stripe-checkout/success?session_id={CHECKOUT_SESSION_ID}',
             'ui_mode' => 'hosted_page',
+            ...$overrides,
         ]);
     }
 

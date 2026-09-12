@@ -19,7 +19,6 @@ final class OptionExtractor
     private const NON_SETTING_DOTTED_LEAVES = [
         'cart.enabled',
         'cart.renderer',
-        'checkout.sessionRequestFactory',
         'housekeeping.intervalHours',
         'housekeeping.batchSize',
         'orders.numberFormatter',

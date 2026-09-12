@@ -206,7 +206,6 @@ final class RuntimeFactory
         return (new SessionRequestCustomizer($this->kirby))->customize(
             $context,
             $request,
-            $configuration->sessionRequestFactory(),
         );
     }
 
@@ -219,7 +218,7 @@ final class RuntimeFactory
             requestContextFactory: new SessionRequestContextFactory($this->kirby),
             orderPageStore: new OrderPageStore($this->kirby),
             sessionGateway: $this->checkoutSessionGateway(),
-            sessionRequestFactory: fn(SessionRequestContext $context): SessionRequest => $this->checkoutSessionRequest($context),
+            prepareSessionRequest: fn(SessionRequestContext $context): SessionRequest => $this->checkoutSessionRequest($context),
             stripeApiVersion: ApiVersion::CURRENT,
         );
     }

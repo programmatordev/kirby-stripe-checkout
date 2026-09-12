@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Configuration;
 
-use Closure;
-use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestFactoryInterface;
-
 /**
  * Carries normalized configuration inside one operation-scoped service graph.
  *
@@ -25,7 +22,6 @@ final class Configuration
         private readonly ProductConfiguration $products,
         private readonly bool $cartEnabled,
         private readonly array $housekeeping,
-        private readonly SessionRequestFactoryInterface|Closure|null $sessionRequestFactory,
     ) {}
 
     public function settings(): Settings
@@ -58,10 +54,5 @@ final class Configuration
     public function translations(): array
     {
         return $this->translations;
-    }
-
-    public function sessionRequestFactory(): SessionRequestFactoryInterface|Closure|null
-    {
-        return $this->sessionRequestFactory;
     }
 }

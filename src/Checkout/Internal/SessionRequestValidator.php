@@ -4,26 +4,13 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
-use InvalidArgumentException;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\InvalidSessionRequestException;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 
-/** Enforces the payment, navigation, currency, and correlation safety floor. */
+/** Validates supported parameters and the invariants required by the Checkout lifecycle. */
 final class SessionRequestValidator
 {
     private const PRIVATE_METADATA_PREFIX = 'kirby_stripe_checkout_';
-
-    private const MAX_METADATA_ENTRIES = 50;
-
-    private const MAX_METADATA_KEY_LENGTH = 40;
-
-    private const MAX_METADATA_VALUE_LENGTH = 500;
-
-    private const ADDITIVE_PAYMENT_INTENT_FIELDS = [
-        'description',
-        'receipt_email',
-        'statement_descriptor_suffix',
-    ];
 
     private const PROTECTED_TOP_LEVEL_FIELDS = [
         'client_reference_id',
@@ -35,88 +22,50 @@ final class SessionRequestValidator
         'ui_mode',
     ];
 
-    // These parameters alter flows the current order and reconciliation models
-    // do not yet represent, so even the advanced factory cannot enable them.
-    private const UNSUPPORTED_TOP_LEVEL_FIELDS = [
+    /**
+     * Provider-managed state that the current Order model cannot reconcile yet.
+     *
+     * Adaptive pricing needs presentment snapshots; recovery can create another
+     * Session; optional items can change saved lines; server-only shipping needs
+     * a Session update flow; and saved methods need an explicit customer/consent
+     * contract. Managed Payments changes the merchant-of-record model entirely.
+     *
+     * @see https://docs.stripe.com/payments/currencies/localize-prices/adaptive-pricing
+     * @see https://docs.stripe.com/payments/checkout/abandoned-carts
+     * @see https://docs.stripe.com/payments/checkout/optional-items
+     * @see https://docs.stripe.com/payments/checkout/custom-shipping-options
+     * @see https://docs.stripe.com/payments/checkout/save-during-payment
+     * @see https://docs.stripe.com/payments/managed-payments
+     */
+    private const PROHIBITED_TOP_LEVEL_FIELDS = [
         'adaptive_pricing',
         'after_expiration',
-        'customer',
-        'customer_account',
-        'customer_creation',
-        'customer_email',
-        'customer_update',
-        'excluded_payment_method_types',
         'managed_payments',
         'optional_items',
-        'origin_context',
-        'payment_method_collection',
-        'payment_method_configuration',
-        'payment_method_data',
-        'payment_method_types',
         'permissions',
         'saved_payment_method_options',
-        'setup_intent_data',
-        'subscription_data',
     ];
 
-    // Reject the same unsupported capabilities wherever Stripe nests them.
-    private const UNSUPPORTED_NESTED_FIELDS = [
-        'adjustable_quantity',
+    /** Settlement, capture and future-use paths outside the current payment lifecycle. */
+    private const PROHIBITED_PAYMENT_INTENT_FIELDS = [
         'application_fee_amount',
         'application_fee_percent',
         'capture_method',
-        'currency_options',
-        'issuer',
-        'liability',
         'on_behalf_of',
-        'recurring',
         'setup_future_usage',
         'transfer_data',
         'transfer_group',
     ];
 
-    /** @param array<mixed, mixed> $additions */
-    public function applyAdditions(SessionRequest $request, array $additions): SessionRequest
-    {
-        $parameters = $request->parameters();
+    /** Payment-method-specific forms of unsupported capture and future-use behavior. */
+    private const PROHIBITED_PAYMENT_METHOD_OPTION_FIELDS = [
+        'capture_method',
+        'setup_future_usage',
+    ];
 
-        foreach ($additions as $field => $value) {
-            if (is_string($field) === false || $field === '') {
-                throw new InvalidSessionRequestException('session_request.additions_invalid');
-            }
-
-            if ($field === 'metadata') {
-                $parameters['metadata'] = $this->addMetadata(
-                    $parameters['metadata'] ?? null,
-                    $value,
-                    'metadata',
-                );
-
-                continue;
-            }
-
-            if ($field === 'payment_intent_data') {
-                $parameters['payment_intent_data'] = $this->addPaymentIntentData(
-                    $parameters['payment_intent_data'] ?? null,
-                    $value,
-                );
-
-                continue;
-            }
-
-            if (array_key_exists($field, $parameters)) {
-                throw new InvalidSessionRequestException('session_request.parameter_protected', $field);
-            }
-
-            throw new InvalidSessionRequestException('session_request.parameter_unsupported', $field);
-        }
-
-        try {
-            return $this->validate($request, new SessionRequest($parameters));
-        } catch (InvalidArgumentException $error) {
-            throw new InvalidSessionRequestException('session_request.additions_invalid', previous: $error);
-        }
-    }
+    public function __construct(
+        private readonly SupportedSessionParametersValidator $supportedParameters = new SupportedSessionParametersValidator(),
+    ) {}
 
     public function validate(SessionRequest $request, SessionRequest $customizedRequest): SessionRequest
     {
@@ -128,114 +77,13 @@ final class SessionRequestValidator
         }
 
         $this->validateNavigation($expected, $parameters);
-        $this->validateUnsupportedFields($parameters);
+        $this->validateProhibitedParameters($parameters);
         $this->validateMetadata($expected, $parameters);
         $this->validateLineItems($expected, $parameters);
         $this->validatePrivateMetadataLocations($parameters);
+        $this->supportedParameters->validate($parameters);
 
         return $customizedRequest;
-    }
-
-    /** @return array<string, mixed> */
-    private function addMetadata(mixed $current, mixed $additions, string $path): array
-    {
-        if (
-            is_array($current) === false
-            || array_is_list($current)
-            || is_array($additions) === false
-            || ($additions !== [] && array_is_list($additions))
-        ) {
-            throw new InvalidSessionRequestException('session_request.additions_invalid', $path);
-        }
-
-        foreach ($additions as $key => $value) {
-            $fieldPath = $path . '.' . (string) $key;
-
-            if (
-                is_string($key) === false
-                || $key === ''
-                || is_string($value) === false
-                || str_starts_with($key, self::PRIVATE_METADATA_PREFIX)
-            ) {
-                throw new InvalidSessionRequestException('session_request.additions_invalid', $fieldPath);
-            }
-
-            if (array_key_exists($key, $current)) {
-                throw new InvalidSessionRequestException('session_request.parameter_protected', $fieldPath);
-            }
-
-            $current[$key] = $value;
-        }
-
-        /** @var array<string, mixed> $current */
-        $this->validateMetadataValues($current, $path, 'session_request.additions_invalid');
-
-        return $current;
-    }
-
-    /** @return array<string, mixed> */
-    private function addPaymentIntentData(mixed $current, mixed $additions): array
-    {
-        if (
-            is_array($current) === false
-            || array_is_list($current)
-            || is_array($additions) === false
-            || ($additions !== [] && array_is_list($additions))
-        ) {
-            throw new InvalidSessionRequestException(
-                'session_request.additions_invalid',
-                'payment_intent_data',
-            );
-        }
-
-        foreach ($additions as $field => $value) {
-            $path = 'payment_intent_data.' . (string) $field;
-
-            if (is_string($field) === false || $field === '') {
-                throw new InvalidSessionRequestException('session_request.additions_invalid', $path);
-            }
-
-            if ($field === 'metadata') {
-                $current['metadata'] = $this->addMetadata(
-                    $current['metadata'] ?? null,
-                    $value,
-                    $path,
-                );
-
-                continue;
-            }
-
-            if (array_key_exists($field, $current)) {
-                throw new InvalidSessionRequestException('session_request.parameter_protected', $path);
-            }
-
-            if (in_array($field, self::ADDITIVE_PAYMENT_INTENT_FIELDS, true) === false) {
-                throw new InvalidSessionRequestException('session_request.parameter_unsupported', $path);
-            }
-
-            if (is_string($value) === false || $value === '') {
-                throw new InvalidSessionRequestException('session_request.additions_invalid', $path);
-            }
-
-            if ($field === 'receipt_email' && filter_var($value, FILTER_VALIDATE_EMAIL) === false) {
-                throw new InvalidSessionRequestException('session_request.additions_invalid', $path);
-            }
-
-            $valueLength = grapheme_strlen($value);
-
-            if (
-                $field === 'statement_descriptor_suffix'
-                && $valueLength !== false
-                && $valueLength > 22
-            ) {
-                throw new InvalidSessionRequestException('session_request.additions_invalid', $path);
-            }
-
-            $current[$field] = $value;
-        }
-
-        /** @var array<string, mixed> $current */
-        return $current;
     }
 
     /**
@@ -265,35 +113,43 @@ final class SessionRequestValidator
     }
 
     /** @param array<string, mixed> $parameters */
-    private function validateUnsupportedFields(array $parameters): void
+    private function validateProhibitedParameters(array $parameters): void
     {
-        foreach (self::UNSUPPORTED_TOP_LEVEL_FIELDS as $field) {
-            if (array_key_exists($field, $parameters)) {
-                throw new InvalidSessionRequestException('session_request.parameter_unsupported', $field);
+        foreach (self::PROHIBITED_TOP_LEVEL_FIELDS as $field) {
+            $this->assertAbsent($parameters, $field, $field);
+        }
+
+        $paymentIntentData = $parameters['payment_intent_data'] ?? null;
+
+        if (is_array($paymentIntentData) && array_is_list($paymentIntentData) === false) {
+            foreach (self::PROHIBITED_PAYMENT_INTENT_FIELDS as $field) {
+                $this->assertAbsent(
+                    $paymentIntentData,
+                    $field,
+                    'payment_intent_data.' . $field,
+                );
             }
         }
 
-        $this->findUnsupportedNestedField($parameters);
-    }
+        $automaticTax = $parameters['automatic_tax'] ?? null;
 
-    /** @param array<mixed, mixed> $values */
-    private function findUnsupportedNestedField(array $values, string $path = ''): void
-    {
-        foreach ($values as $field => $value) {
-            $field = (string) $field;
-            $fieldPath = $path === '' ? $field : $path . '.' . $field;
+        if (is_array($automaticTax) && array_is_list($automaticTax) === false) {
+            $this->assertAbsent($automaticTax, 'liability', 'automatic_tax.liability');
+        }
 
-            if (in_array($field, self::UNSUPPORTED_NESTED_FIELDS, true)) {
-                throw new InvalidSessionRequestException('session_request.parameter_unsupported', $fieldPath);
-            }
+        $paymentMethodOptions = $parameters['payment_method_options'] ?? null;
 
-            // Metadata keys are project vocabulary, not Stripe request paths.
-            if ($field === 'metadata') {
-                continue;
-            }
-
-            if (is_array($value)) {
-                $this->findUnsupportedNestedField($value, $fieldPath);
+        if (is_array($paymentMethodOptions) && array_is_list($paymentMethodOptions) === false) {
+            foreach ($paymentMethodOptions as $paymentMethod => $options) {
+                if (is_array($options) && array_is_list($options) === false) {
+                    foreach (self::PROHIBITED_PAYMENT_METHOD_OPTION_FIELDS as $field) {
+                        $this->assertAbsent(
+                            $options,
+                            $field,
+                            'payment_method_options.' . (string) $paymentMethod . '.' . $field,
+                        );
+                    }
+                }
             }
         }
     }
@@ -313,7 +169,12 @@ final class SessionRequestValidator
         $expectedPaymentIntent = $expected['payment_intent_data'] ?? null;
         $paymentIntent = $parameters['payment_intent_data'] ?? null;
 
-        if (is_array($expectedPaymentIntent) === false || is_array($paymentIntent) === false) {
+        if (
+            is_array($expectedPaymentIntent) === false
+            || array_is_list($expectedPaymentIntent)
+            || is_array($paymentIntent) === false
+            || array_is_list($paymentIntent)
+        ) {
             throw new InvalidSessionRequestException(
                 'session_request.invariant_violation',
                 'payment_intent_data',
@@ -357,6 +218,7 @@ final class SessionRequestValidator
             /** @var array<string, mixed> $expectedLine */
             /** @var array<string, mixed> $line */
             $this->assertSame($expectedLine, $line, 'quantity', $path . '.quantity');
+            $this->assertAbsent($line, 'adjustable_quantity', $path . '.adjustable_quantity');
             $this->assertProtectedMetadata(
                 $expectedLine['metadata'] ?? null,
                 $line['metadata'] ?? null,
@@ -390,6 +252,8 @@ final class SessionRequestValidator
             /** @var array<string, mixed> $price */
             $this->assertSame($expectedPrice, $price, 'currency', $path . '.price_data.currency');
             $this->assertSame($expectedPrice, $price, 'unit_amount', $path . '.price_data.unit_amount');
+            $this->assertAbsent($price, 'currency_options', $path . '.price_data.currency_options');
+            $this->assertAbsent($price, 'recurring', $path . '.price_data.recurring');
 
             if (array_key_exists('price', $line)) {
                 throw new InvalidSessionRequestException('session_request.invariant_violation', $path . '.price');
@@ -433,33 +297,6 @@ final class SessionRequestValidator
                 );
             }
         }
-
-        /** @var array<string, mixed> $actual */
-        $this->validateMetadataValues($actual, $path, 'session_request.invariant_violation');
-    }
-
-    /** @param array<string, mixed> $metadata */
-    private function validateMetadataValues(array $metadata, string $path, string $errorCode): void
-    {
-        if (count($metadata) > self::MAX_METADATA_ENTRIES) {
-            throw new InvalidSessionRequestException($errorCode, $path);
-        }
-
-        foreach ($metadata as $key => $value) {
-            $keyLength = grapheme_strlen($key);
-            $valueLength = is_string($value) ? grapheme_strlen($value) : false;
-
-            if (
-                $key === ''
-                || ($keyLength !== false && $keyLength > self::MAX_METADATA_KEY_LENGTH)
-                || str_contains($key, '[')
-                || str_contains($key, ']')
-                || is_string($value) === false
-                || ($valueLength !== false && $valueLength > self::MAX_METADATA_VALUE_LENGTH)
-            ) {
-                throw new InvalidSessionRequestException($errorCode, $path . '.' . (string) $key);
-            }
-        }
     }
 
     /** @param array<mixed, mixed> $values */
@@ -485,6 +322,14 @@ final class SessionRequestValidator
             if (is_array($value)) {
                 $this->validatePrivateMetadataLocations($value, $fieldPath);
             }
+        }
+    }
+
+    /** @param array<mixed, mixed> $values */
+    private function assertAbsent(array $values, string $field, string $path): void
+    {
+        if (array_key_exists($field, $values)) {
+            throw new InvalidSessionRequestException('session_request.parameter_protected', $path);
         }
     }
 

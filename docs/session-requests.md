@@ -18,9 +18,9 @@ Before submission, the plugin generates an opaque attempt token containing a Kir
 
 The hosted URL and client secret are not stored either. An uncertain request may be sent again only with the exact saved request and key and only within the internal 23-hour deadline; request customization is not run again. A definite provider rejection becomes `creation_failed`, while a network or incompatible-response uncertainty becomes `creation_uncertain` for later diagnosis or recovery.
 
-## Add safe parameters
+## Customize the request
 
-For a small project-specific addition, register Kirby's namespaced apply-filter:
+Register Kirby's namespaced apply-filter when one Checkout attempt needs values that are not available from Settings, or when project logic needs to change a Settings-owned value:
 
 ```php
 <?php
@@ -33,74 +33,32 @@ return [
             array $parameters,
             SessionRequestContext $context,
         ): array {
-            $metadata = $parameters['metadata'] ?? [];
-            $paymentIntentData = $parameters['payment_intent_data'] ?? [];
+            $parameters['billing_address_collection'] = 'required';
+            $parameters['metadata']['sales_channel'] = 'website';
+            $parameters['payment_intent_data']['description'] =
+                'Order ' . $context->order()->orderNumber();
 
-            return [
-                ...$parameters,
-                'metadata' => [
-                    ...$metadata,
-                    'sales_channel' => 'website',
-                ],
-                'payment_intent_data' => [
-                    ...$paymentIntentData,
-                    'description' => 'Order ' . $context->order()->orderNumber(),
-                ],
-            ];
+            return $parameters;
         },
     ],
 ];
 ```
 
-Kirby passes the result from one matching handler to the next. Each handler must therefore accept and return the complete accumulated `$parameters` map. Keep the named arguments as `$parameters` and `$context`; Kirby resolves hook arguments by name.
+The filter receives the complete standard request, not an empty additions map. It can add a Stripe parameter, remove an optional parameter, or replace a Settings-owned value for this attempt. Kirby passes each handler's result to the next matching handler, so every handler must return the complete `$parameters` map. Keep the argument names as `$parameters` and `$context`; Kirby resolves hook arguments by name.
 
-The additive filter currently accepts:
+The immutable `SessionRequestContext` contains information known before the customer enters Checkout: the order snapshot, language and Stripe locale, initiating URL, destinations, expiry, and UI mode. It cannot contain an address or other value first entered on Stripe's page. Location-dependent logic must therefore use information collected before Checkout or wait for the later Stripe result.
 
-- string project metadata under `metadata` and `payment_intent_data.metadata`, outside the private `kirby_stripe_checkout_*` namespace and within [Stripe's metadata limits](https://docs.stripe.com/metadata#configuration-data);
-- `payment_intent_data.description`;
-- `payment_intent_data.receipt_email`;
-- `payment_intent_data.statement_descriptor_suffix`.
+The final request is stored on the Order exactly as submitted. Do not place secrets, payment credentials, or unnecessary personal data in it. If an uncertain Stripe call is retried, the plugin reuses that saved request unchanged and does not run the filter again.
 
-An addition cannot repeat a built-in path, even with the same value. Other paths are rejected instead of being treated as implicitly supported when stripe-php adds a parameter. Use typed plugin Settings for supported Checkout features as they become available.
+## Validation boundaries
 
-Setting `payment_intent_data.receipt_email` makes Stripe send a live-mode receipt regardless of the account's normal email setting. Add it only when that behavior is intentional.
+Every filter result passes final validation before an order or Stripe Session can be created. The validator has three responsibilities:
 
-## Customize advanced construction
+1. Parameters the plugin officially supports through Settings are fully validated when present. This currently covers billing-address, name, phone, tax-ID and consent collection, custom fields, and promotion-code entry.
+2. Values required by the order and payment lifecycle are protected from changes.
+3. Other serializable Stripe parameters pass through without the plugin duplicating Stripe's semantic validation. A malformed or incompatible provider-owned value is rejected by Stripe and the Order records a safe `creation_failed` outcome.
 
-Projects that genuinely need a complete uncommon one-time request can configure the PHP-only `checkout.sessionRequestFactory` option. It accepts a `SessionRequestFactoryInterface` implementation or a Closure with the same signature:
-
-```php
-<?php
-
-use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
-use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
-
-return [
-    'programmatordev.stripe-checkout' => [
-        'checkout' => [
-            'sessionRequestFactory' => function (
-                SessionRequestContext $context,
-                SessionRequest $request,
-            ): SessionRequest {
-                $parameters = $request->parameters();
-                $parameters['branding_settings'] = [
-                    'display_name' => 'Example Store',
-                ];
-
-                return new SessionRequest($parameters);
-            },
-        ],
-    ],
-];
-```
-
-The factory receives the immutable resolved context and the complete accumulated request. The request contains the plugin's standard parameters plus any parameters returned by the additive filter. The factory returns a new complete `SessionRequest`; it does not receive Stripe credentials, a client, a mutable order Page, or responsibility for making the API call.
-
-Customization runs in a fixed order: the plugin builds its standard request, applies all matching additive filters sequentially, invokes the configured factory with that result, and validates the final request. This lets integrations contribute safe additions while leaving the project-level factory with visibility and final control over those additions.
-
-## Mandatory safety rules
-
-Every result passes the same final validation before an order or Stripe Session can be created. Advanced construction must preserve:
+The protected lifecycle values are:
 
 - one-time `payment` mode and the configured hosted or embedded UI mode;
 - the exact store currency, fixed lifetime, locale, and installation identifier;
@@ -108,6 +66,10 @@ Every result passes the same final validation before an order or Stripe Session 
 - the order reference and private Session, PaymentIntent, and line-item metadata;
 - the original line count, quantities, price source, Price IDs or inline amounts, and currencies.
 
-The validator rejects subscriptions and setup mode, Connect transfers or fees, manual capture, saved/future payment methods, adjustable quantities, optional items, customer mapping, Adaptive Pricing, managed payments, and explicit payment-method lists. These restrictions preserve the order lifecycle and keep payment-method configuration in Stripe. A project that needs to replace those guarantees needs its own integration rather than this extension point.
+The validator also rejects lifecycle shapes the current order model cannot represent: subscriptions and setup mode, Connect transfers or fees, manual capture, saved/future payment methods, adjustable quantities, optional items, Adaptive Pricing, Managed Payments, recovery Sessions, and server-controlled dynamic shipping updates. Provider hints such as `origin_context`, explicit customer references, payment-method configuration, discounts, invoice creation, and other Stripe-owned parameters are allowed when they do not change those guarantees.
+
+Stripe remains the authority for unsupported parameters and payment-method-specific combinations. A project can therefore use newly available Stripe values through the filter without waiting for a plugin release, but errors for those values surface only when Stripe receives the request. The plugin validates a parameter itself only when it officially supports that parameter or needs to protect an architectural invariant.
+
+Setting `payment_intent_data.receipt_email` makes Stripe send a live-mode receipt regardless of the account's normal email setting. Add it only when that behavior is intentional.
 
 `SessionRequest` deliberately contains only Stripe-shaped scalar, list, and map data. It normalizes map order and exposes a stable `fingerprint()` without coupling project code to stripe-php request objects.

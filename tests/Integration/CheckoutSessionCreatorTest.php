@@ -123,7 +123,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $creator = $this->creator(
             configuration: $configuration,
             gateway: $gateway,
-            sessionRequestFactory: static function (SessionRequestContext $context) use (&$requestCalls, $kirby, $settings): SessionRequest {
+            prepareSessionRequest: static function (SessionRequestContext $context) use (&$requestCalls, $kirby, $settings): SessionRequest {
                 $requestCalls++;
 
                 return (new SessionRequestBuilder(
@@ -272,7 +272,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $presentation = $this->creator(
             configuration: $configuration,
             gateway: $retryGateway,
-            sessionRequestFactory: static function () use (&$retryRequestCalls): SessionRequest {
+            prepareSessionRequest: static function () use (&$retryRequestCalls): SessionRequest {
                 $retryRequestCalls++;
 
                 throw new RuntimeException('An existing request must not be rebuilt.');
@@ -852,7 +852,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $creator = $this->creator(
             configuration: $configuration,
             gateway: $gateway,
-            sessionRequestFactory: static fn(): never => throw new CheckoutInputException('checkout.request_invalid'),
+            prepareSessionRequest: static fn(): never => throw new CheckoutInputException('checkout.request_invalid'),
         );
 
         try {
@@ -1025,13 +1025,13 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         );
     }
 
-    /** @param (callable(SessionRequestContext): SessionRequest)|null $sessionRequestFactory */
+    /** @param (callable(SessionRequestContext): SessionRequest)|null $prepareSessionRequest */
     private function creator(
         Configuration $configuration,
         FakeCheckoutSessionGateway $gateway,
-        ?callable $sessionRequestFactory = null,
+        ?callable $prepareSessionRequest = null,
     ): CheckoutSessionCreator {
-        $sessionRequestFactory ??= fn(SessionRequestContext $context): SessionRequest => (new SessionRequestBuilder(
+        $prepareSessionRequest ??= fn(SessionRequestContext $context): SessionRequest => (new SessionRequestBuilder(
             kirby: $this->kirby,
             settings: $configuration->settings(),
         ))->build($context);
@@ -1041,7 +1041,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             requestContextFactory: new SessionRequestContextFactory($this->kirby),
             orderPageStore: new OrderPageStore($this->kirby),
             sessionGateway: $gateway,
-            sessionRequestFactory: $sessionRequestFactory(...),
+            prepareSessionRequest: $prepareSessionRequest(...),
             stripeApiVersion: ApiVersion::CURRENT,
         );
     }

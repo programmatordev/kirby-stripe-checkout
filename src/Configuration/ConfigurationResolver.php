@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Configuration;
 
 use Closure;
-use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestFactoryInterface;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Collection\BillingAddressCollection;
 use ProgrammatorDev\StripeCheckout\Collection\NameCollectionMode;
@@ -25,7 +24,7 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
  */
 final class ConfigurationResolver
 {
-    private const ROOT_KEYS = ['cart', 'checkout', 'housekeeping', 'orders', 'products', 'settings', 'stripe', 'translations'];
+    private const ROOT_KEYS = ['cart', 'housekeeping', 'orders', 'products', 'settings', 'stripe', 'translations'];
     private const PRODUCT_FIELD_KEYS = [
         'name',
         'description',
@@ -58,7 +57,6 @@ final class ConfigurationResolver
             $this->orderNumberFormatter($options);
             $housekeeping = $this->housekeeping($options);
             $cartEnabled = $this->resolveCart($root['cart']);
-            $sessionRequestFactory = $this->resolveCheckout($root['checkout']);
             $products = $this->resolveProducts($root['products']);
             $stripe = $this->resolveStripe($root['stripe']);
             $settings = $this->resolveSettings($root['settings'], $pageSettings);
@@ -73,7 +71,6 @@ final class ConfigurationResolver
                 products: $products,
                 cartEnabled: $cartEnabled,
                 housekeeping: $housekeeping,
-                sessionRequestFactory: $sessionRequestFactory,
             ));
         } catch (ConfigurationException $error) {
             return ConfigurationReport::invalid($error);
@@ -170,7 +167,7 @@ final class ConfigurationResolver
 
     /**
      * @param array<string, mixed> $root
-     * @return array{cart: array<string, mixed>, checkout: array<string, mixed>, housekeeping: array<string, mixed>, orders: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>}
+     * @return array{cart: array<string, mixed>, housekeeping: array<string, mixed>, orders: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>}
      */
     private function resolveRoot(#[SensitiveParameter] array $root): array
     {
@@ -185,7 +182,6 @@ final class ConfigurationResolver
         $resolver = new OptionsResolver();
         $resolver->setDefaults([
             'cart' => [],
-            'checkout' => [],
             'housekeeping' => [],
             'orders' => [],
             'products' => [],
@@ -195,32 +191,14 @@ final class ConfigurationResolver
         ]);
         $resolver->setAllowedTypes('products', 'array');
         $resolver->setAllowedTypes('cart', 'array');
-        $resolver->setAllowedTypes('checkout', 'array');
         $resolver->setAllowedTypes('housekeeping', 'array');
         $resolver->setAllowedTypes('orders', 'array');
         $resolver->setAllowedTypes('settings', 'array');
         $resolver->setAllowedTypes('stripe', 'array');
         $resolver->setAllowedTypes('translations', 'array');
 
-        /** @var array{cart: array<string, mixed>, checkout: array<string, mixed>, housekeeping: array<string, mixed>, orders: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>} */
+        /** @var array{cart: array<string, mixed>, housekeeping: array<string, mixed>, orders: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>} */
         return $resolver->resolve($root);
-    }
-
-    /** @param array<string, mixed> $checkout */
-    private function resolveCheckout(array $checkout): SessionRequestFactoryInterface|Closure|null
-    {
-        $this->assertKnownKeys($checkout, ['sessionRequestFactory'], 'checkout');
-        $factory = $checkout['sessionRequestFactory'] ?? null;
-
-        if (
-            $factory !== null
-            && $factory instanceof SessionRequestFactoryInterface === false
-            && $factory instanceof Closure === false
-        ) {
-            throw new ConfigurationException('configuration.type_invalid', 'checkout.sessionRequestFactory');
-        }
-
-        return $factory;
     }
 
     /** @param array<string, mixed> $cart */

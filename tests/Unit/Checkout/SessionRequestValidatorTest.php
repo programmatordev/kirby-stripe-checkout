@@ -12,216 +12,270 @@ use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 
 final class SessionRequestValidatorTest extends TestCase
 {
-    public function testAddsOnlyProjectMetadataAndSafePaymentIntentFields(): void
-    {
-        $request = (new SessionRequestValidator())->applyAdditions($this->standardRequest(), [
-            'metadata' => ['customer_reference' => 'customer-42'],
-            'payment_intent_data' => [
-                'description' => 'Order ORD-TEST',
-                'metadata' => ['warehouse' => 'west'],
-                'receipt_email' => 'buyer@example.com',
-                'statement_descriptor_suffix' => 'ORDER',
-            ],
-        ]);
-        $parameters = $request->parameters();
-
-        $this->assertIsArray($parameters['metadata']);
-        $this->assertIsArray($parameters['payment_intent_data']);
-        $this->assertIsArray($parameters['payment_intent_data']['metadata']);
-        $this->assertSame('customer-42', $parameters['metadata']['customer_reference'] ?? null);
-        $this->assertSame('Order ORD-TEST', $parameters['payment_intent_data']['description'] ?? null);
-        $this->assertSame('west', $parameters['payment_intent_data']['metadata']['warehouse'] ?? null);
-        $this->assertSame('buyer@example.com', $parameters['payment_intent_data']['receipt_email'] ?? null);
-        $this->assertSame('ORDER', $parameters['payment_intent_data']['statement_descriptor_suffix'] ?? null);
-    }
-
-    /** @param array<mixed, mixed> $additions */
-    #[DataProvider('invalidAdditions')]
-    public function testRejectsProtectedUnsupportedAndInvalidAdditions(
-        array $additions,
-        string $errorCode,
-        ?string $path,
-    ): void {
-        try {
-            (new SessionRequestValidator())->applyAdditions($this->standardRequest(), $additions);
-            $this->fail('Expected the additions to be rejected.');
-        } catch (InvalidSessionRequestException $error) {
-            $this->assertSame($errorCode, $error->errorCode());
-            $this->assertSame($path, $error->path());
-        }
-    }
-
-    /** @return iterable<string, array{array<mixed, mixed>, string, string|null}> */
-    public static function invalidAdditions(): iterable
-    {
-        $tooManyMetadataEntries = [];
-
-        for ($index = 0; $index < 48; $index++) {
-            $tooManyMetadataEntries['key_' . $index] = 'value';
-        }
-
-        yield 'built-in field' => [
-            ['mode' => 'payment'],
-            'session_request.parameter_protected',
-            'mode',
-        ];
-        yield 'private metadata' => [
-            ['metadata' => ['kirby_stripe_checkout_order' => 'page://different']],
-            'session_request.additions_invalid',
-            'metadata.kirby_stripe_checkout_order',
-        ];
-        yield 'duplicate project metadata' => [
-            ['metadata' => ['project_reference' => 'duplicate']],
-            'session_request.parameter_protected',
-            'metadata.project_reference',
-        ];
-        yield 'unsupported root' => [
-            ['invoice_creation' => ['enabled' => true]],
-            'session_request.parameter_unsupported',
-            'invoice_creation',
-        ];
-        yield 'unsupported PaymentIntent field' => [
-            ['payment_intent_data' => ['capture_method' => 'manual']],
-            'session_request.parameter_unsupported',
-            'payment_intent_data.capture_method',
-        ];
-        yield 'invalid receipt email' => [
-            ['payment_intent_data' => ['receipt_email' => 'invalid']],
-            'session_request.additions_invalid',
-            'payment_intent_data.receipt_email',
-        ];
-        yield 'statement suffix is too long' => [
-            ['payment_intent_data' => ['statement_descriptor_suffix' => str_repeat('x', 23)]],
-            'session_request.additions_invalid',
-            'payment_intent_data.statement_descriptor_suffix',
-        ];
-        yield 'invalid metadata value' => [
-            ['metadata' => ['project_reference' => 42]],
-            'session_request.additions_invalid',
-            'metadata.project_reference',
-        ];
-        yield 'invalid UTF-8 metadata key' => [
-            ['metadata' => ["\xB1" => 'value']],
-            'session_request.additions_invalid',
-            null,
-        ];
-        yield 'too many metadata entries' => [
-            ['metadata' => $tooManyMetadataEntries],
-            'session_request.additions_invalid',
-            'metadata',
-        ];
-        yield 'metadata key is too long' => [
-            ['metadata' => [str_repeat('k', 41) => 'value']],
-            'session_request.additions_invalid',
-            'metadata.' . str_repeat('k', 41),
-        ];
-        yield 'metadata key contains brackets' => [
-            ['metadata' => ['project[key]' => 'value']],
-            'session_request.additions_invalid',
-            'metadata.project[key]',
-        ];
-        yield 'metadata value is too long' => [
-            ['metadata' => ['customer_reference' => str_repeat('v', 501)]],
-            'session_request.additions_invalid',
-            'metadata.customer_reference',
-        ];
-    }
-
-    public function testTreatsEmptyNestedAdditionsAsNoOps(): void
-    {
-        $request = $this->standardRequest();
-        $customizedRequest = (new SessionRequestValidator())->applyAdditions($request, [
-            'metadata' => [],
-            'payment_intent_data' => [],
-        ]);
-
-        $this->assertSame($request->parameters(), $customizedRequest->parameters());
-    }
-
-    public function testAllowsAdvancedOneTimeConstructionInsideTheSafetyFloor(): void
+    public function testAllowsSupportedOverridesAndStripeOwnedParameters(): void
     {
         $parameters = $this->standardRequest()->parameters();
-        $parameters['automatic_tax'] = ['enabled' => true];
+        $parameters['billing_address_collection'] = 'required';
+        $parameters['name_collection'] = [
+            'individual' => [
+                'enabled' => true,
+                'optional' => false,
+            ],
+        ];
+        $parameters['custom_fields'] = [[
+            'key' => 'vatnumber',
+            'label' => [
+                'custom' => 'VAT number',
+                'type' => 'custom',
+            ],
+            'optional' => true,
+            'text' => [
+                'maximum_length' => 20,
+                'minimum_length' => 3,
+            ],
+            'type' => 'text',
+        ]];
+        $parameters['allow_promotion_codes'] = false;
+        $parameters['customer'] = 'cus_test';
+        $parameters['discounts'] = [['promotion_code' => 'promo_test']];
         $parameters['invoice_creation'] = ['enabled' => true];
-        $this->assertIsArray($parameters['line_items']);
-        $this->assertIsArray($parameters['line_items'][0]);
-        $parameters['line_items'][0]['tax_rates'] = ['txr_custom'];
-        $request = new SessionRequest($parameters);
+        $parameters['origin_context'] = 'mobile_app';
+        $parameters['payment_method_types'] = ['card'];
+        $parameters['payment_method_options'] = [
+            'card' => ['request_three_d_secure' => 'automatic'],
+        ];
+        $metadata = $this->map($parameters['metadata']);
+        $metadata['customer_reference'] = 42;
+        $parameters['metadata'] = $metadata;
+        $paymentIntentData = $this->map($parameters['payment_intent_data']);
+        $paymentIntentData['description'] = 'Order ORD-TEST';
+        $parameters['payment_intent_data'] = $paymentIntentData;
+        $lineItems = $this->valueList($parameters['line_items']);
+        $firstLine = $this->map($lineItems[0]);
+        $firstLine['tax_rates'] = ['txr_custom'];
+        $lineItems[0] = $firstLine;
+        $parameters['line_items'] = $lineItems;
+        $customizedRequest = new SessionRequest($parameters);
 
         $this->assertSame(
-            $request,
-            (new SessionRequestValidator())->validate($this->standardRequest(), $request),
+            $customizedRequest,
+            (new SessionRequestValidator())->validate($this->standardRequest(), $customizedRequest),
         );
     }
 
-    #[DataProvider('unsafeFactoryRequests')]
-    public function testRejectsFactoryRequestsOutsideTheSafetyFloor(
+    public function testAllowsOptionalStandardParametersToBeRemoved(): void
+    {
+        $parameters = $this->standardRequest()->parameters();
+        unset($parameters['billing_address_collection']);
+        $customizedRequest = new SessionRequest($parameters);
+
+        $this->assertSame(
+            $customizedRequest,
+            (new SessionRequestValidator())->validate($this->standardRequest(), $customizedRequest),
+        );
+    }
+
+    #[DataProvider('invalidSupportedParameters')]
+    public function testRejectsInvalidSupportedParameters(callable $change, string $path): void
+    {
+        $parameters = $this->standardRequest()->parameters();
+        $change($parameters);
+
+        $this->assertRejected(
+            parameters: $parameters,
+            errorCode: 'session_request.parameter_invalid',
+            path: $path,
+        );
+    }
+
+    /** @return iterable<string, array{callable(array<string, mixed>&): void, string}> */
+    public static function invalidSupportedParameters(): iterable
+    {
+        yield 'billing address collection' => [
+            static function (array &$parameters): void {
+                $parameters['billing_address_collection'] = 'sometimes';
+            },
+            'billing_address_collection',
+        ];
+        yield 'name collection enabled flag' => [
+            static function (array &$parameters): void {
+                $parameters['name_collection'] = [
+                    'individual' => ['enabled' => 'true'],
+                ];
+            },
+            'name_collection.individual.enabled',
+        ];
+        yield 'phone collection enabled flag' => [
+            static function (array &$parameters): void {
+                $parameters['phone_number_collection'] = ['enabled' => 1];
+            },
+            'phone_number_collection.enabled',
+        ];
+        yield 'tax ID requirement' => [
+            static function (array &$parameters): void {
+                $parameters['tax_id_collection'] = [
+                    'enabled' => true,
+                    'required' => 'always',
+                ];
+            },
+            'tax_id_collection.required',
+        ];
+        yield 'consent value' => [
+            static function (array &$parameters): void {
+                $parameters['consent_collection'] = ['terms_of_service' => 'optional'];
+            },
+            'consent_collection.terms_of_service',
+        ];
+        yield 'promotion-code flag' => [
+            static function (array &$parameters): void {
+                $parameters['allow_promotion_codes'] = 1;
+            },
+            'allow_promotion_codes',
+        ];
+        yield 'custom-field key' => [
+            static function (array &$parameters): void {
+                $parameters['custom_fields'] = [[
+                    'key' => 'VAT-number',
+                    'label' => [
+                        'custom' => 'VAT number',
+                        'type' => 'custom',
+                    ],
+                    'optional' => true,
+                    'type' => 'text',
+                ]];
+            },
+            'custom_fields.0.key',
+        ];
+        yield 'too many custom fields' => [
+            static function (array &$parameters): void {
+                $parameters['custom_fields'] = [[], [], [], []];
+            },
+            'custom_fields',
+        ];
+    }
+
+    #[DataProvider('protectedParameters')]
+    public function testRejectsChangesOutsideTheLifecycleSafetyFloor(
         callable $change,
+        string $errorCode,
         string $path,
     ): void {
         $parameters = $this->standardRequest()->parameters();
         $change($parameters);
 
-        try {
-            (new SessionRequestValidator())->validate(
-                $this->standardRequest(),
-                new SessionRequest($parameters),
-            );
-            $this->fail('Expected the replacement request to be rejected.');
-        } catch (InvalidSessionRequestException $error) {
-            $this->assertSame($path, $error->path());
-        }
+        $this->assertRejected(
+            parameters: $parameters,
+            errorCode: $errorCode,
+            path: $path,
+        );
     }
 
-    /** @return iterable<string, array{callable(array<string, mixed>&): void, string}> */
-    public static function unsafeFactoryRequests(): iterable
+    /** @return iterable<string, array{callable(array<string, mixed>&): void, string, string}> */
+    public static function protectedParameters(): iterable
     {
         yield 'subscription mode' => [
             static function (array &$parameters): void {
                 $parameters['mode'] = 'subscription';
             },
+            'session_request.invariant_violation',
             'mode',
         ];
         yield 'other currency' => [
             static function (array &$parameters): void {
                 $parameters['currency'] = 'usd';
             },
+            'session_request.invariant_violation',
             'currency',
         ];
         yield 'other success URL' => [
             static function (array &$parameters): void {
                 $parameters['success_url'] = 'https://example.com/success';
             },
+            'session_request.invariant_violation',
             'success_url',
         ];
-        yield 'missing Session metadata' => [
+        yield 'missing Session correlation' => [
             static function (array &$parameters): void {
-                assert(is_array($parameters['metadata']));
-                unset($parameters['metadata']['kirby_stripe_checkout_order']);
+                $metadata = self::map($parameters['metadata']);
+                unset($metadata['kirby_stripe_checkout_order']);
+                $parameters['metadata'] = $metadata;
             },
+            'session_request.invariant_violation',
             'metadata.kirby_stripe_checkout_order',
+        ];
+        yield 'forged private metadata' => [
+            static function (array &$parameters): void {
+                $metadata = self::map($parameters['metadata']);
+                $metadata['kirby_stripe_checkout_extra'] = 'forged';
+                $parameters['metadata'] = $metadata;
+            },
+            'session_request.parameter_protected',
+            'metadata.kirby_stripe_checkout_extra',
         ];
         yield 'different line quantity' => [
             static function (array &$parameters): void {
-                assert(is_array($parameters['line_items']));
-                assert(is_array($parameters['line_items'][0]));
-                $parameters['line_items'][0]['quantity'] = 2;
+                $lineItems = self::valueList($parameters['line_items']);
+                $firstLine = self::map($lineItems[0]);
+                $firstLine['quantity'] = 2;
+                $lineItems[0] = $firstLine;
+                $parameters['line_items'] = $lineItems;
             },
+            'session_request.invariant_violation',
             'line_items.0.quantity',
         ];
         yield 'second line' => [
             static function (array &$parameters): void {
-                assert(is_array($parameters['line_items']));
-                assert(is_array($parameters['line_items'][0]));
-                $parameters['line_items'][] = $parameters['line_items'][0];
+                $lineItems = self::valueList($parameters['line_items']);
+                $lineItems[] = $lineItems[0];
+                $parameters['line_items'] = $lineItems;
             },
+            'session_request.invariant_violation',
             'line_items',
+        ];
+        yield 'inline amount' => [
+            static function (array &$parameters): void {
+                $lineItems = self::valueList($parameters['line_items']);
+                $firstLine = self::map($lineItems[0]);
+                $priceData = self::map($firstLine['price_data']);
+                $priceData['unit_amount'] = 2_000;
+                $firstLine['price_data'] = $priceData;
+                $lineItems[0] = $firstLine;
+                $parameters['line_items'] = $lineItems;
+            },
+            'session_request.invariant_violation',
+            'line_items.0.price_data.unit_amount',
+        ];
+        yield 'adjustable quantity' => [
+            static function (array &$parameters): void {
+                $lineItems = self::valueList($parameters['line_items']);
+                $firstLine = self::map($lineItems[0]);
+                $firstLine['adjustable_quantity'] = ['enabled' => true];
+                $lineItems[0] = $firstLine;
+                $parameters['line_items'] = $lineItems;
+            },
+            'session_request.parameter_protected',
+            'line_items.0.adjustable_quantity',
+        ];
+        yield 'recurring inline price' => [
+            static function (array &$parameters): void {
+                $lineItems = self::valueList($parameters['line_items']);
+                $firstLine = self::map($lineItems[0]);
+                $priceData = self::map($firstLine['price_data']);
+                $priceData['recurring'] = ['interval' => 'month'];
+                $firstLine['price_data'] = $priceData;
+                $lineItems[0] = $firstLine;
+                $parameters['line_items'] = $lineItems;
+            },
+            'session_request.parameter_protected',
+            'line_items.0.price_data.recurring',
         ];
         yield 'manual capture' => [
             static function (array &$parameters): void {
-                assert(is_array($parameters['payment_intent_data']));
-                $parameters['payment_intent_data']['capture_method'] = 'manual';
+                $paymentIntentData = self::map($parameters['payment_intent_data']);
+                $paymentIntentData['capture_method'] = 'manual';
+                $parameters['payment_intent_data'] = $paymentIntentData;
             },
+            'session_request.parameter_protected',
             'payment_intent_data.capture_method',
         ];
         yield 'future payment method' => [
@@ -230,33 +284,38 @@ final class SessionRequestValidatorTest extends TestCase
                     'card' => ['setup_future_usage' => 'off_session'],
                 ];
             },
+            'session_request.parameter_protected',
             'payment_method_options.card.setup_future_usage',
+        ];
+        yield 'payment-method-specific manual capture' => [
+            static function (array &$parameters): void {
+                $parameters['payment_method_options'] = [
+                    'card' => ['capture_method' => 'manual'],
+                ];
+            },
+            'session_request.parameter_protected',
+            'payment_method_options.card.capture_method',
         ];
         yield 'Connect transfer' => [
             static function (array &$parameters): void {
-                assert(is_array($parameters['payment_intent_data']));
-                $parameters['payment_intent_data']['transfer_data'] = [
+                $paymentIntentData = self::map($parameters['payment_intent_data']);
+                $paymentIntentData['transfer_data'] = [
                     'destination' => 'acct_test',
                 ];
+                $parameters['payment_intent_data'] = $paymentIntentData;
             },
+            'session_request.parameter_protected',
             'payment_intent_data.transfer_data',
         ];
-        yield 'explicit payment methods' => [
+        yield 'automatic-tax liability' => [
             static function (array &$parameters): void {
-                $parameters['payment_method_types'] = ['card'];
-            },
-            'payment_method_types',
-        ];
-        yield 'recurring inline price' => [
-            static function (array &$parameters): void {
-                assert(is_array($parameters['line_items']));
-                assert(is_array($parameters['line_items'][0]));
-                assert(is_array($parameters['line_items'][0]['price_data']));
-                $parameters['line_items'][0]['price_data']['recurring'] = [
-                    'interval' => 'month',
+                $parameters['automatic_tax'] = [
+                    'enabled' => true,
+                    'liability' => ['type' => 'account'],
                 ];
             },
-            'line_items.0.price_data.recurring',
+            'session_request.parameter_protected',
+            'automatic_tax.liability',
         ];
         yield 'private metadata outside correlation maps' => [
             static function (array &$parameters): void {
@@ -267,13 +326,82 @@ final class SessionRequestValidatorTest extends TestCase
                     ],
                 ];
             },
+            'session_request.parameter_protected',
             'invoice_creation.invoice_data.metadata.kirby_stripe_checkout_order',
         ];
+        yield 'optional items' => [
+            static function (array &$parameters): void {
+                $parameters['optional_items'] = [];
+            },
+            'session_request.parameter_protected',
+            'optional_items',
+        ];
+    }
+
+    public function testProtectionMatchesExactPathsRatherThanNestedNames(): void
+    {
+        $parameters = $this->standardRequest()->parameters();
+        $parameters['invoice_creation'] = [
+            'enabled' => true,
+            'invoice_data' => [
+                'metadata' => ['recurring' => 'allowed'],
+            ],
+        ];
+        $parameters['payment_method_options'] = [
+            'card' => [
+                'network' => [
+                    'liability' => 'allowed',
+                    'setup_future_usage_hint' => 'allowed',
+                ],
+            ],
+        ];
+        $customizedRequest = new SessionRequest($parameters);
+
+        $this->assertSame(
+            $customizedRequest,
+            (new SessionRequestValidator())->validate($this->standardRequest(), $customizedRequest),
+        );
+    }
+
+    /** @param array<string, mixed> $parameters */
+    private function assertRejected(array $parameters, string $errorCode, string $path): void
+    {
+        try {
+            (new SessionRequestValidator())->validate(
+                $this->standardRequest(),
+                new SessionRequest($parameters),
+            );
+            $this->fail('Expected the customized request to be rejected.');
+        } catch (InvalidSessionRequestException $error) {
+            $this->assertSame($errorCode, $error->errorCode());
+            $this->assertSame($path, $error->path());
+        }
+    }
+
+    /** @return array<string, mixed> */
+    private static function map(mixed $value): array
+    {
+        self::assertIsArray($value);
+        self::assertFalse(array_is_list($value));
+
+        /** @var array<string, mixed> $value */
+        return $value;
+    }
+
+    /** @return list<mixed> */
+    private static function valueList(mixed $value): array
+    {
+        self::assertIsArray($value);
+        self::assertTrue(array_is_list($value));
+
+        /** @var list<mixed> $value */
+        return $value;
     }
 
     private function standardRequest(): SessionRequest
     {
         return new SessionRequest([
+            'billing_address_collection' => 'auto',
             'cancel_url' => 'https://example.com/stripe-checkout/cancel',
             'client_reference_id' => 'page://Order123',
             'currency' => 'eur',
@@ -296,7 +424,6 @@ final class SessionRequestValidatorTest extends TestCase
             'metadata' => [
                 'kirby_stripe_checkout_order' => 'page://Order123',
                 'kirby_stripe_checkout_owner' => 'programmatordev/stripe-checkout',
-                'project_reference' => 'original',
             ],
             'mode' => 'payment',
             'payment_intent_data' => [

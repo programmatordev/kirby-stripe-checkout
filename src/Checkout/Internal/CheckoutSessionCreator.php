@@ -32,19 +32,19 @@ use Throwable;
 final class CheckoutSessionCreator
 {
     /** @var Closure(SessionRequestContext): SessionRequest */
-    private readonly Closure $sessionRequestFactory;
+    private readonly Closure $prepareSessionRequest;
 
-    /** @param Closure(SessionRequestContext): SessionRequest $sessionRequestFactory */
+    /** @param Closure(SessionRequestContext): SessionRequest $prepareSessionRequest */
     public function __construct(
         private readonly Configuration $configuration,
         private readonly SessionRequestContextFactory $requestContextFactory,
         private readonly OrderPageStore $orderPageStore,
         private readonly CheckoutSessionGatewayInterface $sessionGateway,
-        Closure $sessionRequestFactory,
+        Closure $prepareSessionRequest,
         private readonly string $stripeApiVersion,
         private readonly CheckoutSessionRecordValidator $sessionRecordValidator = new CheckoutSessionRecordValidator(),
     ) {
-        $this->sessionRequestFactory = $sessionRequestFactory;
+        $this->prepareSessionRequest = $prepareSessionRequest;
     }
 
     public function create(
@@ -76,7 +76,7 @@ final class CheckoutSessionCreator
                     createdAt: $now,
                     initiatingUrl: $initiatingUrl,
                 );
-                $sessionRequest = ($this->sessionRequestFactory)($requestContext);
+                $sessionRequest = ($this->prepareSessionRequest)($requestContext);
                 $checkoutAttempt = new CheckoutAttempt(
                     order: $order,
                     context: $requestContext,
