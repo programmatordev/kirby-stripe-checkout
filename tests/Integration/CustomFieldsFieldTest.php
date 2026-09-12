@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Kirby\Content\Field;
 use Kirby\Data\Yaml;
+use Kirby\Exception\InvalidArgumentException;
 use Kirby\Exception\PermissionException;
 use Kirby\Form\Form;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
@@ -218,6 +219,20 @@ final class CustomFieldsFieldTest extends KirbyTestCase
         $this->assertIsString($id);
         $this->assertMatchesRegularExpression('/^[a-z0-9]{16}$/', $id);
         $this->assertArrayNotHasKey('labels', $firstField);
+    }
+
+    public function testMalformedSymfonyYamlUsesKirbysFieldValidationException(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(options: [
+            'yaml.handler' => 'symfony',
+        ]);
+        $this->kirby = $this->environment->app();
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('invalid YAML');
+        $page->update(['customFields' => '[invalid']);
     }
 
     /** @return list<array<string, mixed>> */

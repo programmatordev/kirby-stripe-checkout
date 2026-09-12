@@ -148,6 +148,34 @@ final class CustomFieldStructureAdapterTest extends TestCase
         ]]);
     }
 
+    public function testRejectsConflictingFieldIdentityAliases(): void
+    {
+        $adapter = new CustomFieldStructureAdapter();
+        $fixture = self::canonicalFixture();
+        $fixture[0]['_id'] = 'field00000000002';
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('conflicting IDs');
+        $adapter->canonical($fixture);
+    }
+
+    public function testRejectsConflictingOptionIdentityAliases(): void
+    {
+        $adapter = new CustomFieldStructureAdapter();
+        $fixture = self::canonicalFixture();
+        $options = $fixture[1]['options'] ?? null;
+        $this->assertIsArray($options);
+        $option = $options[0] ?? null;
+        $this->assertIsArray($option);
+        $option['_id'] = 'option0000000002';
+        $options[0] = $option;
+        $fixture[1]['options'] = $options;
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('conflicting IDs');
+        $adapter->canonical($fixture);
+    }
+
     /** @return list<array<string, mixed>> */
     private static function canonicalFixture(): array
     {

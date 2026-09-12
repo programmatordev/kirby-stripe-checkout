@@ -474,7 +474,6 @@ export default {
 				};
 		},
 		updateFromForm(row, updated) {
-
 			// Avoid sending incomplete new drawer rows into Kirby's live form.
 			if (this.isComplete(updated) === false) {
 				return;

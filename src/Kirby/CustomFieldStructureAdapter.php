@@ -9,6 +9,7 @@ use Kirby\Data\Yaml;
 use ProgrammatorDev\StripeCheckout\Configuration\CustomFieldFactory;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Support\TextValidator;
+use Throwable;
 
 /**
  * Adapts Panel Structure rows to canonical custom-field definitions.
@@ -261,7 +262,16 @@ final class CustomFieldStructureAdapter implements SynchronizedStructureAdapterI
         }
 
         if (is_string($value)) {
-            $value = Yaml::decode($value);
+            try {
+                $value = Yaml::decode($value);
+            } catch (Throwable $error) {
+                // Kirby's selectable YAML handlers throw different exception
+                // types. Keep the adapter's public failure contract stable.
+                throw new InvalidArgumentException(
+                    'Synchronized Structure data contains invalid YAML.',
+                    previous: $error,
+                );
+            }
         }
 
         if (is_array($value) === false || array_is_list($value) === false) {
@@ -364,7 +374,16 @@ final class CustomFieldStructureAdapter implements SynchronizedStructureAdapterI
     /** @param array<string, mixed> $row */
     private function submittedId(array $row): ?string
     {
-        $id = $row['id'] ?? $row['_id'] ?? null;
+        // Stored plugin rows use `id`; Kirby's native Structure transport uses
+        // `_id`. Accept either form, but never guess between two identities.
+        $id = $row['id'] ?? null;
+        $kirbyId = $row['_id'] ?? null;
+
+        if ($id !== null && $kirbyId !== null && $id !== $kirbyId) {
+            throw new InvalidArgumentException('A synchronized Structure row has conflicting IDs.');
+        }
+
+        $id ??= $kirbyId;
 
         return is_string($id) && preg_match('/\A[a-z0-9]{16}\z/D', $id) === 1
             ? $id
