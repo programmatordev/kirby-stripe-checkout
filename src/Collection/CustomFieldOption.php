@@ -7,14 +7,23 @@ namespace ProgrammatorDev\StripeCheckout\Collection;
 use ProgrammatorDev\StripeCheckout\Collection\Exception\InvalidCustomFieldException;
 use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 
-/** Exposes one stable value and localized label in a dropdown custom field. */
+/**
+ * Exposes one stable value and localized label in a dropdown custom field.
+ *
+ * @see https://docs.stripe.com/api/checkout/sessions/create?query=custom_fields
+ */
 final readonly class CustomFieldOption
 {
+    public const MAX_VALUE_LENGTH = 100;
+
     public function __construct(
         private string $value,
         private string $label,
     ) {
-        if (preg_match('/\A[a-z0-9]{1,64}\z/D', $value) !== 1) {
+        if (
+            preg_match('/\A[a-z0-9]+\z/D', $value) !== 1
+            || strlen($value) > self::MAX_VALUE_LENGTH
+        ) {
             throw new InvalidCustomFieldException('value', 'A custom-field option requires a lowercase alphanumeric value.');
         }
 

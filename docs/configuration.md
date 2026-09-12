@@ -94,7 +94,7 @@ These destination values are available through Settings now. The current package
 
 The collection controls are independent. Tax-ID collection does not enable Automatic Tax, and billing-address collection set to `auto` does not promise a complete address. The defaults match Stripe's disabled or automatic behavior except for the individual name, which this plugin asks for optionally by default. Enabling phone collection makes the field required in Stripe Checkout. Terms acceptance requires the store's terms URL to be configured in Stripe. Stripe currently restricts promotional-email consent to US merchants and US customers.
 
-Stripe Checkout supports at most three custom fields. Configure them in the Settings tab or lock the complete list through PHP. Their stable keys and dropdown values use lowercase letters and numbers; PHP labels can provide language-specific overrides keyed by Kirby language code:
+Stripe Checkout supports at most three custom fields. Configure them in the Settings tab or lock the complete list through PHP. Their stable keys and dropdown values use lowercase letters and numbers; keys accept up to 200 characters and dropdown values up to 100. PHP labels can provide language-specific overrides keyed by Kirby language code:
 
 ```php
 'settings' => [

@@ -247,6 +247,29 @@ final class ConfigurationResolverTest extends TestCase
         $this->assertSame(CredentialMode::Unknown, $configuration->stripe()->publishableKeyMode());
     }
 
+    public function testAcceptsStripesMaximumCustomFieldIdentifierLengths(): void
+    {
+        $configuration = $this->resolve([
+            self::PREFIX => [
+                'settings' => [
+                    'customFields' => [[
+                        'key' => str_repeat('k', 200),
+                        'label' => 'Reference',
+                        'type' => 'dropdown',
+                        'options' => [[
+                            'value' => str_repeat('o', 100),
+                            'label' => 'Option',
+                        ]],
+                    ]],
+                ],
+            ],
+        ])->configurationOrFail();
+        $customField = $configuration->settings()->customFields()[0];
+
+        $this->assertSame(200, strlen($customField->key()));
+        $this->assertSame(100, strlen($customField->options()[0]->value()));
+    }
+
     public function testResolvesKirbysNormalizedDottedConfiguration(): void
     {
         $configuration = $this->resolve([
@@ -407,12 +430,20 @@ final class ConfigurationResolverTest extends TestCase
         ], 'settings.customFields'];
         yield 'missing key' => [[array_diff_key($text, ['key' => true])], 'settings.customFields.0.key'];
         yield 'uppercase key' => [[[...$text, 'key' => 'Reference']], 'settings.customFields.0.key'];
+        yield 'oversized key' => [[[...$text, 'key' => str_repeat('a', 201)]], 'settings.customFields.0.key'];
         yield 'duplicate key' => [[$text, $text], 'settings.customFields.1.key'];
         yield 'unknown type' => [[[...$text, 'type' => 'date']], 'settings.customFields.0.type'];
         yield 'invalid required type' => [[[...$text, 'required' => 'yes']], 'settings.customFields.0.required'];
         yield 'reversed bounds' => [[[...$text, 'minimumLength' => 10, 'maximumLength' => 5]], 'settings.customFields.0.maximumLength'];
         yield 'options on text' => [[[...$text, 'options' => $dropdown['options']]], 'settings.customFields.0.options'];
         yield 'empty dropdown' => [[[...$dropdown, 'options' => []]], 'settings.customFields.0.options'];
+        yield 'oversized dropdown value' => [[[
+            ...$dropdown,
+            'options' => [[
+                'value' => str_repeat('a', 101),
+                'label' => 'Morning',
+            ]],
+        ]], 'settings.customFields.0.options.0.value'];
         yield 'length bound on dropdown' => [[[...$dropdown, 'minimumLength' => 1]], 'settings.customFields.0.minimumLength'];
         yield 'unknown default' => [[[...$dropdown, 'defaultValue' => 'evening']], 'settings.customFields.0.defaultValue'];
         yield 'invalid translated labels' => [[[...$text, 'labels' => ['invalid code' => 'Referência']]], 'settings.customFields.0.labels'];

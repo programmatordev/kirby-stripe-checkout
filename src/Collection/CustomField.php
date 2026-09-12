@@ -11,12 +11,14 @@ use ProgrammatorDev\StripeCheckout\Support\TextValidator;
  * Exposes one validated, localized Stripe Checkout custom field.
  *
  * Provider-facing labels, input bounds and dropdown sizes follow Stripe's
- * Checkout Session schema. Stable identifiers use the plugin's narrower limit.
+ * Checkout Session schema. Stable identifiers use its lowercase subset.
  *
  * @see https://docs.stripe.com/api/checkout/sessions/create?query=custom_fields
  */
 final readonly class CustomField
 {
+    public const MAX_KEY_LENGTH = 200;
+
     /** @var list<CustomFieldOption> */
     private array $options;
 
@@ -31,7 +33,10 @@ final readonly class CustomField
         private ?string $defaultValue = null,
         array $options = [],
     ) {
-        if (preg_match('/\A[a-z0-9]{1,64}\z/D', $key) !== 1) {
+        if (
+            preg_match('/\A[a-z0-9]+\z/D', $key) !== 1
+            || strlen($key) > self::MAX_KEY_LENGTH
+        ) {
             throw new InvalidCustomFieldException('key', 'A custom field requires a lowercase alphanumeric key.');
         }
 

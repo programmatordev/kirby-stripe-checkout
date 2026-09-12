@@ -206,9 +206,9 @@ export default {
 						disabled: technicalDisabled,
 						help: this.$t("programmatordev.stripe-checkout.customFields.option.value.help"),
 						label: this.$t("programmatordev.stripe-checkout.customFields.option.value.label"),
-						maxlength: 64,
+						maxlength: 100,
 						name: "value",
-						pattern: "[a-z0-9]{1,64}",
+						pattern: "[a-z0-9]{1,100}",
 						required: true,
 						type: "text"
 					},
@@ -228,16 +228,19 @@ export default {
 				sortable: this.technicalLocked === false,
 				type: this.technicalLocked
 					? "stripe-checkout-synchronized-structure-rows"
-					: "structure"
+					: "structure",
+				when: {
+					type: "dropdown"
+				}
 			};
 			const fields = {
 				key: {
 					disabled: technicalDisabled,
 					help: this.$t("programmatordev.stripe-checkout.customFields.key.help"),
 					label: this.$t("programmatordev.stripe-checkout.customFields.key.label"),
-					maxlength: 64,
+					maxlength: 200,
 					name: "key",
-					pattern: "[a-z0-9]{1,64}",
+					pattern: "[a-z0-9]{1,200}",
 					required: true,
 					type: "text"
 				},
@@ -265,9 +268,8 @@ export default {
 					name: "required",
 					type: "toggle"
 				},
-				...(row.type === "dropdown"
-					? {}
-					: this.lengthFields(row.type, technicalDisabled)),
+				...this.lengthFields("text", technicalDisabled),
+				...this.lengthFields("numeric", technicalDisabled),
 				defaultValue: {
 					disabled: technicalDisabled,
 					label: this.$t("programmatordev.stripe-checkout.customFields.defaultValue.label"),
@@ -275,7 +277,7 @@ export default {
 					name: "defaultValue",
 					type: "text"
 				},
-				...(row.type === "dropdown" ? { options: dropdownOptions } : {})
+				options: dropdownOptions
 			};
 
 			return this.$helper.field.subfields(this, fields);
@@ -292,14 +294,14 @@ export default {
 				return true;
 			}
 
-			return /^[a-z0-9]{1,64}$/.test(row.key) &&
+			return /^[a-z0-9]{1,200}$/.test(row.key) &&
 				typeof row.label === "string" &&
 				row.label.trim() !== "" &&
 				["text", "numeric", "dropdown"].includes(row.type) &&
 				(row.type !== "dropdown" || (
 					row.options.length > 0 &&
 					row.options.every(option =>
-						/^[a-z0-9]{1,64}$/.test(option.value) &&
+						/^[a-z0-9]{1,100}$/.test(option.value) &&
 						typeof option.label === "string" &&
 						option.label.trim() !== ""
 					)
@@ -311,20 +313,26 @@ export default {
 			return {
 				[`minimumLength${suffix}`]: {
 					disabled,
-					label: this.$t("programmatordev.stripe-checkout.customFields.minimumLength.label"),
+					label: this.$t(`programmatordev.stripe-checkout.customFields.minimumLength.${type}`),
 					max: 255,
 					min: 1,
 					name: `minimumLength${suffix}`,
 					type: "number",
+					when: {
+						type
+					},
 					width: "1/2"
 				},
 				[`maximumLength${suffix}`]: {
 					disabled,
-					label: this.$t("programmatordev.stripe-checkout.customFields.maximumLength.label"),
+					label: this.$t(`programmatordev.stripe-checkout.customFields.maximumLength.${type}`),
 					max: 255,
 					min: 1,
 					name: `maximumLength${suffix}`,
 					type: "number",
+					when: {
+						type
+					},
 					width: "1/2"
 				}
 			};
@@ -347,12 +355,6 @@ export default {
 						const updated = this.rowFromForm(row, value, optionIds);
 
 						this.updateFromForm(row, updated);
-
-						if (updated.type !== row.type) {
-							// Type-specific fields are fixed when Kirby creates the
-							// drawer, so replace it when the selected type changes.
-							this.open(updated, true);
-						}
 					},
 					next: () => this.open(next, true),
 					prev: () => this.open(previous, true),

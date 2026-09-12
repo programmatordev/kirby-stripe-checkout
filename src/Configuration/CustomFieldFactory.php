@@ -68,7 +68,11 @@ final class CustomFieldFactory
                 }
             }
 
-            $key = $this->identifier($field['key'], $path . '.key');
+            $key = $this->identifier(
+                value: $field['key'],
+                maximumLength: CustomField::MAX_KEY_LENGTH,
+                path: $path . '.key',
+            );
 
             if (isset($keys[$key])) {
                 throw new ConfigurationException('configuration.value_invalid', $path . '.key');
@@ -225,7 +229,11 @@ final class CustomFieldFactory
                 }
             }
 
-            $value = $this->identifier($option['value'], $optionPath . '.value');
+            $value = $this->identifier(
+                value: $option['value'],
+                maximumLength: CustomFieldOption::MAX_VALUE_LENGTH,
+                path: $optionPath . '.value',
+            );
 
             if (isset($values[$value])) {
                 throw new ConfigurationException('configuration.value_invalid', $optionPath . '.value');
@@ -279,13 +287,16 @@ final class CustomFieldFactory
         return $values;
     }
 
-    private function identifier(mixed $value, string $path): string
+    private function identifier(mixed $value, int $maximumLength, string $path): string
     {
         if (is_string($value) === false) {
             throw new ConfigurationException('configuration.type_invalid', $path);
         }
 
-        if (preg_match('/\A[a-z0-9]{1,64}\z/D', $value) !== 1) {
+        if (
+            preg_match('/\A[a-z0-9]+\z/D', $value) !== 1
+            || strlen($value) > $maximumLength
+        ) {
             throw new ConfigurationException('configuration.value_invalid', $path);
         }
 

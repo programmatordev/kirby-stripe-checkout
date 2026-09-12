@@ -57,6 +57,20 @@ final class CustomFieldValuesTest extends TestCase
         ], $customField->toArray());
     }
 
+    public function testAcceptsStripesMaximumIdentifierLengths(): void
+    {
+        $option = new CustomFieldOption(str_repeat('o', 100), 'Option');
+        $customField = new CustomField(
+            key: str_repeat('k', 200),
+            label: 'Reference',
+            type: CustomFieldType::Dropdown,
+            options: [$option],
+        );
+
+        $this->assertSame(200, strlen($customField->key()));
+        $this->assertSame(100, strlen($customField->options()[0]->value()));
+    }
+
     #[DataProvider('invalidCustomFieldProvider')]
     public function testRejectsInvalidCustomFields(Closure $create): void
     {
@@ -73,6 +87,13 @@ final class CustomFieldValuesTest extends TestCase
         yield 'invalid key' => [
             static fn(): CustomField => new CustomField(
                 'Reference',
+                'Reference',
+                CustomFieldType::Text,
+            ),
+        ];
+        yield 'oversized key' => [
+            static fn(): CustomField => new CustomField(
+                str_repeat('a', 201),
                 'Reference',
                 CustomFieldType::Text,
             ),
@@ -193,6 +214,7 @@ final class CustomFieldValuesTest extends TestCase
     public static function invalidOptionProvider(): iterable
     {
         yield 'uppercase value' => ['Morning', 'Morning'];
+        yield 'oversized value' => [str_repeat('a', 101), 'Morning'];
         yield 'blank value' => ['', 'Morning'];
         yield 'blank label' => ['morning', ''];
         yield 'padded label' => ['morning', ' Morning '];
