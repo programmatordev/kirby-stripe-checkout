@@ -54,6 +54,13 @@
 		</k-input-validator>
 
 		<k-box
+			v-if="selectionWarning"
+			:text="selectionWarning"
+			theme="warning"
+			class="k-stripe-checkout-catalogue-picker-field__status"
+		/>
+
+		<k-box
 			v-if="statusText"
 			:theme="statusTheme"
 			:text="statusText"
@@ -113,6 +120,9 @@ export default {
 		};
 	},
 	computed: {
+		selectionWarning() {
+			return this.sourceInactive ? null : this.localSelected?.warning ?? null;
+		},
 		apiEndpoint() {
 			return this.endpoint ?? this.endpoints.field;
 		},

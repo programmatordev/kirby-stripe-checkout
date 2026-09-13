@@ -52,11 +52,14 @@ final class TaxCodeCatalogue
             $items = [];
 
             foreach ($cached['items'] as $item) {
+                // Cached classifications must retain requirement metadata so
+                // an authorized Panel load cannot silently omit the location warning.
                 if (
                     is_array($item) === false
                     || is_string($item['id'] ?? null) === false
                     || is_string($item['name'] ?? null) === false
                     || is_string($item['description'] ?? null) === false
+                    || is_bool($item['requiresPerformanceLocation'] ?? null) === false
                     || isset($items[$item['id']])
                 ) {
                     return $empty;
@@ -67,6 +70,7 @@ final class TaxCodeCatalogue
                     providerName: $item['name'],
                     providerDescription: $item['description'],
                     confirmed: true,
+                    requiresPerformanceLocation: $item['requiresPerformanceLocation'],
                 );
             }
 
@@ -142,6 +146,7 @@ final class TaxCodeCatalogue
                         providerName: $record->name,
                         providerDescription: $record->description,
                         confirmed: true,
+                        requiresPerformanceLocation: $record->requiresPerformanceLocation,
                     );
                 }
 
@@ -216,6 +221,7 @@ final class TaxCodeCatalogue
                 'id' => $taxCode->id(),
                 'name' => $taxCode->providerName(),
                 'description' => $taxCode->providerDescription(),
+                'requiresPerformanceLocation' => $taxCode->requiresPerformanceLocation(),
             ], $state['items']),
         ]);
     }

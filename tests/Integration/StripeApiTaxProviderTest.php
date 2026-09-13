@@ -29,6 +29,7 @@ final class StripeApiTaxProviderTest extends KirbyTestCase
                     'id' => 'txcd_test',
                     'name' => 'Test classification',
                     'description' => 'Provider description',
+                    'requirements' => ['performance_location' => count($requests) === 1 ? 'required' : 'optional'],
                 ]],
             ], JSON_THROW_ON_ERROR), 200, []];
         });
@@ -42,6 +43,8 @@ final class StripeApiTaxProviderTest extends KirbyTestCase
         $this->assertSame('txcd_test', $first->taxCodes()[0]->id);
         $this->assertSame('Test classification', $first->taxCodes()[0]->name);
         $this->assertSame('Provider description', $first->taxCodes()[0]->description);
+        $this->assertTrue($first->taxCodes()[0]->requiresPerformanceLocation);
+        $this->assertFalse($second->taxCodes()[0]->requiresPerformanceLocation);
         $this->assertCount(2, $requests);
         $this->assertSame('get', $requests[0][0]);
         $this->assertSame('https://api.stripe.com/v1/tax_codes', $requests[0][1]);

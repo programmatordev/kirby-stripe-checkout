@@ -18,6 +18,7 @@ return [
     'programmatordev.stripe-checkout.taxCodes.selectedUnavailable' => 'This saved code is not in the catalogue. It has been preserved; refresh or select another code.',
     'programmatordev.stripe-checkout.taxCodes.savedReference' => 'Saved Tax Code',
     'programmatordev.stripe-checkout.taxCodes.inherit' => 'Use product default or Stripe preset',
+    'programmatordev.stripe-checkout.taxCodes.performanceLocationUnsupported' => 'This Tax Code requires a performance location. This is not currently supported.',
     'programmatordev.stripe-checkout.diagnostics.taxCodes' => 'Tax Code catalogue',
     'programmatordev.stripe-checkout.diagnostics.taxCodes.denied' => 'You do not have permission to read the Tax Code catalogue.',
     'programmatordev.stripe-checkout.diagnostics.taxCodes.ready' => '{count} codes cached. Last refresh: {refreshedAt}. This does not check Stripe Tax readiness.',

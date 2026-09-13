@@ -16,6 +16,42 @@ use ProgrammatorDev\StripeCheckout\Test\Support\Stripe\FakeTaxProvider;
 
 final class TaxCodeCatalogueTest extends TestCase
 {
+    public function testPreservesPerformanceLocationRequirementsInTheCache(): void
+    {
+        $provider = new FakeTaxProvider(pages: ['first' => new TaxCodeListResult([
+            new TaxCodeRecord('txcd_event', 'Event', 'Event admission', requiresPerformanceLocation: true),
+            self::record(),
+        ], false)]);
+        $catalogue = new TaxCodeCatalogue(new MemoryCache(), $provider, 'test-account');
+        $catalogue->load();
+
+        $this->assertTrue($catalogue->find('txcd_event')?->requiresPerformanceLocation());
+        $this->assertFalse($catalogue->find('txcd_test')?->requiresPerformanceLocation());
+        $this->assertSame([null], $provider->listCursors);
+    }
+
+    public function testCachedCodesWithoutRequirementMetadataAreRefreshedOnPanelLoad(): void
+    {
+        $cache = new MemoryCache();
+        $cache->set('test-account', [
+            'items' => [[
+                'id' => 'txcd_event',
+                'name' => 'Event',
+                'description' => 'Event admission',
+            ]],
+            'refreshedAt' => time(),
+            'failedAt' => null,
+        ]);
+        $provider = new FakeTaxProvider(pages: ['first' => new TaxCodeListResult([
+            new TaxCodeRecord('txcd_event', 'Event', 'Event admission', requiresPerformanceLocation: true),
+        ], false)]);
+        $catalogue = new TaxCodeCatalogue($cache, $provider, 'test-account');
+        $catalogue->load();
+
+        $this->assertTrue($catalogue->find('txcd_event')?->requiresPerformanceLocation());
+        $this->assertSame([null], $provider->listCursors);
+    }
+
     public function testReadsAllPagesAndPreservesProviderDescriptions(): void
     {
         $provider = new FakeTaxProvider(pages: [
@@ -181,6 +217,7 @@ final class TaxCodeCatalogueTest extends TestCase
             'id' => 'wrong',
             'name' => 'Test',
             'description' => 'Test',
+            'requiresPerformanceLocation' => false,
         ]];
         $cache->set('first-account', $state);
         $this->assertSame([], $first->cached()['items']);

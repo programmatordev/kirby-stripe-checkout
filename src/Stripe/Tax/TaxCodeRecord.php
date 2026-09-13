@@ -11,5 +11,6 @@ final readonly class TaxCodeRecord
         public string $id,
         public string $name,
         public string $description,
+        public bool $requiresPerformanceLocation = false,
     ) {}
 }

@@ -205,11 +205,21 @@ final class TaxCodeField extends FieldClass
     /** @return array<string, mixed> */
     private static function item(TaxCode $code): array
     {
+        // Warn without making the code invalid: a trusted Session request
+        // filter may supply the location even though the Panel cannot configure it.
+        $warning = $code->requiresPerformanceLocation()
+            ? I18n::translate('programmatordev.stripe-checkout.taxCodes.performanceLocationUnsupported')
+            : null;
+
         return [
             'id' => $code->id(),
-            'icon' => 'tag',
+            'icon' => $warning === null ? 'tag' : 'alert',
             'text' => $code->providerName(),
             'info' => $code->providerDescription(),
+            ...($warning === null ? [] : [
+                'theme' => 'warning',
+                'warning' => $warning,
+            ]),
         ];
     }
 

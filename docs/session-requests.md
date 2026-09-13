@@ -54,7 +54,7 @@ The final request is stored on the Order exactly as submitted. Do not place secr
 
 Automatic Tax and the Kirby price inclusion policy are defaults for new Sessions, not locks on trusted per-order logic. The filter can enable or disable Automatic Tax, change inline `tax_behavior`, or supply Stripe-owned manual `tax_rates`. Stripe validates whether the final combination is supported; the plugin does not calculate tax or maintain its own manual-rate engine. Existing Stripe Price IDs remain fixed, so their Price/Product tax configuration stays in Stripe.
 
-Event categories can require a performance location. For example, a filter can replace an inline product's classification with Stripe's location-aware shape:
+Some Tax Codes require a performance location, which the Panel flags with a warning. The plugin does not configure or select locations. Without one, Stripe rejects Session creation—even when Automatic Tax is disabled in a customized request that still submits such a code. A developer can supply an existing account-specific Tax Location through the filter. For example, a filter can replace an inline product's classification with Stripe's location-aware shape:
 
 ```php
 $productData = &$parameters['line_items'][0]['price_data']['product_data'];

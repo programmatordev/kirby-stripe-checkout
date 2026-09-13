@@ -10,7 +10,7 @@ Stripeprice: price_1UC0dKCHaQ3jXxl70OEeZUMn
 
 ----
 
-Taxcode: txcd_33020002
+Taxcode: 
 
 ----
 

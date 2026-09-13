@@ -84,13 +84,23 @@ final class TaxCodeValidatorTest extends TestCase
         );
     }
 
-    /** @return array{items: list<array{id: string, name: string, description: string}>, refreshedAt: int, failedAt: null} */
+    /** @return array{items: list<array{id: string, name: string, description: string, requiresPerformanceLocation: bool}>, refreshedAt: int, failedAt: null} */
     private function snapshot(): array
     {
         return [
             'items' => [
-                ['id' => 'txcd_first', 'name' => 'First', 'description' => 'First classification'],
-                ['id' => 'txcd_second', 'name' => 'Second', 'description' => 'Second classification'],
+                [
+                    'id' => 'txcd_first',
+                    'name' => 'First',
+                    'description' => 'First classification',
+                    'requiresPerformanceLocation' => false,
+                ],
+                [
+                    'id' => 'txcd_second',
+                    'name' => 'Second',
+                    'description' => 'Second classification',
+                    'requiresPerformanceLocation' => false,
+                ],
             ],
             'refreshedAt' => time(),
             'failedAt' => null,

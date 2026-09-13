@@ -18,6 +18,7 @@ return [
     'programmatordev.stripe-checkout.taxCodes.selectedUnavailable' => 'Este código guardado não está no catálogo. Foi preservado; atualize ou selecione outro código.',
     'programmatordev.stripe-checkout.taxCodes.savedReference' => 'Código fiscal guardado',
     'programmatordev.stripe-checkout.taxCodes.inherit' => 'Usar predefinição do produto ou do Stripe',
+    'programmatordev.stripe-checkout.taxCodes.performanceLocationUnsupported' => 'Este código fiscal requer um local de prestação. Esta opção ainda não é suportada.',
     'programmatordev.stripe-checkout.diagnostics.taxCodes' => 'Catálogo de códigos fiscais',
     'programmatordev.stripe-checkout.diagnostics.taxCodes.denied' => 'Não tem permissão para consultar o catálogo de códigos fiscais.',
     'programmatordev.stripe-checkout.diagnostics.taxCodes.ready' => '{count} códigos em cache. Última atualização: {refreshedAt}. Não verifica a configuração fiscal do Stripe.',

@@ -100,7 +100,7 @@ Authorized Panel access loads the catalogue initially and refreshes it after 30 
 
 With Automatic Tax enabled, the initiating order freezes the effective local classification and the Session request maps it to the inline Stripe Product. Retrying an uncertain request reuses that exact request instead of rereading edited product fields. See [Automatic Tax configuration](configuration.md#automatic-tax-configuration) and [Stripe's product tax-code guide](https://docs.stripe.com/tax/products-prices-tax-codes-tax-behavior).
 
-Some categories, such as event admission, need a performance location in addition to a Tax Code. Selecting a code does not configure that location. Use the [complete Session request filter](session-requests.md#tax-customization) to supply Stripe's product `tax_details`; Stripe validates location requirements. The plugin does not create tax locations or merchant registrations.
+Some categories, such as event admission, need a performance location in addition to a Tax Code. The Panel warns when a selected code requires one, including variant overrides. Selecting a code does not configure that location: the plugin does not currently provide a location picker or create locations. A performance location is a merchant-defined address saved in your Stripe account, not part of a global Stripe catalogue. Use the [complete Session request filter](session-requests.md#tax-customization) to supply Stripe's product `tax_details`. Without the required location, Stripe rejects Session creation rather than asking the buyer to enter it. The warning does not block saving or the developer's filter. Merchant registrations remain managed in Stripe.
 
 ## Variants
 

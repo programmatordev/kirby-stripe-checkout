@@ -10,8 +10,12 @@ use Kirby\Form\Form;
 use ProgrammatorDev\StripeCheckout\Configuration\StripeConfiguration;
 use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
 use ProgrammatorDev\StripeCheckout\Kirby\TaxCodeField;
+use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeCatalogue;
+use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeListResult;
+use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeRecord;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
+use ProgrammatorDev\StripeCheckout\Test\Support\Stripe\FakeTaxProvider;
 use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
 use Stripe\ApiRequestor;
 use Stripe\HttpClient\ClientInterface;
@@ -19,6 +23,39 @@ use Stripe\HttpClient\ClientInterface;
 final class TaxCodeFieldTest extends KirbyTestCase
 {
     private const PREFIX = 'programmatordev.stripe-checkout';
+
+    public function testRequiredPerformanceLocationWarnsWithoutBlockingSelectionOrStorage(): void
+    {
+        $page = $this->restart();
+        $catalogue = new TaxCodeCatalogue(
+            $this->kirby->cache(self::PREFIX . '.taxCodes'),
+            new FakeTaxProvider(pages: [
+                'first' => new TaxCodeListResult([
+                    new TaxCodeRecord('txcd_test0', 'Event', 'Event admission', requiresPerformanceLocation: true),
+                ], false),
+            ]),
+            'unconfigured',
+        );
+        $catalogue->refresh();
+        $field = Form::for($page)->fields()->field('taxCode');
+        /** @var array{disabled: bool, selected: array{theme: string, warning: string}} $props */
+        $props = $field->toArray();
+        $selected = $props['selected'];
+
+        $this->assertSame('txcd_test0', $field->toStoredValue());
+        $this->assertFalse($props['disabled']);
+        $this->assertSame('warning', $selected['theme']);
+        $this->assertStringContainsString('performance location', $selected['warning']);
+        $this->assertSame($selected, TaxCodeField::apiResponse($this->kirby, null, 1, false, 'txcd_test0')['data'][0]);
+        /** @var array{data: list<array<string, mixed>>} $response */
+        $response = $this->kirby->api()->call('pages/product/fields/options/tax-codes', 'GET', [
+            'query' => [
+                'view' => 'selected',
+                'taxCode' => 'txcd_test0',
+            ],
+        ]);
+        $this->assertSame($selected, $response['data'][0]);
+    }
 
     public function testFieldStoresAScalarAndHydratesCachedDetails(): void
     {
@@ -32,6 +69,7 @@ final class TaxCodeFieldTest extends KirbyTestCase
         $this->assertSame('txcd_test0', $field->toStoredValue());
         $this->assertSame('txcd_test0', $props['value']);
         $this->assertSame('Category 0', $props['selected']['text'] ?? null);
+        $this->assertArrayNotHasKey('warning', $props['selected'] ?? []);
         $this->assertSame('ready', $props['catalogue']['status']);
         $this->assertFalse($props['disabled']);
         $this->assertSame('', $field->fill('')->toStoredValue());
@@ -251,6 +289,7 @@ final class TaxCodeFieldTest extends KirbyTestCase
                 'id' => 'txcd_test' . $index,
                 'name' => 'Category ' . $index,
                 'description' => 'Description',
+                'requiresPerformanceLocation' => false,
             ];
         }
 

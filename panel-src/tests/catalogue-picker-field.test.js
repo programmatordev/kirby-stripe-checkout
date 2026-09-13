@@ -7,6 +7,20 @@ const source = await readFile(new URL("../src/components/CataloguePickerField.vu
 const script = source.split("<script>")[1].split("</script>")[0];
 const { default: component } = await import(`data:text/javascript;base64,${Buffer.from(script).toString("base64")}`);
 
+test("selection warnings remain visible in read-only translations and hide for an inactive source", () => {
+	const field = {
+		localSelected: { warning: "A performance location is required." },
+		sourceInactive: false,
+		disabled: true
+	};
+	assert.equal(component.computed.selectionWarning.call(field), field.localSelected.warning);
+	field.sourceInactive = true;
+	assert.equal(component.computed.selectionWarning.call(field), null);
+	field.sourceInactive = false;
+	field.localSelected = null;
+	assert.equal(component.computed.selectionWarning.call(field), null);
+});
+
 for (const fails of [false, true]) {
 	test(`server-selected props supersede an earlier hydration ${fails ? "failure" : "response"}`, async () => {
 		let resolve;
