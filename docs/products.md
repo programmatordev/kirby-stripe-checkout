@@ -312,6 +312,8 @@ The catalogue is a Kirby-native, read-only cache for Panel convenience:
 - searching and pagination then use the local catalogue;
 - a failed refresh keeps the last successful catalogue and marks it as stale;
 - a refresh immediately rehydrates the saved selection; if it is no longer eligible, its ID is preserved with a warning;
+- a Price chosen in the dialog is also checked after refresh; if it is no longer eligible, choose another Price before confirming;
+- saving a variant updates its cached Price preview even when the Price ID stays the same;
 - a saved selection is hydrated from the cache without contacting Stripe on every Page load;
 - a saved ID is preserved even if the catalogue is unavailable or that Price is no longer eligible.
 

@@ -155,6 +155,8 @@ export default {
 			localValue: this.clone(this.value),
 			localStripePriceItems: {},
 			localTaxCodeItems: {},
+			stripePriceRequestIds: {},
+			taxCodeRequestIds: {},
 			variantPage: 1,
 			variantPageSize: 10
 		};
@@ -666,7 +668,8 @@ export default {
 					: null;
 			} else {
 				current.stripePriceId = value.stripePriceId || null;
-				this.hydrateStripePrices([current.stripePriceId]);
+				// The drawer may have refreshed metadata without changing the saved ID.
+				this.hydrateStripePrices([current.stripePriceId], true);
 			}
 
 			// A hidden field must not erase a dormant technical override.
@@ -677,27 +680,45 @@ export default {
 
 			this.emit();
 		},
-		async hydrateStripePrices(priceIds) {
-			const missing = [...new Set(priceIds)]
-				.filter(priceId => priceId && !this.localStripePriceItems[priceId]);
+		async hydrateStripePrices(priceIds, force = false) {
+			const selected = [...new Set(priceIds)]
+				.filter(priceId => priceId && (force || !this.localStripePriceItems[priceId]));
 
 			if (
 				this.priceSource !== "stripe" ||
-				missing.length === 0 ||
+				selected.length === 0 ||
 				this.pricesReadable === false ||
 				!this.endpoints.field
 			) {
 				return;
 			}
 
+			const requestIds = {};
+
+			for (const id of selected) {
+				requestIds[id] = (this.stripePriceRequestIds[id] ?? 0) + 1;
+				this.stripePriceRequestIds[id] = requestIds[id];
+			}
+
 			try {
 				const response = await this.$api.get(`${this.endpoints.field}/prices`, {
-					prices: missing.join(","),
+					prices: selected.join(","),
 					view: "selected"
 				});
 
-				for (const item of response?.data ?? []) {
-					this.$set(this.localStripePriceItems, item.id, item);
+				for (const id of selected) {
+					// Per-ID freshness also permits concurrent reads of other table pages.
+					if (requestIds[id] !== this.stripePriceRequestIds[id]) {
+						continue;
+					}
+
+					const item = response?.data?.find(item => item.id === id);
+
+					if (item) {
+						this.$set(this.localStripePriceItems, id, item);
+					} else {
+						this.$delete(this.localStripePriceItems, id);
+					}
 				}
 			} catch (error) {
 				// Keep the saved references visible when cached details are unavailable.
@@ -720,6 +741,13 @@ export default {
 				return;
 			}
 
+			const requestIds = {};
+
+			for (const id of selected) {
+				requestIds[id] = (this.taxCodeRequestIds[id] ?? 0) + 1;
+				this.taxCodeRequestIds[id] = requestIds[id];
+			}
+
 			try {
 				const response = await this.$api.get(`${this.endpoints.field}/tax-codes`, {
 					taxCodes: selected.join(","),
@@ -727,11 +755,18 @@ export default {
 				});
 
 				for (const id of selected) {
-					this.$delete(this.localTaxCodeItems, id);
-				}
+					// An older batch must not replace refreshed requirement warnings.
+					if (requestIds[id] !== this.taxCodeRequestIds[id]) {
+						continue;
+					}
 
-				for (const item of response?.data ?? []) {
-					this.$set(this.localTaxCodeItems, item.id, item);
+					const item = response?.data?.find(item => item.id === id);
+
+					if (item) {
+						this.$set(this.localTaxCodeItems, id, item);
+					} else {
+						this.$delete(this.localTaxCodeItems, id);
+					}
 				}
 			} catch (error) {
 				// Retain saved IDs when their cached details cannot be read.

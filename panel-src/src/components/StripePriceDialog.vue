@@ -179,13 +179,26 @@ export default {
 				const refreshed = await this.$api.post(this.endpoint);
 				this.$emit("refreshed", refreshed);
 
-				const response = await this.$api.get(this.endpoint, {
-					page: this.pagination.page,
-					product: this.product?.id,
-					search: this.query,
-					view: this.product === null ? "products" : "prices"
-				});
+				const selectedId = this.selected?.id;
+				// List results are filtered and paginated; only a selected-ID read can
+				// establish that the chosen Price disappeared from the refreshed cache.
+				const [response, selectedResponse] = await Promise.all([
+					this.$api.get(this.endpoint, {
+						page: this.pagination.page,
+						product: this.product?.id,
+						search: this.query,
+						view: this.product === null ? "products" : "prices"
+					}),
+					selectedId ? this.$api.get(this.endpoint, {
+						price: selectedId,
+						view: "selected"
+					}) : Promise.resolve(null)
+				]);
 				this.applyResponse(response);
+
+				if (selectedId && this.selected?.id === selectedId) {
+					this.selected = selectedResponse?.data?.find(item => item.id === selectedId) ?? null;
+				}
 
 				if (refreshed.catalogue?.status === "ready") {
 					this.$panel.notification.success(
@@ -219,7 +232,7 @@ export default {
 			this.applyResponse(response);
 		},
 		submit() {
-			if (this.selected !== null) {
+			if (this.selected !== null && this.refreshing === false) {
 				this.$emit("submit", [this.selected]);
 			}
 		}
