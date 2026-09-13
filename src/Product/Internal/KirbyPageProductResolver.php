@@ -14,11 +14,13 @@ use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductUnavailableException;
 use ProgrammatorDev\StripeCheckout\Product\Product;
+use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
+use ProgrammatorDev\StripeCheckout\Tax\TaxErrorCode;
 use Throwable;
 
 /**
@@ -72,11 +74,11 @@ final class KirbyPageProductResolver implements ProductResolverInterface
         } elseif ($variant !== null) {
             $sku = $variant['sku'];
         } else {
-            throw new InvalidProductException('product.variant_invalid');
+            throw new InvalidProductException(ProductErrorCode::VARIANT_INVALID);
         }
 
         if ($name === null) {
-            throw new InvalidProductException('product.name_missing');
+            throw new InvalidProductException(ProductErrorCode::NAME_MISSING);
         }
 
         return new Product(
@@ -116,7 +118,7 @@ final class KirbyPageProductResolver implements ProductResolverInterface
         }
 
         if (is_string($value) === false) {
-            throw new InvalidProductException('tax.code_invalid');
+            throw new InvalidProductException(TaxErrorCode::CODE_INVALID);
         }
 
         return new TaxCode(trim($value));
@@ -130,7 +132,7 @@ final class KirbyPageProductResolver implements ProductResolverInterface
         try {
             return $this->schema->canonical($value);
         } catch (Throwable $error) {
-            throw new InvalidProductException('product.options_invalid', $error);
+            throw new InvalidProductException(ProductErrorCode::OPTIONS_INVALID, $error);
         }
     }
 
@@ -143,7 +145,7 @@ final class KirbyPageProductResolver implements ProductResolverInterface
         try {
             return $this->schema->localized($canonical, $overlay);
         } catch (Throwable $error) {
-            throw new InvalidProductException('product.options_invalid', $error);
+            throw new InvalidProductException(ProductErrorCode::OPTIONS_INVALID, $error);
         }
     }
 
@@ -156,7 +158,7 @@ final class KirbyPageProductResolver implements ProductResolverInterface
     {
         if ($canonical['options'] === []) {
             if ($selectedOptions !== []) {
-                throw new InvalidProductException('product.selected_options_invalid');
+                throw new InvalidProductException(ProductErrorCode::SELECTED_OPTIONS_INVALID);
             }
 
             return null;
@@ -168,14 +170,14 @@ final class KirbyPageProductResolver implements ProductResolverInterface
 
             if ($variantOptions === $selectedOptions) {
                 if ($variant['enabled'] === false) {
-                    throw new ProductUnavailableException('product.variant_unavailable');
+                    throw new ProductUnavailableException(ProductErrorCode::VARIANT_UNAVAILABLE);
                 }
 
                 return $variant;
             }
         }
 
-        throw new InvalidProductException('product.selected_options_invalid');
+        throw new InvalidProductException(ProductErrorCode::SELECTED_OPTIONS_INVALID);
     }
 
     /**
@@ -199,7 +201,7 @@ final class KirbyPageProductResolver implements ProductResolverInterface
             }
 
             if ($value === null) {
-                throw new InvalidProductException('product.selected_options_invalid');
+                throw new InvalidProductException(ProductErrorCode::SELECTED_OPTIONS_INVALID);
             }
 
             $selected[] = new SelectedOption(
@@ -287,7 +289,7 @@ final class KirbyPageProductResolver implements ProductResolverInterface
         $field = $content->get($name);
 
         if ($field instanceof Field === false) {
-            throw new InvalidProductException('product.field_invalid');
+            throw new InvalidProductException(ProductErrorCode::FIELD_INVALID);
         }
 
         return $field;

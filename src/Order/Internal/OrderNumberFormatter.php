@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Order\Internal;
 use Closure;
 use Kirby\Uuid\Uri;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
+use ProgrammatorDev\StripeCheckout\Order\OrderErrorCode;
 use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 use Throwable;
 
@@ -38,7 +39,7 @@ final class OrderNumberFormatter
 
             return OrderData::text(trim($number), 80);
         } catch (Throwable) {
-            throw new OrderDataException('order.number_invalid');
+            throw new OrderDataException(OrderErrorCode::NUMBER_INVALID);
         }
     }
 }

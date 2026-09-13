@@ -20,6 +20,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestContextFactor
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestCustomizer;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
+use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationReport;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
@@ -35,6 +36,7 @@ use ProgrammatorDev\StripeCheckout\Product\Internal\KirbyPageLocator;
 use ProgrammatorDev\StripeCheckout\Product\Internal\KirbyPageProductResolver;
 use ProgrammatorDev\StripeCheckout\Product\Internal\ProductOptionsFactory;
 use ProgrammatorDev\StripeCheckout\Product\Product;
+use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
@@ -50,6 +52,7 @@ use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 use ProgrammatorDev\StripeCheckout\Stripe\StripeApiClientFactory;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\StripeApiTaxProvider;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeCatalogue;
+use ProgrammatorDev\StripeCheckout\Tax\TaxErrorCode;
 use ProgrammatorDev\StripeCheckout\Translation\LocaleResolver;
 use Stripe\StripeClient;
 use Stripe\Util\ApiVersion;
@@ -98,7 +101,7 @@ final class RuntimeFactory
                 $currency = $runtime->settings()->currency();
 
                 if ($currency === null) {
-                    throw new ConfigurationException('configuration.required_missing', 'settings.currency');
+                    throw new ConfigurationException(ConfigurationErrorCode::REQUIRED_MISSING, 'settings.currency');
                 }
 
                 // A syntactically valid ID is not proof the current Price is usable.
@@ -142,7 +145,7 @@ final class RuntimeFactory
         // A successful empty snapshot means an unknown code, not an outage.
         // A failed refresh does not invalidate the retained last-good snapshot.
         if ($catalogue['refreshedAt'] === null) {
-            throw new InvalidProductException('tax.catalogue_unavailable');
+            throw new InvalidProductException(TaxErrorCode::CATALOGUE_UNAVAILABLE);
         }
 
         foreach ($catalogue['items'] as $taxCode) {
@@ -151,7 +154,7 @@ final class RuntimeFactory
             }
         }
 
-        throw new InvalidProductException('tax.code_invalid');
+        throw new InvalidProductException(TaxErrorCode::CODE_INVALID);
     }
 
     public function productOptions(Page|string $reference): ProductOptions
@@ -178,7 +181,7 @@ final class RuntimeFactory
         }
 
         if (is_string($value) === false) {
-            throw new InvalidProductException('product.stripe_price_invalid');
+            throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INVALID);
         }
 
         return $this->productStripePrice($value);
@@ -193,13 +196,13 @@ final class RuntimeFactory
 
         if ($currency === null) {
             throw new ConfigurationException(
-                'configuration.required_missing',
+                ConfigurationErrorCode::REQUIRED_MISSING,
                 'settings.currency',
             );
         }
 
         return $this->stripePriceCatalogue()->find($reference->priceId(), $currency)
-            ?? throw new InvalidProductException('product.stripe_price_unavailable');
+            ?? throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_UNAVAILABLE);
     }
 
     public function stripePriceCatalogue(): PriceCatalogue
@@ -223,7 +226,7 @@ final class RuntimeFactory
 
         if ($provider === null) {
             throw new ConfigurationException(
-                'configuration.credential_missing',
+                ConfigurationErrorCode::CREDENTIAL_MISSING,
                 'stripe.secretKey',
             );
         }

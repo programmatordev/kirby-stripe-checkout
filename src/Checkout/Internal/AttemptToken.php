@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 use Closure;
 use Kirby\Uuid\Uuid;
 use LogicException;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderUuidValidator;
@@ -34,7 +35,7 @@ final readonly class AttemptToken
             strlen($value) > 256
             || preg_match('/\A(?<uuid>[A-Za-z0-9_-]+)\.(?<nonce>[A-Za-z0-9_-]{43})\z/D', $value, $parts) !== 1
         ) {
-            throw new CheckoutInputException('checkout.attempt_token_invalid');
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_TOKEN_INVALID);
         }
 
         $orderUuid = self::decode($parts['uuid']);
@@ -48,14 +49,14 @@ final readonly class AttemptToken
                 || self::encode($nonce) !== $parts['nonce']
                 || strlen($nonce) !== self::NONCE_BYTES
             ) {
-                throw new CheckoutInputException('checkout.attempt_token_invalid');
+                throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_TOKEN_INVALID);
             }
 
             // Order identities follow Kirby's configured UUID vocabulary,
             // including custom generators as well as the bundled formats.
             OrderData::uuid('page://' . $orderUuid);
         } catch (Throwable) {
-            throw new CheckoutInputException('checkout.attempt_token_invalid');
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_TOKEN_INVALID);
         }
 
         $this->orderUuid = $orderUuid;

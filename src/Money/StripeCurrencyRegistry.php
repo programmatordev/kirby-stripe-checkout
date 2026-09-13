@@ -78,7 +78,7 @@ final class StripeCurrencyRegistry
         $this->assertSupported($currency);
 
         if (preg_match('/^[0-9]+(?:\.[0-9]+)?$/D', $amount) !== 1) {
-            throw new MoneyException('money.amount_invalid');
+            throw new MoneyException(MoneyErrorCode::AMOUNT_INVALID);
         }
 
         try {
@@ -93,11 +93,11 @@ final class StripeCurrencyRegistry
                 ->toBigInteger()
                 ->toInt();
         } catch (RoundingNecessaryException $error) {
-            throw new MoneyException('money.amount_inexact', $error);
+            throw new MoneyException(MoneyErrorCode::AMOUNT_INEXACT, $error);
         } catch (IntegerOverflowException $error) {
-            throw new MoneyException('money.amount_overflow', $error);
+            throw new MoneyException(MoneyErrorCode::AMOUNT_OVERFLOW, $error);
         } catch (MathException $error) {
-            throw new MoneyException('money.amount_invalid', $error);
+            throw new MoneyException(MoneyErrorCode::AMOUNT_INVALID, $error);
         }
 
         return new MoneySnapshot($currency, $minorAmount);
@@ -106,7 +106,7 @@ final class StripeCurrencyRegistry
     public function fromMoney(Money $money): MoneySnapshot
     {
         if ($money->isNegative()) {
-            throw new MoneyException('money.amount_negative');
+            throw new MoneyException(MoneyErrorCode::AMOUNT_NEGATIVE);
         }
 
         return $this->fromDecimal(
@@ -123,7 +123,7 @@ final class StripeCurrencyRegistry
             in_array($currency, self::WHOLE_UNIT_TWO_DECIMAL, true)
             && $minorAmount % 100 !== 0
         ) {
-            throw new MoneyException('money.provider_amount_invalid');
+            throw new MoneyException(MoneyErrorCode::PROVIDER_AMOUNT_INVALID);
         }
 
         return new MoneySnapshot($currency, $minorAmount);
@@ -137,7 +137,7 @@ final class StripeCurrencyRegistry
             in_array($snapshot->currency(), self::WHOLE_UNIT_TWO_DECIMAL, true)
             && $snapshot->minorAmount() % 100 !== 0
         ) {
-            throw new MoneyException('money.provider_amount_invalid');
+            throw new MoneyException(MoneyErrorCode::PROVIDER_AMOUNT_INVALID);
         }
 
         try {
@@ -146,14 +146,14 @@ final class StripeCurrencyRegistry
 
             return Money::of($amount, $snapshot->currency());
         } catch (Throwable $error) {
-            throw new MoneyException('money.provider_amount_invalid', $error);
+            throw new MoneyException(MoneyErrorCode::PROVIDER_AMOUNT_INVALID, $error);
         }
     }
 
     private function assertSupported(string $currency): void
     {
         if ($this->supports($currency) === false) {
-            throw new MoneyException('money.currency_unsupported');
+            throw new MoneyException(MoneyErrorCode::CURRENCY_UNSUPPORTED);
         }
     }
 }

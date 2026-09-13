@@ -42,21 +42,21 @@ final class OptionPresetLibrary
             $presets = is_array($value) ? $value : Yaml::decode($value);
         } catch (Throwable $error) {
             throw new ConfigurationException(
-                'persistence.content_invalid',
+                PersistenceErrorCode::CONTENT_INVALID,
                 'optionPresets',
                 $error,
             );
         }
 
         if (array_is_list($presets) === false) {
-            throw new ConfigurationException('persistence.content_invalid', 'optionPresets');
+            throw new ConfigurationException(PersistenceErrorCode::CONTENT_INVALID, 'optionPresets');
         }
 
         $normalized = [];
 
         foreach ($presets as $preset) {
             if (is_array($preset) === false) {
-                throw new ConfigurationException('persistence.content_invalid', 'optionPresets');
+                throw new ConfigurationException(PersistenceErrorCode::CONTENT_INVALID, 'optionPresets');
             }
 
             $label = $this->requiredLabel($preset['label'] ?? null);
@@ -65,13 +65,13 @@ final class OptionPresetLibrary
 
             foreach ($options as $option) {
                 if (is_array($option) === false) {
-                    throw new ConfigurationException('persistence.content_invalid', 'optionPresets');
+                    throw new ConfigurationException(PersistenceErrorCode::CONTENT_INVALID, 'optionPresets');
                 }
 
                 $values = $this->decodeValues($option['values'] ?? null);
 
                 if ($values === []) {
-                    throw new ConfigurationException('persistence.content_invalid', 'optionPresets');
+                    throw new ConfigurationException(PersistenceErrorCode::CONTENT_INVALID, 'optionPresets');
                 }
 
                 $normalizedOptions[] = [
@@ -81,7 +81,7 @@ final class OptionPresetLibrary
             }
 
             if ($normalizedOptions === []) {
-                throw new ConfigurationException('persistence.content_invalid', 'optionPresets');
+                throw new ConfigurationException(PersistenceErrorCode::CONTENT_INVALID, 'optionPresets');
             }
 
             $normalized[] = ['label' => $label, 'options' => $normalizedOptions];
@@ -98,7 +98,7 @@ final class OptionPresetLibrary
                 $value = Yaml::decode($value);
             } catch (Throwable $error) {
                 throw new ConfigurationException(
-                    'persistence.content_invalid',
+                    PersistenceErrorCode::CONTENT_INVALID,
                     'optionPresets',
                     $error,
                 );
@@ -106,7 +106,7 @@ final class OptionPresetLibrary
         }
 
         if (is_array($value) === false || array_is_list($value) === false) {
-            throw new ConfigurationException('persistence.content_invalid', 'optionPresets');
+            throw new ConfigurationException(PersistenceErrorCode::CONTENT_INVALID, 'optionPresets');
         }
 
         return $value;
@@ -122,7 +122,7 @@ final class OptionPresetLibrary
         }
 
         if (is_array($value) === false || array_is_list($value) === false) {
-            throw new ConfigurationException('persistence.content_invalid', 'optionPresets');
+            throw new ConfigurationException(PersistenceErrorCode::CONTENT_INVALID, 'optionPresets');
         }
 
         $normalized = [];
@@ -143,7 +143,7 @@ final class OptionPresetLibrary
             || strlen(trim($value)) > 500
             || TextValidator::isSingleLine($value) === false
         ) {
-            throw new ConfigurationException('persistence.content_invalid', 'optionPresets');
+            throw new ConfigurationException(PersistenceErrorCode::CONTENT_INVALID, 'optionPresets');
         }
 
         return trim($value);

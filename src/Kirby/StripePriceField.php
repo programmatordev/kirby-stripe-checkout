@@ -14,6 +14,7 @@ use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Stripe\CataloguePagination;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogue;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogueErrorCode;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 
 /**
@@ -95,7 +96,7 @@ final class StripePriceField extends FieldClass
             return [
                 ...$props,
                 'catalogue' => [
-                    'error' => 'prices.configuration_invalid',
+                    'error' => PriceCatalogueErrorCode::CONFIGURATION_INVALID,
                     'failedAt' => null,
                     'refreshedAt' => null,
                     'status' => 'error',

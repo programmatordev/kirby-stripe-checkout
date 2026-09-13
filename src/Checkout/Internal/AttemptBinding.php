@@ -6,8 +6,10 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
 use InvalidArgumentException;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartSnapshot;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
+use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
@@ -74,7 +76,7 @@ final readonly class AttemptBinding
         ?string $guestReference = null,
     ): self {
         if ($cart->entries() === []) {
-            throw new CheckoutInputException('selection.invalid');
+            throw new CheckoutInputException(SelectionErrorCode::INVALID);
         }
 
         // Cart identity/revision identify selection state. The separate request
@@ -99,7 +101,7 @@ final readonly class AttemptBinding
         ?string $guestReference = null,
     ): self {
         if (array_is_list($items) === false || $items === [] || count($items) > ProductRequestNormalizer::MAX_ENTRIES) {
-            throw new CheckoutInputException('selection.invalid');
+            throw new CheckoutInputException(SelectionErrorCode::INVALID);
         }
 
         return new self(
@@ -126,14 +128,14 @@ final readonly class AttemptBinding
     public function assertMatches(self $binding): void
     {
         if (hash_equals($this->fingerprint, $binding->fingerprint) === false) {
-            throw new CheckoutInputException('checkout.attempt_conflict');
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
         }
     }
 
     public function assertMatchesFingerprint(string $fingerprint): void
     {
         if (preg_match('/\A[a-f0-9]{64}\z/', $fingerprint) !== 1 || hash_equals($fingerprint, $this->fingerprint) === false) {
-            throw new CheckoutInputException('checkout.attempt_conflict');
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
         }
     }
 
@@ -144,7 +146,7 @@ final readonly class AttemptBinding
             || $this->userUuid !== $order->userUuid()
             || $this->guestReference !== $guestReference
         ) {
-            throw new CheckoutInputException('checkout.attempt_conflict');
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
         }
     }
 }

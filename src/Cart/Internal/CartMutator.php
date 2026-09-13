@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Cart\Internal;
 
 use Closure;
+use ProgrammatorDev\StripeCheckout\Cart\CartErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
+use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 
 /**
@@ -58,7 +60,7 @@ final class CartMutator
             }
 
             if (count($entries) >= ProductRequestNormalizer::MAX_ENTRIES) {
-                throw new CheckoutInputException('selection.line_limit_exceeded');
+                throw new CheckoutInputException(SelectionErrorCode::LINE_LIMIT_EXCEEDED);
             }
 
             $entries[] = new CartEntry(($this->newId)(), $request);
@@ -73,7 +75,7 @@ final class CartMutator
             $this->requireRevision($current, $revision);
 
             if ($quantity < 1) {
-                throw new CheckoutInputException('selection.quantity_invalid');
+                throw new CheckoutInputException(SelectionErrorCode::QUANTITY_INVALID);
             }
 
             $entries = $current->entries();
@@ -132,11 +134,11 @@ final class CartMutator
     private function requireRevision(CartSnapshot $current, string $revision): void
     {
         if ($revision === '') {
-            throw new CheckoutInputException('selection.invalid');
+            throw new CheckoutInputException(SelectionErrorCode::INVALID);
         }
 
         if ($revision !== $current->revision()) {
-            throw new CartMutationException('cart.revision_conflict', $current);
+            throw new CartMutationException(CartErrorCode::REVISION_CONFLICT, $current);
         }
     }
 
@@ -148,7 +150,7 @@ final class CartMutator
             }
         }
 
-        throw new CartMutationException('cart.item_not_found');
+        throw new CartMutationException(CartErrorCode::ITEM_NOT_FOUND);
     }
 
     /** @param list<CartEntry> $entries */

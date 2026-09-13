@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Translation;
 
 use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Exception\MoneyException;
+use ProgrammatorDev\StripeCheckout\Money\MoneyErrorCode;
 
 /**
  * Resolves one validated locale from explicit, language, or App settings.
@@ -48,7 +49,7 @@ final class LocaleResolver
     private function normalize(string $locale): string
     {
         if ($locale === '' || trim($locale) !== $locale) {
-            throw new MoneyException('money.locale_invalid');
+            throw new MoneyException(MoneyErrorCode::LOCALE_INVALID);
         }
 
         $locale = preg_replace('/[.@].*$/', '', str_replace('-', '_', $locale));
@@ -58,7 +59,7 @@ final class LocaleResolver
             is_string($locale) === false
             || preg_match('/^[A-Za-z]{2,3}(?:_[A-Za-z0-9]{2,8})*$/D', $locale) !== 1
         ) {
-            throw new MoneyException('money.locale_invalid');
+            throw new MoneyException(MoneyErrorCode::LOCALE_INVALID);
         }
 
         return $locale;

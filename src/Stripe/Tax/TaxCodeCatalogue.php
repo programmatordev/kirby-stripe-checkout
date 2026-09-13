@@ -85,7 +85,7 @@ final class TaxCodeCatalogue
                 'items' => array_values($items),
                 'refreshedAt' => $refreshedAt,
                 'failedAt' => $failedAt,
-                'error' => $failedAt === null ? null : 'tax_codes.refresh_failed',
+                'error' => $failedAt === null ? null : TaxCodeCatalogueErrorCode::REFRESH_FAILED,
             ];
         } catch (Throwable) {
             return $empty;
@@ -179,7 +179,7 @@ final class TaxCodeCatalogue
             $state = [
                 ...$previous,
                 'failedAt' => time(),
-                'error' => 'tax_codes.refresh_failed',
+                'error' => TaxCodeCatalogueErrorCode::REFRESH_FAILED,
             ];
             $this->store($state);
 

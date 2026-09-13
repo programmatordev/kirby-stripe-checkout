@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Cart\Internal;
 use Closure;
 use InvalidArgumentException;
 use Kirby\Session\Session;
+use ProgrammatorDev\StripeCheckout\Cart\CartErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use Throwable;
@@ -80,7 +81,7 @@ final class KirbySessionCartStore implements CartStoreInterface
             } catch (Throwable) {
                 // A diagnostic must neither reveal the damaged data nor prevent recovery.
                 try {
-                    ($this->diagnostic)('cart.session_reset');
+                    ($this->diagnostic)(CartErrorCode::SESSION_RESET);
                 } catch (Throwable) {
                 }
             }

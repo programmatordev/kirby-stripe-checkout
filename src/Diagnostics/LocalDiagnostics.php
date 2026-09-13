@@ -8,6 +8,7 @@ use Kirby\Cms\App;
 use Kirby\Uuid\Uuid;
 use Kirby\Uuid\Uuids;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderHookDispatcher;
@@ -204,7 +205,7 @@ final class LocalDiagnostics
         string $message = 'configuration.invalid',
     ): array {
         return $this->check($id, self::FAIL, $message, [
-            'code' => $error?->errorCode() ?? 'configuration.root_invalid',
+            'code' => $error?->errorCode() ?? ConfigurationErrorCode::ROOT_INVALID,
             'path' => $error?->path() ?? 'programmatordev.stripe-checkout',
         ]);
     }

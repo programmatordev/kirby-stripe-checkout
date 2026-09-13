@@ -29,7 +29,7 @@ final readonly class ProductResolutionContext
         }
 
         if ($this->settings->currency() === null) {
-            throw new InvalidProductException('product.currency_missing');
+            throw new InvalidProductException(ProductErrorCode::CURRENCY_MISSING);
         }
 
         if (
@@ -37,7 +37,7 @@ final readonly class ProductResolutionContext
             || $this->locale === ''
             || trim($this->locale) !== $this->locale
         ) {
-            throw new InvalidProductException('product.context_invalid');
+            throw new InvalidProductException(ProductErrorCode::CONTEXT_INVALID);
         }
     }
 

@@ -10,6 +10,7 @@ use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use Throwable;
@@ -40,7 +41,7 @@ final class ProductCommerceResolver
             $priceId ??= $this->optionalString($this->field($content, $fields['stripePrice'])->value());
 
             if ($priceId === null) {
-                throw new InvalidProductException('product.price_missing');
+                throw new InvalidProductException(ProductErrorCode::PRICE_MISSING);
             }
 
             return new StripePriceReference($priceId);
@@ -51,7 +52,7 @@ final class ProductCommerceResolver
         $currency = $context->settings()->currency();
 
         if ($amount === null || $currency === null) {
-            throw new InvalidProductException('product.price_missing');
+            throw new InvalidProductException(ProductErrorCode::PRICE_MISSING);
         }
 
         try {
@@ -59,7 +60,7 @@ final class ProductCommerceResolver
 
             return new Price($this->currencies->toMoney($snapshot));
         } catch (Throwable $error) {
-            throw new InvalidProductException('product.price_invalid', $error);
+            throw new InvalidProductException(ProductErrorCode::PRICE_INVALID, $error);
         }
     }
 
@@ -78,7 +79,7 @@ final class ProductCommerceResolver
         $shipping ??= $context->settings()->defaultRequiresShipping();
 
         if ($shipping === null) {
-            throw new InvalidProductException('product.shipping_missing');
+            throw new InvalidProductException(ProductErrorCode::SHIPPING_MISSING);
         }
 
         return $shipping;
@@ -90,7 +91,7 @@ final class ProductCommerceResolver
             null, '', 'inherit' => null,
             true, 'yes' => true,
             false, 'no' => false,
-            default => throw new InvalidProductException('product.shipping_invalid'),
+            default => throw new InvalidProductException(ProductErrorCode::SHIPPING_INVALID),
         };
     }
 
@@ -104,7 +105,7 @@ final class ProductCommerceResolver
         $field = $content->get($name);
 
         if ($field instanceof Field === false) {
-            throw new InvalidProductException('product.field_invalid');
+            throw new InvalidProductException(ProductErrorCode::FIELD_INVALID);
         }
 
         return $field;

@@ -61,7 +61,7 @@ final readonly class Product
 
         // Native presentation and URL-only consumers must agree on the first image.
         if ($this->image !== null && $this->image->url() !== ($this->imageUrls[0] ?? null)) {
-            throw new InvalidProductException('product.images_invalid');
+            throw new InvalidProductException(ProductErrorCode::IMAGES_INVALID);
         }
 
         $this->metadata = $this->validateMetadata($metadata);
@@ -145,7 +145,7 @@ final readonly class Product
         $requestedOptions = $this->request->selectedOptions();
 
         if (($requestedOptions === []) !== ($selectedOptions === [])) {
-            throw new InvalidProductException('product.selected_options_invalid');
+            throw new InvalidProductException(ProductErrorCode::SELECTED_OPTIONS_INVALID);
         }
 
         $optionValues = [];
@@ -155,7 +155,7 @@ final readonly class Product
                 $selectedOption instanceof SelectedOption === false
                 || isset($optionValues[$selectedOption->optionId()])
             ) {
-                throw new InvalidProductException('product.selected_options_invalid');
+                throw new InvalidProductException(ProductErrorCode::SELECTED_OPTIONS_INVALID);
             }
 
             $optionValues[$selectedOption->optionId()] = $selectedOption->valueId();
@@ -164,11 +164,11 @@ final readonly class Product
         ksort($optionValues);
 
         if ($optionValues !== $requestedOptions) {
-            throw new InvalidProductException('product.selected_options_invalid');
+            throw new InvalidProductException(ProductErrorCode::SELECTED_OPTIONS_INVALID);
         }
 
         if (($requestedOptions === []) !== ($this->variantId === null)) {
-            throw new InvalidProductException('product.variant_invalid');
+            throw new InvalidProductException(ProductErrorCode::VARIANT_INVALID);
         }
 
         /** @var list<SelectedOption> $selectedOptions */
@@ -182,7 +182,7 @@ final readonly class Product
     private function validateImages(array $imageUrls): array
     {
         if (count($imageUrls) > 8 || array_is_list($imageUrls) === false) {
-            throw new InvalidProductException('product.images_invalid');
+            throw new InvalidProductException(ProductErrorCode::IMAGES_INVALID);
         }
 
         $normalized = [];
@@ -192,7 +192,7 @@ final readonly class Product
             $scheme = parse_url($url, PHP_URL_SCHEME);
 
             if (in_array($scheme, ['http', 'https'], true) === false || isset($normalized[$url])) {
-                throw new InvalidProductException('product.images_invalid');
+                throw new InvalidProductException(ProductErrorCode::IMAGES_INVALID);
             }
 
             $normalized[$url] = true;
@@ -208,14 +208,14 @@ final readonly class Product
     private function validateMetadata(array $metadata): array
     {
         if (count($metadata) > 20) {
-            throw new InvalidProductException('product.metadata_invalid');
+            throw new InvalidProductException(ProductErrorCode::METADATA_INVALID);
         }
 
         $normalized = [];
 
         foreach ($metadata as $key => $value) {
             if (is_string($key) === false || is_bool($value) === false && is_int($value) === false && is_string($value) === false) {
-                throw new InvalidProductException('product.metadata_invalid');
+                throw new InvalidProductException(ProductErrorCode::METADATA_INVALID);
             }
 
             $normalized[ProductData::identifier($key)] = is_string($value)

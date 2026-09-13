@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\InvalidSessionRequestException;
+use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestErrorCode;
 use ProgrammatorDev\StripeCheckout\Collection\CustomField;
 use ProgrammatorDev\StripeCheckout\Collection\CustomFieldOption;
 use ProgrammatorDev\StripeCheckout\Collection\CustomFieldType;
@@ -344,7 +345,7 @@ final class SupportedSessionParametersValidator
     private function invalid(string $path, ?InvalidCustomFieldException $previous = null): never
     {
         throw new InvalidSessionRequestException(
-            'session_request.parameter_invalid',
+            SessionRequestErrorCode::PARAMETER_INVALID,
             $path,
             $previous,
         );

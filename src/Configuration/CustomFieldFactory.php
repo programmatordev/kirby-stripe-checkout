@@ -44,7 +44,7 @@ final class CustomFieldFactory
         // Stripe Checkout accepts at most three custom fields per Session.
         // https://docs.stripe.com/api/checkout/sessions/create?query=custom_fields
         if (array_is_list($fields) === false || count($fields) > 3) {
-            throw new ConfigurationException('configuration.value_invalid', 'settings.customFields');
+            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'settings.customFields');
         }
 
         $normalized = [];
@@ -54,7 +54,7 @@ final class CustomFieldFactory
             $path = 'settings.customFields.' . $index;
 
             if (is_array($field) === false) {
-                throw new ConfigurationException('configuration.type_invalid', $path);
+                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path);
             }
 
             $this->assertKnownKeys($field, self::FIELD_KEYS, $path);
@@ -62,7 +62,7 @@ final class CustomFieldFactory
             foreach (['key', 'label', 'type'] as $requiredName) {
                 if (array_key_exists($requiredName, $field) === false) {
                     throw new ConfigurationException(
-                        'configuration.required_missing',
+                        ConfigurationErrorCode::REQUIRED_MISSING,
                         $path . '.' . $requiredName,
                     );
                 }
@@ -75,38 +75,38 @@ final class CustomFieldFactory
             );
 
             if (isset($keys[$key])) {
-                throw new ConfigurationException('configuration.value_invalid', $path . '.key');
+                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path . '.key');
             }
 
             $keys[$key] = true;
             $type = $field['type'];
 
             if (is_string($type) === false) {
-                throw new ConfigurationException('configuration.type_invalid', $path . '.type');
+                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path . '.type');
             }
 
             $customFieldType = CustomFieldType::tryFrom($type);
 
             if ($customFieldType === null) {
-                throw new ConfigurationException('configuration.value_invalid', $path . '.type');
+                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path . '.type');
             }
 
             $required = $field['required'] ?? false;
 
             if (is_bool($required) === false) {
-                throw new ConfigurationException('configuration.type_invalid', $path . '.required');
+                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path . '.required');
             }
 
             $defaultValue = $field['defaultValue'] ?? null;
 
             if ($defaultValue !== null && is_string($defaultValue) === false) {
-                throw new ConfigurationException('configuration.type_invalid', $path . '.defaultValue');
+                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path . '.defaultValue');
             }
 
             $rawOptions = $field['options'] ?? [];
 
             if (is_array($rawOptions) === false) {
-                throw new ConfigurationException('configuration.type_invalid', $path . '.options');
+                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path . '.options');
             }
 
             $normalizedField = [
@@ -172,13 +172,13 @@ final class CustomFieldFactory
             || ($defaultValue !== null && is_string($defaultValue) === false)
             || is_array($rawOptions) === false
         ) {
-            throw new ConfigurationException('configuration.type_invalid', $path);
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path);
         }
 
         $customFieldType = CustomFieldType::tryFrom($type);
 
         if ($customFieldType === null) {
-            throw new ConfigurationException('configuration.value_invalid', $path . '.type');
+            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path . '.type');
         }
 
         /** @var array<string, string> $labels */
@@ -194,7 +194,7 @@ final class CustomFieldFactory
                 options: $this->createOptions($rawOptions, $path . '.options'),
             );
         } catch (InvalidCustomFieldException $error) {
-            throw new ConfigurationException('configuration.value_invalid', $path . '.' . $error->attribute());
+            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path . '.' . $error->attribute());
         }
     }
 
@@ -205,7 +205,7 @@ final class CustomFieldFactory
     private function normalizeOptions(array $options, string $path): array
     {
         if (array_is_list($options) === false || count($options) > 200) {
-            throw new ConfigurationException('configuration.value_invalid', $path);
+            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path);
         }
 
         $normalized = [];
@@ -215,7 +215,7 @@ final class CustomFieldFactory
             $optionPath = $path . '.' . $index;
 
             if (is_array($option) === false) {
-                throw new ConfigurationException('configuration.type_invalid', $optionPath);
+                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $optionPath);
             }
 
             $this->assertKnownKeys($option, self::OPTION_KEYS, $optionPath);
@@ -223,7 +223,7 @@ final class CustomFieldFactory
             foreach (['value', 'label'] as $requiredName) {
                 if (array_key_exists($requiredName, $option) === false) {
                     throw new ConfigurationException(
-                        'configuration.required_missing',
+                        ConfigurationErrorCode::REQUIRED_MISSING,
                         $optionPath . '.' . $requiredName,
                     );
                 }
@@ -236,7 +236,7 @@ final class CustomFieldFactory
             );
 
             if (isset($values[$value])) {
-                throw new ConfigurationException('configuration.value_invalid', $optionPath . '.value');
+                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $optionPath . '.value');
             }
 
             $values[$value] = true;
@@ -265,7 +265,7 @@ final class CustomFieldFactory
                 || is_string($option['label'] ?? null) === false
                 || is_array($option['labels'] ?? null) === false
             ) {
-                throw new ConfigurationException('configuration.type_invalid', $path . '.' . $index);
+                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path . '.' . $index);
             }
 
             /** @var array<string, string> $labels */
@@ -278,7 +278,7 @@ final class CustomFieldFactory
                 );
             } catch (InvalidCustomFieldException $error) {
                 throw new ConfigurationException(
-                    'configuration.value_invalid',
+                    ConfigurationErrorCode::VALUE_INVALID,
                     $path . '.' . $index . '.' . $error->attribute(),
                 );
             }
@@ -290,14 +290,14 @@ final class CustomFieldFactory
     private function identifier(mixed $value, int $maximumLength, string $path): string
     {
         if (is_string($value) === false) {
-            throw new ConfigurationException('configuration.type_invalid', $path);
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path);
         }
 
         if (
             preg_match('/\A[a-z0-9]+\z/D', $value) !== 1
             || strlen($value) > $maximumLength
         ) {
-            throw new ConfigurationException('configuration.value_invalid', $path);
+            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path);
         }
 
         return $value;
@@ -306,7 +306,7 @@ final class CustomFieldFactory
     private function label(mixed $value, int $maximumLength, string $path): string
     {
         if (is_string($value) === false) {
-            throw new ConfigurationException('configuration.type_invalid', $path);
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path);
         }
 
         if (
@@ -315,7 +315,7 @@ final class CustomFieldFactory
             || TextValidator::isSingleLine($value) === false
             || mb_strlen($value) > $maximumLength
         ) {
-            throw new ConfigurationException('configuration.value_invalid', $path);
+            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path);
         }
 
         return $value;
@@ -325,7 +325,7 @@ final class CustomFieldFactory
     private function labels(mixed $labels, int $maximumLength, string $path): array
     {
         if (is_array($labels) === false || array_is_list($labels) && $labels !== []) {
-            throw new ConfigurationException('configuration.type_invalid', $path);
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path);
         }
 
         $normalized = [];
@@ -335,7 +335,7 @@ final class CustomFieldFactory
                 is_string($languageCode) === false
                 || preg_match('/\A[A-Za-z][A-Za-z0-9_-]*\z/D', $languageCode) !== 1
             ) {
-                throw new ConfigurationException('configuration.value_invalid', $path);
+                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path);
             }
 
             $normalized[$languageCode] = $this->label(
@@ -357,11 +357,11 @@ final class CustomFieldFactory
         }
 
         if (is_int($value) === false) {
-            throw new ConfigurationException('configuration.type_invalid', $path);
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path);
         }
 
         if ($value < 1 || $value > 255) {
-            throw new ConfigurationException('configuration.value_invalid', $path);
+            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path);
         }
 
         return $value;
@@ -387,7 +387,7 @@ final class CustomFieldFactory
             }
 
             throw new ConfigurationException(
-                'configuration.option_unknown',
+                ConfigurationErrorCode::OPTION_UNKNOWN,
                 $parent . '.' . $key,
             );
         }

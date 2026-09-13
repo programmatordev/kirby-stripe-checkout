@@ -61,7 +61,7 @@ final class StripeCheckoutPageStore
             }
 
             throw new ConfigurationException(
-                'persistence.write_failed',
+                PersistenceErrorCode::WRITE_FAILED,
                 StripeCheckoutPage::ID,
                 previous: $error,
             );
@@ -71,7 +71,7 @@ final class StripeCheckoutPageStore
 
         if ($created === null) {
             throw new ConfigurationException(
-                'persistence.verify_failed',
+                PersistenceErrorCode::VERIFY_FAILED,
                 StripeCheckoutPage::ID,
             );
         }
@@ -139,7 +139,7 @@ final class StripeCheckoutPageStore
             || $page instanceof StripeCheckoutPage === false
         ) {
             throw new ConfigurationException(
-                'persistence.model_mismatch',
+                PersistenceErrorCode::MODEL_MISMATCH,
                 StripeCheckoutPage::ID,
             );
         }
@@ -150,28 +150,28 @@ final class StripeCheckoutPageStore
             );
         } catch (Throwable) {
             throw new ConfigurationException(
-                'persistence.content_invalid',
+                PersistenceErrorCode::CONTENT_INVALID,
                 'stripeCheckout',
             );
         }
 
         if (($metadata['owner'] ?? null) !== StripeCheckoutPage::OWNER) {
             throw new ConfigurationException(
-                'persistence.owner_mismatch',
+                PersistenceErrorCode::OWNER_MISMATCH,
                 StripeCheckoutPage::ID,
             );
         }
 
         if (($metadata['schemaVersion'] ?? null) !== StripeCheckoutPage::SCHEMA_VERSION) {
             throw new ConfigurationException(
-                'persistence.schema_unsupported',
+                PersistenceErrorCode::SCHEMA_UNSUPPORTED,
                 StripeCheckoutPage::ID,
             );
         }
 
         if (array_diff(array_keys($metadata), ['owner', 'schemaVersion']) !== []) {
             throw new ConfigurationException(
-                'persistence.content_invalid',
+                PersistenceErrorCode::CONTENT_INVALID,
                 'stripeCheckout',
             );
         }
@@ -217,7 +217,7 @@ final class StripeCheckoutPageStore
             return $adapter->definitions($canonical);
         } catch (InvalidArgumentException $error) {
             throw new ConfigurationException(
-                'persistence.content_invalid',
+                PersistenceErrorCode::CONTENT_INVALID,
                 'settings.customFields',
                 previous: $error,
             );

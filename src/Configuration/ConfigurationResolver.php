@@ -100,7 +100,7 @@ final class ConfigurationResolver
         $values = array_key_exists('housekeeping', $root) ? $root['housekeeping'] : [];
 
         if (is_array($values) === false) {
-            throw new ConfigurationException('configuration.type_invalid', 'housekeeping');
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'housekeeping');
         }
 
         $this->assertKnownKeys($values, ['intervalHours', 'batchSize'], 'housekeeping');
@@ -108,11 +108,11 @@ final class ConfigurationResolver
 
         foreach ($values as $name => $value) {
             if (is_int($value) === false) {
-                throw new ConfigurationException('configuration.type_invalid', 'housekeeping.' . $name);
+                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'housekeeping.' . $name);
             }
 
             if ($value < 1 || $name === 'batchSize' && $value > 100) {
-                throw new ConfigurationException('configuration.value_invalid', 'housekeeping.' . $name);
+                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'housekeeping.' . $name);
             }
         }
 
@@ -127,14 +127,14 @@ final class ConfigurationResolver
         $orders = array_key_exists('orders', $root) ? $root['orders'] : [];
 
         if (is_array($orders) === false) {
-            throw new ConfigurationException('configuration.type_invalid', 'orders');
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'orders');
         }
 
         $this->assertKnownKeys($orders, ['numberFormatter'], 'orders');
         $formatter = $orders['numberFormatter'] ?? null;
 
         if ($formatter !== null && $formatter instanceof Closure === false) {
-            throw new ConfigurationException('configuration.type_invalid', 'orders.numberFormatter');
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'orders.numberFormatter');
         }
 
         return $formatter;
@@ -160,7 +160,7 @@ final class ConfigurationResolver
         $cart = array_key_exists('cart', $root) ? $root['cart'] : [];
 
         if (is_array($cart) === false) {
-            throw new ConfigurationException('configuration.type_invalid', 'cart');
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'cart');
         }
 
         /** @var array<string, mixed> $cart */
@@ -177,7 +177,7 @@ final class ConfigurationResolver
 
         foreach (self::ROOT_KEYS as $key) {
             if (array_key_exists($key, $root) && is_array($root[$key]) === false) {
-                throw new ConfigurationException('configuration.type_invalid', $key);
+                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $key);
             }
         }
 
@@ -209,13 +209,13 @@ final class ConfigurationResolver
         $this->assertKnownKeys($cart, ['enabled', 'renderer'], 'cart');
 
         if (isset($cart['renderer']) && $cart['renderer'] instanceof Closure === false) {
-            throw new ConfigurationException('configuration.type_invalid', 'cart.renderer');
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'cart.renderer');
         }
 
         $enabled = array_key_exists('enabled', $cart) ? $cart['enabled'] : true;
 
         if (is_bool($enabled) === false) {
-            throw new ConfigurationException('configuration.type_invalid', 'cart.enabled');
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'cart.enabled');
         }
 
         return $enabled;
@@ -228,13 +228,13 @@ final class ConfigurationResolver
         $resolver = $products['resolver'] ?? null;
 
         if ($resolver !== null && $resolver instanceof ProductResolverInterface === false && $resolver instanceof Closure === false) {
-            throw new ConfigurationException('configuration.type_invalid', 'products.resolver');
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'products.resolver');
         }
 
         $fields = $products['fields'] ?? [];
 
         if (is_array($fields) === false) {
-            throw new ConfigurationException('configuration.type_invalid', 'products.fields');
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'products.fields');
         }
 
         /** @var array<string, mixed> $fields */
@@ -266,7 +266,7 @@ final class ConfigurationResolver
             }
 
             if ($this->validFieldHandle($value) === false) {
-                throw new ConfigurationException('configuration.value_invalid', 'products.fields.' . $key);
+                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'products.fields.' . $key);
             }
         }
 
@@ -284,14 +284,14 @@ final class ConfigurationResolver
         $values = is_string($value) ? [$value] : $value;
 
         if (is_array($values) === false || array_is_list($values) === false || $values === []) {
-            throw new ConfigurationException('configuration.value_invalid', 'products.fields.images');
+            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'products.fields.images');
         }
 
         $normalized = [];
 
         foreach ($values as $field) {
             if (is_string($field) === false || $this->validFieldHandle($field) === false || isset($normalized[$field])) {
-                throw new ConfigurationException('configuration.value_invalid', 'products.fields.images');
+                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'products.fields.images');
             }
 
             $normalized[$field] = true;
@@ -322,11 +322,11 @@ final class ConfigurationResolver
             $path = 'stripe.' . $key;
 
             if ($value !== null && is_string($value) === false) {
-                throw new ConfigurationException('configuration.type_invalid', $path);
+                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path);
             }
 
             if (is_string($value) && ($value === '' || trim($value) !== $value)) {
-                throw new ConfigurationException('configuration.value_invalid', $path);
+                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path);
             }
         }
 
@@ -364,14 +364,14 @@ final class ConfigurationResolver
             && $settings['priceSource'] !== null
             && is_string($settings['priceSource']) === false
         ) {
-            throw new ConfigurationException('configuration.type_invalid', 'settings.priceSource');
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.priceSource');
         }
 
         if (
             is_string($settings['priceSource'] ?? null)
             && PriceSource::tryFrom($settings['priceSource']) === null
         ) {
-            throw new ConfigurationException('configuration.value_invalid', 'settings.priceSource');
+            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'settings.priceSource');
         }
 
         if (
@@ -379,7 +379,7 @@ final class ConfigurationResolver
             && $settings['currency'] !== null
             && is_string($settings['currency']) === false
         ) {
-            throw new ConfigurationException('configuration.type_invalid', 'settings.currency');
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.currency');
         }
 
         $currency = $settings['currency'] ?? null;
@@ -388,7 +388,7 @@ final class ConfigurationResolver
             is_string($currency)
             && $this->currencies->supports($currency) === false
         ) {
-            throw new ConfigurationException('configuration.value_invalid', 'settings.currency');
+            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'settings.currency');
         }
 
         if (
@@ -397,7 +397,7 @@ final class ConfigurationResolver
             && is_bool($settings['defaultRequiresShipping']) === false
         ) {
             throw new ConfigurationException(
-                'configuration.type_invalid',
+                ConfigurationErrorCode::TYPE_INVALID,
                 'settings.defaultRequiresShipping',
             );
         }
@@ -405,22 +405,22 @@ final class ConfigurationResolver
         $uiMode = $settings['uiMode'] ?? null;
 
         if ($uiMode !== null && is_string($uiMode) === false) {
-            throw new ConfigurationException('configuration.type_invalid', 'settings.uiMode');
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.uiMode');
         }
 
         if (is_string($uiMode) && UiMode::tryFrom($uiMode) === null) {
-            throw new ConfigurationException('configuration.value_invalid', 'settings.uiMode');
+            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'settings.uiMode');
         }
 
         foreach (['successDestination', 'cancelDestination', 'returnDestination'] as $name) {
             $destination = $settings[$name] ?? null;
 
             if ($destination !== null && is_string($destination) === false) {
-                throw new ConfigurationException('configuration.type_invalid', 'settings.' . $name);
+                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.' . $name);
             }
 
             if (is_string($destination) && ($destination === '' || trim($destination) !== $destination)) {
-                throw new ConfigurationException('configuration.value_invalid', 'settings.' . $name);
+                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'settings.' . $name);
             }
         }
 
@@ -436,11 +436,11 @@ final class ConfigurationResolver
             $value = $settings[$name] ?? null;
 
             if ($value !== null && is_string($value) === false) {
-                throw new ConfigurationException('configuration.type_invalid', 'settings.' . $name);
+                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.' . $name);
             }
 
             if (is_string($value) && in_array($value, $allowedValues, true) === false) {
-                throw new ConfigurationException('configuration.value_invalid', 'settings.' . $name);
+                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'settings.' . $name);
             }
         }
 
@@ -458,13 +458,13 @@ final class ConfigurationResolver
                 && $settings[$name] !== null
                 && is_bool($settings[$name]) === false
             ) {
-                throw new ConfigurationException('configuration.type_invalid', 'settings.' . $name);
+                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.' . $name);
             }
         }
 
         if (array_key_exists('customFields', $settings) && $settings['customFields'] !== null) {
             if (is_array($settings['customFields']) === false) {
-                throw new ConfigurationException('configuration.type_invalid', 'settings.customFields');
+                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.customFields');
             }
 
             $settings['customFields'] = (new CustomFieldFactory($this->languageCode))
@@ -529,11 +529,11 @@ final class ConfigurationResolver
             $value = $settings[$name] ?? null;
 
             if ($value !== null && (is_bool($default) ? is_bool($value) === false : is_int($value) === false)) {
-                throw new ConfigurationException('configuration.type_invalid', 'settings.' . $name);
+                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.' . $name);
             }
 
             if (is_int($value) && $value < 1) {
-                throw new ConfigurationException('configuration.value_invalid', 'settings.' . $name);
+                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'settings.' . $name);
             }
 
             $resolver->setDefault($name, null);
@@ -553,7 +553,7 @@ final class ConfigurationResolver
         $customFields = $effective['customFields']->value();
 
         if (is_array($customFields) === false) {
-            throw new ConfigurationException('configuration.type_invalid', 'settings.customFields');
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.customFields');
         }
 
         $customFieldFactory = new CustomFieldFactory($this->languageCode);
@@ -602,24 +602,24 @@ final class ConfigurationResolver
                 is_string($locale) === false
                 || preg_match('/^[A-Za-z][A-Za-z0-9_-]*$/', $locale) !== 1
             ) {
-                throw new ConfigurationException('configuration.translation_invalid', 'translations');
+                throw new ConfigurationException(ConfigurationErrorCode::TRANSLATION_INVALID, 'translations');
             }
 
             if (is_array($overrides) === false) {
-                throw new ConfigurationException('configuration.translation_invalid', 'translations.' . $locale);
+                throw new ConfigurationException(ConfigurationErrorCode::TRANSLATION_INVALID, 'translations.' . $locale);
             }
 
             foreach ($overrides as $key => $value) {
                 $path = 'translations.' . $locale;
 
                 if (is_string($key) === false || trim($key) === '') {
-                    throw new ConfigurationException('configuration.translation_invalid', $path);
+                    throw new ConfigurationException(ConfigurationErrorCode::TRANSLATION_INVALID, $path);
                 }
 
                 $path .= '.' . $key;
 
                 if (isset($knownSuffixes[$key]) === false) {
-                    throw new ConfigurationException('configuration.translation_invalid', $path);
+                    throw new ConfigurationException(ConfigurationErrorCode::TRANSLATION_INVALID, $path);
                 }
 
                 if (
@@ -627,7 +627,7 @@ final class ConfigurationResolver
                     || trim($value) === ''
                     || TextValidator::isSingleLine($value) === false
                 ) {
-                    throw new ConfigurationException('configuration.translation_invalid', $path);
+                    throw new ConfigurationException(ConfigurationErrorCode::TRANSLATION_INVALID, $path);
                 }
 
                 $translationOverrides[$locale][$key] = $value;
@@ -659,7 +659,7 @@ final class ConfigurationResolver
             && $secretKeyMode !== $publishableKeyMode
         ) {
             throw new ConfigurationException(
-                'configuration.credential_mode_mismatch',
+                ConfigurationErrorCode::CREDENTIAL_MODE_MISMATCH,
                 'stripe.publishableKey',
             );
         }
@@ -682,7 +682,7 @@ final class ConfigurationResolver
 
             $path = $parent === null ? (string) $key : $parent . '.' . $key;
 
-            throw new ConfigurationException('configuration.option_unknown', $path);
+            throw new ConfigurationException(ConfigurationErrorCode::OPTION_UNKNOWN, $path);
         }
     }
 }

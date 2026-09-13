@@ -10,6 +10,7 @@ use Kirby\Cms\Events;
 use Kirby\Cms\Page;
 use Kirby\Data\Data;
 use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
+use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleErrorCode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEvent;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use Throwable;
@@ -79,7 +80,7 @@ final class OrderHookDispatcher
                         // failure. Native hook consumers still deduplicate effects.
                         if ($entry['status'] !== 'delivered') {
                             $entry['status'] = $delivered ? 'delivered' : 'failed';
-                            $entry['errorCode'] = $delivered ? null : 'lifecycle.listener_failed';
+                            $entry['errorCode'] = $delivered ? null : LifecycleErrorCode::LISTENER_FAILED;
                         }
 
                         break;
@@ -93,7 +94,7 @@ final class OrderHookDispatcher
         } catch (Throwable) {
             // Even a failure to record the outcome must not turn a committed
             // payment into an apparent failure. Pending intent remains replayable.
-            error_log('Stripe Checkout: lifecycle.delivery_record_failed');
+            error_log('Stripe Checkout: ' . LifecycleErrorCode::DELIVERY_RECORD_FAILED);
         } finally {
             unset(self::$active[$key]);
         }
@@ -110,14 +111,14 @@ final class OrderHookDispatcher
                 'deliveryId' => $event->deliveryId(),
                 'occurredAt' => OrderData::timestamp($event->occurredAt()),
                 'status' => $delivered ? 'delivered' : 'failed',
-                'errorCode' => $delivered ? null : 'lifecycle.listener_failed',
+                'errorCode' => $delivered ? null : LifecycleErrorCode::LISTENER_FAILED,
             ], 'json');
 
             if ($written === false) {
-                error_log('Stripe Checkout: lifecycle.delivery_record_failed');
+                error_log('Stripe Checkout: ' . LifecycleErrorCode::DELIVERY_RECORD_FAILED);
             }
         } catch (Throwable) {
-            error_log('Stripe Checkout: lifecycle.delivery_record_failed');
+            error_log('Stripe Checkout: ' . LifecycleErrorCode::DELIVERY_RECORD_FAILED);
         }
     }
 

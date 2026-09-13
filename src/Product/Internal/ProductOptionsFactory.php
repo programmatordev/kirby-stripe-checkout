@@ -11,6 +11,7 @@ use Kirby\Content\Field;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\ProductOption;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptionValue;
@@ -51,7 +52,7 @@ final class ProductOptionsFactory
         $page = $field->parent();
 
         if ($page instanceof Page === false) {
-            throw new InvalidProductException('product.field_invalid');
+            throw new InvalidProductException(ProductErrorCode::FIELD_INVALID);
         }
 
         return $this->fromField($field, $page, $this->context->languageCode());
@@ -75,7 +76,7 @@ final class ProductOptionsFactory
             $canonical = $this->schema->canonical($technical);
             $localized = $this->schema->localized($canonical, $translated);
         } catch (Throwable $error) {
-            throw new InvalidProductException('product.options_invalid', $error);
+            throw new InvalidProductException(ProductErrorCode::OPTIONS_INVALID, $error);
         }
 
         $options = array_map(
@@ -130,7 +131,7 @@ final class ProductOptionsFactory
     private function resolveStripePrice(StripePriceReference $reference): StripePrice
     {
         if ($this->stripePriceResolver === null) {
-            throw new InvalidProductException('product.stripe_price_unavailable');
+            throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_UNAVAILABLE);
         }
 
         return ($this->stripePriceResolver)($reference);
@@ -155,7 +156,7 @@ final class ProductOptionsFactory
         $field = $content->get($name);
 
         if ($field instanceof Field === false) {
-            throw new InvalidProductException('product.field_invalid');
+            throw new InvalidProductException(ProductErrorCode::FIELD_INVALID);
         }
 
         return $field;

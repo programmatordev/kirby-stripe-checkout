@@ -13,6 +13,7 @@ use Kirby\Exception\PermissionException;
 use Kirby\Form\Form;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
+use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleErrorCode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderCustomFieldsValidator;
@@ -129,7 +130,7 @@ final class OrderPage extends ProtectedOrderPage
                 // Valid data is not necessarily unchanged data: native hooks
                 // may edit custom fields, but cannot replace the purchase facts.
                 if (OrderSerializer::hash($data) !== OrderSerializer::hash($initialData)) {
-                    throw new OrderStorageException('persistence.verify_failed');
+                    throw new OrderStorageException(PersistenceErrorCode::VERIFY_FAILED);
                 }
 
                 $customFields = OrderCustomFieldsValidator::validate(array_filter(
@@ -155,7 +156,7 @@ final class OrderPage extends ProtectedOrderPage
 
             // ModelCommit normally flushes after its hook; an exception skips it.
             $this->kirby()->cache('pages')->flush();
-            error_log('Stripe Checkout: lifecycle.creation_hook_failed');
+            error_log('Stripe Checkout: ' . LifecycleErrorCode::CREATION_HOOK_FAILED);
         }
 
         $store = new OrderPageStore($this->kirby());
@@ -164,7 +165,7 @@ final class OrderPage extends ProtectedOrderPage
         // Include the frozen delivery record in verification. Later custom-field
         // edits are allowed, but must not rewrite the initial event's snapshot.
         if (OrderSerializer::hash($store->data($page)) !== OrderSerializer::hash($creationData)) {
-            throw new OrderStorageException('persistence.verify_failed');
+            throw new OrderStorageException(PersistenceErrorCode::VERIFY_FAILED);
         }
 
         return $page;

@@ -13,6 +13,7 @@ Kirby Stripe Checkout is under active development and is not ready for productio
 - [Orders](orders.md) — native Pages, scoped queries, custom fields, separate states and immutable snapshots.
 - [Panel and diagnostics](panel.md) — automatic setup, permissions, menu composition, and local checks.
 - [Translations](translations.md) — bundled languages and project overrides.
+- [Error codes](errors.md) — stable strings and domain-specific PHP constants.
 
 The root [README](../README.md) contains the supported requirements, Composer installation, and shortest setup example. Contributor setup and testing are documented separately in the repository's [contribution guide](https://github.com/programmatordev/kirby-stripe-checkout/blob/main/CONTRIBUTING.md).
 

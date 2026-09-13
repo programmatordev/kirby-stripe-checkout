@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Stripe;
 
+use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
 use ProgrammatorDev\StripeCheckout\Configuration\StripeConfiguration;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
@@ -29,7 +30,7 @@ final class StripeApiClientFactory
 
         if ($apiKey === null) {
             throw new ConfigurationException(
-                'configuration.credential_missing',
+                ConfigurationErrorCode::CREDENTIAL_MISSING,
                 'stripe.secretKey',
             );
         }

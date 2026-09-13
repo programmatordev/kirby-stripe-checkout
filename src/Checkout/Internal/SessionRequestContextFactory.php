@@ -10,9 +10,11 @@ use DateTimeZone;
 use Kirby\Cms\App;
 use Kirby\Cms\Language;
 use Kirby\Http\Url;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
 use ProgrammatorDev\StripeCheckout\Configuration\Configuration;
+use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
@@ -81,20 +83,20 @@ final class SessionRequestContextFactory
         $settings = $configuration->settings();
 
         if ($order->uiMode() !== $settings->uiMode()) {
-            throw new CheckoutInputException('checkout.attempt_conflict');
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
         }
 
         $currency = $settings->currency();
 
         if ($currency === null) {
             throw new ConfigurationException(
-                'configuration.required_missing',
+                ConfigurationErrorCode::REQUIRED_MISSING,
                 'settings.currency',
             );
         }
 
         if ($order->currency() !== $currency) {
-            throw new CheckoutInputException('checkout.attempt_conflict');
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
         }
 
         $language = $this->resolveLanguage($order->languageCode());
@@ -225,7 +227,7 @@ final class SessionRequestContextFactory
         }
 
         if (str_starts_with($value, '//')) {
-            throw new ConfigurationException('configuration.value_invalid', 'settings.' . $name);
+            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'settings.' . $name);
         }
 
         if (str_starts_with($value, '/')) {
@@ -235,7 +237,7 @@ final class SessionRequestContextFactory
             $page = $this->kirby->page($value, drafts: false);
 
             if ($page === null) {
-                throw new ConfigurationException('configuration.value_invalid', 'settings.' . $name);
+                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'settings.' . $name);
             }
 
             $value = $page->url($languageCode);
@@ -255,13 +257,13 @@ final class SessionRequestContextFactory
         bool $removeResultKey = false,
     ): string {
         if (CheckoutUrlValidator::isDestination($value, $requiresHttps) === false) {
-            throw new ConfigurationException('configuration.value_invalid', $path);
+            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path);
         }
 
         $parts = parse_url($value);
 
         if (is_array($parts) === false) {
-            throw new ConfigurationException('configuration.value_invalid', $path);
+            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path);
         }
 
         $query = [];
@@ -269,7 +271,7 @@ final class SessionRequestContextFactory
 
         if (array_key_exists(CheckoutUrlValidator::RESULT_QUERY_KEY, $query)) {
             if ($removeResultKey === false) {
-                throw new ConfigurationException('configuration.value_invalid', $path);
+                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path);
             }
 
             unset($query[CheckoutUrlValidator::RESULT_QUERY_KEY]);

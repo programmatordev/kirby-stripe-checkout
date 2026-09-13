@@ -26,7 +26,7 @@ final readonly class TaxCode
             || TextValidator::isUtf8($this->providerDescription) === false
             || ($this->confirmed && trim($this->providerName) === '')
         ) {
-            throw new InvalidProductException('tax.code_invalid');
+            throw new InvalidProductException(TaxErrorCode::CODE_INVALID);
         }
     }
 

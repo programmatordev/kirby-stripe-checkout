@@ -26,14 +26,14 @@ final readonly class ProductRequest
         $this->reference = ProductData::reference($reference);
 
         if ($this->quantity < 1 || count($selectedOptions) > 32) {
-            throw new InvalidProductException('product.request_invalid');
+            throw new InvalidProductException(ProductErrorCode::REQUEST_INVALID);
         }
 
         $normalized = [];
 
         foreach ($selectedOptions as $optionId => $valueId) {
             if (is_string($optionId) === false) {
-                throw new InvalidProductException('product.request_invalid');
+                throw new InvalidProductException(ProductErrorCode::REQUEST_INVALID);
             }
 
             $normalized[ProductData::identifier($optionId)] = ProductData::identifier($valueId);

@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\InvalidSessionRequestException;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
+use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestErrorCode;
 
 /** Validates supported parameters and the invariants required by the Checkout lifecycle. */
 final class SessionRequestValidator
@@ -111,7 +112,7 @@ final class SessionRequestValidator
             }
 
             if (array_key_exists($field, $parameters)) {
-                throw new InvalidSessionRequestException('session_request.parameter_protected', $field);
+                throw new InvalidSessionRequestException(SessionRequestErrorCode::PARAMETER_PROTECTED, $field);
             }
         }
     }
@@ -197,7 +198,7 @@ final class SessionRequestValidator
             || array_is_list($paymentIntent)
         ) {
             throw new InvalidSessionRequestException(
-                'session_request.invariant_violation',
+                SessionRequestErrorCode::INVARIANT_VIOLATION,
                 'payment_intent_data',
             );
         }
@@ -225,7 +226,7 @@ final class SessionRequestValidator
             || array_is_list($lines) === false
             || count($lines) !== count($expectedLines)
         ) {
-            throw new InvalidSessionRequestException('session_request.invariant_violation', 'line_items');
+            throw new InvalidSessionRequestException(SessionRequestErrorCode::INVARIANT_VIOLATION, 'line_items');
         }
 
         foreach ($expectedLines as $index => $expectedLine) {
@@ -233,7 +234,7 @@ final class SessionRequestValidator
             $path = 'line_items.' . $index;
 
             if (is_array($expectedLine) === false || is_array($line) === false) {
-                throw new InvalidSessionRequestException('session_request.invariant_violation', $path);
+                throw new InvalidSessionRequestException(SessionRequestErrorCode::INVARIANT_VIOLATION, $path);
             }
 
             /** @var array<string, mixed> $expectedLine */
@@ -251,7 +252,7 @@ final class SessionRequestValidator
 
                 if (array_key_exists('price_data', $line)) {
                     throw new InvalidSessionRequestException(
-                        'session_request.invariant_violation',
+                        SessionRequestErrorCode::INVARIANT_VIOLATION,
                         $path . '.price_data',
                     );
                 }
@@ -264,7 +265,7 @@ final class SessionRequestValidator
 
             if (is_array($expectedPrice) === false || is_array($price) === false) {
                 throw new InvalidSessionRequestException(
-                    'session_request.invariant_violation',
+                    SessionRequestErrorCode::INVARIANT_VIOLATION,
                     $path . '.price_data',
                 );
             }
@@ -277,7 +278,7 @@ final class SessionRequestValidator
             $this->assertAbsent($price, 'recurring', $path . '.price_data.recurring');
 
             if (array_key_exists('price', $line)) {
-                throw new InvalidSessionRequestException('session_request.invariant_violation', $path . '.price');
+                throw new InvalidSessionRequestException(SessionRequestErrorCode::INVARIANT_VIOLATION, $path . '.price');
             }
         }
     }
@@ -290,7 +291,7 @@ final class SessionRequestValidator
             || is_array($actual) === false
             || array_is_list($actual)
         ) {
-            throw new InvalidSessionRequestException('session_request.invariant_violation', $path);
+            throw new InvalidSessionRequestException(SessionRequestErrorCode::INVARIANT_VIOLATION, $path);
         }
 
         foreach ($expected as $key => $value) {
@@ -300,7 +301,7 @@ final class SessionRequestValidator
                 && ($actual[$key] ?? null) !== $value
             ) {
                 throw new InvalidSessionRequestException(
-                    'session_request.invariant_violation',
+                    SessionRequestErrorCode::INVARIANT_VIOLATION,
                     $path . '.' . $key,
                 );
             }
@@ -313,7 +314,7 @@ final class SessionRequestValidator
                 && array_key_exists($key, $expected) === false
             ) {
                 throw new InvalidSessionRequestException(
-                    'session_request.parameter_protected',
+                    SessionRequestErrorCode::PARAMETER_PROTECTED,
                     $path . '.' . $key,
                 );
             }
@@ -334,7 +335,7 @@ final class SessionRequestValidator
 
                 if ($allowed === false) {
                     throw new InvalidSessionRequestException(
-                        'session_request.parameter_protected',
+                        SessionRequestErrorCode::PARAMETER_PROTECTED,
                         $fieldPath,
                     );
                 }
@@ -350,7 +351,7 @@ final class SessionRequestValidator
     private function assertAbsent(array $values, string $field, string $path): void
     {
         if (array_key_exists($field, $values)) {
-            throw new InvalidSessionRequestException('session_request.parameter_protected', $path);
+            throw new InvalidSessionRequestException(SessionRequestErrorCode::PARAMETER_PROTECTED, $path);
         }
     }
 
@@ -370,7 +371,7 @@ final class SessionRequestValidator
             || $actual[$field] !== $expected[$field]
         ) {
             throw new InvalidSessionRequestException(
-                'session_request.invariant_violation',
+                SessionRequestErrorCode::INVARIANT_VIOLATION,
                 $path ?? $field,
             );
         }

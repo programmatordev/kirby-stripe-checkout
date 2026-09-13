@@ -49,12 +49,12 @@ final class OptionExtractor
             : [];
 
         if (is_array($root) === false) {
-            throw new ConfigurationException('configuration.root_invalid');
+            throw new ConfigurationException(ConfigurationErrorCode::ROOT_INVALID);
         }
 
         foreach (array_keys($root) as $key) {
             if (is_string($key) === false) {
-                throw new ConfigurationException('configuration.option_unknown', (string) $key);
+                throw new ConfigurationException(ConfigurationErrorCode::OPTION_UNKNOWN, (string) $key);
             }
         }
 
@@ -73,7 +73,7 @@ final class OptionExtractor
             }
 
             if (in_array($path, $dottedLeaves, true) === false) {
-                throw new ConfigurationException('configuration.option_unknown', $path);
+                throw new ConfigurationException(ConfigurationErrorCode::OPTION_UNKNOWN, $path);
             }
 
             $normalizedDottedValues[$path] = $value;
@@ -84,7 +84,7 @@ final class OptionExtractor
 
         foreach ($normalizedDottedValues as $path => $value) {
             if (isset($definedPaths[$path])) {
-                throw new ConfigurationException('configuration.option_duplicate', $path);
+                throw new ConfigurationException(ConfigurationErrorCode::OPTION_DUPLICATE, $path);
             }
 
             $this->setPath($root, $path, $value);
@@ -99,11 +99,11 @@ final class OptionExtractor
             $path = substr($key, strlen(self::PREFIX) + 1);
 
             if (in_array($path, $dottedLeaves, true) === false) {
-                throw new ConfigurationException('configuration.option_unknown', $path);
+                throw new ConfigurationException(ConfigurationErrorCode::OPTION_UNKNOWN, $path);
             }
 
             if (isset($definedPaths[$path])) {
-                throw new ConfigurationException('configuration.option_duplicate', $path);
+                throw new ConfigurationException(ConfigurationErrorCode::OPTION_DUPLICATE, $path);
             }
 
             $this->setPath($root, $path, $value);
@@ -185,7 +185,7 @@ final class OptionExtractor
         $sectionOptions = $root[$section] ?? [];
 
         if (is_array($sectionOptions) === false) {
-            throw new ConfigurationException('configuration.type_invalid', $section);
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $section);
         }
 
         /** @var array<string, mixed> $sectionOptions */
@@ -201,7 +201,7 @@ final class OptionExtractor
             $nested = $cursor[$leaf] ?? [];
 
             if (is_array($nested) === false) {
-                throw new ConfigurationException('configuration.type_invalid', $section . '.' . $leaf);
+                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $section . '.' . $leaf);
             }
 
             $cursor[$leaf] = $nested;

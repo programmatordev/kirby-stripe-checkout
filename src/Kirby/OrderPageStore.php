@@ -26,6 +26,7 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
 use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
+use ProgrammatorDev\StripeCheckout\Order\OrderErrorCode;
 use Throwable;
 
 /** @internal Native Page persistence; no provider requests, sessions or public mutation API. */
@@ -61,10 +62,10 @@ final class OrderPageStore
                 return $container;
             }
 
-            throw new OrderStorageException('persistence.write_failed');
+            throw new OrderStorageException(PersistenceErrorCode::WRITE_FAILED);
         }
 
-        return $this->container() ?? throw new OrderStorageException('persistence.verify_failed');
+        return $this->container() ?? throw new OrderStorageException(PersistenceErrorCode::VERIFY_FAILED);
     }
 
     /** @phpstan-impure Reads the current filesystem inventory. */
@@ -79,7 +80,7 @@ final class OrderPageStore
         }
 
         if ($page instanceof OrdersPage === false || $page->isDraft() === false || $page->intendedTemplate()->name() !== OrderSchema::ORDERS_PAGE_TEMPLATE) {
-            throw new OrderStorageException('persistence.model_mismatch');
+            throw new OrderStorageException(PersistenceErrorCode::MODEL_MISMATCH);
         }
 
         try {
@@ -95,7 +96,7 @@ final class OrderPageStore
                 throw new OrderDataException();
             }
         } catch (Throwable) {
-            throw new OrderStorageException('persistence.content_invalid');
+            throw new OrderStorageException(PersistenceErrorCode::CONTENT_INVALID);
         }
 
         return $page;
@@ -129,7 +130,7 @@ final class OrderPageStore
                 'context' => $context,
             ], 'fields'));
         } catch (Throwable) {
-            throw new OrderDataException('order.custom_fields_invalid');
+            throw new OrderDataException(OrderErrorCode::CUSTOM_FIELDS_INVALID);
         }
 
         $container = $this->initialize();
@@ -145,7 +146,7 @@ final class OrderPageStore
             ]));
         } catch (Throwable $error) {
             // Never adopt a colliding order, including a valid-looking record.
-            throw $error instanceof OrderStorageException ? $error : new OrderStorageException('persistence.write_failed');
+            throw $error instanceof OrderStorageException ? $error : new OrderStorageException(PersistenceErrorCode::WRITE_FAILED);
         }
 
         // The Order Page commit captures and verifies the final native creation
@@ -224,7 +225,7 @@ final class OrderPageStore
                     $pages[] = $page;
                 } catch (OrderStorageException) {
                     // Do not turn malformed children into trusted order Pages.
-                    error_log('Stripe Checkout: persistence.order_invalid');
+                    error_log('Stripe Checkout: ' . PersistenceErrorCode::ORDER_INVALID);
                 }
             }
 
@@ -284,7 +285,7 @@ final class OrderPageStore
     private function userUuid(User $user): string
     {
         if (Uuids::enabled() === false) {
-            throw new OrderQueryException('persistence.user_uuid_unavailable');
+            throw new OrderQueryException(PersistenceErrorCode::USER_UUID_UNAVAILABLE);
         }
 
         return OrderData::uuid($user->uuid()->toString(), 'user');
@@ -297,7 +298,7 @@ final class OrderPageStore
         $page = $container?->drafts()->find($pageId);
 
         if ($page instanceof OrderPage === false) {
-            throw new OrderStorageException('persistence.order_unavailable');
+            throw new OrderStorageException(PersistenceErrorCode::ORDER_UNAVAILABLE);
         }
 
         $this->data($page);
@@ -309,7 +310,7 @@ final class OrderPageStore
     public function data(Page $page): array
     {
         if ($page instanceof OrderPage === false || $page->isDraft() === false || $page->parent()?->id() !== OrderSchema::ORDERS_PAGE_ID) {
-            throw new OrderStorageException('persistence.model_mismatch');
+            throw new OrderStorageException(PersistenceErrorCode::MODEL_MISMATCH);
         }
 
         try {
@@ -331,7 +332,7 @@ final class OrderPageStore
 
             return OrderSerializer::decode($fields, $page->intendedTemplate()->name(), $page->slug());
         } catch (Throwable) {
-            throw new OrderStorageException('persistence.content_invalid');
+            throw new OrderStorageException(PersistenceErrorCode::CONTENT_INVALID);
         }
     }
 
@@ -409,7 +410,7 @@ final class OrderPageStore
             $updated = $this->requirePage($page->id());
 
             if (OrderSerializer::hash($this->data($updated)) !== OrderSerializer::hash($after)) {
-                throw new OrderStorageException('persistence.verify_failed');
+                throw new OrderStorageException(PersistenceErrorCode::VERIFY_FAILED);
             }
 
             // Canonical writes bypass ModelCommit and its cache invalidation.
@@ -454,12 +455,12 @@ final class OrderPageStore
                 // A native after-hook can throw after deletion. Verify storage
                 // before deciding whether the committed deletion failed.
                 if ($this->container()?->drafts()->find($pageId) !== null) {
-                    throw new OrderStorageException('persistence.write_failed');
+                    throw new OrderStorageException(PersistenceErrorCode::WRITE_FAILED);
                 }
             }
 
             if ($this->container()?->drafts()->find($pageId) !== null) {
-                throw new OrderStorageException('persistence.verify_failed');
+                throw new OrderStorageException(PersistenceErrorCode::VERIFY_FAILED);
             }
 
             $this->kirby->cache('pages')->flush();
@@ -497,7 +498,7 @@ final class OrderPageStore
         try {
             $this->kirby->impersonate('kirby', fn(): OrderPage => $page->persistOrderContent($content, $languageCode));
         } catch (Throwable) {
-            throw new OrderStorageException('persistence.write_failed');
+            throw new OrderStorageException(PersistenceErrorCode::WRITE_FAILED);
         }
     }
 
@@ -559,7 +560,7 @@ final class OrderPageStore
     private function requireUuids(): void
     {
         if (Uuids::enabled() === false) {
-            throw new OrderStorageException('persistence.uuid_unavailable');
+            throw new OrderStorageException(PersistenceErrorCode::UUID_UNAVAILABLE);
         }
     }
 }

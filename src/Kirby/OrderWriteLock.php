@@ -32,17 +32,17 @@ final class OrderWriteLock
         $path = $directory . '/' . hash('sha256', $lockKey) . '.lock';
 
         if (isset(self::$held[$path])) {
-            throw new OrderStorageException('persistence.reentrant_write');
+            throw new OrderStorageException(PersistenceErrorCode::REENTRANT_WRITE);
         }
 
         if (is_dir($directory) === false && Dir::make($directory) === false) {
-            throw new OrderStorageException('persistence.write_failed');
+            throw new OrderStorageException(PersistenceErrorCode::WRITE_FAILED);
         }
 
         $handle = @fopen($path, 'c');
 
         if ($handle === false) {
-            throw new OrderStorageException('persistence.write_failed');
+            throw new OrderStorageException(PersistenceErrorCode::WRITE_FAILED);
         }
 
         try {
@@ -50,7 +50,7 @@ final class OrderWriteLock
 
             while (flock($handle, LOCK_EX | LOCK_NB) === false) {
                 if (microtime(true) >= $deadline) {
-                    throw new OrderStorageException('persistence.busy');
+                    throw new OrderStorageException(PersistenceErrorCode::BUSY);
                 }
 
                 usleep(10000);

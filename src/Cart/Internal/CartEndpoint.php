@@ -9,12 +9,18 @@ use Kirby\Cms\App;
 use Kirby\Http\Response;
 use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Cart\CartError;
+use ProgrammatorDev\StripeCheckout\Cart\CartErrorCode;
 use ProgrammatorDev\StripeCheckout\Cart\CartOperation;
 use ProgrammatorDev\StripeCheckout\Cart\CartRenderContext;
 use ProgrammatorDev\StripeCheckout\Cart\Exception\CartException;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
+use ProgrammatorDev\StripeCheckout\Checkout\RequestErrorCode;
+use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
+use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
+use ProgrammatorDev\StripeCheckout\Exception\InternalErrorCode;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
+use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
 use Throwable;
 
 /** @internal HTTP adaptation only; every mutation uses the supported PHP Cart API. */
@@ -76,13 +82,13 @@ final class CartEndpoint
 
         if ($error !== null) {
             $status = match ($error->code()) {
-                'request.invalid_body' => 400,
-                'request.csrf_invalid' => 403,
-                'cart.item_not_found' => 404,
-                'cart.revision_conflict' => 409,
-                'request.unsupported_media_type' => 415,
-                'product.resolution_unavailable' => 503,
-                'internal.error' => 500,
+                RequestErrorCode::INVALID_BODY => 400,
+                RequestErrorCode::CSRF_INVALID => 403,
+                CartErrorCode::ITEM_NOT_FOUND => 404,
+                CartErrorCode::REVISION_CONFLICT => 409,
+                RequestErrorCode::UNSUPPORTED_MEDIA_TYPE => 415,
+                ProductErrorCode::RESOLUTION_UNAVAILABLE => 503,
+                InternalErrorCode::ERROR => 500,
                 default => 422,
             };
         }
@@ -107,18 +113,18 @@ final class CartEndpoint
     private function httpError(CartError $error): CartError
     {
         $code = match ($error->code()) {
-            'cart.configuration_invalid' => 'configuration.not_ready',
-            'cart.amount_invalid' => 'product.invalid',
-            'cart.product_unavailable' => 'product.unavailable',
-            'cart.selection_invalid' => 'selection.invalid',
-            'cart.unavailable' => 'internal.error',
-            'cart.provider_unavailable' => 'product.resolution_unavailable',
-            'cart.quantity_invalid' => 'selection.quantity_invalid',
-            'cart.line_limit_exceeded' => 'selection.line_limit_exceeded',
+            CartErrorCode::CONFIGURATION_INVALID => ConfigurationErrorCode::NOT_READY,
+            CartErrorCode::AMOUNT_INVALID => ProductErrorCode::INVALID,
+            CartErrorCode::PRODUCT_UNAVAILABLE => ProductErrorCode::UNAVAILABLE,
+            CartErrorCode::SELECTION_INVALID => SelectionErrorCode::INVALID,
+            CartErrorCode::UNAVAILABLE => InternalErrorCode::ERROR,
+            CartErrorCode::PROVIDER_UNAVAILABLE => ProductErrorCode::RESOLUTION_UNAVAILABLE,
+            CartErrorCode::QUANTITY_INVALID => SelectionErrorCode::QUANTITY_INVALID,
+            CartErrorCode::LINE_LIMIT_EXCEEDED => SelectionErrorCode::LINE_LIMIT_EXCEEDED,
             default => $error->code(),
         };
 
-        return new CartError($code, $error->message(), $error->itemId(), $code === 'cart.revision_conflict' ? 'revision' : $error->field());
+        return new CartError($code, $error->message(), $error->itemId(), $code === CartErrorCode::REVISION_CONFLICT ? 'revision' : $error->field());
     }
 
     private function html(?Closure $renderer, ?Cart $cart, CartRenderContext $context): Response
@@ -132,7 +138,7 @@ final class CartEndpoint
 
             return new Response($html, 'text/html', $context->httpStatus(), self::HEADERS);
         } catch (Throwable) {
-            error_log('Stripe Checkout: cart.renderer_failed');
+            error_log('Stripe Checkout: ' . CartErrorCode::RENDERER_FAILED);
             // A committed mutation must not look retryable if only rendering failed.
             $status = $context->httpStatus() === 200
                 ? ($context->operation() === CartOperation::Read ? 500 : 204)

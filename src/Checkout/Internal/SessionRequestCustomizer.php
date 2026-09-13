@@ -9,6 +9,7 @@ use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\InvalidSessionRequestException;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
+use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestErrorCode;
 use Throwable;
 
 /** Applies registered filters before auditing the complete request. */
@@ -32,20 +33,20 @@ final class SessionRequestCustomizer
             ], 'parameters');
         } catch (Throwable $error) {
             throw new InvalidSessionRequestException(
-                'session_request.filter_failed',
+                SessionRequestErrorCode::FILTER_FAILED,
                 previous: $error,
             );
         }
 
         if (is_array($parameters) === false || ($parameters !== [] && array_is_list($parameters))) {
-            throw new InvalidSessionRequestException('session_request.filter_invalid');
+            throw new InvalidSessionRequestException(SessionRequestErrorCode::FILTER_INVALID);
         }
 
         try {
             $customizedRequest = new SessionRequest($parameters);
         } catch (InvalidArgumentException $error) {
             throw new InvalidSessionRequestException(
-                'session_request.filter_invalid',
+                SessionRequestErrorCode::FILTER_INVALID,
                 previous: $error,
             );
         }

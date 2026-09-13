@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Order\Internal;
 
 use Kirby\Data\Txt;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
+use ProgrammatorDev\StripeCheckout\Order\OrderErrorCode;
 
 /**
  * @internal Validates developer-added order Page fields, not Checkout form custom fields.
@@ -45,7 +46,7 @@ final class OrderCustomFieldsValidator
 
             return $result;
         } catch (OrderDataException) {
-            throw new OrderDataException('order.custom_fields_invalid');
+            throw new OrderDataException(OrderErrorCode::CUSTOM_FIELDS_INVALID);
         }
     }
 }

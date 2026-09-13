@@ -28,7 +28,7 @@ final readonly class ProductOptions
             || array_is_list($variants) === false
             || ($options === []) !== ($variants === [])
         ) {
-            throw new InvalidProductException('product.options_invalid');
+            throw new InvalidProductException(ProductErrorCode::OPTIONS_INVALID);
         }
 
         $valuesByOption = [];
@@ -38,7 +38,7 @@ final readonly class ProductOptions
 
         foreach ($options as $option) {
             if ($option instanceof ProductOption === false || isset($valuesByOption[$option->id()])) {
-                throw new InvalidProductException('product.options_invalid');
+                throw new InvalidProductException(ProductErrorCode::OPTIONS_INVALID);
             }
 
             $valuesByOption[$option->id()] = array_fill_keys(
@@ -51,7 +51,7 @@ final readonly class ProductOptions
             $valueCount = count($valuesByOption[$option->id()]);
 
             if ($expectedVariantCount > intdiv(PHP_INT_MAX, $valueCount)) {
-                throw new InvalidProductException('product.options_invalid');
+                throw new InvalidProductException(ProductErrorCode::OPTIONS_INVALID);
             }
 
             $expectedVariantCount *= $valueCount;
@@ -64,25 +64,25 @@ final readonly class ProductOptions
 
         foreach ($variants as $variant) {
             if ($variant instanceof ProductVariant === false || isset($variantIds[$variant->id()])) {
-                throw new InvalidProductException('product.options_invalid');
+                throw new InvalidProductException(ProductErrorCode::OPTIONS_INVALID);
             }
 
             $selectedOptions = $variant->selectedOptions();
 
             if (array_keys($selectedOptions) !== $optionIds) {
-                throw new InvalidProductException('product.options_invalid');
+                throw new InvalidProductException(ProductErrorCode::OPTIONS_INVALID);
             }
 
             foreach ($selectedOptions as $optionId => $valueId) {
                 if (isset($valuesByOption[$optionId][$valueId]) === false) {
-                    throw new InvalidProductException('product.options_invalid');
+                    throw new InvalidProductException(ProductErrorCode::OPTIONS_INVALID);
                 }
             }
 
             $selectionKey = serialize($selectedOptions);
 
             if (isset($variantSelections[$selectionKey])) {
-                throw new InvalidProductException('product.options_invalid');
+                throw new InvalidProductException(ProductErrorCode::OPTIONS_INVALID);
             }
 
             $variantIds[$variant->id()] = true;
@@ -90,7 +90,7 @@ final readonly class ProductOptions
         }
 
         if (count($variants) !== $expectedVariantCount) {
-            throw new InvalidProductException('product.options_invalid');
+            throw new InvalidProductException(ProductErrorCode::OPTIONS_INVALID);
         }
 
         /** @var list<ProductOption> $options */

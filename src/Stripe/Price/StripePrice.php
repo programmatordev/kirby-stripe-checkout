@@ -8,6 +8,7 @@ use Brick\Money\Money;
 use ProgrammatorDev\StripeCheckout\Money\MoneySnapshot;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
+use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
 use Throwable;
@@ -45,27 +46,27 @@ final readonly class StripePrice
         $this->priceId = (new StripePriceReference($priceId))->priceId();
 
         if (preg_match('/^prod_[A-Za-z0-9]{1,249}$/D', $productId) !== 1) {
-            throw new InvalidProductException('product.stripe_product_ineligible');
+            throw new InvalidProductException(ProductErrorCode::STRIPE_PRODUCT_INELIGIBLE);
         }
 
         try {
             $price = (new StripeCurrencyRegistry())->toMoney($unitPrice);
         } catch (Throwable $error) {
-            throw new InvalidProductException('product.price_invalid', $error);
+            throw new InvalidProductException(ProductErrorCode::PRICE_INVALID, $error);
         }
 
         if ($price->isNegative()) {
-            throw new InvalidProductException('product.price_invalid');
+            throw new InvalidProductException(ProductErrorCode::PRICE_INVALID);
         }
 
         if (in_array($taxBehavior, ['exclusive', 'inclusive', 'unspecified'], true) === false) {
-            throw new InvalidProductException('product.stripe_price_ineligible');
+            throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INELIGIBLE);
         }
 
         try {
             $this->name = ProductData::name($name);
         } catch (InvalidProductException $error) {
-            throw new InvalidProductException('product.stripe_product_ineligible', $error);
+            throw new InvalidProductException(ProductErrorCode::STRIPE_PRODUCT_INELIGIBLE, $error);
         }
 
         $this->productId = $productId;
@@ -147,7 +148,7 @@ final readonly class StripePrice
     private function validateImages(array $images): array
     {
         if (array_is_list($images) === false) {
-            throw new InvalidProductException('product.images_invalid');
+            throw new InvalidProductException(ProductErrorCode::IMAGES_INVALID);
         }
 
         $validated = [];
@@ -158,14 +159,14 @@ final readonly class StripePrice
             if (
                 in_array(parse_url($image, PHP_URL_SCHEME), ['http', 'https'], true) === false
             ) {
-                throw new InvalidProductException('product.images_invalid');
+                throw new InvalidProductException(ProductErrorCode::IMAGES_INVALID);
             }
 
             $validated[$image] = true;
         }
 
         if (count($validated) > 8) {
-            throw new InvalidProductException('product.images_invalid');
+            throw new InvalidProductException(ProductErrorCode::IMAGES_INVALID);
         }
 
         return array_keys($validated);

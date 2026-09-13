@@ -17,7 +17,7 @@ final readonly class Price
         try {
             (new StripeCurrencyRegistry())->fromMoney($this->price);
         } catch (Throwable $error) {
-            throw new InvalidProductException('product.price_invalid', $error);
+            throw new InvalidProductException(ProductErrorCode::PRICE_INVALID, $error);
         }
     }
 

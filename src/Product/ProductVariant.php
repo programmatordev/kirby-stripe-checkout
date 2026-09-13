@@ -33,14 +33,14 @@ final readonly class ProductVariant
 
         foreach ($selectedOptions as $optionId => $valueId) {
             if (is_string($optionId) === false) {
-                throw new InvalidProductException('product.options_invalid');
+                throw new InvalidProductException(ProductErrorCode::OPTIONS_INVALID);
             }
 
             $normalized[ProductData::identifier($optionId)] = ProductData::identifier($valueId);
         }
 
         if ($normalized === []) {
-            throw new InvalidProductException('product.options_invalid');
+            throw new InvalidProductException(ProductErrorCode::OPTIONS_INVALID);
         }
 
         ksort($normalized);

@@ -9,9 +9,12 @@ use Brick\Money\Money;
 use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Cart\CartError;
+use ProgrammatorDev\StripeCheckout\Cart\CartErrorCode;
 use ProgrammatorDev\StripeCheckout\Cart\CartItem;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
+use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
+use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Exception\MoneyException;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
@@ -19,6 +22,8 @@ use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductException;
 use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
+use ProgrammatorDev\StripeCheckout\Tax\TaxErrorCode;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 use ProgrammatorDev\StripeCheckout\Translation\LocaleResolver;
 use Throwable;
@@ -44,7 +49,7 @@ final class CartViewFactory
             $code = $runtime->settings()->currency();
 
             if ($code === null) {
-                throw new ConfigurationException('configuration.required_missing', 'settings.currency');
+                throw new ConfigurationException(ConfigurationErrorCode::REQUIRED_MISSING, 'settings.currency');
             }
 
             $currency = Currency::of($code);
@@ -64,7 +69,7 @@ final class CartViewFactory
 
                 // A saved selection may become unavailable, never a different product.
                 if (ProductRequestData::sameItem($entry->request(), $product->request()) === false) {
-                    throw new InvalidProductException('product.resolver_changed_request');
+                    throw new InvalidProductException(ProductErrorCode::RESOLVER_CHANGED_REQUEST);
                 }
 
                 $price = $product->price();
@@ -102,19 +107,19 @@ final class CartViewFactory
     public function error(Throwable $error, ?string $itemId = null): CartError
     {
         $code = match (true) {
-            $error instanceof ConfigurationException => 'cart.configuration_invalid',
-            $error instanceof MoneyException => 'cart.amount_invalid',
-            $error instanceof ProductException && in_array($error->errorCode(), ['product.stripe_price_unavailable', 'tax.catalogue_unavailable'], true) => 'cart.provider_unavailable',
-            $error instanceof ProductException && $error->errorCode() === 'product.request_invalid' => 'cart.selection_invalid',
-            $error instanceof ProductException => 'cart.product_unavailable',
+            $error instanceof ConfigurationException => CartErrorCode::CONFIGURATION_INVALID,
+            $error instanceof MoneyException => CartErrorCode::AMOUNT_INVALID,
+            $error instanceof ProductException && in_array($error->errorCode(), [ProductErrorCode::STRIPE_PRICE_UNAVAILABLE, TaxErrorCode::CATALOGUE_UNAVAILABLE], true) => CartErrorCode::PROVIDER_UNAVAILABLE,
+            $error instanceof ProductException && $error->errorCode() === ProductErrorCode::REQUEST_INVALID => CartErrorCode::SELECTION_INVALID,
+            $error instanceof ProductException => CartErrorCode::PRODUCT_UNAVAILABLE,
             $error instanceof CheckoutInputException => match ($error->errorCode()) {
-                'selection.quantity_invalid' => 'cart.quantity_invalid',
-                'selection.line_limit_exceeded' => 'cart.line_limit_exceeded',
-                default => 'cart.selection_invalid',
+                SelectionErrorCode::QUANTITY_INVALID => CartErrorCode::QUANTITY_INVALID,
+                SelectionErrorCode::LINE_LIMIT_EXCEEDED => CartErrorCode::LINE_LIMIT_EXCEEDED,
+                default => CartErrorCode::SELECTION_INVALID,
             },
-            $error instanceof CartMutationException && $error->errorCode() === 'cart.revision_conflict' => 'cart.revision_conflict',
-            $error instanceof CartMutationException && $error->errorCode() === 'cart.item_not_found' => 'cart.item_not_found',
-            default => 'cart.unavailable',
+            $error instanceof CartMutationException && $error->errorCode() === CartErrorCode::REVISION_CONFLICT => CartErrorCode::REVISION_CONFLICT,
+            $error instanceof CartMutationException && $error->errorCode() === CartErrorCode::ITEM_NOT_FOUND => CartErrorCode::ITEM_NOT_FOUND,
+            default => CartErrorCode::UNAVAILABLE,
         };
 
         return $this->translatedError($code, itemId: $itemId);

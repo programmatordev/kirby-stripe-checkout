@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
 use Closure;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
+use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 
@@ -29,7 +30,7 @@ final class ProductRequestNormalizer
     public function merge(ProductRequest $existing, ProductRequest $incoming): ProductRequest
     {
         if (ProductRequestData::sameItem($existing, $incoming) === false) {
-            throw new CheckoutInputException('selection.invalid');
+            throw new CheckoutInputException(SelectionErrorCode::INVALID);
         }
 
         // Individually valid additions can exceed a store's limit once merged,
@@ -51,7 +52,7 @@ final class ProductRequestNormalizer
         // A persisted canonical reference must remain stable; changing it here
         // could silently turn an update into a second equivalent cart entry.
         if (ProductRequestData::sameItem($existing, $request) === false) {
-            throw new CheckoutInputException('selection.invalid');
+            throw new CheckoutInputException(SelectionErrorCode::INVALID);
         }
 
         return $request;
@@ -61,12 +62,12 @@ final class ProductRequestNormalizer
     public function normalizeDirectInput(mixed $items): array
     {
         if (is_array($items) === false || array_is_list($items) === false || $items === []) {
-            throw new CheckoutInputException('selection.invalid');
+            throw new CheckoutInputException(SelectionErrorCode::INVALID);
         }
 
         // Bound submitted work before resolution, even if duplicates would merge.
         if (count($items) > self::MAX_ENTRIES) {
-            throw new CheckoutInputException('selection.line_limit_exceeded');
+            throw new CheckoutInputException(SelectionErrorCode::LINE_LIMIT_EXCEEDED);
         }
 
         // Parse the complete body before running any project resolver.

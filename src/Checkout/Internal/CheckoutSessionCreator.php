@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
 use Closure;
 use DateTimeImmutable;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSessionPresentation;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutSessionException;
@@ -58,7 +59,7 @@ final class CheckoutSessionCreator
         // The structured token reserves the only Order identity this request
         // may create or reuse. Reject mismatches before configuration or writes.
         if ($token->orderUuid() !== $order->uuid()) {
-            throw new CheckoutInputException('checkout.attempt_conflict');
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
         }
 
         // The preparation callback runs only when this token has no persisted
@@ -156,7 +157,7 @@ final class CheckoutSessionCreator
         }
 
         if (in_array($status, [CheckoutStatus::Creating, CheckoutStatus::CreationUncertain], true) === false) {
-            throw new CheckoutInputException('checkout.attempt_closed');
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CLOSED);
         }
 
         $providerFailure = $checkoutAttempt['providerFailure'];
@@ -181,7 +182,7 @@ final class CheckoutSessionCreator
                 return $presentation;
             }
 
-            throw new CheckoutSessionException('checkout.attempt_retry_expired');
+            throw new CheckoutSessionException(CheckoutErrorCode::ATTEMPT_RETRY_EXPIRED);
         }
 
         // This is recovery in a later PHP request after stripe-php has already
@@ -224,7 +225,7 @@ final class CheckoutSessionCreator
             ) === false
             || $checkoutAttempt['operation'] !== CheckoutAttempt::OPERATION
         ) {
-            throw new CheckoutInputException('checkout.attempt_conflict');
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
         }
     }
 
@@ -328,7 +329,7 @@ final class CheckoutSessionCreator
             throw $error;
         } catch (Throwable $error) {
             throw new CheckoutSessionException(
-                errorCode: 'checkout.session_attachment_failed',
+                errorCode: CheckoutErrorCode::SESSION_ATTACHMENT_FAILED,
                 retryable: true,
                 previous: $error,
             );
@@ -338,7 +339,7 @@ final class CheckoutSessionCreator
 
         if (($data['stripeCheckoutSessionId'] ?? null) !== $sessionRecord->id) {
             throw new CheckoutSessionException(
-                errorCode: 'checkout.session_attachment_failed',
+                errorCode: CheckoutErrorCode::SESSION_ATTACHMENT_FAILED,
                 retryable: true,
             );
         }
@@ -346,12 +347,12 @@ final class CheckoutSessionCreator
         $status = CheckoutStatus::from(OrderData::text($data['checkoutStatus']));
 
         if (in_array($status, [CheckoutStatus::Complete, CheckoutStatus::Expired], true)) {
-            throw new CheckoutInputException('checkout.attempt_closed');
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CLOSED);
         }
 
         if ($status !== CheckoutStatus::Open) {
             throw new CheckoutSessionException(
-                errorCode: 'checkout.session_attachment_failed',
+                errorCode: CheckoutErrorCode::SESSION_ATTACHMENT_FAILED,
                 retryable: true,
             );
         }
@@ -400,7 +401,7 @@ final class CheckoutSessionCreator
         $sessionId = $sessionRecord->id;
 
         if ($sessionId === null) {
-            throw new CheckoutSessionException('checkout.session_incompatible');
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
         }
 
         return $this->orderPageStore->update(
@@ -410,7 +411,7 @@ final class CheckoutSessionCreator
                 // before this POST response acquires the order write lock.
                 if (isset($data['stripeCheckoutSessionId'])) {
                     if ($data['stripeCheckoutSessionId'] !== $sessionId) {
-                        throw new CheckoutSessionException('checkout.session_incompatible');
+                        throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
                     }
 
                     return $data;
@@ -505,7 +506,7 @@ final class CheckoutSessionCreator
         }
 
         if (in_array($status, [CheckoutStatus::Complete, CheckoutStatus::Expired], true)) {
-            throw new CheckoutInputException('checkout.attempt_closed');
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CLOSED);
         }
 
         return null;
@@ -514,7 +515,7 @@ final class CheckoutSessionCreator
     private function sessionException(CheckoutSessionGatewayException $error): CheckoutSessionException
     {
         return new CheckoutSessionException(
-            errorCode: 'checkout.session_' . str_replace('provider_', '', $error->failure()->type()->value),
+            errorCode: CheckoutErrorCode::forSessionFailure($error->failure()->type()),
             retryable: $error->failure()->isRetryable(),
             previous: $error,
         );
@@ -526,7 +527,7 @@ final class CheckoutSessionCreator
         $type = CheckoutSessionFailureType::from(OrderData::text($providerFailure['type'] ?? null));
 
         return new CheckoutSessionException(
-            errorCode: 'checkout.session_' . str_replace('provider_', '', $type->value),
+            errorCode: CheckoutErrorCode::forSessionFailure($type),
             retryable: false,
         );
     }

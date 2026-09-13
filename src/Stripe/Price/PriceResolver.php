@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Stripe\Price;
 use Brick\Math\BigDecimal;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
+use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use Throwable;
 
@@ -33,7 +34,7 @@ final class PriceResolver
         } catch (InvalidProductException $error) {
             throw $error;
         } catch (Throwable $error) {
-            throw new InvalidProductException('product.stripe_price_unavailable', $error);
+            throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_UNAVAILABLE, $error);
         }
     }
 
@@ -56,7 +57,7 @@ final class PriceResolver
             || $record->tiersMode !== null
             || $record->hasQuantityTransform
         ) {
-            throw new InvalidProductException('product.stripe_price_ineligible');
+            throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INELIGIBLE);
         }
 
         $productName = $record->productName;
@@ -68,13 +69,13 @@ final class PriceResolver
             || $record->productActive === false
             || is_string($productName) === false
         ) {
-            throw new InvalidProductException('product.stripe_product_ineligible');
+            throw new InvalidProductException(ProductErrorCode::STRIPE_PRODUCT_INELIGIBLE);
         }
 
         $providerCurrency = strtoupper($record->currency);
 
         if ($providerCurrency !== $currency || $this->currencies->supports($providerCurrency) === false) {
-            throw new InvalidProductException('product.currency_mismatch');
+            throw new InvalidProductException(ProductErrorCode::CURRENCY_MISMATCH);
         }
 
         $minorAmount = $this->minorAmount($record);
@@ -82,7 +83,7 @@ final class PriceResolver
         try {
             $unitPrice = $this->currencies->fromProviderAmount($minorAmount, $providerCurrency);
         } catch (Throwable $error) {
-            throw new InvalidProductException('product.price_invalid', $error);
+            throw new InvalidProductException(ProductErrorCode::PRICE_INVALID, $error);
         }
 
         $taxBehavior = $record->taxBehavior ?? 'unspecified';
@@ -107,27 +108,27 @@ final class PriceResolver
 
             if ($decimal !== null) {
                 if (preg_match('/^[0-9]+(?:\.0+)?$/D', $decimal) !== 1) {
-                    throw new InvalidProductException('product.stripe_price_ineligible');
+                    throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INELIGIBLE);
                 }
 
                 $amount = BigDecimal::of($decimal)->toBigInteger()->toInt();
 
                 if ($record->unitAmount !== null && $record->unitAmount !== $amount) {
-                    throw new InvalidProductException('product.stripe_price_ineligible');
+                    throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INELIGIBLE);
                 }
 
                 return $amount;
             }
 
             if ($record->unitAmount === null || $record->unitAmount < 0) {
-                throw new InvalidProductException('product.stripe_price_ineligible');
+                throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INELIGIBLE);
             }
 
             return $record->unitAmount;
         } catch (InvalidProductException $error) {
             throw $error;
         } catch (Throwable $error) {
-            throw new InvalidProductException('product.stripe_price_ineligible', $error);
+            throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INELIGIBLE, $error);
         }
     }
 }

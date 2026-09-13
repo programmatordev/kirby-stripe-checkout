@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Order\Internal;
 use Kirby\Cms\Url;
 use Kirby\Uuid\Uuids;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
+use ProgrammatorDev\StripeCheckout\Order\OrderErrorCode;
 use Throwable;
 
 /**
@@ -24,7 +25,7 @@ final class OrderUuidValidator
     public static function validate(string $uuid): void
     {
         if (Uuids::enabled() === false) {
-            throw new OrderDataException('order.uuid_unavailable');
+            throw new OrderDataException(OrderErrorCode::UUID_UNAVAILABLE);
         }
 
         OrderData::uuid('page://' . $uuid);
@@ -32,11 +33,11 @@ final class OrderUuidValidator
         try {
             $slug = Url::slug($uuid);
         } catch (Throwable) {
-            throw new OrderDataException('order.uuid_slug_incompatible');
+            throw new OrderDataException(OrderErrorCode::UUID_SLUG_INCOMPATIBLE);
         }
 
         if ($slug !== $uuid) {
-            throw new OrderDataException('order.uuid_slug_incompatible');
+            throw new OrderDataException(OrderErrorCode::UUID_SLUG_INCOMPATIBLE);
         }
     }
 }

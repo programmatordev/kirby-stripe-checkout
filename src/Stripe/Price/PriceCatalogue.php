@@ -127,7 +127,7 @@ final class PriceCatalogue
             $state = [
                 ...$previous,
                 'failedAt' => time(),
-                'error' => 'prices.refresh_failed',
+                'error' => PriceCatalogueErrorCode::REFRESH_FAILED,
             ];
             $this->cache->set($this->key($currency), $this->encode($state));
 

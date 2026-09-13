@@ -23,14 +23,14 @@ final readonly class ProductOption
         $this->name = ProductData::name($name);
 
         if ($values === [] || array_is_list($values) === false) {
-            throw new InvalidProductException('product.options_invalid');
+            throw new InvalidProductException(ProductErrorCode::OPTIONS_INVALID);
         }
 
         $ids = [];
 
         foreach ($values as $value) {
             if ($value instanceof ProductOptionValue === false || isset($ids[$value->id()])) {
-                throw new InvalidProductException('product.options_invalid');
+                throw new InvalidProductException(ProductErrorCode::OPTIONS_INVALID);
             }
 
             $ids[$value->id()] = true;

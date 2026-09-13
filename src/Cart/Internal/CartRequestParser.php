@@ -9,6 +9,8 @@ use Kirby\Http\Request;
 use ProgrammatorDev\StripeCheckout\Cart\CartOperation;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
+use ProgrammatorDev\StripeCheckout\Checkout\RequestErrorCode;
+use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
 use stdClass;
 
 /** @internal Validates HTTP transport only; product rules remain in the shared cart API. */
@@ -24,7 +26,7 @@ final class CartRequestParser
         $type = is_string($header) ? strtolower(trim(explode(';', $header)[0])) : '';
 
         if (in_array($type, ['application/json', 'application/x-www-form-urlencoded'], true) === false) {
-            throw new CheckoutInputException('request.unsupported_media_type');
+            throw new CheckoutInputException(RequestErrorCode::UNSUPPORTED_MEDIA_TYPE);
         }
 
         $raw = $request->body()->contents();
@@ -35,14 +37,14 @@ final class CartRequestParser
             $object = is_string($raw) ? json_decode($raw, depth: 32) : null;
 
             if ($object instanceof stdClass === false) {
-                throw new CheckoutInputException('request.invalid_body');
+                throw new CheckoutInputException(RequestErrorCode::INVALID_BODY);
             }
 
             $body = (array) $object;
 
             if (array_key_exists('options', $body)) {
                 if ($body['options'] instanceof stdClass === false) {
-                    throw new CheckoutInputException('selection.invalid');
+                    throw new CheckoutInputException(SelectionErrorCode::INVALID);
                 }
 
                 $body['options'] = (array) $body['options'];
@@ -56,7 +58,7 @@ final class CartRequestParser
             }
 
             if ($body === []) {
-                throw new CheckoutInputException('request.invalid_body');
+                throw new CheckoutInputException(RequestErrorCode::INVALID_BODY);
             }
         }
 
@@ -78,7 +80,7 @@ final class CartRequestParser
         };
 
         if (array_diff(array_keys($body), $keys) !== []) {
-            throw new CheckoutInputException('selection.invalid');
+            throw new CheckoutInputException(SelectionErrorCode::INVALID);
         }
 
         if ($operation === CartOperation::Add) {
@@ -103,11 +105,11 @@ final class CartRequestParser
         // Require the version the browser saw; substituting the current server
         // revision would silently authorize writes from stale forms or tabs.
         if (is_string($body['revision'] ?? null) === false || $body['revision'] === '' || strlen($body['revision']) > 128) {
-            throw new CheckoutInputException('selection.invalid');
+            throw new CheckoutInputException(SelectionErrorCode::INVALID);
         }
 
         if ($operation === CartOperation::Update && (is_int($body['quantity'] ?? null) === false || $body['quantity'] < 1)) {
-            throw new CheckoutInputException('selection.quantity_invalid');
+            throw new CheckoutInputException(SelectionErrorCode::QUANTITY_INVALID);
         }
 
         /** @var array{revision: string, quantity?: int} $body */
@@ -124,20 +126,20 @@ final class CartRequestParser
             || ($header !== null && $formToken !== null && $header !== $formToken)
             || $kirby->csrf($token) !== true
         ) {
-            throw new CheckoutInputException('request.csrf_invalid');
+            throw new CheckoutInputException(RequestErrorCode::CSRF_INVALID);
         }
     }
 
     private static function formQuantity(mixed $value): int
     {
         if (is_string($value) === false || preg_match('/^[1-9][0-9]*$/D', $value) !== 1) {
-            throw new CheckoutInputException('selection.quantity_invalid');
+            throw new CheckoutInputException(SelectionErrorCode::QUANTITY_INVALID);
         }
 
         $quantity = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
 
         if ($quantity === false) {
-            throw new CheckoutInputException('selection.quantity_invalid');
+            throw new CheckoutInputException(SelectionErrorCode::QUANTITY_INVALID);
         }
 
         return $quantity;

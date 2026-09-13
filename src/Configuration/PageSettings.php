@@ -9,6 +9,7 @@ use ProgrammatorDev\StripeCheckout\Collection\BillingAddressCollection;
 use ProgrammatorDev\StripeCheckout\Collection\NameCollectionMode;
 use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
+use ProgrammatorDev\StripeCheckout\Kirby\PersistenceErrorCode;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 
@@ -56,7 +57,7 @@ final class PageSettings
             )
         ) {
             throw new ConfigurationException(
-                'persistence.content_invalid',
+                PersistenceErrorCode::CONTENT_INVALID,
                 'settings.priceSource',
             );
         }
@@ -71,7 +72,7 @@ final class PageSettings
             )
         ) {
             throw new ConfigurationException(
-                'persistence.content_invalid',
+                PersistenceErrorCode::CONTENT_INVALID,
                 'settings.currency',
             );
         }
@@ -83,7 +84,7 @@ final class PageSettings
             true, 'yes' => true,
             false, 'no' => false,
             default => throw new ConfigurationException(
-                'persistence.content_invalid',
+                PersistenceErrorCode::CONTENT_INVALID,
                 'settings.defaultRequiresShipping',
             ),
         };
@@ -148,7 +149,7 @@ final class PageSettings
             : filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
 
             if ($value === null || (is_int($default) && (is_int($value) === false || is_float($retention[$name]) || is_bool($retention[$name])))) {
-                throw new ConfigurationException('persistence.content_invalid', 'settings.' . $name);
+                throw new ConfigurationException(PersistenceErrorCode::CONTENT_INVALID, 'settings.' . $name);
             }
 
             $retention[$name] = $value;
@@ -299,7 +300,7 @@ final class PageSettings
         $value = $value === '' ? null : $value;
 
         if ($value !== null && (is_string($value) === false || UiMode::tryFrom($value) === null)) {
-            throw new ConfigurationException('persistence.content_invalid', 'settings.uiMode');
+            throw new ConfigurationException(PersistenceErrorCode::CONTENT_INVALID, 'settings.uiMode');
         }
 
         return $value;
@@ -312,7 +313,7 @@ final class PageSettings
         }
 
         if (is_string($value) === false || trim($value) !== $value) {
-            throw new ConfigurationException('persistence.content_invalid', 'settings.' . $name);
+            throw new ConfigurationException(PersistenceErrorCode::CONTENT_INVALID, 'settings.' . $name);
         }
 
         return $value;
@@ -326,7 +327,7 @@ final class PageSettings
         }
 
         if (is_string($value) === false || in_array($value, $allowed, true) === false) {
-            throw new ConfigurationException('persistence.content_invalid', 'settings.' . $name);
+            throw new ConfigurationException(PersistenceErrorCode::CONTENT_INVALID, 'settings.' . $name);
         }
 
         return $value;
@@ -339,7 +340,7 @@ final class PageSettings
             true, 'true' => true,
             false, 'false' => false,
             default => throw new ConfigurationException(
-                'persistence.content_invalid',
+                PersistenceErrorCode::CONTENT_INVALID,
                 'settings.' . $name,
             ),
         };
@@ -354,7 +355,7 @@ final class PageSettings
 
         if (is_array($value) === false) {
             throw new ConfigurationException(
-                'persistence.content_invalid',
+                PersistenceErrorCode::CONTENT_INVALID,
                 'settings.customFields',
             );
         }
@@ -363,7 +364,7 @@ final class PageSettings
             return (new CustomFieldFactory())->normalize($value);
         } catch (ConfigurationException $error) {
             throw new ConfigurationException(
-                'persistence.content_invalid',
+                PersistenceErrorCode::CONTENT_INVALID,
                 $error->path(),
                 previous: $error,
             );

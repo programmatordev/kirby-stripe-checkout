@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutSessionException;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
@@ -59,7 +60,7 @@ final class CheckoutSessionRecordValidator
             || $hasPresentation === false
             || ($sessionRecord->requestId !== null && trim($sessionRecord->requestId) === '')
         ) {
-            throw new CheckoutSessionException('checkout.session_incompatible');
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
         }
     }
 

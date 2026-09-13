@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Lifecycle\Internal;
 
 use Kirby\Uuid\Uri;
 use Kirby\Uuid\Uuid;
+use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleErrorCode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEvent;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
@@ -115,7 +116,7 @@ final class HookDeliveryLedger
                 || $attempts < 0
                 || ($attempts === 0) !== ($entry['lastAttemptAt'] === null)
                 || $entry['status'] !== 'pending' && $attempts === 0
-                || $entry['errorCode'] !== ($entry['status'] === 'failed' ? 'lifecycle.listener_failed' : null)
+                || $entry['errorCode'] !== ($entry['status'] === 'failed' ? LifecycleErrorCode::LISTENER_FAILED : null)
             ) {
                 throw new OrderDataException();
             }

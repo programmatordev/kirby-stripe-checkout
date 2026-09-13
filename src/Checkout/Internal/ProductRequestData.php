@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
+use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 
@@ -22,26 +23,26 @@ final class ProductRequestData
             || array_diff(array_keys($input), ['reference', 'quantity', 'selectedOptions']) !== []
             || is_string($input['reference'] ?? null) === false
         ) {
-            throw new CheckoutInputException('selection.invalid');
+            throw new CheckoutInputException(SelectionErrorCode::INVALID);
         }
 
         // Only omission selects a default; an explicit null remains invalid.
         $quantity = array_key_exists('quantity', $input) ? $input['quantity'] : 1;
 
         if (is_int($quantity) === false || $quantity < 1) {
-            throw new CheckoutInputException('selection.quantity_invalid');
+            throw new CheckoutInputException(SelectionErrorCode::QUANTITY_INVALID);
         }
 
         $options = array_key_exists('selectedOptions', $input) ? $input['selectedOptions'] : [];
 
         if (is_array($options) === false) {
-            throw new CheckoutInputException('selection.invalid');
+            throw new CheckoutInputException(SelectionErrorCode::INVALID);
         }
 
         try {
             return new ProductRequest($input['reference'], $quantity, $options);
         } catch (InvalidProductException $error) {
-            throw new CheckoutInputException('selection.invalid', $error);
+            throw new CheckoutInputException(SelectionErrorCode::INVALID, $error);
         }
     }
 
@@ -66,7 +67,7 @@ final class ProductRequestData
     {
         // Check before adding: PHP converts overflowing integer sums to floats.
         if ($left < 1 || $right < 1 || $left > PHP_INT_MAX - $right) {
-            throw new CheckoutInputException('selection.quantity_invalid');
+            throw new CheckoutInputException(SelectionErrorCode::QUANTITY_INVALID);
         }
 
         return $left + $right;

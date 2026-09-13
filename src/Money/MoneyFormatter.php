@@ -34,7 +34,7 @@ final class MoneyFormatter
         try {
             return $money->formatToLocale($locale);
         } catch (Throwable $error) {
-            throw new MoneyException('money.format_failed', $error);
+            throw new MoneyException(MoneyErrorCode::FORMAT_FAILED, $error);
         }
     }
 
@@ -48,7 +48,7 @@ final class MoneyFormatter
         try {
             return Currencies::getSymbol($code, $locale);
         } catch (Throwable $error) {
-            throw new MoneyException('money.format_failed', $error);
+            throw new MoneyException(MoneyErrorCode::FORMAT_FAILED, $error);
         }
     }
 
@@ -58,24 +58,24 @@ final class MoneyFormatter
     ): Money {
         if ($amount instanceof Money) {
             if ($currency !== null) {
-                throw new MoneyException('money.currency_redundant');
+                throw new MoneyException(MoneyErrorCode::CURRENCY_REDUNDANT);
             }
 
             return $amount;
         }
 
         if ($currency === null) {
-            throw new MoneyException('money.currency_required');
+            throw new MoneyException(MoneyErrorCode::CURRENCY_REQUIRED);
         }
 
         if (is_string($amount) && preg_match('/^-?[0-9]+(?:\.[0-9]+)?$/D', $amount) !== 1) {
-            throw new MoneyException('money.amount_invalid');
+            throw new MoneyException(MoneyErrorCode::AMOUNT_INVALID);
         }
 
         try {
             return Money::of($amount, $this->currency($currency));
         } catch (Throwable $error) {
-            throw new MoneyException('money.amount_invalid', $error);
+            throw new MoneyException(MoneyErrorCode::AMOUNT_INVALID, $error);
         }
     }
 
@@ -88,7 +88,7 @@ final class MoneyFormatter
         try {
             return Currency::of($currency);
         } catch (Throwable $error) {
-            throw new MoneyException('money.currency_invalid', $error);
+            throw new MoneyException(MoneyErrorCode::CURRENCY_INVALID, $error);
         }
     }
 }
