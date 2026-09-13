@@ -10,9 +10,11 @@ use Kirby\Uuid\Uuids;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
+use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderHookDispatcher;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
+use ProgrammatorDev\StripeCheckout\Kirby\PluginPermissions;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
@@ -71,6 +73,11 @@ final class LocalDiagnostics
             $configuration = $configurationReport->configurationOrFail();
             $stripe = $configuration->stripe();
             $settings = $configuration->settings();
+
+            if ($settings->automaticTax() && $settings->priceSource() === PriceSource::Kirby) {
+                $checks[] = $this->taxCodes();
+            }
+
             $checks[] = $this->credential('secretKey', $stripe->hasSecretKey(), $stripe->secretKeyMode());
             $checks[] = $settings->uiMode() === UiMode::Embedded || $stripe->hasPublishableKey()
                 ? $this->credential('publishableKey', $stripe->hasPublishableKey(), $stripe->publishableKeyMode())
@@ -148,6 +155,29 @@ final class LocalDiagnostics
         return $available === true && $version !== null
             ? $this->check($id, self::PASS, 'dependency.ready', ['version' => $version])
             : $this->check($id, self::FAIL, 'dependency.missing');
+    }
+
+    /** @return array{id: string, status: string, message: string, values: array<string, string>} */
+    private function taxCodes(): array
+    {
+        if (PluginPermissions::allows($this->kirby, 'taxCodes.read') === false) {
+            return $this->check('taxCodes', self::UNKNOWN, 'taxCodes.denied');
+        }
+
+        // These are cache facts, not Stripe Tax/account readiness checks.
+        $state = (new RuntimeFactory($this->kirby))->taxCodeCatalogue()->cached();
+        $values = [
+            'count' => (string) count($state['items']),
+            'refreshedAt' => $state['refreshedAt'] === null ? '—' : gmdate('Y-m-d H:i:s \U\T\C', $state['refreshedAt']),
+            'failedAt' => $state['failedAt'] === null ? '—' : gmdate('Y-m-d H:i:s \U\T\C', $state['failedAt']),
+        ];
+
+        return $this->check(
+            'taxCodes',
+            $state['refreshedAt'] !== null && $state['error'] === null ? self::PASS : self::WARNING,
+            $state['error'] !== null ? 'taxCodes.failed' : ($state['refreshedAt'] === null ? 'taxCodes.empty' : 'taxCodes.ready'),
+            $values,
+        );
     }
 
     /** @return array{id: string, status: string, message: string, values: array<string, string>} */

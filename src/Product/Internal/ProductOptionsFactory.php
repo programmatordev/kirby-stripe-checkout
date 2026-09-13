@@ -19,6 +19,8 @@ use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductVariant;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
+use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
+use ProgrammatorDev\StripeCheckout\Tax\TaxErrorCode;
 use Throwable;
 
 /**
@@ -28,13 +30,17 @@ use Throwable;
  */
 final class ProductOptionsFactory
 {
-    /** @param null|Closure(StripePriceReference): StripePrice $stripePriceResolver */
+    /**
+     * @param null|Closure(StripePriceReference): StripePrice $stripePriceResolver
+     * @param null|Closure(TaxCode): void $taxCodeValidator
+     */
     public function __construct(
         private readonly ProductConfiguration $configuration,
         private readonly ProductResolutionContext $context,
         private readonly VariantSchema $schema = new VariantSchema(),
         private readonly ProductCommerceResolver $commerce = new ProductCommerceResolver(),
         private readonly ?Closure $stripePriceResolver = null,
+        private readonly ?Closure $taxCodeValidator = null,
     ) {}
 
     public function forPage(Page $page, string $field): ProductOptions
@@ -108,6 +114,16 @@ final class ProductOptionsFactory
                         ??= $this->resolveStripePrice($price);
                 }
 
+                $taxCode = $this->commerce->taxCode($technicalContent, $fields, $variant, $this->context);
+
+                if ($taxCode !== null) {
+                    if ($this->taxCodeValidator === null) {
+                        throw new InvalidProductException(TaxErrorCode::CATALOGUE_UNAVAILABLE);
+                    }
+
+                    ($this->taxCodeValidator)($taxCode);
+                }
+
                 return new ProductVariant(
                     $variant['id'],
                     $variant['selectedOptions'],
@@ -120,6 +136,7 @@ final class ProductOptionsFactory
                         $this->context,
                     ),
                     sku: $variant['sku'],
+                    taxCode: $taxCode,
                 );
             },
             $localized['variants'],

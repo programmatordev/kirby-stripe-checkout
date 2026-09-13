@@ -16,7 +16,7 @@ use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 final class VariantSchema
 {
     /**
-     * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>}
+     * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}>}
      */
     public function canonical(mixed $value): array
     {
@@ -40,7 +40,7 @@ final class VariantSchema
     }
 
     /**
-     * @param array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>} $canonical
+     * @param array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}>} $canonical
      * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>}
      */
     public function overlay(array $canonical, mixed $value): array
@@ -91,8 +91,8 @@ final class VariantSchema
     }
 
     /**
-     * @param array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>} $canonical
-     * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>}
+     * @param array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}>} $canonical
+     * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}>}
      */
     public function localized(array $canonical, mixed $overlay): array
     {
@@ -207,7 +207,7 @@ final class VariantSchema
 
     /**
      * @param list<array{id: string, label: string, values: list<array{id: string, label: string}>}> $options
-     * @return list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>
+     * @return list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}>
      */
     private function variants(mixed $variants, array $options): array
     {
@@ -278,6 +278,7 @@ final class VariantSchema
                     'stripePriceId',
                 ),
                 'requiresShipping' => $shipping,
+                'taxCode' => $this->nullableString($variant['taxCode'] ?? null, 'taxCode'),
             ];
         }
 

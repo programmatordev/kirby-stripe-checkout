@@ -7,7 +7,13 @@ namespace ProgrammatorDev\StripeCheckout\Tax;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 
-/** Represents a product tax classification and optional Stripe catalogue facts. */
+/**
+ * Represents a product tax classification and optional Stripe catalogue facts.
+ * A code carries no fixed rate: Stripe applies jurisdiction-specific rules using
+ * the customer location and the merchant's tax setup and active registrations.
+ * Catalogue membership alone does not guarantee applicability or tax collection.
+ * https://docs.stripe.com/tax/checkout/page
+ */
 final readonly class TaxCode
 {
     public function __construct(

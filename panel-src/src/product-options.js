@@ -65,7 +65,8 @@ export function reconcile(options, variants, createId = stableId) {
 			sku: null,
 			price: null,
 			stripePriceId: null,
-			requiresShipping: "inherit"
+			requiresShipping: "inherit",
+			taxCode: null
 		};
 	});
 }

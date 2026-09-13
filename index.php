@@ -18,6 +18,7 @@ use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\StripePriceField;
+use ProgrammatorDev\StripeCheckout\Kirby\TaxCodeField;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
@@ -50,6 +51,7 @@ App::plugin(
             'fields/stripe-checkout/name' => [ProductBlueprint::class, 'name'],
             'fields/stripe-checkout/price' => [ProductBlueprint::class, 'price'],
             'fields/stripe-checkout/stripe-price' => [ProductBlueprint::class, 'stripePrice'],
+            'fields/stripe-checkout/tax-code' => [ProductBlueprint::class, 'taxCode'],
             'fields/stripe-checkout/description' => [ProductBlueprint::class, 'description'],
             'fields/stripe-checkout/images' => [ProductBlueprint::class, 'images'],
             'fields/stripe-checkout/sku' => [ProductBlueprint::class, 'sku'],
@@ -65,6 +67,7 @@ App::plugin(
             'stripe-checkout-custom-fields' => CustomFieldsField::class,
             'stripe-checkout-options' => OptionsField::class,
             'stripe-checkout-price' => StripePriceField::class,
+            'stripe-checkout-tax-code' => TaxCodeField::class,
         ],
         'fieldMethods' => [
             'toProductOptions' => static function (Field $field): ProductOptions {
@@ -93,6 +96,7 @@ App::plugin(
             'settings.update' => false,
             'diagnostics.read' => false,
             'prices.read' => false,
+            'taxCodes.read' => false,
             'orders.read' => false,
             'orders.update' => false,
         ],

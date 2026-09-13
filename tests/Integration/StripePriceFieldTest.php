@@ -65,11 +65,12 @@ final class StripePriceFieldTest extends KirbyTestCase
                     'sku' => 'BAG-S',
                     'price' => null,
                     'stripePriceId' => 'price_canvas',
+                    'taxCode' => 'retained_local_code',
                     'requiresShipping' => 'no',
                 ]],
             ],
         ]);
-        $this->seedCatalogue();
+        $this->seedCatalogue([$this->priceItem(taxCode: 'txcd_stripe')]);
 
         /** @var ProductOptions $options */
         /** @phpstan-ignore-next-line method.nonObject, method.notFound */
@@ -78,8 +79,10 @@ final class StripePriceFieldTest extends KirbyTestCase
         $stripePrice = $variant->stripePrice();
 
         $this->assertNull($variant->price());
+        $this->assertNull($variant->taxCode());
         $this->assertInstanceOf(StripePrice::class, $stripePrice);
         $this->assertSame('price_canvas', $stripePrice->priceId());
+        $this->assertSame('txcd_stripe', $stripePrice->taxCode());
         $this->assertSame('16.00', $stripePrice->price()->getAmount()->toString());
         $this->assertNull($variant->toArray()['price']);
         $this->assertSame(
@@ -409,6 +412,7 @@ final class StripePriceFieldTest extends KirbyTestCase
         ?string $nickname = 'Standard',
         int $minorAmount = 1600,
         array $images = ['https://example.test/canvas.jpg'],
+        ?string $taxCode = null,
     ): array {
         return [
             'priceId' => $priceId,
@@ -420,7 +424,7 @@ final class StripePriceFieldTest extends KirbyTestCase
             'description' => null,
             'images' => $images,
             'nickname' => $nickname,
-            'taxCode' => null,
+            'taxCode' => $taxCode,
         ];
     }
 }

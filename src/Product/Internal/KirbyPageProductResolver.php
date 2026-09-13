@@ -9,7 +9,6 @@ use Kirby\Cms\Files;
 use Kirby\Cms\Page;
 use Kirby\Content\Content;
 use Kirby\Content\Field;
-use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductUnavailableException;
@@ -19,8 +18,6 @@ use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
-use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
-use ProgrammatorDev\StripeCheckout\Tax\TaxErrorCode;
 use Throwable;
 
 /**
@@ -93,39 +90,12 @@ final class KirbyPageProductResolver implements ProductResolverInterface
             metadata: $imagesTruncated ? ['imagesTruncated' => true] : [],
             variantId: $variant['id'] ?? null,
             image: $image,
-            taxCode: $this->taxCode($technicalContent, $fields['taxCode'], $context),
+            taxCode: $this->commerce->taxCode($technicalContent, $fields, $variant, $context),
         );
     }
 
-    private function taxCode(
-        Content $content,
-        string $fieldHandle,
-        ProductResolutionContext $context,
-    ): ?TaxCode {
-        // Retained local content is irrelevant when Stripe owns classification.
-        if ($context->settings()->automaticTax() === false || $context->priceSource() !== PriceSource::Kirby) {
-            return null;
-        }
-
-        // The caller supplies default-language technical content; a translated
-        // field must not change tax classification with the storefront language.
-        $value = $this->field($content, $fieldHandle)->value();
-
-        // Omission lets Stripe apply its account preset; never invent a code.
-        // https://docs.stripe.com/tax/products-prices-tax-codes-tax-behavior
-        if ($value === null || (is_string($value) && trim($value) === '')) {
-            return null;
-        }
-
-        if (is_string($value) === false) {
-            throw new InvalidProductException(TaxErrorCode::CODE_INVALID);
-        }
-
-        return new TaxCode(trim($value));
-    }
-
     /**
-     * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>}
+     * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}>}
      */
     private function optionData(mixed $value): array
     {
@@ -137,8 +107,8 @@ final class KirbyPageProductResolver implements ProductResolverInterface
     }
 
     /**
-     * @param array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>} $canonical
-     * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>}
+     * @param array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}>} $canonical
+     * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}>}
      */
     private function localizedVariants(array $canonical, mixed $overlay): array
     {
@@ -150,9 +120,9 @@ final class KirbyPageProductResolver implements ProductResolverInterface
     }
 
     /**
-     * @param array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>} $canonical
+     * @param array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}>} $canonical
      * @param array<string, string> $selectedOptions
-     * @return array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}|null
+     * @return array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}|null
      */
     private function matchedVariant(array $canonical, array $selectedOptions): ?array
     {

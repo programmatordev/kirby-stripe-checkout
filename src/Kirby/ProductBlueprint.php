@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Kirby;
 
 use Kirby\Cms\App;
+use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
@@ -108,6 +109,17 @@ final class ProductBlueprint
     }
 
     /** @return array<string, mixed> */
+    public static function taxCode(App $kirby): array
+    {
+        return [
+            'label' => 'programmatordev.stripe-checkout.product.taxCode.label',
+            'help' => 'programmatordev.stripe-checkout.product.taxCode.help',
+            'translate' => false,
+            'type' => 'stripe-checkout-tax-code',
+        ];
+    }
+
+    /** @return array<string, mixed> */
     public static function images(App $kirby): array
     {
         return [
@@ -155,7 +167,7 @@ final class ProductBlueprint
             $currency = $settings->currency();
 
             if ($currency === null) {
-                throw new ConfigurationException('configuration.required', 'settings.currency');
+                throw new ConfigurationException(ConfigurationErrorCode::REQUIRED_MISSING, 'settings.currency');
             }
         } catch (ConfigurationException) {
             return self::configurationWarning();

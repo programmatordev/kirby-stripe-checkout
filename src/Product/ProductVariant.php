@@ -8,6 +8,7 @@ use Brick\Money\Money;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
+use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
 
 /** Exposes one variant with its effective commerce values. */
 final readonly class ProductVariant
@@ -27,6 +28,7 @@ final readonly class ProductVariant
         private Price|StripePrice $sourcePrice,
         private bool $requiresShipping,
         ?string $sku = null,
+        private ?TaxCode $taxCode = null,
     ) {
         $this->id = ProductData::identifier($id);
         $normalized = [];
@@ -88,6 +90,11 @@ final readonly class ProductVariant
         return $this->requiresShipping;
     }
 
+    public function taxCode(): ?TaxCode
+    {
+        return $this->taxCode;
+    }
+
     /**
      * @return array{
      *   id: string,
@@ -96,7 +103,8 @@ final readonly class ProductVariant
      *   sku: ?string,
      *   price: ?array{amount: string, currency: string},
      *   stripePrice: ?array{priceId: string, productId: string, name: string, price: array{amount: string, currency: string}, taxBehavior: string, description: ?string, images: list<string>, nickname: ?string, taxCode: ?string},
-     *   requiresShipping: bool
+     *   requiresShipping: bool,
+     *   taxCode: ?string
      * }
      */
     public function toArray(): array
@@ -128,6 +136,7 @@ final readonly class ProductVariant
                 'taxCode' => $stripePrice->taxCode(),
             ],
             'requiresShipping' => $this->requiresShipping,
+            'taxCode' => $this->taxCode?->id(),
         ];
     }
 }

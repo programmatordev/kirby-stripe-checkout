@@ -143,17 +143,26 @@ export default {
 		pricesReadable: {
 			type: Boolean,
 			default: false
+		},
+		automaticTax: Boolean,
+		taxCodesReadable: {
+			type: Boolean,
+			default: false
 		}
 	},
 	data() {
 		return {
 			localValue: this.clone(this.value),
 			localStripePriceItems: {},
+			localTaxCodeItems: {},
 			variantPage: 1,
 			variantPageSize: 10
 		};
 	},
 	computed: {
+		taxCodeEnabled() {
+			return this.automaticTax && this.priceSource === "kirby";
+		},
 		addOptionActions() {
 			return [
 				{
@@ -260,6 +269,12 @@ export default {
 					label: this.$t("programmatordev.stripe-checkout.options.price"),
 					type: "stripe-checkout-variant-value"
 				},
+				...(this.taxCodeEnabled ? {
+					taxCode: {
+						label: this.$t("programmatordev.stripe-checkout.product.taxCode.label"),
+						type: "stripe-checkout-variant-value"
+					}
+				} : {}),
 				shipping: {
 					label: this.$t("programmatordev.stripe-checkout.options.shipping.label"),
 					type: "stripe-checkout-variant-value"
@@ -297,6 +312,7 @@ export default {
 					combination: this.variantLabel(variant),
 					enabled: variant.enabled,
 					price: this.pricePreview(variant),
+					taxCode: this.taxCodePreview(variant),
 					shipping: this.shippingPreview(variant.requiresShipping),
 					sku: variant.sku
 				}));
@@ -341,19 +357,19 @@ export default {
 	},
 	watch: {
 		variantPage() {
-			this.hydrateVisibleStripePrices();
+			this.hydrateVisibleCatalogueItems();
 		},
 		value: {
 			deep: true,
 			handler(value) {
 				this.localValue = this.clone(value);
 				this.variantPage = 1;
-				this.$nextTick(() => this.hydrateVisibleStripePrices());
+				this.$nextTick(() => this.hydrateVisibleCatalogueItems());
 			}
 		}
 	},
 	mounted() {
-		this.hydrateVisibleStripePrices();
+		this.hydrateVisibleCatalogueItems();
 	},
 	methods: {
 		clone(value) {
@@ -601,6 +617,24 @@ export default {
 					: this.formatPrice(value)
 			};
 		},
+		taxCodePreview(variant) {
+			if (!variant.taxCode) {
+				return {
+					inherited: true,
+					text: this.$t("programmatordev.stripe-checkout.taxCodes.inherit")
+				};
+			}
+
+			return {
+				inherited: false,
+				item: this.localTaxCodeItems[variant.taxCode] ?? {
+					icon: "alert",
+					text: this.$t("programmatordev.stripe-checkout.taxCodes.savedReference"),
+					info: variant.taxCode,
+					theme: "warning"
+				}
+			};
+		},
 		formatPrice(value) {
 			return formatAmount(value, this.currency);
 		},
@@ -635,6 +669,12 @@ export default {
 				this.hydrateStripePrices([current.stripePriceId]);
 			}
 
+			// A hidden field must not erase a dormant technical override.
+			if (this.taxCodeEnabled && Object.hasOwn(value, "taxCode")) {
+				current.taxCode = value.taxCode || null;
+				this.hydrateTaxCodes([current.taxCode]);
+			}
+
 			this.emit();
 		},
 		async hydrateStripePrices(priceIds) {
@@ -663,10 +703,39 @@ export default {
 				// Keep the saved references visible when cached details are unavailable.
 			}
 		},
-		hydrateVisibleStripePrices() {
+		hydrateVisibleCatalogueItems() {
 			this.hydrateStripePrices(
 				this.visibleVariants.map(variant => variant.stripePriceId)
 			);
+			this.hydrateTaxCodes(this.visibleVariants.map(variant => variant.taxCode));
+		},
+		async hydrateTaxCodes(ids) {
+			if (!this.taxCodeEnabled || !this.taxCodesReadable || !this.endpoints.field) {
+				return;
+			}
+
+			const selected = [...new Set(ids)].filter(Boolean);
+
+			if (selected.length === 0) {
+				return;
+			}
+
+			try {
+				const response = await this.$api.get(`${this.endpoints.field}/tax-codes`, {
+					taxCodes: selected.join(","),
+					view: "selected"
+				});
+
+				for (const id of selected) {
+					this.$delete(this.localTaxCodeItems, id);
+				}
+
+				for (const item of response?.data ?? []) {
+					this.$set(this.localTaxCodeItems, item.id, item);
+				}
+			} catch (error) {
+				// Retain saved IDs when their cached details cannot be read.
+			}
 		},
 		updateVariantRows(rows) {
 			const variants = new Map(this.localValue.variants.map(variant => [variant.id, variant]));
@@ -711,6 +780,7 @@ export default {
 
 			fields.stripePriceId = {
 				disabled: this.priceSource !== "stripe" || this.pricesReadable === false,
+				catalogueReadable: this.pricesReadable,
 				endpoint: `${this.endpoints.field}/prices`,
 				label: this.$t("programmatordev.stripe-checkout.options.price.stripeLabel"),
 				name: "stripePriceId",
@@ -718,6 +788,18 @@ export default {
 				sourceInactive: this.priceSource !== "stripe",
 				type: "stripe-checkout-price"
 			};
+
+			if (this.taxCodeEnabled) {
+				fields.taxCode = {
+					disabled: !this.taxCodesReadable,
+					catalogueReadable: this.taxCodesReadable,
+					endpoint: `${this.endpoints.field}/tax-codes`,
+					label: this.$t("programmatordev.stripe-checkout.product.taxCode.label"),
+					help: this.$t("programmatordev.stripe-checkout.taxCodes.inherit"),
+					name: "taxCode",
+					type: "stripe-checkout-tax-code"
+				};
+			}
 
 			fields.requiresShipping = {
 				empty: false,
@@ -735,7 +817,8 @@ export default {
 				price: variant.price,
 				requiresShipping: variant.requiresShipping,
 				sku: variant.sku,
-				stripePriceId: variant.stripePriceId
+				stripePriceId: variant.stripePriceId,
+				taxCode: variant.taxCode
 			};
 		},
 		requestRemoval(id) {

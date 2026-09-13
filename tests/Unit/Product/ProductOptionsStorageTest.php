@@ -29,6 +29,7 @@ final class ProductOptionsStorageTest extends TestCase
                 'sku' => 'RED-S',
                 'price' => '19.95',
                 'stripePriceId' => 'price_fixture',
+                'taxCode' => 'txcd_test',
                 'requiresShipping' => 'yes',
             ]],
         ]);
@@ -37,6 +38,8 @@ final class ProductOptionsStorageTest extends TestCase
         $this->assertSame('existingVariant', $canonical['variants'][0]['id']);
         $this->assertSame('RED-S', $canonical['variants'][0]['sku']);
         $this->assertFalse($canonical['variants'][0]['enabled']);
+        $this->assertSame('txcd_test', $canonical['variants'][0]['taxCode']);
+        $this->assertNull($canonical['variants'][1]['taxCode']);
         $this->assertNotSame('', $canonical['variants'][1]['id']);
     }
 
@@ -135,6 +138,10 @@ final class ProductOptionsStorageTest extends TestCase
             'options' => self::fixtureOptions(),
             'variants' => [],
         ]);
+        $canonical['variants'] = array_map(
+            static fn(array $variant): array => [...$variant, 'taxCode' => 'txcd_test'],
+            $canonical['variants'],
+        );
         $reorderedOptions = array_reverse(self::fixtureOptions());
         $option = $reorderedOptions[1];
         $reorderedOptions[1] = [
@@ -150,11 +157,11 @@ final class ProductOptionsStorageTest extends TestCase
         $after = [];
 
         foreach ($canonical['variants'] as $variant) {
-            $before[VariantMatrix::optionCombinationKey($variant['selectedOptions'])] = $variant['id'];
+            $before[VariantMatrix::optionCombinationKey($variant['selectedOptions'])] = [$variant['id'], $variant['taxCode']];
         }
 
         foreach ($reconciled['variants'] as $variant) {
-            $after[VariantMatrix::optionCombinationKey($variant['selectedOptions'])] = $variant['id'];
+            $after[VariantMatrix::optionCombinationKey($variant['selectedOptions'])] = [$variant['id'], $variant['taxCode']];
         }
 
         ksort($before);

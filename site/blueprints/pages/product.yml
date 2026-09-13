@@ -12,6 +12,8 @@ columns:
         extends: fields/stripe-checkout/price
       stripePrice:
         extends: fields/stripe-checkout/stripe-price
+      taxCode:
+        extends: fields/stripe-checkout/tax-code
       description:
         extends: fields/stripe-checkout/description
       productImages:

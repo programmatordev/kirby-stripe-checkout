@@ -23,7 +23,6 @@ use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationReport;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
-use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
@@ -35,6 +34,7 @@ use ProgrammatorDev\StripeCheckout\Product\Internal\GuardedProductResolver;
 use ProgrammatorDev\StripeCheckout\Product\Internal\KirbyPageLocator;
 use ProgrammatorDev\StripeCheckout\Product\Internal\KirbyPageProductResolver;
 use ProgrammatorDev\StripeCheckout\Product\Internal\ProductOptionsFactory;
+use ProgrammatorDev\StripeCheckout\Product\Internal\TaxCodeValidator;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
@@ -52,7 +52,7 @@ use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 use ProgrammatorDev\StripeCheckout\Stripe\StripeApiClientFactory;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\StripeApiTaxProvider;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeCatalogue;
-use ProgrammatorDev\StripeCheckout\Tax\TaxErrorCode;
+use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
 use ProgrammatorDev\StripeCheckout\Translation\LocaleResolver;
 use Stripe\StripeClient;
 use Stripe\Util\ApiVersion;
@@ -123,38 +123,14 @@ final class RuntimeFactory
             $context,
         );
 
-        $this->validateProductTaxCode($product, $context);
+        $this->taxCodeValidator()->validate($product->taxCode(), $context);
 
         return $product;
     }
 
-    private function validateProductTaxCode(Product $product, ProductResolutionContext $context): void
+    private function taxCodeValidator(): TaxCodeValidator
     {
-        if (
-            $context->settings()->automaticTax() === false
-            || $context->priceSource() !== PriceSource::Kirby
-            || $product->taxCode() === null
-        ) {
-            return;
-        }
-
-        // Both built-in and custom resolvers use cached membership, not a
-        // caller-supplied confirmation flag. Storefront reads never refresh.
-        $catalogue = $this->taxCodeCatalogue()->cached();
-
-        // A successful empty snapshot means an unknown code, not an outage.
-        // A failed refresh does not invalidate the retained last-good snapshot.
-        if ($catalogue['refreshedAt'] === null) {
-            throw new InvalidProductException(TaxErrorCode::CATALOGUE_UNAVAILABLE);
-        }
-
-        foreach ($catalogue['items'] as $taxCode) {
-            if ($taxCode->id() === $product->taxCode()->id()) {
-                return;
-            }
-        }
-
-        throw new InvalidProductException(TaxErrorCode::CODE_INVALID);
+        return new TaxCodeValidator($this->taxCodeCatalogue());
     }
 
     public function productOptions(Page|string $reference): ProductOptions
@@ -342,10 +318,13 @@ final class RuntimeFactory
 
     private function productOptionsFactory(): ProductOptionsFactory
     {
+        $context = $this->productContext();
+
         return new ProductOptionsFactory(
-            $this->products(),
-            $this->productContext(),
+            configuration: $this->products(),
+            context: $context,
             stripePriceResolver: fn(StripePriceReference $reference): StripePrice => $this->productStripePrice($reference),
+            taxCodeValidator: fn(TaxCode $code) => $this->taxCodeValidator()->validate($code, $context),
         );
     }
 

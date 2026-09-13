@@ -30,6 +30,7 @@ final class PanelAreaTest extends KirbyTestCase
             'settings.update' => false,
             'diagnostics.read' => false,
             'prices.read' => false,
+            'taxCodes.read' => false,
             'orders.read' => false,
             'orders.update' => false,
         ], $defaults);

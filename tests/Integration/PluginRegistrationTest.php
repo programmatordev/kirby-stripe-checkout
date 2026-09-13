@@ -11,6 +11,7 @@ use ProgrammatorDev\StripeCheckout\Kirby\ProductBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Kirby\StripePriceField;
+use ProgrammatorDev\StripeCheckout\Kirby\TaxCodeField;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
@@ -59,6 +60,7 @@ final class PluginRegistrationTest extends KirbyTestCase
             'fields/stripe-checkout/name' => [ProductBlueprint::class, 'name'],
             'fields/stripe-checkout/price' => [ProductBlueprint::class, 'price'],
             'fields/stripe-checkout/stripe-price' => [ProductBlueprint::class, 'stripePrice'],
+            'fields/stripe-checkout/tax-code' => [ProductBlueprint::class, 'taxCode'],
             'fields/stripe-checkout/description' => [ProductBlueprint::class, 'description'],
             'fields/stripe-checkout/images' => [ProductBlueprint::class, 'images'],
             'fields/stripe-checkout/sku' => [ProductBlueprint::class, 'sku'],
@@ -75,6 +77,7 @@ final class PluginRegistrationTest extends KirbyTestCase
         $this->assertIsArray($fields);
         $this->assertSame(OptionsField::class, $fields['stripe-checkout-options']);
         $this->assertSame(StripePriceField::class, $fields['stripe-checkout-price']);
+        $this->assertSame(TaxCodeField::class, $fields['stripe-checkout-tax-code']);
         $this->assertIsArray($fieldMethods);
         $this->assertSame(
             ['toProductOptions', 'toProductStripePrice'],
@@ -95,6 +98,7 @@ final class PluginRegistrationTest extends KirbyTestCase
             'settings.update' => false,
             'diagnostics.read' => false,
             'prices.read' => false,
+            'taxCodes.read' => false,
             'orders.read' => false,
             'orders.update' => false,
         ], $extensions['permissions']);

@@ -79,6 +79,7 @@ test("reconciliation preserves matching merchant data and creates only missing v
 		sku: "RED-S",
 		price: "20.00",
 		stripePriceId: null,
+		taxCode: "txcd_test",
 		requiresShipping: "yes"
 	}];
 	let nextId = 0;
@@ -92,6 +93,7 @@ test("reconciliation preserves matching merchant data and creates only missing v
 		assert.equal(variant.enabled, true);
 		assert.equal(variant.price, null);
 		assert.equal(variant.stripePriceId, null);
+		assert.equal(variant.taxCode, null);
 		assert.equal(variant.requiresShipping, "inherit");
 	}
 });

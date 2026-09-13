@@ -24,8 +24,8 @@ final class VariantMatrix
 
     /**
      * @param list<array{id: string, label: string, values: list<array{id: string, label: string}>}> $options
-     * @param list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}> $variants
-     * @return list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>
+     * @param list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}> $variants
+     * @return list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}>
      */
     public function reconcile(array $options, array $variants): array
     {
@@ -53,6 +53,7 @@ final class VariantMatrix
                 'price' => null,
                 'stripePriceId' => null,
                 'requiresShipping' => 'inherit',
+                'taxCode' => null,
             ];
         }
 

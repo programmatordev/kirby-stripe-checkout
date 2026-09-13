@@ -83,13 +83,22 @@ The image fields are read in order and duplicate URLs are removed. The first eig
 
 ## Product Tax Codes
 
-For Kirby prices with Automatic Tax enabled, the resolver can read an optional `taxCode` field. Its value is an exact Stripe Tax Code ID, such as `txcd_...`. Use `products.fields.taxCode` to map an existing field instead. The default language supplies this technical value; variants inherit the product's classification. A custom product resolver can supply a different effective classification with `taxCode: new TaxCode($id)`.
+For Kirby prices with Automatic Tax enabled, add this optional field to your product blueprint:
+
+```yaml
+taxCode:
+  extends: fields/stripe-checkout/tax-code
+```
+
+Select a classification from the searchable Stripe catalogue; the field stores only its `txcd_...` ID. Use `products.fields.taxCode` to map an existing field instead. The default language owns this technical value. Each variant can override it in its drawer; an empty override uses the product default. A custom product resolver can supply another effective classification with `taxCode: new TaxCode($id)`.
 
 Leaving the field empty lets Stripe use the account's preset product tax code. The plugin does not infer a classification from the product name, require a Settings shortlist, or calculate tax itself. With Automatic Tax disabled or Stripe prices selected, the local field is ignored; Stripe Product data is authoritative in Stripe price mode.
 
-Resolved products expose `taxCode(): ?TaxCode`. A selected ID must exist in the current or last-good cached Stripe catalogue. Resolution reports `tax.catalogue_unavailable` if no successful catalogue is available, or `tax.code_invalid` for malformed or unknown codes. These reads do not fetch or refresh Stripe, and a failed refresh preserves previously confirmed classifications.
+Resolved products and storefront variants expose `taxCode(): ?TaxCode`: variant override → product default → `null` for Stripe's preset. A selected ID must exist in the current or last-good cached Stripe catalogue. Resolution reports `tax.catalogue_unavailable` if no successful catalogue is available, or `tax.code_invalid` for malformed or unknown codes. These reads do not fetch or refresh Stripe, and a failed refresh preserves previously confirmed classifications. In Stripe price mode, local `taxCode()` is `null`; classification is available from `stripePrice()->taxCode()`.
 
-The Panel Tax Code picker is not available yet. Tax settings and classification are also **not yet applied to Checkout Sessions**. See [Automatic Tax configuration](configuration.md#automatic-tax-configuration) and [Stripe's product tax-code guide](https://docs.stripe.com/tax/products-prices-tax-codes-tax-behavior).
+Authorized Panel access loads the catalogue initially and refreshes it after 30 days. Failed automatic refreshes wait 24 hours before retrying; the picker also has an explicit refresh button. Missing saved codes stay visible with a warning, never silently replaced. There is no Settings shortlist or additional setup step. The variant field/column appears only for Automatic Tax with Kirby prices; switching settings preserves dormant values.
+
+Tax settings and classification are **not yet applied to Checkout Sessions**. See [Automatic Tax configuration](configuration.md#automatic-tax-configuration) and [Stripe's product tax-code guide](https://docs.stripe.com/tax/products-prices-tax-codes-tax-behavior).
 
 ## Variants
 
@@ -100,7 +109,8 @@ Each generated variant has a stable internal ID and can define:
 - whether the combination is active;
 - its own SKU;
 - a price override;
-- a shipping override.
+- a shipping override;
+- an optional Tax Code override for Automatic Tax with Kirby prices.
 
 In Stripe price mode, the variant price control uses the same searchable Stripe Price selector as the product default. It never asks an editor to paste a raw Price ID.
 
@@ -139,10 +149,13 @@ if ($variant !== null) {
     $variant->price();
     $variant->stripePrice();
     $variant->requiresShipping();
+    $variant->taxCode();
 }
 ```
 
 `price()`, `stripePrice()`, and `requiresShipping()` contain the effective values after applying the product and store fallbacks. In Kirby price mode, `price()` returns an exact Brick `Money` and `stripePrice()` returns `null`. In Stripe price mode, `price()` returns `null` and `stripePrice()` returns the cached validated `StripePrice`. The variant SKU remains `null` when it is not configured because it does not inherit the simple-product SKU.
+
+`taxCode()` returns the effective validated `TaxCode` when Automatic Tax and Kirby prices are enabled, or `null` when no code is configured or local classification is inactive. An empty variant code inherits the product code. Stripe Prices retain their Stripe Product classification instead.
 
 Use the mapped field handle when it differs from the default:
 
@@ -152,7 +165,7 @@ $view = $page->variants()->toProductOptions();
 
 For programmatic code that starts with a Page reference instead of a field, use `$site->stripeCheckout()->productOptions($reference)`.
 
-`toArray()` provides a JSON-safe projection with option and value names, variant IDs, complete selected-option maps, active state, SKU, effective price, and effective shipping behavior. Browser values are presentation feedback only; submit the option/value IDs and let the server resolve them again.
+`toArray()` provides a JSON-safe projection with option and value names, variant IDs, complete selected-option maps, active state, SKU, effective price, shipping behavior, and the nullable effective Tax Code ID. Browser values are presentation feedback only; submit the option/value IDs and let the server resolve them again.
 
 For example, expose the projection to JavaScript through an escaped data attribute and match the currently selected IDs:
 

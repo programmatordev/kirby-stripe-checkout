@@ -8,26 +8,14 @@
 		@cancel="$emit('cancel')"
 		@submit="submit"
 	>
-		<header class="k-pages-dialog-navbar">
-			<k-button
-				:disabled="product === null"
-				:title="$t('back')"
-				icon="angle-left"
-				@click="showProducts"
-			/>
-			<k-headline>
-				{{ product?.text ?? $t("programmatordev.stripe-checkout.prices.dialogTitle") }}
-			</k-headline>
-			<k-button
-				:aria-label="$t('programmatordev.stripe-checkout.prices.refresh')"
-				:disabled="refreshing || $panel.dialog.isLoading"
-				:title="$t('programmatordev.stripe-checkout.prices.refresh')"
-				:icon="refreshing ? 'loader' : 'refresh'"
-				class="k-stripe-checkout-price-dialog__refresh"
-				variant="filled"
-				@click="refresh"
-			/>
-		</header>
+		<k-stripe-checkout-catalogue-dialog-header
+			:back="product !== null"
+			:title="product?.text ?? $t('programmatordev.stripe-checkout.prices.dialogTitle')"
+			:refresh-label="$t('programmatordev.stripe-checkout.prices.refresh')"
+			:refreshing="refreshing"
+			@back="showProducts"
+			@refresh="refresh"
+		/>
 
 		<k-dialog-search :value="query" @search="setQuery" />
 
@@ -77,7 +65,7 @@ export default {
 		endpoint: String,
 		size: {
 			type: String,
-			default: "medium"
+			default: "large"
 		},
 		value: {
 			type: String,
@@ -238,18 +226,3 @@ export default {
 	}
 };
 </script>
-
-<style>
-.k-stripe-checkout-price-dialog :is(.k-item-title, .k-item-info) {
-	min-width: 0;
-	max-width: 100%;
-}
-
-.k-stripe-checkout-price-dialog .k-pages-dialog-navbar {
-	padding-inline-end: 0;
-}
-
-.k-stripe-checkout-price-dialog .k-stripe-checkout-price-dialog__refresh[aria-disabled="true"] {
-	opacity: 1;
-}
-</style>

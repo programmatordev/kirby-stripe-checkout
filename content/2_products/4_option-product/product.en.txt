@@ -2,23 +2,27 @@ Title: Option-bearing product
 
 ----
 
-Description: A product with explicit selectable values for resolver and cart validation tests.
-
-----
-
 Price: 18
 
 ----
 
-Stripeprice: price_1UC0dVCHaQ3jXxl7OyUHCE8y
+Stripeprice: price_1UC0dKCHaQ3jXxl70OEeZUMn
 
 ----
 
-Productimages:
+Taxcode: 
 
 ----
 
-Sku:
+Description: A product with explicit selectable values for resolver and cart validation tests.
+
+----
+
+Productimages: 
+
+----
+
+Sku: 
 
 ----
 
@@ -60,6 +64,7 @@ variants:
     price: "16"
     stripePriceId: price_1UC0dNCHaQ3jXxl7DVkAgvm9
     requiresShipping: 'no'
+    taxCode: null
   - 
     id: 55gogbpul6ctm0np
     selectedOptions:
@@ -70,6 +75,7 @@ variants:
     price: null
     stripePriceId: null
     requiresShipping: 'no'
+    taxCode: null
   - 
     id: 599z4vnkh28qbysc
     selectedOptions:
@@ -80,6 +86,7 @@ variants:
     price: "22.00"
     stripePriceId: price_1UC0dKCHaQ3jXxl70OEeZUMn
     requiresShipping: 'yes'
+    taxCode: null
   - 
     id: or1frhkz1s9hxd0x
     selectedOptions:
@@ -90,6 +97,7 @@ variants:
     price: null
     stripePriceId: null
     requiresShipping: inherit
+    taxCode: null
 
 ----
 

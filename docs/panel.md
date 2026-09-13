@@ -24,11 +24,14 @@ permissions:
     settings.update: true
     diagnostics.read: true
     prices.read: true
+    taxCodes.read: true
     orders.read: true
     orders.update: true
 ```
 
 `prices.read` allows a role to search and explicitly refresh the read-only Stripe Price catalogue from product fields. Page-update permission still controls whether the selected scalar Price ID can be saved.
+
+`taxCodes.read` permits reading, searching, and refreshing the full Tax Code catalogue from product/variant pickers. Saving a selection still requires native Page-update permission. The Tax Code catalogue diagnostic reports only cached counts and successful/failed refresh times; it never checks Stripe Tax setup or account readiness and never refreshes Stripe itself.
 
 `orders.read` permits viewing native order Pages. `orders.update` additionally permits editing project-owned fields; canonical payment/order fields remain protected. See [Orders](orders.md) for blueprint customization. The orders container is also initialized automatically; the main hub does not yet include an Orders tab.
 

@@ -59,13 +59,28 @@ final class OptionsField extends FieldClass
     {
         /** @var array<string, mixed> $props */
         $props = parent::props();
+        $automaticTax = false;
+
+        try {
+            $runtime = new RuntimeFactory($this->kirby());
+            $settings = $runtime->settings();
+            $automaticTax = $settings->automaticTax();
+
+            if ($automaticTax && $settings->priceSource() === PriceSource::Kirby && PluginPermissions::allows($this->kirby(), 'taxCodes.read')) {
+                $runtime->taxCodeCatalogue()->load();
+            }
+        } catch (ConfigurationException) {
+            // Keep the editor usable while store configuration is incomplete.
+        }
 
         return [
             ...$props,
             'currency' => $this->currency,
+            'automaticTax' => $automaticTax,
             'presets' => $this->presets,
             'priceSource' => $this->priceSource,
             'pricesReadable' => PluginPermissions::allows($this->kirby(), 'prices.read'),
+            'taxCodesReadable' => PluginPermissions::allows($this->kirby(), 'taxCodes.read'),
             'serverTechnicalLocked' => $this->technicalLocked(),
             'value' => $this->toFormValue(),
         ];
@@ -74,7 +89,10 @@ final class OptionsField extends FieldClass
     /** @return list<array<string, mixed>> */
     public function routes(): array
     {
-        return StripePriceField::catalogueRoutes('prices');
+        return [
+            ...StripePriceField::catalogueRoutes('prices'),
+            ...TaxCodeField::catalogueRoutes('tax-codes'),
+        ];
     }
 
     /** @return array<string, mixed> */
@@ -131,7 +149,7 @@ final class OptionsField extends FieldClass
     }
 
     /**
-     * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}>}
+     * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}>}
      */
     private function canonicalValue(): array
     {

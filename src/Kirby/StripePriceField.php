@@ -49,6 +49,7 @@ final class StripePriceField extends FieldClass
     {
         /** @var array<string, mixed> $props */
         $props = parent::props();
+        $props['catalogueReadable'] = PluginPermissions::allows($this->kirby(), 'prices.read');
         $value = $this->toFormValue();
 
         if (PluginPermissions::allows($this->kirby(), 'prices.read') === false) {

@@ -16,6 +16,7 @@ use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
+use ProgrammatorDev\StripeCheckout\Product\ProductVariant;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeCatalogue;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeListResult;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeRecord;
@@ -109,6 +110,144 @@ final class ProductTaxCodeTest extends KirbyTestCase
         $this->assertSame('largeVariant001', $product->variantId());
         $this->assertSame('txcd_test', $product->taxCode()?->id());
         $this->assertSame([null], $provider->listCursors);
+    }
+
+    #[DataProvider('variantCodes')]
+    public function testVariantClassificationMatchesThePhpProjection(?string $root, ?string $override, ?string $expected): void
+    {
+        $page = $this->product([
+            'taxCode' => $root,
+            'options' => $this->variantData($override),
+        ]);
+        $this->seedCatalogue();
+        $runtime = new RuntimeFactory($this->kirby);
+        $product = $runtime->resolveProduct(new ProductRequest(
+            reference: $page->id(),
+            selectedOptions: ['sizeOption000001' => 'largeValue00001'],
+        ));
+        $variant = $runtime->productOptions($page)->variants()[0];
+
+        $this->assertSame($expected, $product->taxCode()?->id());
+        $this->assertSame($expected, $variant->taxCode()?->id());
+        $this->assertSame($expected, $variant->toArray()['taxCode']);
+    }
+
+    /** @return iterable<string, array{?string, ?string, ?string}> */
+    public static function variantCodes(): iterable
+    {
+        yield 'inherit' => ['txcd_test', null, 'txcd_test'];
+        yield 'override' => ['txcd_unknown', 'txcd_test', 'txcd_test'];
+        yield 'empty override inherits' => ['txcd_test', '', 'txcd_test'];
+        yield 'no classification' => [null, null, null];
+        yield 'override without root' => [null, 'txcd_test', 'txcd_test'];
+    }
+
+    public function testClearingAnOverrideRestoresTheProductDefault(): void
+    {
+        $page = $this->product([
+            'taxCode' => 'txcd_test',
+            'options' => $this->variantData('txcd_unknown'),
+        ]);
+        $this->seedCatalogue();
+        $runtime = new RuntimeFactory($this->kirby);
+
+        try {
+            $runtime->productOptions($page);
+            $this->fail('Unknown effective overrides must fail in PHP too.');
+        } catch (InvalidProductException $error) {
+            $this->assertSame('tax.code_invalid', $error->errorCode());
+        }
+
+        $page = $page->update(['options' => $this->variantData(null)]);
+        $this->assertSame('txcd_test', $runtime->productOptions($page)->variants()[0]->taxCode()?->id());
+    }
+
+    public function testDifferentVariantsOfOneProductHaveIndependentClassifications(): void
+    {
+        $data = $this->variantData('txcd_test');
+        $data['options'][0]['values'][] = [
+            'id' => 'smallValue00001',
+            'label' => 'Small',
+        ];
+        $data['variants'][] = [
+            'id' => 'smallVariant001',
+            'selectedOptions' => ['sizeOption000001' => 'smallValue00001'],
+            'taxCode' => 'txcd_other',
+        ];
+        $page = $this->product(['options' => $data]);
+        $this->seedCatalogue();
+        $runtime = new RuntimeFactory($this->kirby);
+        $this->assertSame(['txcd_test', 'txcd_other'], array_map(
+            static fn(ProductVariant $variant): ?string => $variant->taxCode()?->id(),
+            $runtime->productOptions($page)->variants(),
+        ));
+        $this->assertSame('txcd_other', $runtime->resolveProduct(new ProductRequest(
+            reference: $page->id(),
+            selectedOptions: ['sizeOption000001' => 'smallValue00001'],
+        ))->taxCode()?->id());
+    }
+
+    public function testTranslationCannotReplaceVariantClassification(): void
+    {
+        $this->restart(languages: [
+            [
+                'code' => 'en',
+                'default' => true,
+                'locale' => 'en_US',
+                'name' => 'English',
+            ],
+            [
+                'code' => 'pt',
+                'locale' => 'pt_PT',
+                'name' => 'Português',
+            ],
+        ]);
+        $page = $this->product(['options' => $this->variantData('txcd_test')]);
+        $page = $page->update(['options' => $this->variantData('txcd_unknown')], 'pt');
+        $this->kirby->setCurrentLanguage('pt');
+        $this->seedCatalogue();
+        $runtime = new RuntimeFactory($this->kirby);
+
+        $this->assertSame('txcd_test', $runtime->productOptions($page)->variants()[0]->taxCode()?->id());
+        $this->assertSame('txcd_test', $runtime->resolveProduct(new ProductRequest(
+            reference: $page->id(),
+            selectedOptions: ['sizeOption000001' => 'largeValue00001'],
+        ))->taxCode()?->id());
+    }
+
+    public function testInactiveVariantClassificationIsRetainedButIgnored(): void
+    {
+        $this->restart(settings: ['automaticTax' => false]);
+        $data = $this->variantData('retained_unknown_code');
+        $page = $this->product(['options' => $data]);
+        $runtime = new RuntimeFactory($this->kirby);
+
+        $this->assertNull($runtime->productOptions($page)->variants()[0]->taxCode());
+        $this->assertNull($runtime->resolveProduct(new ProductRequest(
+            reference: $page->id(),
+            selectedOptions: ['sizeOption000001' => 'largeValue00001'],
+        ))->taxCode());
+        $this->assertSame('retained_unknown_code', (new \ProgrammatorDev\StripeCheckout\Product\Internal\VariantSchema())->canonical($data)['variants'][0]['taxCode']);
+    }
+
+    /** @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, taxCode: ?string}>} */
+    private function variantData(?string $code): array
+    {
+        return [
+            'options' => [[
+                'id' => 'sizeOption000001',
+                'label' => 'Size',
+                'values' => [[
+                    'id' => 'largeValue00001',
+                    'label' => 'Large',
+                ]],
+            ]],
+            'variants' => [[
+                'id' => 'largeVariant001',
+                'selectedOptions' => ['sizeOption000001' => 'largeValue00001'],
+                'taxCode' => $code,
+            ]],
+        ];
     }
 
     /** @param array<string, mixed> $settings */
@@ -299,7 +438,10 @@ final class ProductTaxCodeTest extends KirbyTestCase
     private function seedCatalogue(?string $secretKey = null): FakeTaxProvider
     {
         $provider = new FakeTaxProvider(pages: [
-            'first' => new TaxCodeListResult([new TaxCodeRecord('txcd_test', 'Test category', 'Test description')], false),
+            'first' => new TaxCodeListResult([
+                new TaxCodeRecord('txcd_test', 'Test category', 'Test description'),
+                new TaxCodeRecord('txcd_other', 'Other category', ''),
+            ], false),
         ]);
         $this->catalogue($provider, $secretKey)->refresh();
 
