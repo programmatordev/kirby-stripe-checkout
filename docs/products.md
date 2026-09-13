@@ -75,10 +75,21 @@ The available mappings and defaults are:
 | `sku` | `sku` | Optional simple-product SKU. |
 | `price` | `price` | Exact default price in Kirby price mode. |
 | `stripePrice` | `stripePrice` | Selected Stripe Price in Stripe price mode; stores its scalar ID. |
+| `taxCode` | `taxCode` | Optional Stripe product classification, read only for Kirby prices with Automatic Tax enabled. |
 | `requiresShipping` | `requiresShipping` | `inherit`, `yes`, or `no`. |
 | `options` | `options` | Product options and generated variants. |
 
 The image fields are read in order and duplicate URLs are removed. The first eight usable HTTP(S) images are exposed in the resolved snapshot because that is Stripe Checkout's limit. Extra selected images remain in Kirby; `metadata()['imagesTruncated']` reports that the projection was shortened.
+
+## Product Tax Codes
+
+For Kirby prices with Automatic Tax enabled, the resolver can read an optional `taxCode` field. Its value is an exact Stripe Tax Code ID, such as `txcd_...`. Use `products.fields.taxCode` to map an existing field instead. The default language supplies this technical value; variants inherit the product's classification. A custom product resolver can supply a different effective classification with `taxCode: new TaxCode($id)`.
+
+Leaving the field empty lets Stripe use the account's preset product tax code. The plugin does not infer a classification from the product name, require a Settings shortlist, or calculate tax itself. With Automatic Tax disabled or Stripe prices selected, the local field is ignored; Stripe Product data is authoritative in Stripe price mode.
+
+Resolved products expose `taxCode(): ?TaxCode`. A selected ID must exist in the current or last-good cached Stripe catalogue. Resolution reports `tax.catalogue_unavailable` if no successful catalogue is available, or `tax.code_invalid` for malformed or unknown codes. These reads do not fetch or refresh Stripe, and a failed refresh preserves previously confirmed classifications.
+
+The Panel Tax Code picker is not available yet. Tax settings and classification are also **not yet applied to Checkout Sessions**. See [Automatic Tax configuration](configuration.md#automatic-tax-configuration) and [Stripe's product tax-code guide](https://docs.stripe.com/tax/products-prices-tax-codes-tax-behavior).
 
 ## Variants
 

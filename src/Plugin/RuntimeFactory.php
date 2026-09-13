@@ -22,6 +22,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationReport;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
+use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
@@ -113,10 +114,44 @@ final class RuntimeFactory
 
     public function resolveProduct(ProductRequest $request): Product
     {
-        return (new GuardedProductResolver($this->productResolver()))->resolve(
+        $context = $this->productContext();
+        $product = (new GuardedProductResolver($this->productResolver()))->resolve(
             $request,
-            $this->productContext(),
+            $context,
         );
+
+        $this->validateProductTaxCode($product, $context);
+
+        return $product;
+    }
+
+    private function validateProductTaxCode(Product $product, ProductResolutionContext $context): void
+    {
+        if (
+            $context->settings()->automaticTax() === false
+            || $context->priceSource() !== PriceSource::Kirby
+            || $product->taxCode() === null
+        ) {
+            return;
+        }
+
+        // Both built-in and custom resolvers use cached membership, not a
+        // caller-supplied confirmation flag. Storefront reads never refresh.
+        $catalogue = $this->taxCodeCatalogue()->cached();
+
+        // A successful empty snapshot means an unknown code, not an outage.
+        // A failed refresh does not invalidate the retained last-good snapshot.
+        if ($catalogue['refreshedAt'] === null) {
+            throw new InvalidProductException('tax.catalogue_unavailable');
+        }
+
+        foreach ($catalogue['items'] as $taxCode) {
+            if ($taxCode->id() === $product->taxCode()->id()) {
+                return;
+            }
+        }
+
+        throw new InvalidProductException('tax.code_invalid');
     }
 
     public function productOptions(Page|string $reference): ProductOptions

@@ -33,6 +33,7 @@ final class ConfigurationResolver
         'sku',
         'price',
         'stripePrice',
+        'taxCode',
         'requiresShipping',
         'options',
     ];
@@ -245,6 +246,7 @@ final class ConfigurationResolver
             'sku' => 'sku',
             'price' => 'price',
             'stripePrice' => 'stripePrice',
+            'taxCode' => 'taxCode',
             'requiresShipping' => 'requiresShipping',
             'options' => 'options',
             ...$fields,
@@ -268,7 +270,7 @@ final class ConfigurationResolver
             }
         }
 
-        /** @var array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePrice: string, requiresShipping: string, options: string} $fields */
+        /** @var array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePrice: string, taxCode: string, requiresShipping: string, options: string} $fields */
         return new ProductConfiguration($resolver, $fields);
     }
 

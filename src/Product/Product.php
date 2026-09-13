@@ -8,6 +8,7 @@ use Kirby\Cms\File;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
+use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
 
 /**
  * Contains trusted product facts and optional request-scoped Kirby image access.
@@ -49,6 +50,7 @@ final readonly class Product
         array $metadata = [],
         ?string $variantId = null,
         private ?File $image = null,
+        private ?TaxCode $taxCode = null,
     ) {
         $this->name = ProductData::name($name);
         $this->description = ProductData::optionalString($description, 5000);
@@ -88,6 +90,11 @@ final readonly class Product
     public function priceSource(): PriceSource
     {
         return $this->price instanceof Price ? PriceSource::Kirby : PriceSource::Stripe;
+    }
+
+    public function taxCode(): ?TaxCode
+    {
+        return $this->taxCode;
     }
 
     /** @return list<SelectedOption> */

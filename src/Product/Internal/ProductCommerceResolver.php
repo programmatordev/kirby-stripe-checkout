@@ -26,7 +26,7 @@ final class ProductCommerceResolver
     ) {}
 
     /**
-     * @param array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePrice: string, requiresShipping: string, options: string} $fields
+     * @param array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePrice: string, taxCode: string, requiresShipping: string, options: string} $fields
      * @param array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}|null $variant
      */
     public function price(
@@ -64,7 +64,7 @@ final class ProductCommerceResolver
     }
 
     /**
-     * @param array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePrice: string, requiresShipping: string, options: string} $fields
+     * @param array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePrice: string, taxCode: string, requiresShipping: string, options: string} $fields
      * @param array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string}|null $variant
      */
     public function requiresShipping(

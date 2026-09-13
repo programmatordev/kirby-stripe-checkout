@@ -7,11 +7,11 @@ namespace ProgrammatorDev\StripeCheckout\Test\Unit\Stripe;
 use Kirby\Cache\MemoryCache;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
+use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeCatalogue;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeListResult;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeRecord;
-use ProgrammatorDev\StripeCheckout\Tax\TaxCodeReference;
+use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
 use ProgrammatorDev\StripeCheckout\Test\Support\Stripe\FakeTaxProvider;
 
 final class TaxCodeCatalogueTest extends TestCase
@@ -191,15 +191,15 @@ final class TaxCodeCatalogueTest extends TestCase
 
     public function testLocalLabelsDoNotReplaceProviderIdentity(): void
     {
-        $reference = new TaxCodeReference('txcd_test', 'My category');
-        $this->assertSame('My category', $reference->label());
-        $this->assertSame('txcd_test', $reference->id());
-        $this->assertSame('', $reference->providerName());
-        $this->assertSame('', $reference->providerDescription());
-        $this->assertFalse($reference->isConfirmed());
-        $this->assertSame('txcd_test', (new TaxCodeReference('txcd_test'))->label());
-        $this->expectException(ConfigurationException::class);
-        new TaxCodeReference('txcd_test', "Bad\nlabel");
+        $taxCode = new TaxCode('txcd_test', 'My category');
+        $this->assertSame('My category', $taxCode->label());
+        $this->assertSame('txcd_test', $taxCode->id());
+        $this->assertSame('', $taxCode->providerName());
+        $this->assertSame('', $taxCode->providerDescription());
+        $this->assertFalse($taxCode->isConfirmed());
+        $this->assertSame('txcd_test', (new TaxCode('txcd_test'))->label());
+        $this->expectException(InvalidProductException::class);
+        new TaxCode('txcd_test', "Bad\nlabel");
     }
 
     private static function record(string $id = 'txcd_test', string $name = 'Test'): TaxCodeRecord

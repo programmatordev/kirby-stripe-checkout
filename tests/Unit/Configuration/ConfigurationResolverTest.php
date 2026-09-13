@@ -458,6 +458,7 @@ final class ConfigurationResolverTest extends TestCase
             'sku' => 'sku',
             'price' => 'unitPrice',
             'stripePrice' => 'paymentPrice',
+            'taxCode' => 'taxCode',
             'requiresShipping' => 'requiresShipping',
             'options' => 'options',
         ], $products->fields());

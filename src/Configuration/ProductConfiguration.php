@@ -22,6 +22,7 @@ final readonly class ProductConfiguration
      *   sku: string,
      *   price: string,
      *   stripePrice: string,
+     *   taxCode: string,
      *   requiresShipping: string,
      *   options: string
      * } $fields
@@ -44,6 +45,7 @@ final readonly class ProductConfiguration
      *   sku: string,
      *   price: string,
      *   stripePrice: string,
+     *   taxCode: string,
      *   requiresShipping: string,
      *   options: string
      * }

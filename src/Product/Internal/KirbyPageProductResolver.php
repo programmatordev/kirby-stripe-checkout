@@ -9,6 +9,7 @@ use Kirby\Cms\Files;
 use Kirby\Cms\Page;
 use Kirby\Content\Content;
 use Kirby\Content\Field;
+use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductUnavailableException;
@@ -17,6 +18,7 @@ use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
+use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
 use Throwable;
 
 /**
@@ -89,7 +91,35 @@ final class KirbyPageProductResolver implements ProductResolverInterface
             metadata: $imagesTruncated ? ['imagesTruncated' => true] : [],
             variantId: $variant['id'] ?? null,
             image: $image,
+            taxCode: $this->taxCode($technicalContent, $fields['taxCode'], $context),
         );
+    }
+
+    private function taxCode(
+        Content $content,
+        string $fieldHandle,
+        ProductResolutionContext $context,
+    ): ?TaxCode {
+        // Retained local content is irrelevant when Stripe owns classification.
+        if ($context->settings()->automaticTax() === false || $context->priceSource() !== PriceSource::Kirby) {
+            return null;
+        }
+
+        // The caller supplies default-language technical content; a translated
+        // field must not change tax classification with the storefront language.
+        $value = $this->field($content, $fieldHandle)->value();
+
+        // Omission lets Stripe apply its account preset; never invent a code.
+        // https://docs.stripe.com/tax/products-prices-tax-codes-tax-behavior
+        if ($value === null || (is_string($value) && trim($value) === '')) {
+            return null;
+        }
+
+        if (is_string($value) === false) {
+            throw new InvalidProductException('tax.code_invalid');
+        }
+
+        return new TaxCode(trim($value));
     }
 
     /**

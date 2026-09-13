@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Tax;
 
-use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
+use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 
-/** Identifies a product classification, with optional confirmed Stripe facts. */
-final readonly class TaxCodeReference
+/** Represents a product tax classification and optional Stripe catalogue facts. */
+final readonly class TaxCode
 {
     public function __construct(
         private string $id,
@@ -26,7 +26,7 @@ final readonly class TaxCodeReference
             || TextValidator::isUtf8($this->providerDescription) === false
             || ($this->confirmed && trim($this->providerName) === '')
         ) {
-            throw new ConfigurationException('tax.code_invalid', 'settings.taxCodes');
+            throw new InvalidProductException('tax.code_invalid');
         }
     }
 
@@ -50,6 +50,10 @@ final readonly class TaxCodeReference
         return $this->providerDescription;
     }
 
+    /**
+     * Reports attached catalogue facts, not current membership or tax readiness.
+     * Product resolution checks membership independently, even when this is true.
+     */
     public function isConfirmed(): bool
     {
         return $this->confirmed;

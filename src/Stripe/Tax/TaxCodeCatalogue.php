@@ -7,7 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Stripe\Tax;
 use Kirby\Cache\Cache;
 use ProgrammatorDev\StripeCheckout\Stripe\CataloguePagination;
 use ProgrammatorDev\StripeCheckout\Stripe\CatalogueRefreshPolicy;
-use ProgrammatorDev\StripeCheckout\Tax\TaxCodeReference;
+use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
 use RuntimeException;
 use Throwable;
 
@@ -16,7 +16,7 @@ use Throwable;
  * Automatic loads belong to authorized Panel access, never storefront traffic.
  *
  * @internal
- * @phpstan-type State array{items: list<TaxCodeReference>, refreshedAt: ?int, failedAt: ?int, error: ?string}
+ * @phpstan-type State array{items: list<TaxCode>, refreshedAt: ?int, failedAt: ?int, error: ?string}
  */
 final class TaxCodeCatalogue
 {
@@ -62,7 +62,7 @@ final class TaxCodeCatalogue
                     return $empty;
                 }
 
-                $items[$item['id']] = new TaxCodeReference(
+                $items[$item['id']] = new TaxCode(
                     id: $item['id'],
                     providerName: $item['name'],
                     providerDescription: $item['description'],
@@ -107,7 +107,7 @@ final class TaxCodeCatalogue
     }
 
     /** Cached lookup deliberately does not trigger monthly provider refresh. */
-    public function find(string $id): ?TaxCodeReference
+    public function find(string $id): ?TaxCode
     {
         foreach ($this->cached()['items'] as $taxCode) {
             if ($taxCode->id() === $id) {
@@ -137,7 +137,7 @@ final class TaxCodeCatalogue
                 $records = $page->taxCodes();
 
                 foreach ($records as $record) {
-                    $items[$record->id] = new TaxCodeReference(
+                    $items[$record->id] = new TaxCode(
                         id: $record->id,
                         providerName: $record->name,
                         providerDescription: $record->description,
@@ -162,7 +162,7 @@ final class TaxCodeCatalogue
                 }
             } while ($page->hasMore());
 
-            uasort($items, static fn(TaxCodeReference $left, TaxCodeReference $right): int =>
+            uasort($items, static fn(TaxCode $left, TaxCode $right): int =>
                 [$left->providerName(), $left->id()] <=> [$right->providerName(), $right->id()]);
             $state = [
                 'items' => array_values($items),
@@ -187,14 +187,14 @@ final class TaxCodeCatalogue
         }
     }
 
-    /** @return array{items: list<TaxCodeReference>, refreshedAt: ?int, failedAt: ?int, error: ?string, page: int, pages: int, total: int} */
+    /** @return array{items: list<TaxCode>, refreshedAt: ?int, failedAt: ?int, error: ?string, page: int, pages: int, total: int} */
     public function search(?string $query = null, int $page = 1, bool $refresh = false): array
     {
         $state = $refresh ? $this->refresh() : $this->load();
         $query = mb_strtolower(trim($query ?? ''));
         $items = array_values(array_filter(
             $state['items'],
-            static fn(TaxCodeReference $taxCode): bool => $query === '' || str_contains(
+            static fn(TaxCode $taxCode): bool => $query === '' || str_contains(
                 mb_strtolower(implode(' ', [$taxCode->id(), $taxCode->providerName(), $taxCode->providerDescription()])),
                 $query,
             ),
@@ -212,7 +212,7 @@ final class TaxCodeCatalogue
         // No hard expiry: only provider facts are cached, never local labels.
         $this->cache->set($this->cacheKey, [
             ...$state,
-            'items' => array_map(static fn(TaxCodeReference $taxCode): array => [
+            'items' => array_map(static fn(TaxCode $taxCode): array => [
                 'id' => $taxCode->id(),
                 'name' => $taxCode->providerName(),
                 'description' => $taxCode->providerDescription(),
