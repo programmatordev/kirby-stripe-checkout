@@ -17,6 +17,8 @@ use ProgrammatorDev\StripeCheckout\Configuration\SettingSource;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
+use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
+use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
@@ -47,6 +49,8 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $this->assertSame('false', $this->fieldValue($page, 'termsOfServiceConsent'));
         $this->assertSame('false', $this->fieldValue($page, 'promotionsConsent'));
         $this->assertSame('false', $this->fieldValue($page, 'allowPromotionCodes'));
+        $this->assertSame('false', $this->fieldValue($page, 'automaticTax'));
+        $this->assertSame('stripe_default', $this->fieldValue($page, 'taxBehavior'));
 
         // Kirby creates empty Field objects for required settings without a
         // safe deterministic default; their values must remain unconfigured.
@@ -175,6 +179,8 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
             'individualNameCollection' => 'off',
             'phoneNumberCollection' => 'true',
             'allowPromotionCodes' => 'true',
+            'automaticTax' => 'true',
+            'taxBehavior' => 'inclusive',
         ]);
 
         $this->assertSame(
@@ -187,10 +193,14 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $this->assertSame('off', $this->fieldValue($page, 'individualNameCollection'));
         $this->assertSame('true', $this->fieldValue($page, 'phoneNumberCollection'));
         $this->assertSame('true', $this->fieldValue($page, 'allowPromotionCodes'));
+        $this->assertSame('true', $this->fieldValue($page, 'automaticTax'));
+        $this->assertSame('inclusive', $this->fieldValue($page, 'taxBehavior'));
         $this->assertFalse($page->translation('pt')->exists());
         $this->assertSame(PriceSource::Stripe, $this->settings()->priceSource());
         $this->assertTrue($this->settings()->phoneNumberCollection());
         $this->assertTrue($this->settings()->allowPromotionCodes());
+        $this->assertTrue($this->settings()->automaticTax());
+        $this->assertSame(TaxBehavior::Inclusive, $this->settings()->taxBehavior());
     }
 
     public function testCheckoutDestinationsRemainTranslated(): void
@@ -284,6 +294,81 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $this->assertStringContainsString('locked by PHP configuration', $error->getMessage());
         $this->assertSame('EUR', $this->fieldValue($page, 'currency'));
         $this->assertSame('yes', $this->fieldValue($page, 'defaultRequiresShipping'));
+    }
+
+    public function testTaxPolicySurvivesNativeSavesWhenTaxOrInlinePricingIsDisabled(): void
+    {
+        $store = new StripeCheckoutPageStore($this->kirby);
+        $page = $store->initialize();
+        Changes::publish($page, [
+            'currency' => 'EUR',
+            'defaultRequiresShipping' => 'no',
+            'automaticTax' => true,
+            'taxBehavior' => 'inclusive',
+        ]);
+
+        $this->assertTrue($this->settings()->automaticTax());
+        $this->assertSame(TaxBehavior::Inclusive, $this->settings()->taxBehavior());
+
+        $page = $store->page();
+        $this->assertNotNull($page);
+        Changes::publish($page, [
+            'automaticTax' => false,
+            'priceSource' => 'stripe',
+        ]);
+
+        $this->assertFalse($this->settings()->automaticTax());
+        $this->assertSame(TaxBehavior::Inclusive, $this->settings()->taxBehavior());
+        $page = $store->page();
+        $this->assertNotNull($page);
+        $this->assertSame('inclusive', $this->fieldValue($page, 'taxBehavior'));
+    }
+
+    public function testPhpLockedTaxSettingsShowEffectiveValuesWithoutOverwritingSavedShadows(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(
+            options: [self::PREFIX => [
+                'settings' => [
+                    'automaticTax' => false,
+                    'taxBehavior' => 'exclusive',
+                ],
+            ]],
+            beforeApp: static function (TestWorkspace $workspace): void {
+                $workspace->writeDraftPage(StripeCheckoutPage::ID, StripeCheckoutPage::TEMPLATE, [
+                    'title' => 'Stripe Checkout',
+                    'priceSource' => 'kirby',
+                    'defaultRequiresShipping' => 'no',
+                    'uuid' => 'taxsettings',
+                    'automaticTax' => 'true',
+                    'taxBehavior' => 'inclusive',
+                    'stripeCheckout' => Yaml::encode(self::metadata()),
+                ]);
+            },
+        );
+        $this->kirby = $this->environment->app();
+        $store = new StripeCheckoutPageStore($this->kirby);
+        $page = $store->initialize();
+        /** @var array{props: array{versions: array<string, \stdClass>}} $view */
+        $view = StripeCheckoutArea::view($this->kirby);
+        $input = (array) $view['props']['versions']['changes'];
+
+        $this->assertFalse($input['automatictax']);
+        $this->assertSame('exclusive', $input['taxbehavior']);
+        // Native forms include disabled effective values; publishing them must
+        // keep the merchant's stored shadows rather than copy PHP into content.
+        Changes::publish($page, [...$input, 'currency' => 'EUR']);
+
+        $page = $store->page();
+        $this->assertNotNull($page);
+
+        $this->assertSame('true', $this->fieldValue($page, 'automaticTax'));
+        $this->assertSame('inclusive', $this->fieldValue($page, 'taxBehavior'));
+        $this->assertFalse($this->settings()->automaticTax());
+        $this->assertSame(TaxBehavior::Exclusive, $this->settings()->taxBehavior());
+
+        $this->expectException(PermissionException::class);
+        $page->update(['taxBehavior' => 'exclusive']);
     }
 
     public function testUpdatesUseKirbyHooksAndRefreshThroughANewOperation(): void
@@ -519,6 +604,8 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         yield 'invalid terms consent' => ['termsOfServiceConsent', 'yes'];
         yield 'invalid promotions consent' => ['promotionsConsent', 'yes'];
         yield 'invalid promotion codes' => ['allowPromotionCodes', 'yes'];
+        yield 'invalid automatic tax' => ['automaticTax', 'yes'];
+        yield 'invalid tax behavior' => ['taxBehavior', 'automatic'];
     }
 
     #[DataProvider('invalidCommerceSettingProvider')]

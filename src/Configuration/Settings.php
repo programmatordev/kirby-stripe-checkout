@@ -10,6 +10,7 @@ use ProgrammatorDev\StripeCheckout\Collection\BillingAddressCollection;
 use ProgrammatorDev\StripeCheckout\Collection\CustomField;
 use ProgrammatorDev\StripeCheckout\Collection\NameCollectionMode;
 use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
+use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 
 /**
  * Provides the immutable, sanitized public view of effective store settings.
@@ -152,6 +153,17 @@ final class Settings
     public function allowPromotionCodes(): bool
     {
         return $this->boolean('allowPromotionCodes');
+    }
+
+    public function automaticTax(): bool
+    {
+        return $this->boolean('automaticTax');
+    }
+
+    /** Retained inline-price policy, even when tax is off or Stripe Prices are used. */
+    public function taxBehavior(): TaxBehavior
+    {
+        return TaxBehavior::from($this->string('taxBehavior'));
     }
 
     public function setting(string $path): ?Setting

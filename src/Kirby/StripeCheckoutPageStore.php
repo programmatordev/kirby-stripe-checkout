@@ -105,6 +105,8 @@ final class StripeCheckoutPageStore
             promotionsConsent: $this->fieldValue($page, 'promotionsConsent'),
             customFields: $this->customFieldDefinitions($page),
             allowPromotionCodes: $this->fieldValue($page, 'allowPromotionCodes'),
+            automaticTax: $this->fieldValue($page, 'automaticTax'),
+            taxBehavior: $this->fieldValue($page, 'taxBehavior'),
             cleanupCreationFailures: $this->fieldValue($page, 'cleanupCreationFailures'),
             creationFailureRetentionDays: $this->fieldValue($page, 'creationFailureRetentionDays'),
             cleanupUnpaidOrders: $this->fieldValue($page, 'cleanupUnpaidOrders'),

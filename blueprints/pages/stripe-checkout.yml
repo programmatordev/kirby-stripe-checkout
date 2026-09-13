@@ -227,6 +227,27 @@ tabs:
             help: programmatordev.stripe-checkout.settings.allowPromotionCodes.help
             type: toggle
             translate: false
+          automaticTax:
+            label: programmatordev.stripe-checkout.settings.automaticTax.label
+            help: programmatordev.stripe-checkout.settings.automaticTax.help
+            type: toggle
+            translate: false
+          taxBehavior:
+            label: programmatordev.stripe-checkout.settings.taxBehavior.label
+            help: programmatordev.stripe-checkout.settings.taxBehavior.help
+            type: select
+            required: true
+            translate: false
+            when:
+              automaticTax: true
+              priceSource: kirby
+            options:
+              stripe_default:
+                "*": programmatordev.stripe-checkout.settings.taxBehavior.stripeDefault
+              inclusive:
+                "*": programmatordev.stripe-checkout.settings.taxBehavior.inclusive
+              exclusive:
+                "*": programmatordev.stripe-checkout.settings.taxBehavior.exclusive
   diagnostics:
     label: programmatordev.stripe-checkout.tabs.diagnostics
     icon: info

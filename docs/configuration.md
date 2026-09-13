@@ -52,6 +52,7 @@ The Settings tab currently contains:
 - translated success, cancellation, and embedded-return destinations;
 - billing-address, individual-name, business-name, phone, tax-ID and consent collection;
 - customer-entered promotion codes;
+- Automatic Tax and the tax inclusion policy for Kirby prices;
 - [order retention preferences](#order-retention), with separate controls for failed attempts and unpaid orders.
 
 The protected Page is created with `kirby` as its saved price source, so a fresh installation does not require an initial save for that deterministic default. The plugin does not guess a currency or whether products are physical. It can boot with those two fields empty so the Panel and diagnostics remain available, but the Settings tab asks the operator to select both values.
@@ -79,6 +80,8 @@ return [
             'termsOfServiceConsent' => false,
             'promotionsConsent' => false,
             'allowPromotionCodes' => false,
+            'automaticTax' => false,
+            'taxBehavior' => 'stripe_default',
         ],
     ],
 ];
@@ -126,6 +129,18 @@ Normal Panel saves, including partial saves and pending edits, never copy PHP ov
 
 Unknown options, wrong types, unsupported values, duplicate definitions, blank credentials, and recognizable test/live key mismatches are rejected when plugin configuration is used. Invalid plugin configuration does not prevent unrelated Kirby pages from booting.
 
+## Automatic Tax configuration
+
+`automaticTax` defaults to `false`. The separate `taxBehavior` setting controls how Kirby product prices represent tax:
+
+- `stripe_default` uses the account's Stripe Tax policy;
+- `inclusive` means the listed product price already includes tax;
+- `exclusive` means Stripe adds any applicable tax to that price.
+
+The Panel shows this policy only when Automatic Tax is enabled and the price source is Kirby. Its saved value is retained when hidden. Stripe Prices use the tax behavior and product classification configured in Stripe, not this local policy. Tax-ID collection is independent of Automatic Tax.
+
+These settings can currently be saved and read, but **Session tax mapping and readiness checks are not implemented yet**. Enabling the toggle does not yet enable tax in Checkout Sessions. The plugin never calculates VAT percentages or changes tax registrations. Stripe calculates tax according to customer location, product classification, and your registrations; enabling Automatic Tax alone does not mean tax will be collected everywhere. See [Stripe's tax inclusion guide](https://docs.stripe.com/tax/products-prices-tax-codes-tax-behavior) and [Stripe Tax setup](https://docs.stripe.com/tax/set-up).
+
 ## Reading effective settings
 
 The Site entry point returns sanitized effective settings:
@@ -152,6 +167,8 @@ $settings->termsOfServiceConsent(); // boolean
 $settings->promotionsConsent(); // boolean
 $settings->customFields(); // list of CustomField values
 $settings->allowPromotionCodes(); // boolean
+$settings->automaticTax(); // boolean
+$settings->taxBehavior(); // TaxBehavior enum
 
 $priceSource = $settings->setting('priceSource');
 $priceSource?->value();

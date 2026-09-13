@@ -8,6 +8,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Collection\BillingAddressCollection;
 use ProgrammatorDev\StripeCheckout\Collection\NameCollectionMode;
 use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
+use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 
 /**
  * Shared business defaults for runtime resolution and native Settings fields.
@@ -40,6 +41,8 @@ final class Defaults
         'promotionsConsent' => false,
         'customFields' => [],
         'allowPromotionCodes' => false,
+        'automaticTax' => false,
+        'taxBehavior' => TaxBehavior::StripeDefault->value,
         ...self::RETENTION,
     ];
 

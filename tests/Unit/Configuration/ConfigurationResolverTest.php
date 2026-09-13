@@ -842,6 +842,8 @@ final class ConfigurationResolverTest extends TestCase
                 'promotionsConsent',
                 'customFields',
                 'allowPromotionCodes',
+                'automaticTax',
+                'taxBehavior',
                 'cleanupCreationFailures',
                 'creationFailureRetentionDays',
                 'cleanupUnpaidOrders',

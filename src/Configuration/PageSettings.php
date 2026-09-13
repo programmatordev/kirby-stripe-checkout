@@ -10,6 +10,7 @@ use ProgrammatorDev\StripeCheckout\Collection\NameCollectionMode;
 use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
+use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 
 /**
  * Carries validated non-secret values read from the protected hub Page.
@@ -38,6 +39,8 @@ final class PageSettings
         mixed $promotionsConsent = null,
         mixed $customFields = null,
         mixed $allowPromotionCodes = null,
+        mixed $automaticTax = null,
+        mixed $taxBehavior = null,
         mixed $cleanupCreationFailures = null,
         mixed $creationFailureRetentionDays = null,
         mixed $cleanupUnpaidOrders = null,
@@ -117,6 +120,12 @@ final class PageSettings
         $this->promotionsConsent = $this->normalizeToggle($promotionsConsent, 'promotionsConsent');
         $this->customFields = $this->normalizeCustomFields($customFields);
         $this->allowPromotionCodes = $this->normalizeToggle($allowPromotionCodes, 'allowPromotionCodes');
+        $this->automaticTax = $this->normalizeToggle($automaticTax, 'automaticTax');
+        $this->taxBehavior = $this->normalizeChoice(
+            $taxBehavior,
+            array_column(TaxBehavior::cases(), 'value'),
+            'taxBehavior',
+        );
         $retention = compact('cleanupCreationFailures', 'creationFailureRetentionDays', 'cleanupUnpaidOrders', 'unpaidOrderRetentionDays');
 
         foreach (Defaults::RETENTION as $name => $default) {
@@ -165,6 +174,8 @@ final class PageSettings
     /** @var list<array<string, mixed>>|null */
     private readonly ?array $customFields;
     private readonly ?bool $allowPromotionCodes;
+    private readonly ?bool $automaticTax;
+    private readonly ?string $taxBehavior;
 
     public function priceSource(): ?string
     {
@@ -247,6 +258,16 @@ final class PageSettings
         return $this->allowPromotionCodes;
     }
 
+    public function automaticTax(): ?bool
+    {
+        return $this->automaticTax;
+    }
+
+    public function taxBehavior(): ?string
+    {
+        return $this->taxBehavior;
+    }
+
     /** @return string|bool|int|list<array<string, mixed>>|null */
     public function value(string $name): string|bool|int|array|null
     {
@@ -267,6 +288,8 @@ final class PageSettings
             'promotionsConsent' => $this->promotionsConsent(),
             'customFields' => $this->customFields(),
             'allowPromotionCodes' => $this->allowPromotionCodes(),
+            'automaticTax' => $this->automaticTax(),
+            'taxBehavior' => $this->taxBehavior(),
             default => $this->retention[$name] ?? null,
         };
     }

@@ -392,6 +392,8 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertArrayHasKey('promotionsConsent', $fields);
         $this->assertArrayHasKey('customFields', $fields);
         $this->assertArrayHasKey('allowPromotionCodes', $fields);
+        $this->assertArrayHasKey('automaticTax', $fields);
+        $this->assertArrayHasKey('taxBehavior', $fields);
         $this->assertArrayNotHasKey('projectField', $fields);
         $priceSource = $fields['priceSource'];
         $uiMode = $fields['uiMode'];
@@ -407,6 +409,8 @@ final class PanelAreaTest extends KirbyTestCase
         $promotionsConsent = $fields['promotionsConsent'];
         $customFields = $fields['customFields'];
         $allowPromotionCodes = $fields['allowPromotionCodes'];
+        $automaticTax = $fields['automaticTax'];
+        $taxBehavior = $fields['taxBehavior'];
         $creationFailureRetentionDays = $fields['creationFailureRetentionDays'];
         $unpaidOrderRetentionDays = $fields['unpaidOrderRetentionDays'];
         $this->assertIsArray($priceSource);
@@ -423,6 +427,8 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertIsArray($promotionsConsent);
         $this->assertIsArray($customFields);
         $this->assertIsArray($allowPromotionCodes);
+        $this->assertIsArray($automaticTax);
+        $this->assertIsArray($taxBehavior);
         $this->assertIsArray($creationFailureRetentionDays);
         $this->assertIsArray($unpaidOrderRetentionDays);
         $this->assertTrue($priceSource['required']);
@@ -438,6 +444,21 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertSame([], $customFields['default']);
         $this->assertSame('stripe-checkout-custom-fields', $customFields['type']);
         $this->assertFalse($allowPromotionCodes['default']);
+        $this->assertSame('toggle', $automaticTax['type']);
+        $this->assertFalse($automaticTax['default']);
+        $this->assertFalse($automaticTax['translate']);
+        $this->assertTrue($taxBehavior['required']);
+        $this->assertFalse($taxBehavior['translate']);
+        $this->assertSame('stripe_default', $taxBehavior['default']);
+        $this->assertSame([
+            'automaticTax' => true,
+            'priceSource' => 'kirby',
+        ], $taxBehavior['when']);
+        $this->assertSame([
+            'stripe_default' => ['*' => 'programmatordev.stripe-checkout.settings.taxBehavior.stripeDefault'],
+            'inclusive' => ['*' => 'programmatordev.stripe-checkout.settings.taxBehavior.inclusive'],
+            'exclusive' => ['*' => 'programmatordev.stripe-checkout.settings.taxBehavior.exclusive'],
+        ], $taxBehavior['options']);
         $this->assertSame(['uiMode' => 'hosted'], $successDestination['when']);
         $this->assertSame(['uiMode' => 'hosted'], $cancelDestination['when']);
         $this->assertSame(['uiMode' => 'embedded'], $returnDestination['when']);

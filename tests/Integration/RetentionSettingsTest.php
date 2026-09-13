@@ -151,10 +151,14 @@ final class RetentionSettingsTest extends KirbyTestCase
         $this->assertTrue($versions['latest']['cleanupcreationfailures']);
         $this->assertTrue($versions['latest']['cleanupunpaidorders']);
         $this->assertSame('hosted', $versions['latest']['uimode']);
+        $this->assertFalse($versions['latest']['automatictax']);
+        $this->assertSame('stripe_default', $versions['latest']['taxbehavior']);
         $this->assertSame($before, $page->version('latest')->read('default'));
         $this->assertFalse($page->version('changes')->exists('current'));
         $settings = (new ConfigurationResolver())->resolve([], $store->settings())->configurationOrFail()->settings();
         $this->assertSame(SettingSource::InternalDefault, $settings->setting('unpaidOrderRetentionDays')?->source());
+        $this->assertSame(SettingSource::InternalDefault, $settings->setting('automaticTax')?->source());
+        $this->assertSame(SettingSource::InternalDefault, $settings->setting('taxBehavior')?->source());
 
         if ($multilang) {
             // Store-wide settings use Kirby's normal default-language editing.

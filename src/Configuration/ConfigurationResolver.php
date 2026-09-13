@@ -13,6 +13,7 @@ use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
 use ProgrammatorDev\StripeCheckout\Support\TextValidator;
+use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 use SensitiveParameter;
 use Symfony\Component\OptionsResolver\OptionsResolver;
@@ -426,6 +427,7 @@ final class ConfigurationResolver
             'individualNameCollection' => array_column(NameCollectionMode::cases(), 'value'),
             'businessNameCollection' => array_column(NameCollectionMode::cases(), 'value'),
             'taxIdCollection' => array_column(TaxIdCollection::cases(), 'value'),
+            'taxBehavior' => array_column(TaxBehavior::cases(), 'value'),
         ];
 
         foreach ($choiceSettings as $name => $allowedValues) {
@@ -445,6 +447,7 @@ final class ConfigurationResolver
             'termsOfServiceConsent',
             'promotionsConsent',
             'allowPromotionCodes',
+            'automaticTax',
         ];
 
         foreach ($booleanSettings as $name) {
@@ -484,6 +487,8 @@ final class ConfigurationResolver
             'promotionsConsent' => null,
             'customFields' => null,
             'allowPromotionCodes' => null,
+            'automaticTax' => null,
+            'taxBehavior' => null,
         ]);
         $resolver->setAllowedTypes('priceSource', ['null', 'string']);
         $resolver->setAllowedTypes('currency', ['null', 'string']);
@@ -501,6 +506,8 @@ final class ConfigurationResolver
         $resolver->setAllowedTypes('promotionsConsent', ['null', 'bool']);
         $resolver->setAllowedTypes('customFields', ['null', 'array']);
         $resolver->setAllowedTypes('allowPromotionCodes', ['null', 'bool']);
+        $resolver->setAllowedTypes('automaticTax', ['null', 'bool']);
+        $resolver->setAllowedTypes('taxBehavior', ['null', 'string']);
         $resolver->setAllowedValues('priceSource', [
             null,
             PriceSource::Kirby->value,
