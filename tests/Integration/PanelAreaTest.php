@@ -522,6 +522,7 @@ final class PanelAreaTest extends KirbyTestCase
         $shipping = Fields::for($page)->field('defaultRequiresShipping')->toArray();
         $individualName = Fields::for($page)->field('individualNameCollection')->toArray();
         $taxId = Fields::for($page)->field('taxIdCollection')->toArray();
+        $taxBehavior = Fields::for($page)->field('taxBehavior')->toArray();
         /** @var list<array{text: string, value: string}> $currencyOptions */
         $currencyOptions = $currency['options'];
         /** @var list<array{text: string, value: string}> $shippingOptions */
@@ -530,6 +531,8 @@ final class PanelAreaTest extends KirbyTestCase
         $individualNameOptions = $individualName['options'];
         /** @var list<array{text: string, value: string}> $taxIdOptions */
         $taxIdOptions = $taxId['options'];
+        /** @var list<array{text: string, value: string}> $taxBehaviorOptions */
+        $taxBehaviorOptions = $taxBehavior['options'];
         $eur = array_values(array_filter(
             $currencyOptions,
             static fn(array $option): bool => $option['value'] === 'EUR',
@@ -543,6 +546,13 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertSame(['off', 'optional', 'required'], array_column($individualNameOptions, 'value'));
         $this->assertSame(['Desativada', 'Opcional', 'Obrigatória quando suportada'], array_column($taxIdOptions, 'text'));
         $this->assertSame(['off', 'optional', 'required_if_supported'], array_column($taxIdOptions, 'value'));
+        $this->assertSame('Impostos nos preços', $taxBehavior['label']);
+        $this->assertSame([
+            'Usar a predefinição do Stripe',
+            'Impostos incluídos',
+            'Impostos adicionados ao preço',
+        ], array_column($taxBehaviorOptions, 'text'));
+        $this->assertSame(['stripe_default', 'inclusive', 'exclusive'], array_column($taxBehaviorOptions, 'value'));
     }
 
     /**

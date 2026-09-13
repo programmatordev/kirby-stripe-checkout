@@ -11,6 +11,7 @@ use Kirby\Content\Field;
 use Kirby\Data\Yaml;
 use Kirby\Exception\NotFoundException;
 use Kirby\Exception\PermissionException;
+use Kirby\Form\Fields;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Configuration\SettingSource;
@@ -296,8 +297,11 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $this->assertSame('yes', $this->fieldValue($page, 'defaultRequiresShipping'));
     }
 
-    public function testTaxPolicySurvivesNativeSavesWhenTaxOrInlinePricingIsDisabled(): void
-    {
+    #[DataProvider('taxModes')]
+    public function testTaxPolicySurvivesNativeSavesAcrossTaxAndPriceSourceModes(
+        bool $automaticTax,
+        PriceSource $priceSource,
+    ): void {
         $store = new StripeCheckoutPageStore($this->kirby);
         $page = $store->initialize();
         Changes::publish($page, [
@@ -313,15 +317,29 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $page = $store->page();
         $this->assertNotNull($page);
         Changes::publish($page, [
-            'automaticTax' => false,
-            'priceSource' => 'stripe',
+            'automaticTax' => $automaticTax,
+            'priceSource' => $priceSource->value,
         ]);
 
-        $this->assertFalse($this->settings()->automaticTax());
+        $this->assertSame($automaticTax, $this->settings()->automaticTax());
+        $this->assertSame($priceSource, $this->settings()->priceSource());
         $this->assertSame(TaxBehavior::Inclusive, $this->settings()->taxBehavior());
         $page = $store->page();
         $this->assertNotNull($page);
         $this->assertSame('inclusive', $this->fieldValue($page, 'taxBehavior'));
+        $this->assertSame(
+            $automaticTax && $priceSource === PriceSource::Kirby,
+            Fields::for($page)->fill($page->content()->toArray())->field('taxBehavior')->isActive(),
+        );
+    }
+
+    /** @return iterable<string, array{bool, PriceSource}> */
+    public static function taxModes(): iterable
+    {
+        yield 'tax enabled with Kirby prices' => [true, PriceSource::Kirby];
+        yield 'tax disabled with Kirby prices' => [false, PriceSource::Kirby];
+        yield 'tax enabled with Stripe Prices' => [true, PriceSource::Stripe];
+        yield 'tax disabled with Stripe Prices' => [false, PriceSource::Stripe];
     }
 
     public function testPhpLockedTaxSettingsShowEffectiveValuesWithoutOverwritingSavedShadows(): void
