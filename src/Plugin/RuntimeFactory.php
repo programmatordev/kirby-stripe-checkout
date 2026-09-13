@@ -319,12 +319,17 @@ final class RuntimeFactory
     private function productOptionsFactory(): ProductOptionsFactory
     {
         $context = $this->productContext();
+        $taxCodeValidator = null;
 
         return new ProductOptionsFactory(
             configuration: $this->products(),
             context: $context,
             stripePriceResolver: fn(StripePriceReference $reference): StripePrice => $this->productStripePrice($reference),
-            taxCodeValidator: fn(TaxCode $code) => $this->taxCodeValidator()->validate($code, $context),
+            taxCodeValidator: function (TaxCode $code) use (&$taxCodeValidator, $context): void {
+                // One projection shares a snapshot; later projections read anew.
+                // Leave omitted/inactive classification independent of credentials.
+                ($taxCodeValidator ??= $this->taxCodeValidator())->validate($code, $context);
+            },
         );
     }
 

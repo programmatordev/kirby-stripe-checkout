@@ -11,9 +11,12 @@ use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeCatalogue;
 use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
 use ProgrammatorDev\StripeCheckout\Tax\TaxErrorCode;
 
-/** Checks effective local product classification against cached Stripe facts. @internal */
+/** Checks classification against one lazy, operation-scoped cached snapshot. @internal */
 final class TaxCodeValidator
 {
+    /** @var array<string, true>|null */
+    private ?array $catalogueIds = null;
+
     public function __construct(private readonly TaxCodeCatalogue $catalogue) {}
 
     public function validate(?TaxCode $code, ProductResolutionContext $context): void
@@ -26,22 +29,26 @@ final class TaxCodeValidator
             return;
         }
 
-        // Both built-in and custom resolvers use cached membership, not a
-        // caller-supplied confirmation flag. Storefront reads never refresh.
-        $state = $this->catalogue->cached();
+        if ($this->catalogueIds === null) {
+            // Built-in and custom resolvers use cached membership, never a
+            // caller's confirmation flag. Storefront reads do not refresh.
+            $state = $this->catalogue->cached();
 
-        // A successful empty snapshot means an unknown code, not an outage.
-        // A failed refresh does not invalidate the retained last-good snapshot.
-        if ($state['refreshedAt'] === null) {
-            throw new InvalidProductException(TaxErrorCode::CATALOGUE_UNAVAILABLE);
-        }
+            // Empty successful snapshots mean unknown codes, not an outage.
+            // Failed refreshes retain the last-good classification snapshot.
+            if ($state['refreshedAt'] === null) {
+                throw new InvalidProductException(TaxErrorCode::CATALOGUE_UNAVAILABLE);
+            }
 
-        foreach ($state['items'] as $taxCode) {
-            if ($taxCode->id() === $code->id()) {
-                return;
+            $this->catalogueIds = [];
+
+            foreach ($state['items'] as $taxCode) {
+                $this->catalogueIds[$taxCode->id()] = true;
             }
         }
 
-        throw new InvalidProductException(TaxErrorCode::CODE_INVALID);
+        if (isset($this->catalogueIds[$code->id()]) === false) {
+            throw new InvalidProductException(TaxErrorCode::CODE_INVALID);
+        }
     }
 }

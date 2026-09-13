@@ -160,6 +160,9 @@ export default {
 		},
 		selected(value) {
 			if (value) {
+				// Server-selected props can arrive with value and bypass hydration.
+				// Supersede any earlier read before accepting their current facts.
+				this.hydrationRequestId++;
 				this.localSelected = value;
 				this.hydrating = false;
 			}
