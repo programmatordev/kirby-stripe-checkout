@@ -234,9 +234,18 @@ final class TaxCodeCatalogueTest extends TestCase
         $this->assertSame('', $taxCode->providerName());
         $this->assertSame('', $taxCode->providerDescription());
         $this->assertFalse($taxCode->isConfirmed());
+        $this->assertNull($taxCode->requiresPerformanceLocation());
         $this->assertSame('txcd_test', (new TaxCode('txcd_test'))->label());
         $this->expectException(InvalidProductException::class);
         new TaxCode('txcd_test', "Bad\nlabel");
+    }
+
+    public function testRequirementMetadataIsNotInferredFromAReferenceOrConfirmationFlag(): void
+    {
+        $this->assertNull((new TaxCode('txcd_test'))->requiresPerformanceLocation());
+        $this->assertNull((new TaxCode('txcd_test', providerName: 'Test', confirmed: true))->requiresPerformanceLocation());
+        $this->assertTrue((new TaxCode('txcd_test', requiresPerformanceLocation: true))->requiresPerformanceLocation());
+        $this->assertFalse((new TaxCode('txcd_test', requiresPerformanceLocation: false))->requiresPerformanceLocation());
     }
 
     private static function record(string $id = 'txcd_test', string $name = 'Test'): TaxCodeRecord

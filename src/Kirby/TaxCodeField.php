@@ -207,7 +207,7 @@ final class TaxCodeField extends FieldClass
     {
         // Warn without making the code invalid: a trusted Session request
         // filter may supply the location even though the Panel cannot configure it.
-        $warning = $code->requiresPerformanceLocation()
+        $warning = $code->requiresPerformanceLocation() === true
             ? I18n::translate('programmatordev.stripe-checkout.taxCodes.performanceLocationUnsupported')
             : null;
 

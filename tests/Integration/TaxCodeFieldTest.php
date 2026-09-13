@@ -69,7 +69,7 @@ final class TaxCodeFieldTest extends KirbyTestCase
         $this->assertSame('txcd_test0', $field->toStoredValue());
         $this->assertSame('txcd_test0', $props['value']);
         $this->assertSame('Category 0', $props['selected']['text'] ?? null);
-        $this->assertArrayNotHasKey('warning', $props['selected'] ?? []);
+        $this->assertArrayNotHasKey('warning', $props['selected']);
         $this->assertSame('ready', $props['catalogue']['status']);
         $this->assertFalse($props['disabled']);
         $this->assertSame('', $field->fill('')->toStoredValue());

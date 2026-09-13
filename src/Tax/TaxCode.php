@@ -22,7 +22,7 @@ final readonly class TaxCode
         private string $providerName = '',
         private string $providerDescription = '',
         private bool $confirmed = false,
-        private bool $requiresPerformanceLocation = false,
+        private ?bool $requiresPerformanceLocation = null,
     ) {
         // Syntax is not confirmation: the catalogue must supply the exact ID.
         // https://docs.stripe.com/api/tax_codes
@@ -66,8 +66,8 @@ final readonly class TaxCode
         return $this->confirmed;
     }
 
-    /** Reports a provider requirement, not whether a developer's request filter supplies it. */
-    public function requiresPerformanceLocation(): bool
+    /** Null means no requirement metadata is attached; this does not inspect the Session filter. */
+    public function requiresPerformanceLocation(): ?bool
     {
         return $this->requiresPerformanceLocation;
     }
