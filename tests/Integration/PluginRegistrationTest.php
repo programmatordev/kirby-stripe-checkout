@@ -47,7 +47,6 @@ final class PluginRegistrationTest extends KirbyTestCase
         $pluginOptions = ['cache' => [
             'prices' => true,
             'taxCodes' => true,
-            'taxSettings' => true,
         ]];
 
         $this->assertSame($pluginOptions, $extensions['options']);

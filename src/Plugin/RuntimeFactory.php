@@ -22,7 +22,6 @@ use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationReport;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
-use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
@@ -50,7 +49,6 @@ use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 use ProgrammatorDev\StripeCheckout\Stripe\StripeApiClientFactory;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\StripeApiTaxProvider;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeCatalogue;
-use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxReadiness;
 use ProgrammatorDev\StripeCheckout\Translation\LocaleResolver;
 use Stripe\StripeClient;
 use Stripe\Util\ApiVersion;
@@ -65,7 +63,6 @@ final class RuntimeFactory
     private ?ConfigurationReport $configurationReport = null;
 
     private ?StripeClient $stripeClient = null;
-    private ?TaxReadiness $taxReadiness = null;
 
     public function __construct(
         private readonly App $kirby,
@@ -207,28 +204,6 @@ final class RuntimeFactory
             cache: $this->kirby->cache('programmatordev.stripe-checkout.taxCodes'),
             provider: $stripe->hasSecretKey() ? new StripeApiTaxProvider($this->stripeClient()) : null,
             cacheKey: $stripe->hasSecretKey() ? $stripe->secretKeyFingerprint('tax-codes') : 'unconfigured',
-        );
-    }
-
-    public function taxReadiness(): TaxReadiness
-    {
-        if ($this->taxReadiness !== null) {
-            return $this->taxReadiness;
-        }
-
-        $stripe = $this->configurationReport()->configurationOrFail()->stripe();
-
-        // Credential fingerprints isolate mode/account without another Stripe
-        // request to identify the account. Key rotation safely starts cold.
-        return $this->taxReadiness = new TaxReadiness(
-            cache: $this->kirby->cache('programmatordev.stripe-checkout.taxSettings'),
-            provider: $stripe->hasSecretKey() ? new StripeApiTaxProvider($this->stripeClient()) : null,
-            cacheKey: $stripe->hasSecretKey() ? $stripe->secretKeyFingerprint('tax-settings') : 'unconfigured',
-            liveMode: match ($stripe->secretKeyMode()) {
-                CredentialMode::Test => false,
-                CredentialMode::Live => true,
-                CredentialMode::Unknown => null,
-            },
         );
     }
 

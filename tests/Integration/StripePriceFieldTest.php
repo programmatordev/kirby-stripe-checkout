@@ -177,6 +177,27 @@ final class StripePriceFieldTest extends KirbyTestCase
         $this->assertSame('ready', $response['catalogue']['status']);
     }
 
+    public function testEmptyPickerResponsesPreservePanelPagination(): void
+    {
+        $this->restartWithStripePriceField();
+        $this->seedCatalogue([]);
+        $responses = [
+            StripePriceField::apiResponse($this->kirby, null, 99, false),
+            StripePriceField::pickerResponse($this->kirby, 'products', null, null, 99),
+            StripePriceField::pickerResponse($this->kirby, 'prices', 'prod_missing', null, 99),
+        ];
+
+        foreach ($responses as $response) {
+            $this->assertSame([], $response['data']);
+            $this->assertSame([
+                'limit' => 20,
+                'page' => 1,
+                'pages' => 1,
+                'total' => 0,
+            ], $response['pagination']);
+        }
+    }
+
     public function testFieldApiListsProductsBeforeTheirPrices(): void
     {
         $this->restartWithStripePriceField();

@@ -12,6 +12,7 @@ use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
+use ProgrammatorDev\StripeCheckout\Stripe\CataloguePagination;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogue;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 
@@ -22,8 +23,6 @@ use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
  */
 final class StripePriceField extends FieldClass
 {
-    private const PAGE_LIMIT = 20;
-
     private readonly bool $sourceInactive;
 
     /** @param array<string, mixed> $params */
@@ -238,7 +237,7 @@ final class StripePriceField extends FieldClass
                 $result['items'],
             ),
             'pagination' => [
-                'limit' => self::PAGE_LIMIT,
+                'limit' => CataloguePagination::LIMIT,
                 'page' => $result['page'],
                 'pages' => $result['pages'],
                 'total' => $result['total'],
@@ -485,17 +484,15 @@ final class StripePriceField extends FieldClass
      */
     private static function paginate(array $data, int $page): array
     {
-        $total = count($data);
-        $pages = max(1, (int) ceil($total / self::PAGE_LIMIT));
-        $page = min(max(1, $page), $pages);
+        $result = CataloguePagination::paginate($data, $page);
 
         return [
-            'data' => array_slice($data, ($page - 1) * self::PAGE_LIMIT, self::PAGE_LIMIT),
+            'data' => $result['items'],
             'pagination' => [
-                'limit' => self::PAGE_LIMIT,
-                'page' => $page,
-                'pages' => $pages,
-                'total' => $total,
+                'limit' => CataloguePagination::LIMIT,
+                'page' => $result['page'],
+                'pages' => $result['pages'],
+                'total' => $result['total'],
             ],
         ];
     }

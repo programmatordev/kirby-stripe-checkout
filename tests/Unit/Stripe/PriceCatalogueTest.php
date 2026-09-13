@@ -256,6 +256,40 @@ final class PriceCatalogueTest extends TestCase
         $this->assertSame(['price_current'], $provider->retrievedIds);
     }
 
+    public function testManualRefreshBypassesAgeAndFailureCooldown(): void
+    {
+        $cache = new MemoryCache();
+        $provider = new FakePriceProvider(pages: [
+            'first' => new PriceListResult([self::record('price_current', 'Current')], false),
+        ]);
+        $catalogue = new PriceCatalogue(
+            cache: $cache,
+            provider: $provider,
+            resolver: new PriceResolver($provider),
+            cacheKey: 'catalogue',
+        );
+        $catalogue->load('EUR');
+        $provider->failLists = true;
+        $catalogue->refresh('EUR');
+        $freshProvider = new FakePriceProvider(pages: [
+            'first' => new PriceListResult([self::record('price_current', 'Updated', amount: 2400)], false),
+        ]);
+        $catalogue = new PriceCatalogue(
+            cache: $cache,
+            provider: $freshProvider,
+            resolver: new PriceResolver($freshProvider),
+            cacheKey: 'catalogue',
+        );
+        $result = $catalogue->search('EUR', refresh: true);
+
+        $this->assertSame([null, null], $provider->listCursors);
+        $this->assertSame([null], $freshProvider->listCursors);
+        $this->assertSame('Updated', $result['items'][0]->name());
+        $this->assertSame('24.00', $result['items'][0]->price()->getAmount()->toString());
+        $this->assertNull($result['failedAt']);
+        $this->assertNull($result['error']);
+    }
+
     public function testCredentialPartitionsKeepCataloguesAndRefreshFailuresSeparate(): void
     {
         $cache = new MemoryCache();

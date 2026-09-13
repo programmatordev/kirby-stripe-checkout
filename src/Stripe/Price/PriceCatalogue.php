@@ -7,6 +7,8 @@ namespace ProgrammatorDev\StripeCheckout\Stripe\Price;
 use Kirby\Cache\Cache;
 use ProgrammatorDev\StripeCheckout\Money\MoneySnapshot;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
+use ProgrammatorDev\StripeCheckout\Stripe\CataloguePagination;
+use ProgrammatorDev\StripeCheckout\Stripe\CatalogueRefreshPolicy;
 use Throwable;
 
 /**
@@ -17,7 +19,6 @@ use Throwable;
 final class PriceCatalogue
 {
     private const FAILED_REFRESH_COOLDOWN_SECONDS = 15 * 60;
-    private const PAGE_LIMIT = 20;
     private const REFRESH_AFTER_SECONDS = 24 * 60 * 60;
 
     public function __construct(
@@ -41,19 +42,14 @@ final class PriceCatalogue
     public function load(string $currency): array
     {
         $state = $this->cached($currency);
-        $now = time();
-        $retryAllowed = $state['failedAt'] === null
-            || $state['failedAt'] <= $now - self::FAILED_REFRESH_COOLDOWN_SECONDS;
+        $shouldRefresh = CatalogueRefreshPolicy::shouldRefresh(
+            refreshedAt: $state['refreshedAt'],
+            failedAt: $state['failedAt'],
+            refreshAfterSeconds: self::REFRESH_AFTER_SECONDS,
+            failureCooldownSeconds: self::FAILED_REFRESH_COOLDOWN_SECONDS,
+        );
 
-        if ($state['refreshedAt'] === null) {
-            return $retryAllowed ? $this->refresh($currency) : $state;
-        }
-
-        $expired = $state['refreshedAt'] <= $now - self::REFRESH_AFTER_SECONDS;
-
-        return $expired && $retryAllowed
-            ? $this->refresh($currency)
-            : $state;
+        return $shouldRefresh ? $this->refresh($currency) : $state;
     }
 
     public function find(string $priceId, string $currency): ?StripePrice
@@ -163,16 +159,10 @@ final class PriceCatalogue
                 return str_contains($haystack, $query);
             },
         ));
-        $total = count($items);
-        $pages = max(1, (int) ceil($total / self::PAGE_LIMIT));
-        $page = min(max(1, $page), $pages);
 
         return [
             ...$state,
-            'items' => array_slice($items, ($page - 1) * self::PAGE_LIMIT, self::PAGE_LIMIT),
-            'page' => $page,
-            'pages' => $pages,
-            'total' => $total,
+            ...CataloguePagination::paginate($items, $page),
         ];
     }
 

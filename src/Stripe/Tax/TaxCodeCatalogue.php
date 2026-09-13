@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Stripe\Tax;
 
 use Kirby\Cache\Cache;
+use ProgrammatorDev\StripeCheckout\Stripe\CataloguePagination;
+use ProgrammatorDev\StripeCheckout\Stripe\CatalogueRefreshPolicy;
 use ProgrammatorDev\StripeCheckout\Tax\TaxCodeReference;
 use RuntimeException;
 use Throwable;
@@ -20,7 +22,6 @@ final class TaxCodeCatalogue
 {
     private const REFRESH_AFTER_SECONDS = 30 * 24 * 60 * 60;
     private const FAILED_REFRESH_COOLDOWN_SECONDS = 24 * 60 * 60;
-    private const PAGE_LIMIT = 20;
 
     public function __construct(
         private readonly Cache $cache,
@@ -95,13 +96,14 @@ final class TaxCodeCatalogue
     public function load(): array
     {
         $state = $this->cached();
-        $now = time();
-        $refreshDue = $state['refreshedAt'] === null
-            || $state['refreshedAt'] <= $now - self::REFRESH_AFTER_SECONDS;
-        $retryAllowed = $state['failedAt'] === null
-            || $state['failedAt'] <= $now - self::FAILED_REFRESH_COOLDOWN_SECONDS;
+        $shouldRefresh = CatalogueRefreshPolicy::shouldRefresh(
+            refreshedAt: $state['refreshedAt'],
+            failedAt: $state['failedAt'],
+            refreshAfterSeconds: self::REFRESH_AFTER_SECONDS,
+            failureCooldownSeconds: self::FAILED_REFRESH_COOLDOWN_SECONDS,
+        );
 
-        return $refreshDue && $retryAllowed ? $this->refresh() : $state;
+        return $shouldRefresh ? $this->refresh() : $state;
     }
 
     /** Cached lookup deliberately does not trigger monthly provider refresh. */
@@ -197,16 +199,10 @@ final class TaxCodeCatalogue
                 $query,
             ),
         ));
-        $total = count($items);
-        $pages = max(1, (int) ceil($total / self::PAGE_LIMIT));
-        $page = min(max(1, $page), $pages);
 
         return [
             ...$state,
-            'items' => array_slice($items, ($page - 1) * self::PAGE_LIMIT, self::PAGE_LIMIT),
-            'page' => $page,
-            'pages' => $pages,
-            'total' => $total,
+            ...CataloguePagination::paginate($items, $page),
         ];
     }
 
