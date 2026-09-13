@@ -5,11 +5,19 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Brick\Money\Money;
+use DateTimeImmutable;
 use Kirby\Cms\Page;
 use Kirby\Content\Field;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Cart\Exception\CartException;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptBinding;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptToken;
+use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\StripeConfiguration;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderCreationContextFactory;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Price;
@@ -30,6 +38,52 @@ use Stripe\HttpClient\ClientInterface;
 final class ProductTaxCodeTest extends KirbyTestCase
 {
     private const PREFIX = 'programmatordev.stripe-checkout';
+
+    public function testFrozenUnknownClassificationIsRejectedBeforeCreatingAnOrderOrContactingStripe(): void
+    {
+        $this->restart(secretKey: 'sk_test_tax');
+        $this->seedCatalogue('sk_test_tax');
+        $request = new ProductRequest('tax-product');
+        $price = Money::of('16', 'EUR');
+        $product = new Product(
+            request: $request,
+            name: 'Tax product',
+            requiresShipping: false,
+            price: new Price($price),
+            taxCode: new TaxCode('txcd_unknown', providerName: 'Unknown', confirmed: true),
+        );
+        $token = AttemptToken::generate();
+        $order = (new OrderCreationContextFactory($this->kirby))->create(
+            uuid: $token->orderUuid(),
+            lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)],
+            currency: 'EUR',
+            checkoutSource: CheckoutSource::Direct,
+            cartRevision: null,
+            userUuid: null,
+            languageCode: null,
+            uiMode: UiMode::Hosted,
+        );
+
+        try {
+            (new RuntimeFactory($this->kirby))->checkoutSessionCreator()->create(
+                order: $order,
+                binding: AttemptBinding::direct(
+                    items: [$request],
+                    contextFingerprint: hash('sha256', 'context'),
+                    guestReference: 'guest',
+                ),
+                token: $token,
+                guestReference: 'guest',
+                now: new DateTimeImmutable('2026-09-13T12:00:00Z'),
+            );
+            $this->fail('Unknown classification must stop preparation.');
+        } catch (InvalidProductException $error) {
+            $this->assertSame('tax.code_invalid', $error->errorCode());
+        }
+
+        $this->assertCount(0, (new OrderPageStore($this->kirby))->orders());
+        // The environment's strict offline HTTP client fails on any Stripe call.
+    }
 
     protected function setUp(): void
     {

@@ -50,11 +50,29 @@ The immutable `SessionRequestContext` contains information known before the cust
 
 The final request is stored on the Order exactly as submitted. Do not place secrets, payment credentials, or unnecessary personal data in it. If an uncertain Stripe call is retried, the plugin reuses that saved request unchanged and does not run the filter again.
 
+## Tax customization
+
+Automatic Tax and the Kirby price inclusion policy are defaults for new Sessions, not locks on trusted per-order logic. The filter can enable or disable Automatic Tax, change inline `tax_behavior`, or supply Stripe-owned manual `tax_rates`. Stripe validates whether the final combination is supported; the plugin does not calculate tax or maintain its own manual-rate engine. Existing Stripe Price IDs remain fixed, so their Price/Product tax configuration stays in Stripe.
+
+Event categories can require a performance location. For example, a filter can replace an inline product's classification with Stripe's location-aware shape:
+
+```php
+$productData = &$parameters['line_items'][0]['price_data']['product_data'];
+unset($productData['tax_code']);
+$productData['tax_details'] = [
+    'tax_code' => $eventTaxCodeId,
+    'performance_location' => $eventTaxLocationId,
+];
+unset($productData);
+```
+
+This example assumes the first line is a Kirby-priced event, `$eventTaxCodeId` is its Stripe classification, and `$eventTaxLocationId` is a Tax Location created in Stripe. These provider-owned parameters are subject to support by your Stripe account and the pinned API version. In a mixed order, match the relevant initiating line from `$context->order()->lineItems()` instead. The plugin does not infer event locations from customer addresses, create locations, or validate country-specific category requirements. See [Checkout's product tax details](https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-line_items-price_data-product_data-tax_details).
+
 ## Validation boundaries
 
 Every filter result passes final validation before an order or Stripe Session can be created. The validator has three responsibilities:
 
-1. Fields the plugin officially models through Settings are validated when present. This currently covers billing-address, name, phone, tax-ID and consent collection, custom fields, and promotion-code entry. Additional Stripe-owned fields inside those parameter maps remain Stripe's responsibility.
+1. Fields the plugin officially models through Settings are validated when present. This currently covers billing-address, name, phone, tax-ID and consent collection, custom fields, promotion-code entry, Automatic Tax enablement, and inline tax inclusion policy. Additional Stripe-owned fields inside those parameter maps remain Stripe's responsibility.
 2. Values required by the order and payment lifecycle are protected from changes.
 3. Other serializable Stripe parameters pass through without the plugin duplicating Stripe's semantic validation. A malformed or incompatible provider-owned value is rejected by Stripe and the Order records a safe `creation_failed` outcome.
 

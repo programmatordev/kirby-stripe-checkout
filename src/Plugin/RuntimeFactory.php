@@ -23,6 +23,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationReport;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
+use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
@@ -229,9 +230,28 @@ final class RuntimeFactory
     public function checkoutSessionRequest(SessionRequestContext $context): SessionRequest
     {
         $configuration = $this->configurationReport()->configurationOrFail();
+        $settings = $configuration->settings();
+
+        if ($settings->automaticTax() && $settings->priceSource() === PriceSource::Kirby) {
+            $taxCodeValidator = null;
+            $productContext = $this->productContext();
+
+            foreach ($context->order()->lineItems() as $lineItem) {
+                if (is_string($lineItem['taxCode'])) {
+                    // This callback runs before Order persistence and only for a
+                    // new attempt. Recheck frozen local IDs against this operation's
+                    // cached catalogue; exact persisted retries skip preparation.
+                    ($taxCodeValidator ??= $this->taxCodeValidator())->validate(
+                        new TaxCode($lineItem['taxCode']),
+                        $productContext,
+                    );
+                }
+            }
+        }
+
         $request = (new SessionRequestBuilder(
             kirby: $this->kirby,
-            settings: $configuration->settings(),
+            settings: $settings,
         ))->build($context);
 
         return (new SessionRequestCustomizer($this->kirby))->customize(

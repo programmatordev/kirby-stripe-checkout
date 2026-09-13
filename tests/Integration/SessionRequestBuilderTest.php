@@ -18,10 +18,95 @@ use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
+use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 
 final class SessionRequestBuilderTest extends KirbyTestCase
 {
+    #[DataProvider('taxPolicies')]
+    public function testMapsTaxDefaultsForBothCheckoutModes(bool $enabled, string $behavior, UiMode $uiMode): void
+    {
+        $this->restart(options: [
+            'programmatordev.stripe-checkout' => [
+                'settings' => [
+                    'automaticTax' => $enabled,
+                    'taxBehavior' => $behavior,
+                    'uiMode' => $uiMode->value,
+                ],
+            ],
+        ]);
+        $order = $this->inlineOrder(uiMode: $uiMode, taxCode: new TaxCode('txcd_33020002'));
+        $snapshot = $order->lineItems()[0];
+        $this->assertSame('txcd_33020002', $snapshot['taxCode']);
+        $this->assertSame($snapshot, OrderLineItemSnapshot::fromArray($snapshot)->toArray());
+        $parameters = $this->builder()->build($this->context($uiMode, $order))->parameters();
+        $this->assertIsArray($parameters['line_items']);
+        $this->assertIsArray($parameters['line_items'][0]);
+        $priceData = $parameters['line_items'][0]['price_data'];
+        $this->assertIsArray($priceData);
+        $this->assertIsArray($priceData['product_data']);
+
+        if ($enabled) {
+            $this->assertSame(['enabled' => true], $parameters['automatic_tax']);
+            $this->assertSame('txcd_33020002', $priceData['product_data']['tax_code']);
+        } else {
+            $this->assertArrayNotHasKey('automatic_tax', $parameters);
+            $this->assertArrayNotHasKey('tax_code', $priceData['product_data']);
+        }
+
+        if ($enabled && $behavior !== 'stripe_default') {
+            $this->assertSame($behavior, $priceData['tax_behavior']);
+        } else {
+            $this->assertArrayNotHasKey('tax_behavior', $priceData);
+        }
+    }
+
+    /** @return iterable<string, array{bool, string, UiMode}> */
+    public static function taxPolicies(): iterable
+    {
+        $behaviors = ['stripe_default', 'inclusive', 'exclusive'];
+
+        foreach (UiMode::cases() as $uiMode) {
+            foreach ($behaviors as $behavior) {
+                yield $uiMode->value . ' ' . $behavior => [true, $behavior, $uiMode];
+                yield $uiMode->value . ' disabled ' . $behavior => [false, $behavior, $uiMode];
+            }
+        }
+    }
+
+    public function testStripePricesRemainAuthoritativeWithAutomaticTax(): void
+    {
+        $this->restart(options: [
+            'programmatordev.stripe-checkout' => [
+                'settings' => [
+                    'automaticTax' => true,
+                    'taxBehavior' => 'inclusive',
+                ],
+            ],
+        ]);
+        $parameters = $this->builder()->build($this->context(UiMode::Embedded, $this->stripePriceOrder()))->parameters();
+        $this->assertSame(['enabled' => true], $parameters['automatic_tax']);
+        $this->assertIsArray($parameters['line_items']);
+        $this->assertIsArray($parameters['line_items'][0]);
+        $this->assertSame('price_standard', $parameters['line_items'][0]['price']);
+        $this->assertArrayNotHasKey('price_data', $parameters['line_items'][0]);
+    }
+
+    public function testOmittedClassificationDelegatesToStripePreset(): void
+    {
+        $this->restart(options: [
+            'programmatordev.stripe-checkout' => [
+                'settings' => ['automaticTax' => true],
+            ],
+        ]);
+        $parameters = $this->builder()->build($this->context(UiMode::Hosted, $this->inlineOrder()))->parameters();
+        $this->assertIsArray($parameters['line_items']);
+        $this->assertIsArray($parameters['line_items'][0]);
+        $this->assertIsArray($parameters['line_items'][0]['price_data']);
+        $this->assertIsArray($parameters['line_items'][0]['price_data']['product_data']);
+        $this->assertArrayNotHasKey('tax_code', $parameters['line_items'][0]['price_data']['product_data']);
+    }
+
     public function testBuildsTheProtectedHostedInlineRequest(): void
     {
         $context = $this->context(UiMode::Hosted, $this->inlineOrder());
@@ -405,6 +490,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
         ?string $languageCode = null,
         UiMode $uiMode = UiMode::Hosted,
         string $amount = '16.00',
+        ?TaxCode $taxCode = null,
     ): OrderCreationContext {
         $price = Money::of($amount, 'EUR');
         $product = new Product(
@@ -414,6 +500,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
             new Price($price),
             description: 'Heavy canvas.',
             imageUrls: ['https://example.com/bag.jpg'],
+            taxCode: $taxCode,
         );
 
         return $this->order(

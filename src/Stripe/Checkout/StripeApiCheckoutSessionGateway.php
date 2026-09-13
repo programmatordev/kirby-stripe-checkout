@@ -81,6 +81,9 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
             'custom_fields',
             'consent',
             'total_details',
+            'automatic_tax',
+            'line_items',
+            'shipping_cost',
         ];
 
         // Keep only the provider fields owned by the accepted order snapshots.

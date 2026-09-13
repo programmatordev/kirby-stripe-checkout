@@ -104,6 +104,8 @@ final class CheckoutSessionSnapshotNormalizerTest extends TestCase
                 'providerMinimumAmount' => 2000,
             ]],
             'discountTotal' => '5.00',
+            'tax' => null,
+            'taxTotal' => null,
         ], $snapshots);
     }
 
@@ -119,6 +121,8 @@ final class CheckoutSessionSnapshotNormalizerTest extends TestCase
             'consent' => null,
             'discounts' => [],
             'discountTotal' => null,
+            'tax' => null,
+            'taxTotal' => null,
         ], $snapshots);
 
         $source = [

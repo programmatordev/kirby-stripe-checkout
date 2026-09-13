@@ -98,7 +98,9 @@ Resolved products and storefront variants expose `taxCode(): ?TaxCode`: variant 
 
 Authorized Panel access loads the catalogue initially and refreshes it after 30 days. Failed automatic refreshes wait 24 hours before retrying; the picker also has an explicit refresh button. Missing saved codes stay visible with a warning, never silently replaced. There is no Settings shortlist or additional setup step. The variant field/column appears only for Automatic Tax with Kirby prices; switching settings preserves dormant values.
 
-Tax settings and classification are **not yet applied to Checkout Sessions**. See [Automatic Tax configuration](configuration.md#automatic-tax-configuration) and [Stripe's product tax-code guide](https://docs.stripe.com/tax/products-prices-tax-codes-tax-behavior).
+With Automatic Tax enabled, the initiating order freezes the effective local classification and the Session request maps it to the inline Stripe Product. Retrying an uncertain request reuses that exact request instead of rereading edited product fields. See [Automatic Tax configuration](configuration.md#automatic-tax-configuration) and [Stripe's product tax-code guide](https://docs.stripe.com/tax/products-prices-tax-codes-tax-behavior).
+
+Some categories, such as event admission, need a performance location in addition to a Tax Code. Selecting a code does not configure that location. Use the [complete Session request filter](session-requests.md#tax-customization) to supply Stripe's product `tax_details`; Stripe validates location requirements. The plugin does not create tax locations or merchant registrations.
 
 ## Variants
 

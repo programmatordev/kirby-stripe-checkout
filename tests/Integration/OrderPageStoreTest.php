@@ -127,6 +127,15 @@ final class OrderPageStoreTest extends KirbyTestCase
             'discountTotal' => '5.00',
             'shippingTotal' => '0',
             'taxTotal' => '0',
+            'tax' => [
+                'automaticTaxEnabled' => true,
+                'calculationStatus' => 'complete',
+                'provider' => 'stripe',
+                'currency' => 'EUR',
+                'amount' => '0.00',
+                'providerAmount' => 0,
+                'breakdown' => [],
+            ],
             'total' => '27.00',
             'customer' => [
                 'email' => 'buyer@example.test',
@@ -189,6 +198,16 @@ final class OrderPageStoreTest extends KirbyTestCase
         $this->assertSame('accepted', $consent['termsOfService'] ?? null);
         $this->assertSame('5.00', $discount['amount'] ?? null);
         $this->assertSame('cus_test', $data['stripeCustomerId']);
+        $tax = OrderData::map($data['tax']);
+        $this->assertTrue($tax['automaticTaxEnabled']);
+        $this->assertSame('complete', $tax['calculationStatus']);
+        $this->assertSame('0.00', $tax['amount']);
+
+        $this->expectException(OrderDataException::class);
+        $store->update($updated->uuid()->toString(), static fn(array $data): array => [
+            ...$data,
+            'taxTotal' => '1.00',
+        ]);
     }
 
     public function testStaleOrderPageDoesNotOverwriteCanonicalUpdates(): void

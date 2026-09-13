@@ -18,6 +18,7 @@ use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
+use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 use Stripe\Checkout\Session;
 
 /** Builds the protected standard Stripe Checkout Session request. */
@@ -88,6 +89,11 @@ final class SessionRequestBuilder
         $parameters = [
             'billing_address_collection' => $this->settings->billingAddressCollection()->value,
         ];
+
+        if ($this->settings->automaticTax()) {
+            $parameters['automatic_tax'] = ['enabled' => true];
+        }
+
         $nameCollection = [];
         $individualName = $this->nameCollection($this->settings->individualNameCollection());
         $businessName = $this->nameCollection($this->settings->businessNameCollection());
@@ -297,11 +303,29 @@ final class SessionRequestBuilder
             $productData['images'] = $lineItem['images'];
         }
 
-        return [
+        $priceData = [
             'currency' => strtolower($currency),
             'product_data' => $productData,
             'unit_amount' => $providerAmounts['price'],
         ];
+
+        if ($this->settings->automaticTax() && $this->settings->priceSource() === PriceSource::Kirby) {
+            // Omission delegates to Stripe's presets; local policy applies only
+            // to inline prices, never to an existing Stripe Price or Product.
+            // https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-line_items-price_data-tax_behavior
+            if ($this->settings->taxBehavior() !== TaxBehavior::StripeDefault) {
+                $priceData['tax_behavior'] = $this->settings->taxBehavior()->value;
+            }
+
+            if (is_string($lineItem['taxCode'] ?? null)) {
+                // Categories needing an event location use product tax_details
+                // through the complete-request filter; Stripe enforces that need.
+                // https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-line_items-price_data-product_data-tax_details
+                $priceData['product_data']['tax_code'] = $lineItem['taxCode'];
+            }
+        }
+
+        return $priceData;
     }
 
     private function integrationIdentifier(): string

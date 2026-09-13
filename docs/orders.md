@@ -119,6 +119,8 @@ Completing Checkout does not mean a delayed payment has succeeded. A refund also
 
 Each line retains its name, selected `options`, SKU, images and shipping requirement. `price` and `subtotal` are exact decimal strings; `currency` is uppercase. Stripe-backed lines also retain their Price reference and any supplied Product reference. The protected `providerAmounts` map retains Stripe's exact integer units. These are not always the same as a currency's ISO minor units.
 
+Kirby-priced lines also freeze their effective nullable `taxCode` ID. This initiating classification describes what was submitted, not the tax later calculated by Stripe.
+
 The initiating snapshot contains no live product Page, File, cart, credentials or raw attempt token. Reading it does not re-fetch product information. Customer-facing text keeps the language used when the purchase began. A single-language site uses `null` for `languageCode`; a locale is not duplicated alongside it.
 
 ## Authoritative Checkout details
@@ -132,6 +134,11 @@ The stored shapes are:
 - `customFields`: ordered fields with stable `key`, `type`, presented `label`, `required`, `configured`, `answered` and nullable string `value`. An unanswered optional field remains in the list with `answered: false`; a returned empty string is an answer.
 - `consent`: nullable `termsOfService` and `promotions` provider outcomes. Missing results stay `null` and are not interpreted as refusal.
 - `discounts`: ordered applied discounts with known Discount, Coupon and Promotion Code references; customer-facing names/codes; exact amount and currency; and safe product/minimum/first-transaction restrictions when Stripe returns them.
+- `tax`: nullable returned calculation with `automaticTaxEnabled`, nullable `calculationStatus` and `provider`, currency, exact `amount` and integer `providerAmount`. Its nullable `breakdown` preserves ordered allocations with an `order`, `line_item` or `shipping` target and optional target ID, taxable amount, tax amount, inclusive flag, rate percentages, jurisdiction, tax type and taxability reason when returned.
+
+Tax facts do not determine payment state. A completed zero-tax calculation is different from disabled Automatic Tax: reasons such as `not_collecting`, exemption or reverse charge are retained. Manual tax can also have a positive amount while `automaticTaxEnabled` is false. Missing totals stay `null`; an unexpanded breakdown stays `null`, not an invented empty list. Order-level and line/shipping allocations overlap, so do not add all targets together. Line allocations require a complete paginated collection; a truncated Stripe line list is rejected rather than silently stored as complete. Automatic retrieval/pagination remains part of the reconciliation work described below.
+
+When both are present, the tax snapshot amount must agree with `taxTotal` in the order currency. The plugin checks returned amounts and allocations, but never derives tax from a percentage or forces inclusive/exclusive totals through its own tax equation.
 
 `stripeCustomerId` remains a separate protected provider reference. Each discount stores both its decimal `amount` and exact Stripe `providerAmount`; the sum must equal `discountTotal` in the order currency. A completed order has explicit `customFields` and `discounts` lists, including empty lists when nothing was collected or applied.
 

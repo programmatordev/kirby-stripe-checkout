@@ -12,6 +12,7 @@ use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
+use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
 use Throwable;
 
 /** @internal Frozen initiating order line item; never re-resolves a product or retains Kirby Files. */
@@ -49,6 +50,9 @@ final readonly class OrderLineItemSnapshot
             'priceSource' => $product->priceSource()->value,
             'stripePriceId' => $product->price() instanceof StripePriceReference ? $product->price()->priceId() : null,
             'stripeProductId' => $stripeProductId,
+            // Freeze the effective local classification alongside the initiating
+            // price. Retrying an exact request must not re-read edited content.
+            'taxCode' => $product->price() instanceof Price ? $product->taxCode()?->id() : null,
             'currency' => $price->getCurrency()->getCurrencyCode(),
             'price' => (string) $price->getAmount(),
             'subtotal' => (string) $subtotal->getAmount(),
@@ -67,7 +71,9 @@ final readonly class OrderLineItemSnapshot
         try {
             $data = OrderData::map($data);
 
-            $keys = ['reference', 'quantity', 'variantId', 'name', 'description', 'images', 'sku', 'requiresShipping', 'options', 'metadata', 'priceSource', 'stripePriceId', 'stripeProductId', 'currency', 'price', 'subtotal', 'providerAmounts'];
+            $keys = ['reference', 'quantity', 'variantId', 'name', 'description', 'images', 'sku', 'requiresShipping', 'options', 'metadata', 'priceSource', 'stripePriceId', 'stripeProductId', 'taxCode', 'currency', 'price', 'subtotal', 'providerAmounts'];
+            // Omitted classification delegates to Stripe's product preset.
+            $data['taxCode'] ??= null;
             OrderData::validateAllowedKeys($data, $keys);
             OrderData::validateRequiredKeys($data, $keys);
 
@@ -109,11 +115,14 @@ final readonly class OrderLineItemSnapshot
             if (
                 $data['priceSource'] === 'kirby' && ($data['stripePriceId'] !== null || $data['stripeProductId'] !== null)
                 || $data['stripeProductId'] !== null && (is_string($data['stripeProductId']) === false || preg_match('/\Aprod_[A-Za-z0-9]+\z/', $data['stripeProductId']) !== 1)
+                || $data['priceSource'] === 'stripe' && $data['taxCode'] !== null
             ) {
                 throw new OrderDataException();
             }
 
             // Reuse product invariants rather than maintain a second options/image/SKU validator.
+            // Stored tax IDs need only structural validation here; catalogue
+            // membership is checked when preparing a new Checkout request, not on reads.
             $product = new Product(
                 $request,
                 OrderData::text($data['name']),
@@ -125,6 +134,7 @@ final readonly class OrderLineItemSnapshot
                 OrderData::nullableString($data['sku']),
                 OrderData::map($data['metadata']),
                 OrderData::nullableString($data['variantId']),
+                taxCode: $data['taxCode'] === null ? null : new TaxCode(OrderData::text($data['taxCode'])),
             );
             $subtotal = $price->multipliedBy($request->quantity());
             $providedSubtotal = $registry->toMoney($registry->fromDecimal(OrderData::text($data['subtotal']), $currency));

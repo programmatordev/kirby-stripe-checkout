@@ -12,6 +12,47 @@ use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 
 final class SessionRequestValidatorTest extends TestCase
 {
+    public function testAllowsPerOrderTaxOverridesAndStripeOwnedEventLocationValidation(): void
+    {
+        $parameters = $this->standardRequest()->parameters();
+        $parameters['automatic_tax'] = ['enabled' => true];
+        $lineItems = $this->valueList($parameters['line_items']);
+        $lineItem = $this->map($lineItems[0]);
+        $priceData = $this->map($lineItem['price_data']);
+        $priceData['tax_behavior'] = 'inclusive';
+        $productData = $this->map($priceData['product_data']);
+        $productData['tax_details'] = [
+            'performance_location' => 'taxloc_event',
+            'tax_code' => 'txcd_20060058',
+        ];
+        $priceData['product_data'] = $productData;
+        $lineItem['price_data'] = $priceData;
+        // Even incompatible provider-owned combinations reach Stripe rather
+        // than becoming a second local manual-rate/tax-location validator.
+        $lineItem['tax_rates'] = ['txr_manual'];
+        $lineItems[0] = $lineItem;
+        $parameters['line_items'] = $lineItems;
+        $customizedRequest = new SessionRequest($parameters);
+        $validator = new SessionRequestValidator();
+        $this->assertSame($customizedRequest, $validator->validate($this->standardRequest(), $customizedRequest));
+        unset($parameters['automatic_tax']);
+        $customizedRequest = new SessionRequest($parameters);
+        $this->assertSame($customizedRequest, $validator->validate($this->standardRequest(), $customizedRequest));
+    }
+
+    public function testRejectsAnInvalidInlineTaxBehavior(): void
+    {
+        $parameters = $this->standardRequest()->parameters();
+        $lineItems = $this->valueList($parameters['line_items']);
+        $lineItem = $this->map($lineItems[0]);
+        $priceData = $this->map($lineItem['price_data']);
+        $priceData['tax_behavior'] = 'sometimes';
+        $lineItem['price_data'] = $priceData;
+        $lineItems[0] = $lineItem;
+        $parameters['line_items'] = $lineItems;
+        $this->assertRejected($parameters, 'session_request.parameter_invalid', 'line_items.0.price_data.tax_behavior');
+    }
+
     public function testAllowsSupportedOverridesAndStripeOwnedParameters(): void
     {
         $parameters = $this->standardRequest()->parameters();
@@ -91,6 +132,18 @@ final class SessionRequestValidatorTest extends TestCase
     /** @return iterable<string, array{callable(array<string, mixed>&): void, string}> */
     public static function invalidSupportedParameters(): iterable
     {
+        yield 'automatic tax enabled flag' => [
+            static function (array &$parameters): void {
+                $parameters['automatic_tax'] = ['enabled' => 'true'];
+            },
+            'automatic_tax.enabled',
+        ];
+        yield 'automatic tax required flag' => [
+            static function (array &$parameters): void {
+                $parameters['automatic_tax'] = ['unknown' => true];
+            },
+            'automatic_tax.enabled',
+        ];
         yield 'billing address collection' => [
             static function (array &$parameters): void {
                 $parameters['billing_address_collection'] = 'sometimes';

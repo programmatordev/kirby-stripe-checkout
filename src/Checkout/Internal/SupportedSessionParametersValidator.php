@@ -24,6 +24,46 @@ final class SupportedSessionParametersValidator
         $this->validateConsentCollection($parameters);
         $this->validateCustomFields($parameters);
         $this->validateAllowPromotionCodes($parameters);
+        $this->validateAutomaticTax($parameters);
+        $this->validateTaxBehavior($parameters);
+    }
+
+    /** @param array<string, mixed> $parameters */
+    private function validateTaxBehavior(array $parameters): void
+    {
+        // Line structure and authoritative amounts are already checked by the
+        // request validator. Validate only the inclusion policy modeled here.
+        $lineItems = $parameters['line_items'] ?? [];
+
+        if (is_array($lineItems) === false) {
+            return;
+        }
+
+        foreach ($lineItems as $index => $lineItem) {
+            if (is_array($lineItem) === false || is_array($lineItem['price_data'] ?? null) === false) {
+                continue;
+            }
+
+            $priceData = $lineItem['price_data'];
+
+            if (array_key_exists('tax_behavior', $priceData) && in_array($priceData['tax_behavior'], ['inclusive', 'exclusive', 'unspecified'], true) === false) {
+                $this->invalid('line_items.' . $index . '.price_data.tax_behavior');
+            }
+        }
+    }
+
+    /** @param array<string, mixed> $parameters */
+    private function validateAutomaticTax(array $parameters): void
+    {
+        if (array_key_exists('automatic_tax', $parameters) === false) {
+            return;
+        }
+
+        $automaticTax = $this->map($parameters['automatic_tax'], 'automatic_tax');
+        $this->requiredBoolean($automaticTax, 'enabled', 'automatic_tax.enabled');
+        // Other tax parameters, including manual rates and performance locations,
+        // belong to Stripe's validation. Settings are defaults, not filter locks.
+        // https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-automatic_tax
     }
 
     /** @param array<string, mixed> $parameters */

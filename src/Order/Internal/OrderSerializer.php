@@ -277,6 +277,25 @@ final class OrderSerializer
 
             self::validateDiscountSnapshots($data, $currency, $registry);
 
+            if (isset($data['tax'])) {
+                $data['tax'] = TaxSnapshot::fromArray(OrderData::map($data['tax']))->toArray();
+
+                if ($data['tax']['currency'] !== $currency) {
+                    throw new OrderDataException();
+                }
+
+                if (isset($data['taxTotal']) && $data['tax']['amount'] !== null) {
+                    // Compare monetary values, not decimal spelling: persisted
+                    // totals may use an equivalent scale such as "0" versus "0.00".
+                    $taxTotal = $registry->toMoney($registry->fromDecimal(OrderData::text($data['taxTotal']), $currency));
+                    $snapshotTotal = $registry->toMoney($registry->fromDecimal(OrderData::text($data['tax']['amount']), $currency));
+
+                    if ($taxTotal->isEqualTo($snapshotTotal) === false) {
+                        throw new OrderDataException();
+                    }
+                }
+            }
+
             $acceptedSnapshots = [
                 'stripeCheckout',
                 'checkoutAttempt',
@@ -287,6 +306,7 @@ final class OrderSerializer
                 'customFields',
                 'consent',
                 'discounts',
+                'tax',
                 'lifecycleDeliveries',
             ];
             $deferredSnapshots = array_diff(OrderSchema::SNAPSHOTS, $acceptedSnapshots);

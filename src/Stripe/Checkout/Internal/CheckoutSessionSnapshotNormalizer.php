@@ -13,6 +13,7 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\CustomerSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\CustomFieldSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\DiscountSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Order\Internal\TaxSnapshot;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
 use Throwable;
 
@@ -36,7 +37,9 @@ final class CheckoutSessionSnapshotNormalizer
      *   customFields: list<array<string, mixed>>,
      *   consent: ?array<string, mixed>,
      *   discounts: list<array<string, mixed>>,
-     *   discountTotal: ?string
+     *   discountTotal: ?string,
+     *   tax: ?array<string, mixed>,
+     *   taxTotal: ?string
      * }
      */
     public function normalize(CheckoutSessionRecord $sessionRecord): array
@@ -54,6 +57,7 @@ final class CheckoutSessionSnapshotNormalizer
                 sessionData: $sessionData,
                 currency: $sessionRecord->currency,
             );
+            $tax = $this->tax($sessionData, $sessionRecord->currency);
 
             return [
                 'stripeCustomerId' => $this->referenceId($sessionData['customer'] ?? null, 'cus_'),
@@ -70,10 +74,136 @@ final class CheckoutSessionSnapshotNormalizer
                     $discounts,
                 ),
                 'discountTotal' => $discountTotal,
+                'tax' => $tax?->toArray(),
+                'taxTotal' => $tax?->amount(),
             ];
         } catch (Throwable) {
             throw new OrderDataException();
         }
+    }
+
+    /** @param array<string, mixed> $sessionData */
+    private function tax(array $sessionData, ?string $currency): ?TaxSnapshot
+    {
+        if (array_key_exists('automatic_tax', $sessionData) === false) {
+            return null;
+        }
+
+        $automaticTax = $this->map($sessionData['automatic_tax']);
+        $totalDetails = $this->nullableMap($sessionData['total_details'] ?? null);
+        $providerAmount = $totalDetails['amount_tax'] ?? null;
+        $breakdown = null;
+        $totalBreakdown = $this->nullableMap($totalDetails['breakdown'] ?? null);
+
+        // Aggregated rates and per-line rates describe overlapping allocations.
+        // Keep their targets distinct; never sum both or recompute tax locally.
+        // https://docs.stripe.com/api/checkout/sessions/object#checkout_session_object-total_details-breakdown-taxes
+        if ($totalBreakdown !== null && array_key_exists('taxes', $totalBreakdown)) {
+            $breakdown = $this->taxEntries($totalBreakdown['taxes'], 'order', null, $currency);
+
+            // Preserve the meaning of an explicitly empty aggregate before
+            // appending separately expanded line/shipping allocations.
+            if ($breakdown === [] && $providerAmount !== null && $providerAmount !== 0) {
+                throw new OrderDataException();
+            }
+        }
+
+        if (($sessionData['line_items'] ?? null) !== null) {
+            $lineItems = $this->map($sessionData['line_items']);
+
+            // An expanded Session contains only the first handful of lines. The
+            // reconciliation caller must supply a fully paginated collection.
+            // https://docs.stripe.com/api/checkout/sessions/line_items
+            if (($lineItems['has_more'] ?? null) !== false) {
+                throw new OrderDataException();
+            }
+
+            foreach ($this->list($lineItems['data'] ?? null) as $lineItem) {
+                $lineItem = $this->map($lineItem);
+
+                if (($lineItem['taxes'] ?? null) !== null) {
+                    $breakdown ??= [];
+                    array_push($breakdown, ...$this->taxEntries(
+                        value: $lineItem['taxes'],
+                        target: 'line_item',
+                        targetId: OrderData::text($lineItem['id'] ?? null, 255),
+                        currency: $currency,
+                    ));
+                }
+            }
+        }
+
+        $shippingCost = $this->nullableMap($sessionData['shipping_cost'] ?? null);
+
+        if (($shippingCost['taxes'] ?? null) !== null) {
+            $breakdown ??= [];
+            array_push($breakdown, ...$this->taxEntries(
+                value: $shippingCost['taxes'],
+                target: 'shipping',
+                targetId: $this->referenceId($shippingCost['shipping_rate'] ?? null, 'shr_'),
+                currency: $currency,
+            ));
+        }
+
+        return TaxSnapshot::fromArray([
+            'automaticTaxEnabled' => $automaticTax['enabled'] ?? null,
+            'calculationStatus' => $automaticTax['status'] ?? null,
+            'provider' => $automaticTax['provider'] ?? null,
+            'currency' => $currency === null ? null : strtoupper($currency),
+            'amount' => $this->taxAmount($providerAmount, $currency),
+            'providerAmount' => $providerAmount,
+            // Null means unexpanded/unavailable, not a calculated empty breakdown.
+            'breakdown' => $breakdown,
+        ]);
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function taxEntries(mixed $value, string $target, ?string $targetId, ?string $currency): array
+    {
+        $entries = [];
+
+        foreach ($this->list($value) as $tax) {
+            $tax = $this->map($tax);
+            $rate = $this->map($tax['rate'] ?? null);
+            $entries[] = [
+                'target' => $target,
+                'targetId' => $targetId,
+                'amount' => $this->taxAmount($tax['amount'] ?? null, $currency),
+                'providerAmount' => $tax['amount'] ?? null,
+                'currency' => $currency === null ? null : strtoupper($currency),
+                'taxableAmount' => $this->taxAmount($tax['taxable_amount'] ?? null, $currency),
+                'providerTaxableAmount' => $tax['taxable_amount'] ?? null,
+                'rateId' => $this->referenceId($rate['id'] ?? null, 'txr_'),
+                'inclusive' => $rate['inclusive'] ?? null,
+                'percentage' => $this->percentage($rate['percentage'] ?? null),
+                'effectivePercentage' => $this->percentage($rate['effective_percentage'] ?? null),
+                'jurisdiction' => $rate['jurisdiction'] ?? null,
+                'jurisdictionLevel' => $rate['jurisdiction_level'] ?? null,
+                'country' => $rate['country'] ?? null,
+                'state' => $rate['state'] ?? null,
+                'taxType' => $rate['tax_type'] ?? null,
+                'rateType' => $rate['rate_type'] ?? null,
+                'displayName' => $rate['display_name'] ?? null,
+                'taxabilityReason' => $tax['taxability_reason'] ?? null,
+            ];
+        }
+
+        return $entries;
+    }
+
+    private function taxAmount(mixed $value, ?string $currency): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if ($currency === null) {
+            throw new OrderDataException();
+        }
+
+        $registry = new StripeCurrencyRegistry();
+
+        return (string) $registry->toMoney($registry->fromProviderAmount(OrderData::integer($value), strtoupper($currency)))->getAmount();
     }
 
     /** @param array<string, mixed> $details */
