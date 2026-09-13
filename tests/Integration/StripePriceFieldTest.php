@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Kirby\Exception\PermissionException;
 use Kirby\Form\Form;
+use ProgrammatorDev\StripeCheckout\Configuration\StripeConfiguration;
 use ProgrammatorDev\StripeCheckout\Kirby\StripePriceField;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
@@ -366,7 +367,9 @@ final class StripePriceFieldTest extends KirbyTestCase
     /** @param list<array<string, mixed>>|null $items */
     private function seedCatalogue(?array $items = null): void
     {
-        $this->kirby->cache('programmatordev.stripe-checkout.prices')->set('catalogue-eur', [
+        $stripe = new StripeConfiguration(secretKey: 'sk_test_example', publishableKey: null, webhookSecret: null);
+        $cacheKey = $stripe->secretKeyFingerprint('prices') . '-eur';
+        $this->kirby->cache('programmatordev.stripe-checkout.prices')->set($cacheKey, [
             'error' => null,
             'failedAt' => null,
             'refreshedAt' => time(),

@@ -287,6 +287,8 @@ The catalogue is a Kirby-native, read-only cache for Panel convenience:
 - a saved selection is hydrated from the cache without contacting Stripe on every Page load;
 - a saved ID is preserved even if the catalogue is unavailable or that Price is no longer eligible.
 
+The catalogue is isolated by Stripe credentials and store currency. Changing keys starts with an empty catalogue for the new credentials instead of reusing another account's or test/live mode's data.
+
 The cache is never charging authority. Before later order creation, the selected Price and associated Product are retrieved freshly and revalidated. Supported Prices must be active, fixed, per-unit, one-time Prices whose default currency exactly matches the store currency and whose Product is active and named. Recurring, tiered, customer-chosen, fractional-provider-unit, quantity-transformed, or otherwise ambiguous Prices are rejected. Extra `currency_options` are ignored.
 
 Stripe supplies the authoritative Product name, description, images, amount, currency, and tax facts in this mode. Kirby's local SKU and selected option labels remain project-owned snapshots; local Product presentation fields are not merged into Stripe Product data.

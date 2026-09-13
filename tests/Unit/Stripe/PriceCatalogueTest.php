@@ -24,7 +24,12 @@ final class PriceCatalogueTest extends TestCase
             'price_first' => new PriceListResult([$ineligible, $second], false),
         ]);
         $cache = new MemoryCache();
-        $catalogue = new PriceCatalogue($cache, $provider, new PriceResolver($provider));
+        $catalogue = new PriceCatalogue(
+            cache: $cache,
+            provider: $provider,
+            resolver: new PriceResolver($provider),
+            cacheKey: 'catalogue',
+        );
 
         $result = $catalogue->search('EUR');
 
@@ -56,9 +61,10 @@ final class PriceCatalogueTest extends TestCase
             'first' => new PriceListResult($records, false),
         ]);
         $catalogue = new PriceCatalogue(
-            new MemoryCache(),
-            $provider,
-            new PriceResolver($provider),
+            cache: new MemoryCache(),
+            provider: $provider,
+            resolver: new PriceResolver($provider),
+            cacheKey: 'catalogue',
         );
 
         $secondPage = $catalogue->search('EUR', page: 2);
@@ -79,9 +85,10 @@ final class PriceCatalogueTest extends TestCase
             ], false),
         ]);
         $catalogue = new PriceCatalogue(
-            new MemoryCache(),
-            $provider,
-            new PriceResolver($provider),
+            cache: new MemoryCache(),
+            provider: $provider,
+            resolver: new PriceResolver($provider),
+            cacheKey: 'catalogue',
         );
 
         $this->assertSame(
@@ -109,7 +116,12 @@ final class PriceCatalogueTest extends TestCase
             'error' => null,
         ]);
         $provider = new FakePriceProvider();
-        $catalogue = new PriceCatalogue($cache, $provider, new PriceResolver($provider));
+        $catalogue = new PriceCatalogue(
+            cache: $cache,
+            provider: $provider,
+            resolver: new PriceResolver($provider),
+            cacheKey: 'catalogue',
+        );
 
         $state = $catalogue->cached('EUR');
 
@@ -123,8 +135,12 @@ final class PriceCatalogueTest extends TestCase
         $cachedProvider = new FakePriceProvider(pages: [
             'first' => new PriceListResult([self::record('price_current', 'Current')], false),
         ]);
-        (new PriceCatalogue($cache, $cachedProvider, new PriceResolver($cachedProvider)))
-            ->refresh('EUR');
+        (new PriceCatalogue(
+            cache: $cache,
+            provider: $cachedProvider,
+            resolver: new PriceResolver($cachedProvider),
+            cacheKey: 'catalogue',
+        ))->refresh('EUR');
         /** @var array<string, mixed> $cached */
         $cached = $cache->get('catalogue-eur');
         $cached['refreshedAt'] = time() - 86_401;
@@ -133,7 +149,12 @@ final class PriceCatalogueTest extends TestCase
         $freshProvider = new FakePriceProvider(pages: [
             'first' => new PriceListResult([self::record('price_current', 'Current', amount: 2400)], false),
         ]);
-        $catalogue = new PriceCatalogue($cache, $freshProvider, new PriceResolver($freshProvider));
+        $catalogue = new PriceCatalogue(
+            cache: $cache,
+            provider: $freshProvider,
+            resolver: new PriceResolver($freshProvider),
+            cacheKey: 'catalogue',
+        );
         $result = $catalogue->load('EUR');
 
         $this->assertSame([null], $freshProvider->listCursors);
@@ -146,7 +167,12 @@ final class PriceCatalogueTest extends TestCase
         $provider = new FakePriceProvider(pages: [
             'first' => new PriceListResult([self::record('price_cached', 'Cached')], false),
         ]);
-        $catalogue = new PriceCatalogue($cache, $provider, new PriceResolver($provider));
+        $catalogue = new PriceCatalogue(
+            cache: $cache,
+            provider: $provider,
+            resolver: new PriceResolver($provider),
+            cacheKey: 'catalogue',
+        );
         $catalogue->refresh('EUR');
         /** @var array<string, mixed> $cached */
         $cached = $cache->get('catalogue-eur');
@@ -168,9 +194,10 @@ final class PriceCatalogueTest extends TestCase
         $provider = new FakePriceProvider();
         $provider->failLists = true;
         $catalogue = new PriceCatalogue(
-            new MemoryCache(),
-            $provider,
-            new PriceResolver($provider),
+            cache: new MemoryCache(),
+            provider: $provider,
+            resolver: new PriceResolver($provider),
+            cacheKey: 'catalogue',
         );
 
         $first = $catalogue->load('EUR');
@@ -188,9 +215,10 @@ final class PriceCatalogueTest extends TestCase
             'first' => new PriceListResult([$record], false),
         ]);
         $catalogue = new PriceCatalogue(
-            new MemoryCache(),
-            $provider,
-            new PriceResolver($provider),
+            cache: new MemoryCache(),
+            provider: $provider,
+            resolver: new PriceResolver($provider),
+            cacheKey: 'catalogue',
         );
         $catalogue->refresh('EUR');
         $provider->failLists = true;
@@ -213,7 +241,12 @@ final class PriceCatalogueTest extends TestCase
             prices: ['price_current' => $fresh],
         );
         $resolver = new PriceResolver($provider);
-        $catalogue = new PriceCatalogue(new MemoryCache(), $provider, $resolver);
+        $catalogue = new PriceCatalogue(
+            cache: new MemoryCache(),
+            provider: $provider,
+            resolver: $resolver,
+            cacheKey: 'catalogue',
+        );
 
         $listed = $catalogue->search('EUR')['items'][0];
         $stripePrice = $resolver->resolve('price_current', 'EUR');
@@ -221,6 +254,45 @@ final class PriceCatalogueTest extends TestCase
         $this->assertSame('16.00', $listed->price()->getAmount()->toString());
         $this->assertSame('24.00', $stripePrice->price()->getAmount()->toString());
         $this->assertSame(['price_current'], $provider->retrievedIds);
+    }
+
+    public function testCredentialPartitionsKeepCataloguesAndRefreshFailuresSeparate(): void
+    {
+        $cache = new MemoryCache();
+        $firstProvider = new FakePriceProvider(pages: [
+            'first' => new PriceListResult([self::record('price_first', 'First account')], false),
+        ]);
+        $secondProvider = new FakePriceProvider(pages: [
+            'first' => new PriceListResult([self::record('price_second', 'Second account')], false),
+        ]);
+        $first = new PriceCatalogue(
+            cache: $cache,
+            provider: $firstProvider,
+            resolver: new PriceResolver($firstProvider),
+            cacheKey: 'first-credential',
+        );
+        $second = new PriceCatalogue(
+            cache: $cache,
+            provider: $secondProvider,
+            resolver: new PriceResolver($secondProvider),
+            cacheKey: 'second-credential',
+        );
+        $first->refresh('EUR');
+
+        $this->assertSame([], $second->cached('EUR')['items']);
+        $secondProvider->failLists = true;
+        $failed = $second->refresh('EUR');
+
+        $this->assertSame([], $failed['items']);
+        $this->assertSame('prices.refresh_failed', $failed['error']);
+        $this->assertNull($first->cached('EUR')['failedAt']);
+        $secondProvider->failLists = false;
+        $refreshed = $second->refresh('EUR');
+
+        $this->assertSame('price_first', $first->cached('EUR')['items'][0]->priceId());
+        $this->assertSame('price_second', $refreshed['items'][0]->priceId());
+        $this->assertSame([], $first->cached('USD')['items']);
+        $this->assertSame('price_first', $first->cached('eur')['items'][0]->priceId());
     }
 
     private static function record(

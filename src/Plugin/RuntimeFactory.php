@@ -22,6 +22,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationReport;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
+use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
@@ -47,6 +48,9 @@ use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceResolver;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\StripeApiPriceProvider;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 use ProgrammatorDev\StripeCheckout\Stripe\StripeApiClientFactory;
+use ProgrammatorDev\StripeCheckout\Stripe\Tax\StripeApiTaxProvider;
+use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeCatalogue;
+use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxReadiness;
 use ProgrammatorDev\StripeCheckout\Translation\LocaleResolver;
 use Stripe\StripeClient;
 use Stripe\Util\ApiVersion;
@@ -61,6 +65,7 @@ final class RuntimeFactory
     private ?ConfigurationReport $configurationReport = null;
 
     private ?StripeClient $stripeClient = null;
+    private ?TaxReadiness $taxReadiness = null;
 
     public function __construct(
         private readonly App $kirby,
@@ -168,11 +173,15 @@ final class RuntimeFactory
     public function stripePriceCatalogue(): PriceCatalogue
     {
         $provider = $this->configuredStripePriceProvider();
+        $stripe = $this->configurationReport()->configurationOrFail()->stripe();
 
+        // Partition by credentials and currency so key rotation cannot reuse
+        // another account's or mode's last-good catalogue.
         return new PriceCatalogue(
-            $this->kirby->cache('programmatordev.stripe-checkout.prices'),
-            $provider,
-            $provider === null ? null : new PriceResolver($provider),
+            cache: $this->kirby->cache('programmatordev.stripe-checkout.prices'),
+            provider: $provider,
+            resolver: $provider === null ? null : new PriceResolver($provider),
+            cacheKey: $stripe->hasSecretKey() ? $stripe->secretKeyFingerprint('prices') : 'unconfigured',
         );
     }
 
@@ -188,6 +197,39 @@ final class RuntimeFactory
         }
 
         return new PriceResolver($provider);
+    }
+
+    public function taxCodeCatalogue(): TaxCodeCatalogue
+    {
+        $stripe = $this->configurationReport()->configurationOrFail()->stripe();
+
+        return new TaxCodeCatalogue(
+            cache: $this->kirby->cache('programmatordev.stripe-checkout.taxCodes'),
+            provider: $stripe->hasSecretKey() ? new StripeApiTaxProvider($this->stripeClient()) : null,
+            cacheKey: $stripe->hasSecretKey() ? $stripe->secretKeyFingerprint('tax-codes') : 'unconfigured',
+        );
+    }
+
+    public function taxReadiness(): TaxReadiness
+    {
+        if ($this->taxReadiness !== null) {
+            return $this->taxReadiness;
+        }
+
+        $stripe = $this->configurationReport()->configurationOrFail()->stripe();
+
+        // Credential fingerprints isolate mode/account without another Stripe
+        // request to identify the account. Key rotation safely starts cold.
+        return $this->taxReadiness = new TaxReadiness(
+            cache: $this->kirby->cache('programmatordev.stripe-checkout.taxSettings'),
+            provider: $stripe->hasSecretKey() ? new StripeApiTaxProvider($this->stripeClient()) : null,
+            cacheKey: $stripe->hasSecretKey() ? $stripe->secretKeyFingerprint('tax-settings') : 'unconfigured',
+            liveMode: match ($stripe->secretKeyMode()) {
+                CredentialMode::Test => false,
+                CredentialMode::Live => true,
+                CredentialMode::Unknown => null,
+            },
+        );
     }
 
     public function checkoutSessionGateway(): CheckoutSessionGatewayInterface

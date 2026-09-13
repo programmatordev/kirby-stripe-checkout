@@ -139,7 +139,7 @@ Unknown options, wrong types, unsupported values, duplicate definitions, blank c
 
 The Panel shows this policy only when Automatic Tax is enabled and the price source is Kirby. Its saved value is retained when hidden. Stripe Prices use the tax behavior and product classification configured in Stripe, not this local policy. Tax-ID collection is independent of Automatic Tax.
 
-These settings can currently be saved and read, but **Session tax mapping and readiness checks are not implemented yet**. Enabling the toggle does not yet enable tax in Checkout Sessions. The plugin never calculates VAT percentages or changes tax registrations. Stripe calculates tax according to customer location, product classification, and your registrations; enabling Automatic Tax alone does not mean tax will be collected everywhere. See [Stripe's tax inclusion guide](https://docs.stripe.com/tax/products-prices-tax-codes-tax-behavior) and [Stripe Tax setup](https://docs.stripe.com/tax/set-up).
+These settings can currently be saved and read, but **they are not yet connected to Checkout Session creation**. Enabling the toggle does not yet enable tax in Checkout Sessions. The plugin never calculates VAT percentages or changes tax registrations. Stripe calculates tax according to customer location, product classification, and your registrations; enabling Automatic Tax alone does not mean tax will be collected everywhere. See [Stripe's tax inclusion guide](https://docs.stripe.com/tax/products-prices-tax-codes-tax-behavior) and [Stripe Tax setup](https://docs.stripe.com/tax/set-up).
 
 ## Reading effective settings
 

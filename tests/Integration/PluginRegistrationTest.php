@@ -44,7 +44,13 @@ final class PluginRegistrationTest extends KirbyTestCase
         $areas = $extensions['areas'] ?? null;
         $translations = $extensions['translations'] ?? null;
 
-        $this->assertSame(['cache' => ['prices' => true]], $extensions['options']);
+        $pluginOptions = ['cache' => [
+            'prices' => true,
+            'taxCodes' => true,
+            'taxSettings' => true,
+        ]];
+
+        $this->assertSame($pluginOptions, $extensions['options']);
         $this->assertIsArray($blueprints);
         $this->assertSame(
             [SettingsBlueprint::class, 'load'],
@@ -96,7 +102,7 @@ final class PluginRegistrationTest extends KirbyTestCase
         $this->assertIsArray($translations);
         $this->assertSame(['en', 'pt_PT'], array_keys($translations));
         $this->assertSame(
-            ['cache' => ['prices' => true]],
+            $pluginOptions,
             $this->kirby->option('programmatordev.stripe-checkout'),
         );
     }

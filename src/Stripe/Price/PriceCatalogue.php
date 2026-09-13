@@ -24,6 +24,7 @@ final class PriceCatalogue
         private readonly Cache $cache,
         private readonly ?PriceProviderInterface $provider,
         private readonly ?PriceResolver $resolver,
+        private readonly string $cacheKey,
     ) {}
 
     /**
@@ -177,7 +178,7 @@ final class PriceCatalogue
 
     private function key(string $currency): string
     {
-        return 'catalogue-' . strtolower($currency);
+        return $this->cacheKey . '-' . strtolower($currency);
     }
 
     /**
