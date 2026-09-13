@@ -104,7 +104,7 @@ final class CartViewFactory
         $code = match (true) {
             $error instanceof ConfigurationException => 'cart.configuration_invalid',
             $error instanceof MoneyException => 'cart.amount_invalid',
-            $error instanceof ProductException && $error->errorCode() === 'product.stripe_price_unavailable' => 'cart.provider_unavailable',
+            $error instanceof ProductException && in_array($error->errorCode(), ['product.stripe_price_unavailable', 'tax.catalogue_unavailable'], true) => 'cart.provider_unavailable',
             $error instanceof ProductException && $error->errorCode() === 'product.request_invalid' => 'cart.selection_invalid',
             $error instanceof ProductException => 'cart.product_unavailable',
             $error instanceof CheckoutInputException => match ($error->errorCode()) {

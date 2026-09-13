@@ -8,6 +8,8 @@ use Brick\Money\Money;
 use Kirby\Cms\Page;
 use Kirby\Content\Field;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ProgrammatorDev\StripeCheckout\Cart\Exception\CartException;
+use ProgrammatorDev\StripeCheckout\Configuration\StripeConfiguration;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Price;
@@ -21,6 +23,8 @@ use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ProgrammatorDev\StripeCheckout\Test\Support\Stripe\FakeTaxProvider;
+use Stripe\ApiRequestor;
+use Stripe\HttpClient\ClientInterface;
 
 final class ProductTaxCodeTest extends KirbyTestCase
 {
@@ -172,6 +176,81 @@ final class ProductTaxCodeTest extends KirbyTestCase
         $this->assertSame('txcd_test', $field->value());
     }
 
+    public function testProductClassificationUsesOnlyTheConfiguredCredentialCatalogue(): void
+    {
+        $secretKey = 'sk_test_product_tax';
+        $this->restart(secretKey: $secretKey);
+        $page = $this->product(['taxCode' => 'txcd_test']);
+        $client = $this->createMock(ClientInterface::class);
+        $client->expects($this->never())->method('request');
+        ApiRequestor::setHttpClient($client);
+        $this->seedCatalogue($secretKey);
+        $foreignProvider = new FakeTaxProvider(pages: [
+            'first' => new TaxCodeListResult([new TaxCodeRecord('txcd_foreign', 'Foreign category', '')], false),
+        ]);
+        $this->catalogue($foreignProvider, 'sk_test_foreign')->refresh();
+        $runtime = new RuntimeFactory($this->kirby);
+
+        $this->assertSame('txcd_test', $runtime->resolveProduct(new ProductRequest($page->id()))->taxCode()?->id());
+        $page = $page->update(['taxCode' => 'txcd_foreign']);
+
+        $this->expectException(InvalidProductException::class);
+        $this->expectExceptionMessage('tax.code_invalid');
+        $runtime->resolveProduct(new ProductRequest($page->id()));
+    }
+
+    public function testCredentialRotationNeedsItsOwnCatalogueWithoutFetchingDuringResolution(): void
+    {
+        $secretKey = 'sk_test_product_tax';
+        $this->restart(secretKey: $secretKey);
+        $page = $this->product(['taxCode' => 'txcd_test']);
+        $client = $this->createMock(ClientInterface::class);
+        $client->expects($this->never())->method('request');
+        ApiRequestor::setHttpClient($client);
+        $this->seedCatalogue($secretKey);
+        $this->assertSame('txcd_test', (new RuntimeFactory($this->kirby))->resolveProduct(new ProductRequest($page->id()))->taxCode()?->id());
+
+        // Keep the same content and cache root while changing only the credentials.
+        $rotatedSecretKey = 'sk_test_rotated_product_tax';
+        $this->kirby = $this->kirby->clone([
+            'options' => [self::PREFIX => ['stripe' => ['secretKey' => $rotatedSecretKey]]],
+        ]);
+        $runtime = new RuntimeFactory($this->kirby);
+
+        try {
+            $runtime->resolveProduct(new ProductRequest($page->id()));
+            $this->fail('A previous credential catalogue cannot confirm the rotated credentials.');
+        } catch (InvalidProductException $error) {
+            $this->assertSame('tax.catalogue_unavailable', $error->errorCode());
+        }
+
+        $this->seedCatalogue($rotatedSecretKey);
+        $this->assertSame('txcd_test', $runtime->resolveProduct(new ProductRequest($page->id()))->taxCode()?->id());
+    }
+
+    public function testMissingCatalogueRemainsATemporaryCartErrorOnReadsAndMutations(): void
+    {
+        $page = $this->product(['taxCode' => 'txcd_test']);
+        $this->seedCatalogue();
+        $cart = (new RuntimeFactory($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $cart->add($page->id());
+        $this->kirby->cache(self::PREFIX . '.taxCodes')->remove('unconfigured');
+        $cart = (new RuntimeFactory($this->kirby))->cart();
+        $this->assertNotNull($cart);
+
+        $this->assertSame('cart.provider_unavailable', $cart->errors()[0]->code());
+        $this->assertSame('Product information is temporarily unavailable. Please try again.', $cart->errors()[0]->message());
+        $this->assertNull($cart->subtotal());
+
+        try {
+            $cart->add($page->id());
+            $this->fail('A classification without a catalogue cannot be added.');
+        } catch (CartException $error) {
+            $this->assertSame('cart.provider_unavailable', $error->errorCode());
+        }
+    }
+
     public function testCustomResolversCannotBypassMembershipWithAConfirmationFlag(): void
     {
         $this->restart(['resolver' => static fn(ProductRequest $request): Product => new Product(
@@ -217,24 +296,25 @@ final class ProductTaxCodeTest extends KirbyTestCase
         ])->changeStatus('listed');
     }
 
-    private function seedCatalogue(): FakeTaxProvider
+    private function seedCatalogue(?string $secretKey = null): FakeTaxProvider
     {
         $provider = new FakeTaxProvider(pages: [
             'first' => new TaxCodeListResult([new TaxCodeRecord('txcd_test', 'Test category', 'Test description')], false),
         ]);
-        $this->catalogue($provider)->refresh();
+        $this->catalogue($provider, $secretKey)->refresh();
 
         return $provider;
     }
 
-    private function catalogue(FakeTaxProvider $provider): TaxCodeCatalogue
+    private function catalogue(FakeTaxProvider $provider, ?string $secretKey = null): TaxCodeCatalogue
     {
-        // Seed the runtime's no-credentials namespace with an explicit fake;
-        // these tests need neither a configured API client nor Stripe traffic.
+        // Seed the runtime's credential namespace with an explicit offline fake.
+        $stripe = new StripeConfiguration(secretKey: $secretKey, publishableKey: null, webhookSecret: null);
+
         return new TaxCodeCatalogue(
             cache: $this->kirby->cache(self::PREFIX . '.taxCodes'),
             provider: $provider,
-            cacheKey: 'unconfigured',
+            cacheKey: $secretKey === null ? 'unconfigured' : $stripe->secretKeyFingerprint('tax-codes'),
         );
     }
 
@@ -243,7 +323,7 @@ final class ProductTaxCodeTest extends KirbyTestCase
      * @param array<string, mixed> $settings
      * @param list<array<string, mixed>>|null $languages
      */
-    private function restart(array $products = [], array $settings = [], ?array $languages = null): void
+    private function restart(array $products = [], array $settings = [], ?array $languages = null, ?string $secretKey = null): void
     {
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start(options: [
@@ -255,6 +335,7 @@ final class ProductTaxCodeTest extends KirbyTestCase
                     ...$settings,
                 ],
                 'products' => $products,
+                'stripe' => ['secretKey' => $secretKey],
             ],
         ], languages: $languages);
         $this->kirby = $this->environment->app();
