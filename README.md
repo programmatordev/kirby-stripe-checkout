@@ -12,7 +12,7 @@ Stripe Checkout integration for [Kirby CMS](https://getkirby.com).
 ## Requirements
 
 - PHP 8.2 or later
-- Kirby 5.5.3 or a later compatible Kirby 5 release
+- Kirby 5.6.0 or a later compatible Kirby 5 release
 - Composer
 
 ## Installation

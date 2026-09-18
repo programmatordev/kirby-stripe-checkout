@@ -25,11 +25,11 @@
 	"require": {
         "php": ">=8.2.0",
 		"ext-intl": "*",
-		"getkirby/cms": "^5.5.3",
+		"getkirby/cms": "^5.6.0",
 		"getkirby/composer-installer": "^1.2.1",
 		"stripe/stripe-php": "^21.3",
 		"symfony/options-resolver": "^7.4",
-		"brick/money": "^0.15.0",
+		"brick/money": "^0.15.1",
 		"symfony/intl": "^7.4"
     },
     "require-dev": {

@@ -18,19 +18,30 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
  */
 abstract class ProtectedOrderPage extends Page
 {
-    /** @return array<string, mixed> */
-    public function createDefaultContent(): array
+    /**
+     * @param array<string, mixed> $content
+     * @return array<string, mixed>
+     */
+    public function createContent(array $content = []): array
     {
-        // Keep native defaults for custom fields, but do not manufacture empty
-        // final payment facts from the canonical display fields.
-        /** @var array<string, mixed> $defaults */
-        $defaults = parent::createDefaultContent();
-
-        return array_filter(
-            $defaults,
+        // Keep native defaults and save handlers for custom fields, but do not
+        // manufacture final payment facts from canonical blueprint defaults.
+        /** @var array<string, mixed> $created */
+        $created = array_filter(
+            parent::createContent($content),
             static fn(string $field): bool => OrderSchema::isReserved($field) === false,
             ARRAY_FILTER_USE_KEY,
         );
+
+        foreach ($content as $field => $value) {
+            if (OrderSchema::isReserved($field)) {
+                // Canonical values have already passed OrderSerializer and must
+                // not be re-shaped by display-only Object/Structure fields.
+                $created[strtolower($field)] = $value;
+            }
+        }
+
+        return $created;
     }
 
     public function permissions(): PagePermissions

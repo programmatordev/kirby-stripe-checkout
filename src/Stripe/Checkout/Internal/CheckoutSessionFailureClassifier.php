@@ -38,14 +38,21 @@ final class CheckoutSessionFailureClassifier
                 ? CheckoutSessionFailureType::Uncertain
                 : CheckoutSessionFailureType::Unavailable,
         };
-        $stripeApiError = $error instanceof ApiErrorException ? $error : null;
-        $providerType = $stripeApiError?->getError()?->type;
+        $requestId = null;
+        $providerCode = null;
+        $providerType = null;
+
+        if ($error instanceof ApiErrorException) {
+            $requestId = $error->getRequestId();
+            $providerCode = $error->getStripeCode();
+            $providerType = $error->getError()?->type;
+        }
 
         return CheckoutSessionFailure::fromProvider(
             type: $type,
             retryable: $retryDirective ?? $this->fallbackRetryable($error),
-            requestId: $stripeApiError?->getRequestId(),
-            providerCode: $stripeApiError?->getStripeCode(),
+            requestId: $requestId,
+            providerCode: $providerCode,
             providerType: $providerType,
         );
     }

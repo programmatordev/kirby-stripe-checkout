@@ -284,13 +284,21 @@ final class OrderPageStoreTest extends KirbyTestCase
             beforeApp: static function (TestWorkspace $workspace): void {
                 $workspace->writePageBlueprint('stripe-checkout-order', [
                     'extends' => 'programmatordev/stripe-checkout/pages/order',
-                    'tabs' => ['project' => [
-                        'label' => 'Project',
-                        'fields' => ['note' => [
-                            'type' => 'textarea',
-                            'default' => 'New order',
-                        ]],
-                    ]],
+                    'tabs' => [
+                        'project' => [
+                            'label' => 'Project',
+                            'fields' => ['note' => [
+                                'type' => 'textarea',
+                                'default' => 'New order',
+                            ]],
+                        ],
+                        'technical' => [
+                            'fields' => ['stripeCheckoutSessionId' => [
+                                'type' => 'text',
+                                'default' => 'cs_blueprint_default',
+                            ]],
+                        ],
+                    ],
                 ]);
             },
         );
@@ -299,6 +307,7 @@ final class OrderPageStoreTest extends KirbyTestCase
         $page = $this->createOrder();
         $this->assertSame('pt', $this->value($page, 'languageCode'));
         $this->assertSame('New order', $this->value($page, 'note'));
+        $this->assertNull($this->value($page, 'stripeCheckoutSessionId'));
         $page = $page->update(['note' => 'Português'], 'pt');
         $page = $page->update(['note' => 'English'], 'en');
         $this->assertSame('Português', $page->version('latest')->read('pt')['note'] ?? null);

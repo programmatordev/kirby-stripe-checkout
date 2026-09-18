@@ -50,7 +50,7 @@ final class LocalDiagnostics
     {
         $checks = [
             $this->dependency('php', PHP_VERSION, version_compare(PHP_VERSION, '8.2.0', '>=')),
-            $this->dependency('kirby', App::version(), version_compare((string) App::version(), '5.5.3', '>=')),
+            $this->dependency('kirby', App::version(), version_compare((string) App::version(), '5.6.0', '>=')),
             $this->dependency('stripePhp', defined(Stripe::class . '::VERSION') ? Stripe::VERSION : null, class_exists(Stripe::class)),
             $this->orderIdentity(),
         ];
