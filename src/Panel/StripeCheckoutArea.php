@@ -145,9 +145,9 @@ final class StripeCheckoutArea
             }
 
             if ($name === 'shippingZones') {
-                // Keep Page-owned synchronization IDs in the Panel. Public
-                // definitions contain configuration-only values such as
-                // localized labels that do not belong in synchronized storage.
+                // Page-owned lists keep their persisted synchronization IDs. The
+                // field gives PHP-locked public definitions view-only IDs because
+                // those identities are not part of project configuration.
                 $value = $setting->isLocked()
                     ? array_map(
                         static fn(ShippingZone $shippingZone): array => $shippingZone->toArray(),

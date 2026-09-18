@@ -14,6 +14,8 @@ final readonly class DeliveryEstimate
         private ?int $maximum,
         private DeliveryEstimateUnit $unit,
     ) {
+        // Stripe permits either bound, but every supplied value must be positive.
+        // https://docs.stripe.com/api/checkout/sessions/create#checkout_session_create-shipping_options-shipping_rate_data-delivery_estimate
         if ($minimum === null && $maximum === null) {
             throw new InvalidShippingOptionException(
                 'deliveryEstimate',

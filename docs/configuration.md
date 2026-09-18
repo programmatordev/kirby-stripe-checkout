@@ -178,6 +178,8 @@ The Panel generates an immutable internal key for each option. PHP-configured op
 
 Every destination resolves to exactly one zone, so options never combine across zones. A zone requires one through five options because Stripe Checkout accepts at most five. Option keys are unique across the complete store configuration, and customer-facing labels are distinct inside their zone. Invalid configuration is rejected rather than truncated.
 
+When configuring shipping in PHP, write amounts as exact decimal strings such as `'4.90'`. Binary floating-point values are rejected to avoid storing rounded money.
+
 The global `shippingTaxBehavior` values match the normal tax-inclusion choices. `shippingTaxCode` accepts `stripe_default`, `shipping`, or `nontaxable`. These values are retained but dormant while Automatic Tax is disabled. They classify the shipping charge for Stripe; the plugin does not calculate a shipping VAT percentage. Confirm before choosing `nontaxable`, as the correct treatment depends on the store and destination.
 
 PHP options can add localized labels with a `labels` map and can override `taxBehavior` or an exact `taxCode` per option. In the Panel, the default language owns zones, countries, option membership/order, and technical values. Other languages can translate only customer-facing option labels; stable internal IDs keep both nested levels synchronized. Existing reusable Stripe Shipping Rate IDs are deliberately not accepted: later Checkout mapping will create inline, checkout-specific backing Rates.

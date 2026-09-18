@@ -182,6 +182,22 @@ final class ShippingSettingsTest extends KirbyTestCase
         ]]);
     }
 
+    public function testPageSaveRejectsBinaryFloatingPointShippingAmounts(): void
+    {
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
+        $zone = self::selectedZone();
+        $option = self::option();
+        $option['amount'] = 4.9;
+        $zone['options'] = [$option];
+
+        $this->expectException(ConfigurationException::class);
+        $this->expectExceptionMessage('settings.shippingZones.0.options.0.amount');
+        $page->update([
+            'currency' => 'EUR',
+            'shippingZones' => [$zone],
+        ]);
+    }
+
     /** @return array<string, mixed> */
     private static function selectedZone(): array
     {

@@ -28,6 +28,9 @@ final readonly class ShippingOption
             throw new InvalidShippingOptionException('key', 'A shipping option requires a valid stable key.');
         }
 
+        // This becomes Stripe's customer-facing `display_name`, which is
+        // limited to 100 characters.
+        // https://docs.stripe.com/api/checkout/sessions/create#checkout_session_create-shipping_options-shipping_rate_data-display_name
         if (
             $label === ''
             || trim($label) !== $label

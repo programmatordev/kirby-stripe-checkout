@@ -62,6 +62,8 @@ final readonly class ShippingZone
             throw new InvalidArgumentException('Shipping zone countries do not match their scope.');
         }
 
+        // Checkout accepts at most five shipping options for one Session.
+        // https://docs.stripe.com/api/checkout/sessions/create#checkout_session_create-shipping_options
         if (array_is_list($options) === false || $options === [] || count($options) > 5) {
             throw new InvalidArgumentException('A shipping zone requires between one and five options.');
         }

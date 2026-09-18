@@ -56,7 +56,7 @@ final class ShippingZoneStructureAdapter implements SynchronizedStructureAdapter
                     'id' => $optionId,
                     'key' => $option['key'] ?? null,
                     'label' => $option['label'] ?? null,
-                    'amount' => $this->amount($option['amount'] ?? null),
+                    'amount' => $option['amount'] ?? null,
                     'deliveryEstimate' => $option['deliveryEstimate'] ?? null,
                     ...array_key_exists('taxBehavior', $option)
                         ? ['taxBehavior' => $option['taxBehavior']]
@@ -122,7 +122,7 @@ final class ShippingZoneStructureAdapter implements SynchronizedStructureAdapter
         foreach ($canonical as $zone) {
             $submittedZone = $submittedZones[$zone['id']] ?? [];
             $submittedOptions = $this->indexSubmittedRows(
-                $this->optionalRows($submittedZone['options'] ?? null),
+                $this->submittedRows($submittedZone['options'] ?? null),
             );
             $options = [];
 
@@ -233,7 +233,7 @@ final class ShippingZoneStructureAdapter implements SynchronizedStructureAdapter
     }
 
     /** @return list<array<string, mixed>> */
-    private function optionalRows(mixed $value): array
+    private function submittedRows(mixed $value): array
     {
         if (is_array($value) === false || array_is_list($value) === false) {
             return [];
@@ -270,6 +270,8 @@ final class ShippingZoneStructureAdapter implements SynchronizedStructureAdapter
     /** @param array<string, mixed> $row */
     private function submittedId(array $row): ?string
     {
+        // Stored plugin rows use `id`; Kirby's native Structure transport uses
+        // `_id`. Accept either form, but never guess between two identities.
         $id = $row['id'] ?? null;
         $kirbyId = $row['_id'] ?? null;
 
@@ -301,6 +303,9 @@ final class ShippingZoneStructureAdapter implements SynchronizedStructureAdapter
     }
 
     /**
+     * Unknown and malformed IDs are ignored because a translation overlay
+     * cannot create canonical membership. Duplicate known IDs are ambiguous.
+     *
      * @param list<array<string, mixed>> $rows
      * @return array<string, array<string, mixed>>
      */
@@ -348,11 +353,6 @@ final class ShippingZoneStructureAdapter implements SynchronizedStructureAdapter
         }
 
         $seen[$value] = true;
-    }
-
-    private function amount(mixed $value): mixed
-    {
-        return is_int($value) || is_float($value) ? (string) $value : $value;
     }
 
     private function overlayLabel(mixed $value, mixed $fallback, string $path): string

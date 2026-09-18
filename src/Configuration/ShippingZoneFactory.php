@@ -18,7 +18,11 @@ use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 use Throwable;
 
-/** Normalizes configured zones and creates their localized domain values. */
+/**
+ * Normalizes configured zones and creates their localized domain values.
+ *
+ * @internal
+ */
 final class ShippingZoneFactory
 {
     private const ZONE_KEYS = ['name', 'scope', 'countries', 'options'];
