@@ -138,14 +138,21 @@ final class SettingsBlueprint
         }
 
         if ($customShippingResolver) {
+            $shippingZonesLocked = in_array('shippingZones', $lockedSettings, true);
+            $help = $shippingZonesLocked
+                ? I18n::template(
+                    'programmatordev.stripe-checkout.settings.shippingZones.resolverInactiveLocked',
+                    ['path' => 'programmatordev.stripe-checkout.settings.shippingZones'],
+                )
+                : I18n::translate(
+                    'programmatordev.stripe-checkout.settings.shippingZones.resolverInactive',
+                );
             $blueprint = self::applyFieldProperties(
                 blueprint: $blueprint,
                 fieldName: 'shippingZones',
                 properties: [
                     'disabled' => true,
-                    'help' => I18n::translate(
-                        'programmatordev.stripe-checkout.settings.shippingZones.resolverInactive',
-                    ),
+                    'help' => $help,
                 ],
             );
         }

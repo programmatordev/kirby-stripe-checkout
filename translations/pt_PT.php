@@ -231,6 +231,7 @@ return [
     'programmatordev.stripe-checkout.settings.shippingZones.label' => 'Zonas de envio',
     'programmatordev.stripe-checkout.settings.shippingZones.help' => 'Agrupe os países que partilham as mesmas opções de envio. Uma zona de recurso abrange os países que não pertencem a outra zona.',
     'programmatordev.stripe-checkout.settings.shippingZones.resolverInactive' => 'Um resolvedor de envio em PHP substitui estas zonas. Remova <code>programmatordev.stripe-checkout.shipping.resolver</code> para voltar a utilizá-las.',
+    'programmatordev.stripe-checkout.settings.shippingZones.resolverInactiveLocked' => 'Um resolvedor de envio em PHP substitui estas zonas, que também estão bloqueadas por <code>{path}</code>. Remova <code>programmatordev.stripe-checkout.shipping.resolver</code> para voltar a utilizá-las.',
     'programmatordev.stripe-checkout.settings.shippingZones.add' => 'Adicionar zona',
     'programmatordev.stripe-checkout.settings.shippingZones.empty' => 'Ainda não foram adicionadas zonas de envio.',
     'programmatordev.stripe-checkout.settings.shippingZones.translationHelp' => 'A configuração das zonas é gerida no idioma predefinido. Aqui pode traduzir os nomes das opções apresentados ao cliente.',

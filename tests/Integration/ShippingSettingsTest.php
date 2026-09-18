@@ -129,6 +129,40 @@ final class ShippingSettingsTest extends KirbyTestCase
         $this->assertFalse($page->blueprint()->field('shippingTaxCode')['disabled'] ?? false);
     }
 
+    public function testInactivePhpLockedZonesExplainBothConfigurationSources(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(options: [
+            'programmatordev.stripe-checkout' => [
+                'settings' => [
+                    'currency' => 'EUR',
+                    'shippingZones' => [self::fallbackZone()],
+                ],
+                'shipping' => [
+                    'resolver' => static fn(
+                        CheckoutContext $checkout,
+                        ShippingContext $shipping,
+                    ): ShippingQuote => ShippingQuote::unavailable(),
+                ],
+            ],
+        ]);
+        $this->kirby = $this->environment->app();
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
+        $shippingZones = $page->blueprint()->field('shippingZones');
+        $help = $shippingZones['help'] ?? null;
+
+        $this->assertTrue($shippingZones['disabled'] ?? false);
+        $this->assertIsString($help);
+        $this->assertStringContainsString(
+            'programmatordev.stripe-checkout.shipping.resolver',
+            $help,
+        );
+        $this->assertStringContainsString(
+            'programmatordev.stripe-checkout.settings.shippingZones',
+            $help,
+        );
+    }
+
     public function testSecondaryLanguagesStoreOnlyNestedOptionLabels(): void
     {
         $this->environment->close();

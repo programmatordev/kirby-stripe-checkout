@@ -231,6 +231,7 @@ return [
     'programmatordev.stripe-checkout.settings.shippingZones.label' => 'Shipping zones',
     'programmatordev.stripe-checkout.settings.shippingZones.help' => 'Group countries that share the same shipping options. A fallback zone covers countries not assigned to another zone.',
     'programmatordev.stripe-checkout.settings.shippingZones.resolverInactive' => 'A PHP shipping resolver replaces these zones. Remove <code>programmatordev.stripe-checkout.shipping.resolver</code> to use them again.',
+    'programmatordev.stripe-checkout.settings.shippingZones.resolverInactiveLocked' => 'A PHP shipping resolver replaces these zones, which are also locked by <code>{path}</code>. Remove <code>programmatordev.stripe-checkout.shipping.resolver</code> to use them again.',
     'programmatordev.stripe-checkout.settings.shippingZones.add' => 'Add zone',
     'programmatordev.stripe-checkout.settings.shippingZones.empty' => 'No shipping zones have been added.',
     'programmatordev.stripe-checkout.settings.shippingZones.translationHelp' => 'Zone configuration is managed in the default language. You can translate customer-facing option labels here.',

@@ -6,7 +6,6 @@ namespace ProgrammatorDev\StripeCheckout\Shipping\Internal;
 
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Shipping\Exception\InvalidShippingQuoteException;
-use ProgrammatorDev\StripeCheckout\Shipping\Exception\ShippingException;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
@@ -27,9 +26,9 @@ final readonly class GuardedShippingResolver implements ShippingResolverInterfac
     ): ShippingQuote {
         try {
             $quote = $this->resolver->resolve($checkout, $shipping);
-        } catch (ShippingException $error) {
-            throw $error;
         } catch (Throwable $error) {
+            // A resolver publishes expected customer-facing failures by returning
+            // an unavailable quote; no thrown exception crosses this boundary.
             throw new InvalidShippingQuoteException(ShippingErrorCode::RESOLVER_FAILED, $error);
         }
 

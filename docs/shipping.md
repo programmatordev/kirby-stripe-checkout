@@ -2,7 +2,7 @@
 
 Shipping is Kirby-owned. The built-in resolver uses the ordered zones and fixed whole-order options configured in the Stripe Checkout Settings Page. A project can replace that calculation with one PHP resolver for product-specific rules, free-shipping thresholds, pickup labels, carrier APIs, or other store policy.
 
-The quote engine and resolver contract are available now. Public Cart destination mutation and Checkout Session shipping mapping are not implemented yet.
+The quote engine and resolver contract are implemented as the foundation for the public shipping flow. Cart destination mutation, public quote projection, and Checkout Session shipping mapping are not implemented yet, so configuring a resolver does not affect a storefront until that integration is complete.
 
 ## Built-in resolution
 
@@ -53,13 +53,13 @@ return [
                 }
 
                 return ShippingQuote::available([
-                        new ShippingOption(
-                            key: 'standard',
-                            label: 'Standard delivery',
-                            amount: Money::of('4.90', $checkout->currency()),
-                            taxBehavior: $shipping->taxBehavior(),
-                            taxCode: $shipping->taxCode(),
-                        ),
+                    new ShippingOption(
+                        key: 'standard',
+                        label: 'Standard delivery',
+                        amount: Money::of('4.90', $checkout->currency()),
+                        taxBehavior: $shipping->taxBehavior(),
+                        taxCode: $shipping->taxCode(),
+                    ),
                 ]);
             },
         ],
@@ -141,6 +141,6 @@ Available quotes require one through five ordered options. Keys and labels must 
 
 Issue codes are safe, language-neutral strings in the `shipping.*` namespace. Return a specific code when the storefront needs to distinguish a known unavailable condition. Do not put carrier messages, addresses, credentials, or other private data in an issue code.
 
-Resolver exceptions are normalized to `shipping.resolver_failed`. Hook failures use `shipping.filter_failed`, while an invalid hook return uses `shipping.filter_invalid`. Original exception messages are not exposed at the quote boundary. Neither extension point receives a Stripe client, mutable Cart, order storage, or raw browser request. They must not trust browser-supplied amounts or create Stripe resources.
+Resolver exceptions are normalized to `shipping.resolver_failed`. Hook failures use `shipping.filter_failed`, while an invalid hook return uses `shipping.filter_invalid`. Original exception details are retained only as the previous cause for developer debugging; they are not copied into the safe public error code or message. Neither extension point receives a Stripe client, mutable Cart, order storage, or raw browser request. They must not trust browser-supplied amounts or create Stripe resources.
 
 See [Configuration](configuration.md#shipping-configuration) for fixed zones, delivery estimates, translations, and shipping tax defaults.

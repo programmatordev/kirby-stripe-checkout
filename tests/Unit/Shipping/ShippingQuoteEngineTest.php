@@ -11,6 +11,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Shipping\Exception\InvalidShippingQuoteException;
+use ProgrammatorDev\StripeCheckout\Shipping\Exception\ShippingException;
 use ProgrammatorDev\StripeCheckout\Shipping\Internal\ClosureShippingResolver;
 use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingQuoteEngine;
 use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingZoneResolver;
@@ -154,6 +155,21 @@ final class ShippingQuoteEngineTest extends TestCase
             self::fail('The resolver currency should match the checkout.');
         } catch (InvalidShippingQuoteException $error) {
             $this->assertSame(ShippingErrorCode::CURRENCY_MISMATCH, $error->errorCode());
+        }
+    }
+
+    public function testResolverCannotBypassFailureSanitizationWithAShippingException(): void
+    {
+        $engine = new ShippingQuoteEngine(new ClosureShippingResolver(
+            static fn(): never => throw new ShippingException('shipping.private_carrier_token_123'),
+        ));
+
+        try {
+            $engine->quote(self::checkout(), self::shipping());
+            self::fail('The resolver failure should be normalized.');
+        } catch (InvalidShippingQuoteException $error) {
+            $this->assertSame(ShippingErrorCode::RESOLVER_FAILED, $error->errorCode());
+            $this->assertStringNotContainsString('private_carrier_token_123', $error->getMessage());
         }
     }
 

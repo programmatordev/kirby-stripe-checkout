@@ -29,6 +29,7 @@ final class OptionExtractor
         'products.fields.requiresShipping',
         'products.fields.sku',
         'products.fields.stripePrice',
+        'products.fields.taxCode',
         'products.fields.options',
         'products.resolver',
         'shipping.resolver',
