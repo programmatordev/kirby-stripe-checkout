@@ -17,6 +17,26 @@ use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 
 final class CustomFieldsFieldTest extends KirbyTestCase
 {
+    public function testPageManagedFieldsGenerateTheirKeyFromTheStableId(): void
+    {
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
+        $page = $page->update(['customFields' => [[
+            'id' => 'field00000000001',
+            'label' => 'Reference',
+            'type' => 'text',
+        ]]]);
+        $field = (new StripeCheckoutPageStore($this->kirby))->settings()->customFields()[0] ?? null;
+        $storedField = $page->content()->get('customFields');
+
+        $this->assertIsArray($field);
+        $this->assertSame('field00000000001', $field['key'] ?? null);
+        $this->assertInstanceOf(Field::class, $storedField);
+        $storedValue = Yaml::decode($storedField->value());
+        $storedRow = $storedValue[0] ?? null;
+        $this->assertIsArray($storedRow);
+        $this->assertSame('field00000000001', $storedRow['key'] ?? null);
+    }
+
     public function testDefaultLanguageOwnsCanonicalRowsAndTranslationsStoreOnlyLabels(): void
     {
         $this->environment->close();

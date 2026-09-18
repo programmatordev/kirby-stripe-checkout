@@ -128,12 +128,12 @@ final class CustomFieldStructureAdapterTest extends TestCase
     {
         $adapter = new CustomFieldStructureAdapter();
         $canonical = $adapter->canonical([[
-            'key' => 'reference',
             'label' => 'Reference',
             'type' => 'text',
         ]]);
 
         $this->assertMatchesRegularExpression('/^[a-z0-9]{16}$/', $canonical[0]['id']);
+        $this->assertSame($canonical[0]['id'], $canonical[0]['key']);
     }
 
     public function testRejectsMalformedTranslatedLabels(): void

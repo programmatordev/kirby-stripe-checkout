@@ -102,11 +102,6 @@ export default {
 		},
 		columns() {
 			return {
-				key: {
-					label: this.$t("programmatordev.stripe-checkout.customFields.key.label"),
-					mobile: true,
-					type: "text"
-				},
 				label: {
 					label: this.$t("programmatordev.stripe-checkout.customFields.label.label"),
 					mobile: true,
@@ -138,7 +133,6 @@ export default {
 		rows() {
 			return this.localValue.map(row => ({
 				_id: row.id,
-				key: row.key,
 				label: row.label,
 				required: row.required
 					? this.$t("yes")
@@ -163,11 +157,13 @@ export default {
 			if (this.localValue.length >= 3 || this.technicalLocked || this.disabled) {
 				return;
 			}
+			const id = stableId();
 
+			// The immutable synchronization ID also serves as the hidden Stripe/order key.
 			this.open({
 				defaultValue: null,
-				id: stableId(),
-				key: "",
+				id,
+				key: id,
 				label: "",
 				maximumLength: null,
 				minimumLength: null,
@@ -234,16 +230,6 @@ export default {
 				}
 			};
 			const fields = {
-				key: {
-					disabled: technicalDisabled,
-					help: this.$t("programmatordev.stripe-checkout.customFields.key.help"),
-					label: this.$t("programmatordev.stripe-checkout.customFields.key.label"),
-					maxlength: 200,
-					name: "key",
-					pattern: "[a-z0-9]{1,200}",
-					required: true,
-					type: "text"
-				},
 				label: {
 					label: this.$t("programmatordev.stripe-checkout.customFields.label.label"),
 					maxlength: 50,
@@ -420,7 +406,6 @@ export default {
 		toFormValue(row) {
 			return {
 				defaultValue: row.defaultValue,
-				key: row.key,
 				label: row.label,
 				maximumLengthNumeric: row.maximumLength,
 				maximumLengthText: row.maximumLength,
@@ -460,7 +445,6 @@ export default {
 				: {
 					...row,
 					defaultValue: value.defaultValue || null,
-					key: value.key ?? "",
 					label: value.label ?? "",
 					maximumLength: type === "dropdown"
 						? null

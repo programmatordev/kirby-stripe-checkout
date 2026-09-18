@@ -14,8 +14,9 @@ use Throwable;
 /**
  * Adapts Panel Structure rows to canonical custom-field definitions.
  *
- * Internal row IDs connect translations without becoming part of the public
- * custom-field API. Stable field keys and dropdown values remain commerce data.
+ * Internal row IDs connect translations. Page-managed fields reuse that stable
+ * identity as their generated public key, while PHP definitions keep explicit
+ * developer-owned keys. Dropdown values remain merchant-owned commerce data.
  *
  * @internal
  * @phpstan-type CanonicalOption array{id: string, value: string, label: string}
@@ -65,7 +66,9 @@ final class CustomFieldStructureAdapter implements SynchronizedStructureAdapterI
             $this->assertKnownKeys($row, self::FIELD_KEYS, $path);
             $id = $this->stableId($row, $path);
             $this->assertUnique($rowIds, $id, $path . '.id');
-            $key = $this->requiredString($row['key'] ?? null, $path . '.key');
+            // Page-managed rows may omit the technical key and reuse their
+            // immutable ID. PHP-owned definitions retain their explicit key.
+            $key = $this->requiredString($row['key'] ?? $id, $path . '.key');
             $type = $this->requiredString($row['type'] ?? null, $path . '.type');
 
             $options = $this->canonicalOptions($row['options'] ?? [], $path . '.options');

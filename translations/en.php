@@ -202,8 +202,6 @@ return [
     'programmatordev.stripe-checkout.customFields.empty' => 'No custom fields have been configured.',
     'programmatordev.stripe-checkout.customFields.add' => 'Add custom field',
     'programmatordev.stripe-checkout.customFields.translationHelp' => 'Only customer-facing labels can be translated here. Use the default language to change fields, options, or their order.',
-    'programmatordev.stripe-checkout.customFields.key.label' => 'Key',
-    'programmatordev.stripe-checkout.customFields.key.help' => 'Use lowercase letters and numbers. The key identifies this answer in order data and integrations.',
     'programmatordev.stripe-checkout.customFields.label.label' => 'Label',
     'programmatordev.stripe-checkout.customFields.type.label' => 'Type',
     'programmatordev.stripe-checkout.customFields.type.text' => 'Text',

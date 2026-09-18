@@ -202,8 +202,6 @@ return [
     'programmatordev.stripe-checkout.customFields.empty' => 'Ainda não existem campos personalizados.',
     'programmatordev.stripe-checkout.customFields.add' => 'Adicionar campo personalizado',
     'programmatordev.stripe-checkout.customFields.translationHelp' => 'Aqui só pode traduzir os textos apresentados ao cliente. Use o idioma predefinido para alterar campos, opções ou a sua ordem.',
-    'programmatordev.stripe-checkout.customFields.key.label' => 'Chave',
-    'programmatordev.stripe-checkout.customFields.key.help' => 'Use letras minúsculas e números. A chave identifica esta resposta nos dados da encomenda e nas integrações.',
     'programmatordev.stripe-checkout.customFields.label.label' => 'Etiqueta',
     'programmatordev.stripe-checkout.customFields.type.label' => 'Tipo',
     'programmatordev.stripe-checkout.customFields.type.text' => 'Texto',
