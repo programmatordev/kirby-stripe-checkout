@@ -29,6 +29,7 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->assertSame(LocalDiagnostics::WARNING, $checks['webhookSecret']['status']);
         $this->assertSame(LocalDiagnostics::WARNING, $checks['currency']['status']);
         $this->assertSame(LocalDiagnostics::WARNING, $checks['defaultRequiresShipping']['status']);
+        $this->assertSame('shippingResolver.zones', $checks['shippingResolver']['message']);
         $this->assertSame(LocalDiagnostics::PASS, $checks['hubPage']['status']);
     }
 
@@ -118,6 +119,29 @@ final class LocalDiagnosticsTest extends KirbyTestCase
 
         $this->assertSame(LocalDiagnostics::PASS, $checks['currency']['status']);
         $this->assertSame(LocalDiagnostics::PASS, $checks['defaultRequiresShipping']['status']);
+    }
+
+    public function testReportsTheCustomShippingResolverWithoutCallingIt(): void
+    {
+        $called = false;
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(options: [
+            'programmatordev.stripe-checkout.shipping.resolver' => static function () use (&$called): never {
+                $called = true;
+
+                throw new \LogicException('Not called.');
+            },
+        ]);
+        $this->kirby = $this->environment->app();
+        $checks = array_column(
+            (new LocalDiagnostics($this->kirby))->report()['checks'],
+            null,
+            'id',
+        );
+
+        $this->assertFalse($called);
+        $this->assertSame(LocalDiagnostics::PASS, $checks['shippingResolver']['status']);
+        $this->assertSame('shippingResolver.custom', $checks['shippingResolver']['message']);
     }
 
     public function testReportsPageSlugSettingsThatWouldChangeOrderUuids(): void

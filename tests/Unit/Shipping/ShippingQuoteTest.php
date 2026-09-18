@@ -1,0 +1,82 @@
+<?php
+
+declare(strict_types=1);
+
+namespace ProgrammatorDev\StripeCheckout\Test\Unit\Shipping;
+
+use Brick\Money\Money;
+use PHPUnit\Framework\TestCase;
+use ProgrammatorDev\StripeCheckout\Shipping\Exception\InvalidShippingQuoteException;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingOption;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuoteStatus;
+
+final class ShippingQuoteTest extends TestCase
+{
+    public function testCreatesAvailableDestinationRequiredAndUnavailableQuotes(): void
+    {
+        $option = self::option();
+        $available = ShippingQuote::available([$option]);
+        $destinationRequired = ShippingQuote::destinationRequired();
+        $unavailable = ShippingQuote::unavailable('shipping.carrier_unavailable');
+
+        $this->assertSame(ShippingQuoteStatus::Available, $available->status());
+        $this->assertSame([$option], $available->options());
+        $this->assertNull($available->issueCode());
+        $this->assertSame(ShippingQuoteStatus::DestinationRequired, $destinationRequired->status());
+        $this->assertSame(ShippingErrorCode::DESTINATION_REQUIRED, $destinationRequired->issueCode());
+        $this->assertSame([], $destinationRequired->options());
+        $this->assertSame(ShippingQuoteStatus::Unavailable, $unavailable->status());
+        $this->assertSame('shipping.carrier_unavailable', $unavailable->issueCode());
+    }
+
+    public function testRejectsAnEmptyAvailableQuote(): void
+    {
+        $this->expectException(InvalidShippingQuoteException::class);
+
+        ShippingQuote::available([]);
+    }
+
+    public function testRejectsDuplicateOptionKeysAndMixedCurrencies(): void
+    {
+        try {
+            ShippingQuote::available([
+                self::option(),
+                self::option(label: 'Express'),
+            ]);
+            self::fail('A duplicate option key should be rejected.');
+        } catch (InvalidShippingQuoteException $error) {
+            self::assertSame(ShippingErrorCode::INVALID, $error->errorCode());
+        }
+
+        try {
+            ShippingQuote::available([
+                self::option(),
+                self::option(key: 'express', label: 'Express', currency: 'USD'),
+            ]);
+            self::fail('Mixed quote currencies should be rejected.');
+        } catch (InvalidShippingQuoteException $error) {
+            self::assertSame(ShippingErrorCode::CURRENCY_MISMATCH, $error->errorCode());
+        }
+    }
+
+    public function testRejectsUnsafeIssueCodes(): void
+    {
+        $this->expectException(InvalidShippingQuoteException::class);
+
+        ShippingQuote::unavailable("shipping.failure\ninternal detail");
+    }
+
+    private static function option(
+        string $key = 'standard',
+        string $label = 'Standard',
+        string $currency = 'EUR',
+    ): ShippingOption {
+        return new ShippingOption(
+            key: $key,
+            label: $label,
+            amount: Money::of('4.90', $currency),
+        );
+    }
+}

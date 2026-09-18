@@ -68,11 +68,17 @@ final class LocalDiagnostics
             foreach (['currency', 'defaultRequiresShipping'] as $id) {
                 $checks[] = $this->check($id, self::UNKNOWN, 'setting.unknown');
             }
+
+            $checks[] = $this->check('shippingResolver', self::UNKNOWN, 'shippingResolver.unknown');
         } else {
             $checks[] = $this->check('configuration', self::PASS, 'configuration.ready');
             $configuration = $configurationReport->configurationOrFail();
             $stripe = $configuration->stripe();
             $settings = $configuration->settings();
+
+            $checks[] = $configuration->shipping()->resolver() === null
+                ? $this->check('shippingResolver', self::PASS, 'shippingResolver.zones')
+                : $this->check('shippingResolver', self::PASS, 'shippingResolver.custom');
 
             if ($settings->automaticTax() && $settings->priceSource() === PriceSource::Kirby) {
                 $checks[] = $this->taxCodes();

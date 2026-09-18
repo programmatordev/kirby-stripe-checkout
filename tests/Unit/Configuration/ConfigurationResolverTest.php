@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Unit\Configuration;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Collection\BillingAddressCollection;
 use ProgrammatorDev\StripeCheckout\Collection\CustomFieldType;
 use ProgrammatorDev\StripeCheckout\Collection\NameCollectionMode;
@@ -18,6 +19,9 @@ use ProgrammatorDev\StripeCheckout\Configuration\PageSettings;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Configuration\SettingSource;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingResolverInterface;
 use SensitiveParameter;
 
 final class ConfigurationResolverTest extends TestCase
@@ -464,6 +468,31 @@ final class ConfigurationResolverTest extends TestCase
         ], $products->fields());
     }
 
+    public function testResolvesObjectAndDottedClosureShippingResolvers(): void
+    {
+        $objectResolver = new class implements ShippingResolverInterface {
+            public function resolve(
+                CheckoutContext $checkout,
+                ShippingContext $shipping,
+            ): ShippingQuote {
+                return ShippingQuote::unavailable();
+            }
+        };
+        $objectConfiguration = $this->resolve([
+            self::PREFIX => ['shipping' => ['resolver' => $objectResolver]],
+        ])->configurationOrFail()->shipping();
+        $closureResolver = static fn(
+            CheckoutContext $checkout,
+            ShippingContext $shipping,
+        ): ShippingQuote => ShippingQuote::unavailable();
+        $closureConfiguration = $this->resolve([
+            self::PREFIX . '.shipping.resolver' => $closureResolver,
+        ])->configurationOrFail()->shipping();
+
+        $this->assertSame($objectResolver, $objectConfiguration->resolver());
+        $this->assertSame($closureResolver, $closureConfiguration->resolver());
+    }
+
     public function testPageSettingOverridesTheInternalDefault(): void
     {
         $settings = (new ConfigurationResolver())->resolve(
@@ -690,6 +719,29 @@ final class ConfigurationResolverTest extends TestCase
             [self::PREFIX => ['products' => ['resolver' => 'resolver']]],
             'configuration.type_invalid',
             'products.resolver',
+        ];
+        yield 'shipping section has wrong type' => [
+            [self::PREFIX => ['shipping' => false]],
+            'configuration.type_invalid',
+            'shipping',
+        ];
+        yield 'shipping resolver must be typed or a Closure' => [
+            [self::PREFIX => ['shipping' => ['resolver' => 'resolver']]],
+            'configuration.type_invalid',
+            'shipping.resolver',
+        ];
+        yield 'unknown shipping option is rejected' => [
+            [self::PREFIX => ['shipping' => ['carrier' => 'custom']]],
+            'configuration.option_unknown',
+            'shipping.carrier',
+        ];
+        yield 'nested and dotted shipping resolvers cannot conflict' => [
+            [
+                self::PREFIX => ['shipping' => ['resolver' => static fn(): null => null]],
+                self::PREFIX . '.shipping.resolver' => static fn(): null => null,
+            ],
+            'configuration.option_duplicate',
+            'shipping.resolver',
         ];
         yield 'unknown product field mapping is rejected' => [
             [self::PREFIX => ['products' => ['fields' => ['stock' => 'stock']]]],

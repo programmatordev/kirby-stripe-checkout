@@ -102,6 +102,12 @@ final class SettingsBlueprint
             $lockedSettings = [];
         }
 
+        try {
+            $customShippingResolver = $resolver->shippingResolver($options) !== null;
+        } catch (ConfigurationException) {
+            $customShippingResolver = false;
+        }
+
         $resolvedSettings = $report->isValid()
             ? $report->configurationOrFail()->settings()
             : null;
@@ -131,6 +137,20 @@ final class SettingsBlueprint
             );
         }
 
+        if ($customShippingResolver) {
+            $blueprint = self::applyFieldProperties(
+                blueprint: $blueprint,
+                fieldName: 'shippingZones',
+                properties: [
+                    'disabled' => true,
+                    'help' => I18n::translate(
+                        'programmatordev.stripe-checkout.settings.shippingZones.resolverInactive',
+                    ),
+                ],
+            );
+        }
+
+        /** @var array<string, mixed> $blueprint */
         return $blueprint;
     }
 
@@ -189,28 +209,44 @@ final class SettingsBlueprint
         string $fieldName,
         mixed $lockedValue = null,
     ): array {
+        $properties = [
+            'disabled' => true,
+            'help' => I18n::template(
+                'programmatordev.stripe-checkout.settings.locked',
+                ['path' => 'programmatordev.stripe-checkout.settings.' . $fieldName],
+            ),
+        ];
+
+        if ($lockedValue !== null) {
+            $properties['lockedValue'] = $lockedValue;
+        }
+
+        return self::applyFieldProperties($blueprint, $fieldName, $properties);
+    }
+
+    /**
+     * @param array<mixed, mixed> $blueprint
+     * @param array<string, mixed> $properties
+     * @return array<mixed, mixed>
+     */
+    private static function applyFieldProperties(
+        array $blueprint,
+        string $fieldName,
+        array $properties,
+    ): array {
         foreach ($blueprint as $key => $value) {
             if (is_array($value) === false) {
                 continue;
             }
 
             if ($key === 'fields' && is_array($value[$fieldName] ?? null)) {
-                $value[$fieldName]['disabled'] = true;
-                $value[$fieldName]['help'] = I18n::template(
-                    'programmatordev.stripe-checkout.settings.locked',
-                    ['path' => 'programmatordev.stripe-checkout.settings.' . $fieldName],
-                );
-
-                if ($lockedValue !== null) {
-                    $value[$fieldName]['lockedValue'] = $lockedValue;
-                }
-
+                $value[$fieldName] = [...$value[$fieldName], ...$properties];
                 $blueprint[$key] = $value;
 
                 continue;
             }
 
-            $blueprint[$key] = self::applyLock($value, $fieldName, $lockedValue);
+            $blueprint[$key] = self::applyFieldProperties($value, $fieldName, $properties);
         }
 
         return $blueprint;

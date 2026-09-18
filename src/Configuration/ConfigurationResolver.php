@@ -12,6 +12,7 @@ use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingResolverInterface;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingTaxCode;
 use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
@@ -26,7 +27,7 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
  */
 final class ConfigurationResolver
 {
-    private const ROOT_KEYS = ['cart', 'housekeeping', 'orders', 'products', 'settings', 'stripe', 'translations'];
+    private const ROOT_KEYS = ['cart', 'housekeeping', 'orders', 'products', 'settings', 'shipping', 'stripe', 'translations'];
     private const PRODUCT_FIELD_KEYS = [
         'name',
         'description',
@@ -61,6 +62,7 @@ final class ConfigurationResolver
             $housekeeping = $this->housekeeping($options);
             $cartEnabled = $this->resolveCart($root['cart']);
             $products = $this->resolveProducts($root['products']);
+            $shipping = $this->resolveShipping($root['shipping']);
             $stripe = $this->resolveStripe($root['stripe']);
             $settings = $this->resolveSettings($root['settings'], $pageSettings);
             $translations = $this->resolveTranslations($root['translations']);
@@ -72,6 +74,7 @@ final class ConfigurationResolver
                 stripe: $stripe,
                 translations: $translations,
                 products: $products,
+                shipping: $shipping,
                 cartEnabled: $cartEnabled,
                 housekeeping: $housekeeping,
             ));
@@ -191,6 +194,22 @@ final class ConfigurationResolver
         return $cart['renderer'] ?? null;
     }
 
+    /** @param array<string, mixed> $options */
+    public function shippingResolver(
+        #[SensitiveParameter]
+        array $options,
+    ): ShippingResolverInterface|Closure|null {
+        $root = $this->extractor->extract($options);
+        $shipping = array_key_exists('shipping', $root) ? $root['shipping'] : [];
+
+        if (is_array($shipping) === false) {
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'shipping');
+        }
+
+        /** @var array<string, mixed> $shipping */
+        return $this->resolveShipping($shipping)->resolver();
+    }
+
     /**
      * @param array<string, mixed> $options
      * @return array<string, mixed>
@@ -210,7 +229,7 @@ final class ConfigurationResolver
 
     /**
      * @param array<string, mixed> $root
-     * @return array{cart: array<string, mixed>, housekeeping: array<string, mixed>, orders: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>}
+     * @return array{cart: array<string, mixed>, housekeeping: array<string, mixed>, orders: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, shipping: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>}
      */
     private function resolveRoot(#[SensitiveParameter] array $root): array
     {
@@ -229,6 +248,7 @@ final class ConfigurationResolver
             'orders' => [],
             'products' => [],
             'settings' => [],
+            'shipping' => [],
             'stripe' => [],
             'translations' => [],
         ]);
@@ -237,10 +257,11 @@ final class ConfigurationResolver
         $resolver->setAllowedTypes('housekeeping', 'array');
         $resolver->setAllowedTypes('orders', 'array');
         $resolver->setAllowedTypes('settings', 'array');
+        $resolver->setAllowedTypes('shipping', 'array');
         $resolver->setAllowedTypes('stripe', 'array');
         $resolver->setAllowedTypes('translations', 'array');
 
-        /** @var array{cart: array<string, mixed>, housekeeping: array<string, mixed>, orders: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>} */
+        /** @var array{cart: array<string, mixed>, housekeeping: array<string, mixed>, orders: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, shipping: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>} */
         return $resolver->resolve($root);
     }
 
@@ -313,6 +334,23 @@ final class ConfigurationResolver
 
         /** @var array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePrice: string, taxCode: string, requiresShipping: string, options: string} $fields */
         return new ProductConfiguration($resolver, $fields);
+    }
+
+    /** @param array<string, mixed> $shipping */
+    private function resolveShipping(array $shipping): ShippingConfiguration
+    {
+        $this->assertKnownKeys($shipping, ['resolver'], 'shipping');
+        $resolver = $shipping['resolver'] ?? null;
+
+        if (
+            $resolver !== null
+            && $resolver instanceof ShippingResolverInterface === false
+            && $resolver instanceof Closure === false
+        ) {
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'shipping.resolver');
+        }
+
+        return new ShippingConfiguration($resolver);
     }
 
     /** @return list<string> */

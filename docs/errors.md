@@ -30,6 +30,7 @@ Each domain owns its codes. Common examples are:
 - `Checkout\CheckoutErrorCode` and `Checkout\SessionRequestErrorCode` for Checkout attempts and request customization.
 - `Order\OrderErrorCode` and `Kirby\PersistenceErrorCode` for orders and native content storage.
 - `Tax\TaxErrorCode` for product tax classification.
+- `Shipping\ShippingErrorCode` for quote resolution and safe unavailable reasons.
 
 These namespaces are relative to `ProgrammatorDev\StripeCheckout`. Other domain classes follow the same `*ErrorCode` naming pattern.
 

@@ -184,7 +184,7 @@ The global `shippingTaxBehavior` values match the normal tax-inclusion choices. 
 
 PHP options can add localized labels with a `labels` map and can override `taxBehavior` or an exact `taxCode` per option. In the Panel, the default language owns zones, countries, option membership/order, and technical values. Other languages can translate only customer-facing option labels; stable internal IDs keep both nested levels synchronized. Existing reusable Stripe Shipping Rate IDs are deliberately not accepted: later Checkout mapping will create inline, checkout-specific backing Rates.
 
-The current package resolves and validates this configuration but does not yet add shipping to a Cart or Checkout Session.
+The current package resolves and validates this configuration and implements the built-in quote engine. See [Shipping quotes](shipping.md) for destination behavior and the PHP replacement resolver. Public Cart destination mutation and Checkout Session shipping mapping are not implemented yet.
 
 ## Reading effective settings
 
@@ -273,3 +273,7 @@ The optional PHP-only `orders.numberFormatter` closure changes the visible order
 ## Session request customization
 
 Checkout Session values that vary per order belong in the `programmatordev.stripe-checkout.session.parameters` Kirby filter rather than global configuration. The filter receives the complete standard request and immutable checkout context. See [Checkout Session requests](session-requests.md) for its contract, protected values, and retry behavior.
+
+## Shipping quote customization
+
+Use `shipping.resolver` when a project needs to replace configured zones completely. Use the `programmatordev.stripe-checkout.shipping.quote` Kirby hook to adjust the quote returned by either source for one Checkout. See [Shipping quotes](shipping.md) for both contracts.

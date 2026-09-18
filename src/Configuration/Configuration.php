@@ -20,6 +20,7 @@ final class Configuration
         private readonly StripeConfiguration $stripe,
         private readonly array $translations,
         private readonly ProductConfiguration $products,
+        private readonly ShippingConfiguration $shipping,
         private readonly bool $cartEnabled,
         private readonly array $housekeeping,
     ) {}
@@ -48,6 +49,11 @@ final class Configuration
     public function products(): ProductConfiguration
     {
         return $this->products;
+    }
+
+    public function shipping(): ShippingConfiguration
+    {
+        return $this->shipping;
     }
 
     /** @return array<string, array<string, string>> */

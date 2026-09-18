@@ -6,9 +6,12 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Collator;
 use Kirby\Form\Form;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingTaxCode;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingZoneScope;
 use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
@@ -96,6 +99,34 @@ final class ShippingSettingsTest extends KirbyTestCase
 
         $this->assertTrue($page->blueprint()->field('shippingZones')['disabled'] ?? false);
         $this->assertFalse($page->blueprint()->field('shippingTaxBehavior')['disabled'] ?? false);
+    }
+
+    public function testCustomResolverMakesStoredZonesInactiveWithoutLockingTaxDefaults(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(options: [
+            'programmatordev.stripe-checkout' => [
+                'shipping' => [
+                    'resolver' => static fn(
+                        CheckoutContext $checkout,
+                        ShippingContext $shipping,
+                    ): ShippingQuote => ShippingQuote::unavailable(),
+                ],
+            ],
+        ]);
+        $this->kirby = $this->environment->app();
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
+        $shippingZones = $page->blueprint()->field('shippingZones');
+        $help = $shippingZones['help'] ?? null;
+
+        $this->assertTrue($shippingZones['disabled'] ?? false);
+        $this->assertIsString($help);
+        $this->assertStringContainsString(
+            'programmatordev.stripe-checkout.shipping.resolver',
+            $help,
+        );
+        $this->assertFalse($page->blueprint()->field('shippingTaxBehavior')['disabled'] ?? false);
+        $this->assertFalse($page->blueprint()->field('shippingTaxCode')['disabled'] ?? false);
     }
 
     public function testSecondaryLanguagesStoreOnlyNestedOptionLabels(): void

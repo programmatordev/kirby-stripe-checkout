@@ -13,6 +13,7 @@ use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutator;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartViewFactory;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\KirbySessionCartStore;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionCreator;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestBuilder;
@@ -26,6 +27,7 @@ use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
+use ProgrammatorDev\StripeCheckout\Configuration\ShippingConfiguration;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
@@ -43,6 +45,13 @@ use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
+use ProgrammatorDev\StripeCheckout\Shipping\Internal\ClosureShippingResolver;
+use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingQuoteCustomizer;
+use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingQuoteEngine;
+use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingZoneResolver;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingResolverInterface;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionGatewayInterface;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\StripeApiCheckoutSessionGateway;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogue;
@@ -127,6 +136,27 @@ final class RuntimeFactory
         $this->taxCodeValidator()->validate($product->taxCode(), $context);
 
         return $product;
+    }
+
+    public function resolveShippingQuote(
+        CheckoutContext $checkout,
+        ShippingContext $shipping,
+    ): ?ShippingQuote {
+        $quote = (new ShippingQuoteEngine($this->shippingResolver()))->quote(
+            $checkout,
+            $shipping,
+        );
+
+        if ($quote === null) {
+            // Digital-only Checkouts have no quote for project hooks to decorate.
+            return null;
+        }
+
+        return (new ShippingQuoteCustomizer($this->kirby))->customize(
+            $quote,
+            $checkout,
+            $shipping,
+        );
     }
 
     private function taxCodeValidator(): TaxCodeValidator
@@ -306,6 +336,13 @@ final class RuntimeFactory
             ->products();
     }
 
+    private function shipping(): ShippingConfiguration
+    {
+        return $this->configurationReport()
+            ->configurationOrFail()
+            ->shipping();
+    }
+
     private function productResolver(): ProductResolverInterface
     {
         $configured = $this->products()->resolver();
@@ -314,6 +351,17 @@ final class RuntimeFactory
             $configured instanceof ProductResolverInterface => $configured,
             $configured instanceof Closure => new ClosureProductResolver($configured),
             default => new KirbyPageProductResolver($this->products()),
+        };
+    }
+
+    private function shippingResolver(): ShippingResolverInterface
+    {
+        $configured = $this->shipping()->resolver();
+
+        return match (true) {
+            $configured instanceof ShippingResolverInterface => $configured,
+            $configured instanceof Closure => new ClosureShippingResolver($configured),
+            default => new ShippingZoneResolver($this->settings()->shippingZones()),
         };
     }
 
