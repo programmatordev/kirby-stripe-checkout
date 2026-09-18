@@ -65,13 +65,9 @@ final class SettingsVersion extends Version
 
         /** @var array<string, mixed> $options */
         $options = $this->model->kirby()->options();
-        $settings = (new ConfigurationResolver())->resolve($options)->configurationOrFail()->settings();
+        $lockedSettings = (new ConfigurationResolver())->lockedSettingNames($options);
 
-        foreach ($settings->all() as $name => $setting) {
-            if ($setting->isLocked() === false) {
-                continue;
-            }
-
+        foreach ($lockedSettings as $name) {
             $field = strtolower($name);
             // Absence is meaningful: removing a PHP override must not expose a
             // value that only came from a disabled field or its form default.

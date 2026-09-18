@@ -349,6 +349,39 @@ final class PanelAreaTest extends KirbyTestCase
         }
     }
 
+    public function testPageOwnedShippingZonesRenderInTheArea(): void
+    {
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
+        $page->update([
+            'currency' => 'EUR',
+            'shippingZones' => [[
+                'name' => 'Worldwide',
+                'scope' => 'fallback',
+                'countries' => [],
+                'options' => [[
+                    'key' => 'standard',
+                    'label' => 'Standard delivery',
+                    'amount' => '4.00',
+                    'deliveryEstimate' => null,
+                ]],
+            ]],
+        ]);
+        $view = $this->view();
+        /** @var array{versions: array{latest: \stdClass}} $props */
+        $props = $view['props'];
+        $shippingZones = $props['versions']['latest']->shippingzones;
+
+        $this->assertSame('k-page-view', $view['component']);
+        $this->assertIsArray($shippingZones);
+        $shippingZone = $shippingZones[0] ?? null;
+        $this->assertIsArray($shippingZone);
+        $shippingOptions = $shippingZone['options'] ?? null;
+        $this->assertIsArray($shippingOptions);
+        $shippingOption = $shippingOptions[0] ?? null;
+        $this->assertIsArray($shippingOption);
+        $this->assertSame('standard', $shippingOption['key'] ?? null);
+    }
+
     public function testSettingsBlueprintCannotBeReplacedByTheProject(): void
     {
         $this->environment->close();

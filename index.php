@@ -15,6 +15,7 @@ use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\OrdersPage;
 use ProgrammatorDev\StripeCheckout\Kirby\ProductBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
+use ProgrammatorDev\StripeCheckout\Kirby\ShippingZonesField;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\StripePriceField;
@@ -67,6 +68,7 @@ App::plugin(
             'stripe-checkout-custom-fields' => CustomFieldsField::class,
             'stripe-checkout-options' => OptionsField::class,
             'stripe-checkout-price' => StripePriceField::class,
+            'stripe-checkout-shipping-zones' => ShippingZonesField::class,
             'stripe-checkout-tax-code' => TaxCodeField::class,
         ],
         'fieldMethods' => [

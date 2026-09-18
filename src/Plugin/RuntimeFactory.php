@@ -286,11 +286,6 @@ final class RuntimeFactory
         $resolver = new ConfigurationResolver(
             languageCode: $this->kirby->language()?->code(),
         );
-        $phpReport = $resolver->resolve($options);
-
-        if ($phpReport->isValid() === false) {
-            return $this->configurationReport = $phpReport;
-        }
 
         try {
             $pageSettings = (new StripeCheckoutPageStore($this->kirby))->settings();

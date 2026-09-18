@@ -107,6 +107,9 @@ final class StripeCheckoutPageStore
             allowPromotionCodes: $this->fieldValue($page, 'allowPromotionCodes'),
             automaticTax: $this->fieldValue($page, 'automaticTax'),
             taxBehavior: $this->fieldValue($page, 'taxBehavior'),
+            shippingZones: $this->shippingZoneDefinitions($page),
+            shippingTaxBehavior: $this->fieldValue($page, 'shippingTaxBehavior'),
+            shippingTaxCode: $this->fieldValue($page, 'shippingTaxCode'),
             cleanupCreationFailures: $this->fieldValue($page, 'cleanupCreationFailures'),
             creationFailureRetentionDays: $this->fieldValue($page, 'creationFailureRetentionDays'),
             cleanupUnpaidOrders: $this->fieldValue($page, 'cleanupUnpaidOrders'),
@@ -219,6 +222,44 @@ final class StripeCheckoutPageStore
             throw new ConfigurationException(
                 PersistenceErrorCode::CONTENT_INVALID,
                 'settings.customFields',
+                previous: $error,
+            );
+        }
+    }
+
+    /** @return list<array<string, mixed>>|null */
+    private function shippingZoneDefinitions(Page $page): ?array
+    {
+        $canonicalValue = $this->fieldValue($page, 'shippingZones');
+
+        if ($canonicalValue === null || $canonicalValue === '') {
+            return null;
+        }
+
+        try {
+            $adapter = new ShippingZoneStructureAdapter();
+            $canonical = $adapter->canonical($canonicalValue);
+            $defaultLanguageCode = $this->kirby->defaultLanguage()?->code();
+            $currentLanguageCode = $this->kirby->languageCode();
+
+            if (
+                $defaultLanguageCode !== null
+                && $currentLanguageCode !== null
+                && $currentLanguageCode !== $defaultLanguageCode
+            ) {
+                $localized = $adapter->localized(
+                    $canonical,
+                    $this->fieldValue($page, 'shippingZones', 'current'),
+                );
+
+                return $adapter->definitions($localized);
+            }
+
+            return $adapter->definitions($canonical);
+        } catch (InvalidArgumentException $error) {
+            throw new ConfigurationException(
+                PersistenceErrorCode::CONTENT_INVALID,
+                'settings.shippingZones',
                 previous: $error,
             );
         }

@@ -10,6 +10,8 @@ use ProgrammatorDev\StripeCheckout\Collection\BillingAddressCollection;
 use ProgrammatorDev\StripeCheckout\Collection\CustomField;
 use ProgrammatorDev\StripeCheckout\Collection\NameCollectionMode;
 use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingTaxCode;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingZone;
 use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 
 /**
@@ -23,13 +25,17 @@ final class Settings
     /** @var list<CustomField> */
     private readonly array $customFields;
 
+    /** @var list<ShippingZone> */
+    private readonly array $shippingZones;
+
     /**
      * @internal Constructed from the public-setting whitelist.
      *
      * @param array<string, Setting> $settings
      * @param array<mixed> $customFields
+     * @param array<mixed> $shippingZones
      */
-    public function __construct(array $settings, array $customFields)
+    public function __construct(array $settings, array $customFields, array $shippingZones)
     {
         if (array_keys($settings) !== array_keys(Defaults::SETTINGS)) {
             throw new LogicException('The public Settings view contains an unexpected schema.');
@@ -45,9 +51,21 @@ final class Settings
             }
         }
 
+        if (array_is_list($shippingZones) === false) {
+            throw new LogicException('The public Settings view requires a list of shipping zones.');
+        }
+
+        foreach ($shippingZones as $shippingZone) {
+            if ($shippingZone instanceof ShippingZone === false) {
+                throw new LogicException('The public Settings view contains an invalid shipping zone.');
+            }
+        }
+
         $this->settings = $settings;
         /** @var list<CustomField> $customFields */
         $this->customFields = $customFields;
+        /** @var list<ShippingZone> $shippingZones */
+        $this->shippingZones = $shippingZones;
     }
 
     public function priceSource(): PriceSource
@@ -164,6 +182,22 @@ final class Settings
     public function taxBehavior(): TaxBehavior
     {
         return TaxBehavior::from($this->string('taxBehavior'));
+    }
+
+    /** @return list<ShippingZone> */
+    public function shippingZones(): array
+    {
+        return $this->shippingZones;
+    }
+
+    public function shippingTaxBehavior(): TaxBehavior
+    {
+        return TaxBehavior::from($this->string('shippingTaxBehavior'));
+    }
+
+    public function shippingTaxCode(): ShippingTaxCode
+    {
+        return ShippingTaxCode::from($this->string('shippingTaxCode'));
     }
 
     public function setting(string $path): ?Setting

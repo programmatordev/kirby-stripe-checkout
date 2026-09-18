@@ -53,6 +53,7 @@ The Settings tab currently contains:
 - billing-address, individual-name, business-name, phone, tax-ID and consent collection;
 - customer-entered promotion codes;
 - Automatic Tax and the tax inclusion policy for Kirby prices;
+- country-based shipping zones with fixed whole-order options, and shipping tax defaults;
 - [order retention preferences](#order-retention), with separate controls for failed attempts and unpaid orders.
 
 The protected Page is created with `kirby` as its saved price source, so a fresh installation does not require an initial save for that deterministic default. The plugin does not guess a currency or whether products are physical. It can boot with those two fields empty so the Panel and diagnostics remain available, but the Settings tab asks the operator to select both values.
@@ -82,6 +83,24 @@ return [
             'allowPromotionCodes' => false,
             'automaticTax' => false,
             'taxBehavior' => 'stripe_default',
+            'shippingZones' => [[
+                'name' => 'Iberia',
+                'scope' => 'selected_countries',
+                'countries' => ['PT', 'ES'],
+                'options' => [[
+                    'key' => 'standard',
+                    'label' => 'Standard delivery',
+                    'labels' => ['pt' => 'Entrega normal'],
+                    'amount' => '4.90',
+                    'deliveryEstimate' => [
+                        'minimum' => 2,
+                        'maximum' => 4,
+                        'unit' => 'business_day',
+                    ],
+                ]],
+            ]],
+            'shippingTaxBehavior' => 'stripe_default',
+            'shippingTaxCode' => 'stripe_default',
         ],
     ],
 ];
@@ -143,6 +162,28 @@ Enabling Automatic Tax adds `automatic_tax.enabled=true` to new Checkout Session
 
 The plugin never calculates VAT percentages or changes tax registrations. Your Stripe account's tax settings and defaults remain managed in Stripe; the plugin does not retrieve them or certify account readiness. Stripe calculates tax according to customer location, product classification, and your registrations; enabling Automatic Tax alone does not mean tax will be collected everywhere. Missing registrations can produce zero tax rather than a creation error. See [Stripe's tax inclusion guide](https://docs.stripe.com/tax/products-prices-tax-codes-tax-behavior) and [Stripe Tax setup](https://docs.stripe.com/tax/set-up).
 
+## Shipping configuration
+
+Shipping is Kirby-owned. Add zones in the Settings tab, then add the ordered fixed options available in each zone. The same complete zone list can be locked through PHP.
+
+An explicit zone owns a non-empty list chosen from the destinations supported by Stripe Checkout. A single optional fallback zone represents every supported country that is not assigned to an explicit zone. When no explicit zones exist, that fallback effectively covers every destination. Countries cannot appear in more than one explicit zone.
+
+Each option applies to the complete order and contains:
+
+- a customer-facing `label`;
+- an exact non-negative decimal `amount` in the store currency, including `0` for free shipping;
+- an optional delivery estimate using hours, days, business days, weeks, or months.
+
+The Panel generates an immutable internal key for each option. PHP-configured options supply their own stable lowercase `key`, which is exposed through the public shipping API and must remain unchanged after orders begin referring to it.
+
+Every destination resolves to exactly one zone, so options never combine across zones. A zone requires one through five options because Stripe Checkout accepts at most five. Option keys are unique across the complete store configuration, and customer-facing labels are distinct inside their zone. Invalid configuration is rejected rather than truncated.
+
+The global `shippingTaxBehavior` values match the normal tax-inclusion choices. `shippingTaxCode` accepts `stripe_default`, `shipping`, or `nontaxable`. These values are retained but dormant while Automatic Tax is disabled. They classify the shipping charge for Stripe; the plugin does not calculate a shipping VAT percentage. Confirm before choosing `nontaxable`, as the correct treatment depends on the store and destination.
+
+PHP options can add localized labels with a `labels` map and can override `taxBehavior` or an exact `taxCode` per option. In the Panel, the default language owns zones, countries, option membership/order, and technical values. Other languages can translate only customer-facing option labels; stable internal IDs keep both nested levels synchronized. Existing reusable Stripe Shipping Rate IDs are deliberately not accepted: later Checkout mapping will create inline, checkout-specific backing Rates.
+
+The current package resolves and validates this configuration but does not yet add shipping to a Cart or Checkout Session.
+
 ## Reading effective settings
 
 The Site entry point returns sanitized effective settings:
@@ -171,6 +212,9 @@ $settings->customFields(); // list of CustomField values
 $settings->allowPromotionCodes(); // boolean
 $settings->automaticTax(); // boolean
 $settings->taxBehavior(); // TaxBehavior enum
+$settings->shippingZones(); // ordered list of ShippingZone values, each containing its options
+$settings->shippingTaxBehavior(); // TaxBehavior enum
+$settings->shippingTaxCode(); // ShippingTaxCode enum
 
 $priceSource = $settings->setting('priceSource');
 $priceSource?->value();

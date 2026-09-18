@@ -97,11 +97,8 @@
 </template>
 
 <script>
-import {
-	formatAmount,
-	importPreset,
-	reconcile
-} from "../product-options.js";
+import { formatAmount } from "../money.js";
+import { importPreset, reconcile } from "../product-options.js";
 import { resolveStableId, stableId } from "../synchronized-structure.js";
 
 const emptyValue = () => ({ options: [], variants: [] });

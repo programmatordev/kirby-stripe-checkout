@@ -8,6 +8,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Collection\BillingAddressCollection;
 use ProgrammatorDev\StripeCheckout\Collection\NameCollectionMode;
 use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingTaxCode;
 use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 
 /**
@@ -43,6 +44,9 @@ final class Defaults
         'allowPromotionCodes' => false,
         'automaticTax' => false,
         'taxBehavior' => TaxBehavior::StripeDefault->value,
+        'shippingZones' => [],
+        'shippingTaxBehavior' => TaxBehavior::StripeDefault->value,
+        'shippingTaxCode' => ShippingTaxCode::StripeDefault->value,
         ...self::RETENTION,
     ];
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Panel;
 
 use Kirby\Cms\App;
+use Kirby\Exception\InvalidArgumentException;
 use Kirby\Exception\PermissionException;
 use Kirby\Form\Fields;
 use Kirby\Panel\Panel;
@@ -15,6 +16,7 @@ use ProgrammatorDev\StripeCheckout\Kirby\PluginPermissions;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingZone;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 
 /**
@@ -142,12 +144,30 @@ final class StripeCheckoutArea
                     : $storedValue ?? [];
             }
 
+            if ($name === 'shippingZones') {
+                // Keep Page-owned synchronization IDs in the Panel. Public
+                // definitions contain configuration-only values such as
+                // localized labels that do not belong in synchronized storage.
+                $value = $setting->isLocked()
+                    ? array_map(
+                        static fn(ShippingZone $shippingZone): array => $shippingZone->toArray(),
+                        $settings->shippingZones(),
+                    )
+                    : $storedValue ?? [];
+            }
+
             // This select uses yes/no option IDs; native toggles use booleans.
             if ($name === 'defaultRequiresShipping' && is_bool($value)) {
                 $value = $value ? 'yes' : 'no';
             }
 
-            $panelValue = $field->fill($value)->toFormValue();
+            try {
+                $panelValue = $field->fill($value)->toFormValue();
+            } catch (InvalidArgumentException) {
+                // Effective-value projection is only a Panel convenience. A
+                // projection mismatch must not hide the native recovery view.
+                continue;
+            }
 
             if (isset($versions['latest']) && ($setting->isLocked() || $storedValue === null || $storedValue === '')) {
                 $versions['latest']->{$key} = $panelValue;

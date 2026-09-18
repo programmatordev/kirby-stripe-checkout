@@ -60,6 +60,9 @@ final class StripeCheckoutPage extends Page
         'allowpromotioncodes' => 'allowPromotionCodes',
         'automatictax' => 'automaticTax',
         'taxbehavior' => 'taxBehavior',
+        'shippingzones' => 'shippingZones',
+        'shippingtaxbehavior' => 'shippingTaxBehavior',
+        'shippingtaxcode' => 'shippingTaxCode',
         'cleanupcreationfailures' => 'cleanupCreationFailures',
         'creationfailureretentiondays' => 'creationFailureRetentionDays',
         'cleanupunpaidorders' => 'cleanupUnpaidOrders',
@@ -81,6 +84,8 @@ final class StripeCheckoutPage extends Page
         'allowpromotioncodes' => 'allowPromotionCodes',
         'automatictax' => 'automaticTax',
         'taxbehavior' => 'taxBehavior',
+        'shippingtaxbehavior' => 'shippingTaxBehavior',
+        'shippingtaxcode' => 'shippingTaxCode',
         'cleanupcreationfailures' => 'cleanupCreationFailures',
         'creationfailureretentiondays' => 'creationFailureRetentionDays',
         'cleanupunpaidorders' => 'cleanupUnpaidOrders',
@@ -148,6 +153,18 @@ final class StripeCheckoutPage extends Page
             try {
                 $input['customfields'] = $this->normalizeCustomFieldStorage(
                     value: $input['customfields'],
+                    defaultLanguageCode: $defaultLanguageCode,
+                    targetLanguageCode: $targetLanguageCode,
+                );
+            } catch (InvalidArgumentException $error) {
+                throw new KirbyInvalidArgumentException(message: $error->getMessage());
+            }
+        }
+
+        if (array_key_exists('shippingzones', $input)) {
+            try {
+                $input['shippingzones'] = $this->normalizeShippingZoneStorage(
+                    value: $input['shippingzones'],
                     defaultLanguageCode: $defaultLanguageCode,
                     targetLanguageCode: $targetLanguageCode,
                 );
@@ -313,8 +330,21 @@ final class StripeCheckoutPage extends Page
 
         foreach (self::SETTING_FIELDS as $field => $name) {
             if ($name === 'customFields') {
-                $storedValues[$name] = null;
-                $candidateValues[$name] = null;
+                [$storedValues[$name], $candidateValues[$name]] = $this->customFieldUpdateValues(
+                    input: $input,
+                    field: $field,
+                    languageCode: $languageCode,
+                );
+
+                continue;
+            }
+
+            if ($name === 'shippingZones') {
+                [$storedValues[$name], $candidateValues[$name]] = $this->shippingZoneUpdateValues(
+                    input: $input,
+                    field: $field,
+                    languageCode: $languageCode,
+                );
 
                 continue;
             }
@@ -330,22 +360,23 @@ final class StripeCheckoutPage extends Page
 
         /** @var array<string, mixed> $options */
         $options = $this->kirby()->options();
-        $settings = (new ConfigurationResolver())
-            ->resolve($options)
-            ->configurationOrFail()
-            ->settings();
+        $lockedSettings = array_fill_keys(
+            (new ConfigurationResolver())->lockedSettingNames($options),
+            true,
+        );
 
         foreach (array_keys($input) as $field) {
             $name = self::SETTING_FIELDS[$field];
-            $setting = $settings->setting($name);
 
-            if ($setting?->isLocked() !== true) {
+            if (isset($lockedSettings[$name]) === false) {
                 continue;
             }
 
-            $changed = $name === 'customFields'
-                ? $this->customFieldStorageChanged($input[$field], $languageCode)
-                : $candidate->value($name) !== $stored->value($name);
+            $changed = match ($name) {
+                'customFields' => $this->customFieldStorageChanged($input[$field], $languageCode),
+                'shippingZones' => $this->shippingZoneStorageChanged($input[$field], $languageCode),
+                default => $candidate->value($name) !== $stored->value($name),
+            };
 
             if ($changed) {
                 throw new PermissionException(
@@ -353,6 +384,10 @@ final class StripeCheckoutPage extends Page
                 );
             }
         }
+
+        (new ConfigurationResolver(
+            languageCode: $languageCode ?? $this->kirby()->languageCode(),
+        ))->settings($options, $candidate);
     }
 
     private function structuralChangeDenied(): PermissionException
@@ -393,6 +428,110 @@ final class StripeCheckoutPage extends Page
         return $adapter->canonical($value) !== $canonical;
     }
 
+    private function shippingZoneStorageChanged(mixed $value, ?string $languageCode): bool
+    {
+        $adapter = new ShippingZoneStructureAdapter();
+        $defaultLanguageCode = $this->kirby()->defaultLanguage()?->code();
+        $targetLanguageCode = $languageCode ?? $this->kirby()->languageCode();
+        $canonical = $adapter->canonical($this->fieldValue('shippingZones'));
+
+        if (
+            $defaultLanguageCode !== null
+            && $targetLanguageCode !== null
+            && $targetLanguageCode !== $defaultLanguageCode
+        ) {
+            $storedField = $this->content($targetLanguageCode)->get('shippingZones');
+            $storedValue = $storedField instanceof Field ? $storedField->value() : null;
+
+            return $adapter->overlay($canonical, $value)
+                !== $adapter->overlay($canonical, $storedValue);
+        }
+
+        return $adapter->canonical($value) !== $canonical;
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     * @return array{list<array<string, mixed>>, list<array<string, mixed>>}
+     */
+    private function customFieldUpdateValues(
+        array $input,
+        string $field,
+        ?string $languageCode,
+    ): array {
+        $adapter = new CustomFieldStructureAdapter();
+        $canonical = $adapter->canonical($this->fieldValue('customFields'));
+        $defaultLanguageCode = $this->kirby()->defaultLanguage()?->code();
+        $targetLanguageCode = $languageCode ?? $this->kirby()->languageCode();
+
+        if (
+            $defaultLanguageCode !== null
+            && $targetLanguageCode !== null
+            && $targetLanguageCode !== $defaultLanguageCode
+        ) {
+            $storedField = $this->content($targetLanguageCode)->get('customFields');
+            $storedOverlay = $storedField instanceof Field ? $storedField->value() : null;
+            $candidateOverlay = array_key_exists($field, $input)
+                ? $input[$field]
+                : $storedOverlay;
+
+            return [
+                $adapter->definitions($adapter->localized($canonical, $storedOverlay)),
+                $adapter->definitions($adapter->localized($canonical, $candidateOverlay)),
+            ];
+        }
+
+        return [
+            $adapter->definitions($canonical),
+            $adapter->definitions(
+                array_key_exists($field, $input)
+                    ? $adapter->canonical($input[$field])
+                    : $canonical,
+            ),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     * @return array{list<array<string, mixed>>, list<array<string, mixed>>}
+     */
+    private function shippingZoneUpdateValues(
+        array $input,
+        string $field,
+        ?string $languageCode,
+    ): array {
+        $adapter = new ShippingZoneStructureAdapter();
+        $canonical = $adapter->canonical($this->fieldValue('shippingZones'));
+        $defaultLanguageCode = $this->kirby()->defaultLanguage()?->code();
+        $targetLanguageCode = $languageCode ?? $this->kirby()->languageCode();
+
+        if (
+            $defaultLanguageCode !== null
+            && $targetLanguageCode !== null
+            && $targetLanguageCode !== $defaultLanguageCode
+        ) {
+            $storedField = $this->content($targetLanguageCode)->get('shippingZones');
+            $storedOverlay = $storedField instanceof Field ? $storedField->value() : null;
+            $candidateOverlay = array_key_exists($field, $input)
+                ? $input[$field]
+                : $storedOverlay;
+
+            return [
+                $adapter->definitions($adapter->localized($canonical, $storedOverlay)),
+                $adapter->definitions($adapter->localized($canonical, $candidateOverlay)),
+            ];
+        }
+
+        return [
+            $adapter->definitions($canonical),
+            $adapter->definitions(
+                array_key_exists($field, $input)
+                    ? $adapter->canonical($input[$field])
+                    : $canonical,
+            ),
+        ];
+    }
+
     /** @return list<array<string, mixed>> */
     private function normalizeCustomFieldStorage(
         mixed $value,
@@ -408,6 +547,28 @@ final class StripeCheckoutPage extends Page
         ) {
             return $adapter->overlay(
                 $adapter->canonical($this->fieldValue('customFields')),
+                $value,
+            );
+        }
+
+        return $adapter->canonical($value);
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function normalizeShippingZoneStorage(
+        mixed $value,
+        ?string $defaultLanguageCode,
+        ?string $targetLanguageCode,
+    ): array {
+        $adapter = new ShippingZoneStructureAdapter();
+
+        if (
+            $defaultLanguageCode !== null
+            && $targetLanguageCode !== null
+            && $targetLanguageCode !== $defaultLanguageCode
+        ) {
+            return $adapter->overlay(
+                $adapter->canonical($this->fieldValue('shippingZones')),
                 $value,
             );
         }

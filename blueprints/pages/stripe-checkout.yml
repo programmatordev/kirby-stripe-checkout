@@ -248,6 +248,40 @@ tabs:
                 "*": programmatordev.stripe-checkout.settings.taxBehavior.inclusive
               exclusive:
                 "*": programmatordev.stripe-checkout.settings.taxBehavior.exclusive
+          shippingZones:
+            label: programmatordev.stripe-checkout.settings.shippingZones.label
+            help: programmatordev.stripe-checkout.settings.shippingZones.help
+            type: stripe-checkout-shipping-zones
+          shippingTaxBehavior:
+            label: programmatordev.stripe-checkout.settings.shippingTaxBehavior.label
+            help: programmatordev.stripe-checkout.settings.shippingTaxBehavior.help
+            type: select
+            required: true
+            translate: false
+            when:
+              automaticTax: true
+            options:
+              stripe_default:
+                "*": programmatordev.stripe-checkout.settings.taxBehavior.stripeDefault
+              inclusive:
+                "*": programmatordev.stripe-checkout.settings.taxBehavior.inclusive
+              exclusive:
+                "*": programmatordev.stripe-checkout.settings.taxBehavior.exclusive
+          shippingTaxCode:
+            label: programmatordev.stripe-checkout.settings.shippingTaxCode.label
+            help: programmatordev.stripe-checkout.settings.shippingTaxCode.help
+            type: select
+            required: true
+            translate: false
+            when:
+              automaticTax: true
+            options:
+              stripe_default:
+                "*": programmatordev.stripe-checkout.settings.shippingTaxCode.stripeDefault
+              shipping:
+                "*": programmatordev.stripe-checkout.settings.shippingTaxCode.shipping
+              nontaxable:
+                "*": programmatordev.stripe-checkout.settings.shippingTaxCode.nontaxable
   diagnostics:
     label: programmatordev.stripe-checkout.tabs.diagnostics
     icon: info

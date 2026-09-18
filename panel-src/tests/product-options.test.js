@@ -4,10 +4,10 @@ import test from "node:test";
 import {
 	optionCombinationKey,
 	combinations,
-	formatAmount,
 	importPreset,
 	reconcile
 } from "../src/product-options.js";
+import { formatAmount } from "../src/money.js";
 
 const options = [
 	{
@@ -33,6 +33,7 @@ test("formats table amounts with the currency's standard decimal digits", () => 
 	assert.equal(formatAmount("16", "JPY"), "16");
 	assert.equal(formatAmount("16", "KWD"), "16.000");
 	assert.equal(formatAmount("16.5", "EUR"), "16.50");
+	assert.equal(formatAmount("16", null), "16");
 });
 
 test("generates the Cartesian product of option values", () => {

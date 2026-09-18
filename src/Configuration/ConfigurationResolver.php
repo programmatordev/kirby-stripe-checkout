@@ -12,6 +12,7 @@ use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingTaxCode;
 use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
@@ -88,6 +89,46 @@ final class ConfigurationResolver
     public function cartEnabled(#[SensitiveParameter] array $options): bool
     {
         return $this->resolveCart($this->cartOptions($options));
+    }
+
+    /**
+     * Returns explicit non-null PHP setting leaves without resolving values
+     * that may depend on their Page-owned peers.
+     *
+     * @param array<string, mixed> $options
+     * @return list<string>
+     */
+    public function lockedSettingNames(#[SensitiveParameter] array $options): array
+    {
+        $settings = $this->resolveRoot($this->extractor->extract($options))['settings'];
+        $this->assertKnownKeys($settings, array_keys(Defaults::SETTINGS), 'settings');
+        $locks = [];
+
+        foreach ($settings as $name => $value) {
+            if ($value !== null) {
+                $locks[] = $name;
+            }
+        }
+
+        return $locks;
+    }
+
+    /**
+     * Resolves only store-facing settings for Panel validation.
+     *
+     * This deliberately avoids making unrelated credentials or product
+     * configuration prerequisites for saving the protected Settings Page.
+     *
+     * @param array<string, mixed> $options
+     */
+    public function settings(
+        #[SensitiveParameter]
+        array $options,
+        ?PageSettings $pageSettings = null,
+    ): Settings {
+        $settings = $this->resolveRoot($this->extractor->extract($options))['settings'];
+
+        return $this->resolveSettings($settings, $pageSettings);
     }
 
     /**
@@ -430,6 +471,8 @@ final class ConfigurationResolver
             'businessNameCollection' => array_column(NameCollectionMode::cases(), 'value'),
             'taxIdCollection' => array_column(TaxIdCollection::cases(), 'value'),
             'taxBehavior' => array_column(TaxBehavior::cases(), 'value'),
+            'shippingTaxBehavior' => array_column(TaxBehavior::cases(), 'value'),
+            'shippingTaxCode' => array_column(ShippingTaxCode::cases(), 'value'),
         ];
 
         foreach ($choiceSettings as $name => $allowedValues) {
@@ -471,6 +514,14 @@ final class ConfigurationResolver
                 ->normalize($settings['customFields']);
         }
 
+        if (
+            array_key_exists('shippingZones', $settings)
+            && $settings['shippingZones'] !== null
+            && is_array($settings['shippingZones']) === false
+        ) {
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.shippingZones');
+        }
+
         $resolver = new OptionsResolver();
         $resolver->setDefaults([
             'priceSource' => null,
@@ -491,6 +542,9 @@ final class ConfigurationResolver
             'allowPromotionCodes' => null,
             'automaticTax' => null,
             'taxBehavior' => null,
+            'shippingZones' => null,
+            'shippingTaxBehavior' => null,
+            'shippingTaxCode' => null,
         ]);
         $resolver->setAllowedTypes('priceSource', ['null', 'string']);
         $resolver->setAllowedTypes('currency', ['null', 'string']);
@@ -510,6 +564,9 @@ final class ConfigurationResolver
         $resolver->setAllowedTypes('allowPromotionCodes', ['null', 'bool']);
         $resolver->setAllowedTypes('automaticTax', ['null', 'bool']);
         $resolver->setAllowedTypes('taxBehavior', ['null', 'string']);
+        $resolver->setAllowedTypes('shippingZones', ['null', 'array']);
+        $resolver->setAllowedTypes('shippingTaxBehavior', ['null', 'string']);
+        $resolver->setAllowedTypes('shippingTaxCode', ['null', 'string']);
         $resolver->setAllowedValues('priceSource', [
             null,
             PriceSource::Kirby->value,
@@ -550,6 +607,39 @@ final class ConfigurationResolver
             $effective[$name] = $this->resolveSetting($phpSettings[$name], $pageSettings?->value($name), $default);
         }
 
+        $shippingTaxBehavior = $effective['shippingTaxBehavior']->value();
+        $shippingTaxCode = $effective['shippingTaxCode']->value();
+        $currency = $effective['currency']->value();
+
+        if (
+            ($currency !== null && is_string($currency) === false)
+            || is_string($shippingTaxBehavior) === false
+            || is_string($shippingTaxCode) === false
+        ) {
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.shippingZones');
+        }
+
+        $rawShippingZones = $effective['shippingZones']->value();
+
+        if (is_array($rawShippingZones) === false) {
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.shippingZones');
+        }
+
+        $shippingZoneFactory = new ShippingZoneFactory(
+            currency: $currency,
+            defaultTaxBehavior: TaxBehavior::from($shippingTaxBehavior),
+            defaultTaxCode: ShippingTaxCode::from($shippingTaxCode)->taxCode(),
+            languageCode: $this->languageCode,
+        );
+        $normalizedShippingZones = $shippingZoneFactory->normalize($rawShippingZones);
+        $shippingZonesSetting = $effective['shippingZones'];
+        $effective['shippingZones'] = new Setting(
+            settingValue: $normalizedShippingZones,
+            settingSource: $shippingZonesSetting->source(),
+            shadowed: $shippingZonesSetting->hasShadowedValue(),
+            pageShadow: $shippingZonesSetting->shadowedValue(),
+        );
+
         $customFields = $effective['customFields']->value();
 
         if (is_array($customFields) === false) {
@@ -561,6 +651,7 @@ final class ConfigurationResolver
         return new Settings(
             settings: $effective,
             customFields: $customFieldFactory->createAll($customFields),
+            shippingZones: $shippingZoneFactory->createAll($normalizedShippingZones),
         );
     }
 

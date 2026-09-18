@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Configuration;
 
+use Kirby\Data\Yaml;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Collection\BillingAddressCollection;
 use ProgrammatorDev\StripeCheckout\Collection\NameCollectionMode;
@@ -11,7 +12,9 @@ use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\PersistenceErrorCode;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingTaxCode;
 use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
+use Throwable;
 
 /**
  * Carries validated non-secret values read from the protected hub Page.
@@ -42,6 +45,9 @@ final class PageSettings
         mixed $allowPromotionCodes = null,
         mixed $automaticTax = null,
         mixed $taxBehavior = null,
+        mixed $shippingZones = null,
+        mixed $shippingTaxBehavior = null,
+        mixed $shippingTaxCode = null,
         mixed $cleanupCreationFailures = null,
         mixed $creationFailureRetentionDays = null,
         mixed $cleanupUnpaidOrders = null,
@@ -127,6 +133,17 @@ final class PageSettings
             array_column(TaxBehavior::cases(), 'value'),
             'taxBehavior',
         );
+        $this->shippingZones = $this->normalizeShippingZones($shippingZones);
+        $this->shippingTaxBehavior = $this->normalizeChoice(
+            $shippingTaxBehavior,
+            array_column(TaxBehavior::cases(), 'value'),
+            'shippingTaxBehavior',
+        );
+        $this->shippingTaxCode = $this->normalizeChoice(
+            $shippingTaxCode,
+            array_column(ShippingTaxCode::cases(), 'value'),
+            'shippingTaxCode',
+        );
         $retention = compact('cleanupCreationFailures', 'creationFailureRetentionDays', 'cleanupUnpaidOrders', 'unpaidOrderRetentionDays');
 
         foreach (Defaults::RETENTION as $name => $default) {
@@ -177,6 +194,10 @@ final class PageSettings
     private readonly ?bool $allowPromotionCodes;
     private readonly ?bool $automaticTax;
     private readonly ?string $taxBehavior;
+    /** @var list<array<string, mixed>>|null */
+    private readonly ?array $shippingZones;
+    private readonly ?string $shippingTaxBehavior;
+    private readonly ?string $shippingTaxCode;
 
     public function priceSource(): ?string
     {
@@ -269,7 +290,23 @@ final class PageSettings
         return $this->taxBehavior;
     }
 
-    /** @return string|bool|int|list<array<string, mixed>>|null */
+    /** @return list<array<string, mixed>>|null */
+    public function shippingZones(): ?array
+    {
+        return $this->shippingZones;
+    }
+
+    public function shippingTaxBehavior(): ?string
+    {
+        return $this->shippingTaxBehavior;
+    }
+
+    public function shippingTaxCode(): ?string
+    {
+        return $this->shippingTaxCode;
+    }
+
+    /** @return string|bool|int|array<mixed>|null */
     public function value(string $name): string|bool|int|array|null
     {
         return match ($name) {
@@ -291,6 +328,9 @@ final class PageSettings
             'allowPromotionCodes' => $this->allowPromotionCodes(),
             'automaticTax' => $this->automaticTax(),
             'taxBehavior' => $this->taxBehavior(),
+            'shippingZones' => $this->shippingZones(),
+            'shippingTaxBehavior' => $this->shippingTaxBehavior(),
+            'shippingTaxCode' => $this->shippingTaxCode(),
             default => $this->retention[$name] ?? null,
         };
     }
@@ -366,6 +406,113 @@ final class PageSettings
             throw new ConfigurationException(
                 PersistenceErrorCode::CONTENT_INVALID,
                 $error->path(),
+                previous: $error,
+            );
+        }
+    }
+
+    /** @return list<array<string, mixed>>|null */
+    private function normalizeShippingZones(mixed $value): ?array
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $value = $this->decodeList($value, 'settings.shippingZones');
+
+        if (is_array($value) === false || array_is_list($value) === false) {
+            throw new ConfigurationException(
+                PersistenceErrorCode::CONTENT_INVALID,
+                'settings.shippingZones',
+            );
+        }
+
+        foreach ($value as $zone) {
+            if (is_array($zone) === false) {
+                throw new ConfigurationException(
+                    PersistenceErrorCode::CONTENT_INVALID,
+                    'settings.shippingZones',
+                );
+            }
+        }
+
+        $normalized = [];
+
+        /** @var list<array<string, mixed>> $value */
+        foreach ($value as $zoneIndex => $zone) {
+            $options = $zone['options'] ?? null;
+
+            if (is_array($options) === false || array_is_list($options) === false) {
+                throw new ConfigurationException(
+                    PersistenceErrorCode::CONTENT_INVALID,
+                    'settings.shippingZones.' . $zoneIndex . '.options',
+                );
+            }
+
+            foreach ($options as $optionIndex => $option) {
+                if (is_array($option) === false) {
+                    throw new ConfigurationException(
+                        PersistenceErrorCode::CONTENT_INVALID,
+                        'settings.shippingZones.' . $zoneIndex . '.options.' . $optionIndex,
+                    );
+                }
+
+                $estimate = $option['deliveryEstimate'] ?? null;
+
+                if (is_array($estimate)) {
+                    foreach (['minimum', 'maximum'] as $bound) {
+                        $rawBound = $estimate[$bound] ?? null;
+
+                        if ($rawBound === null || $rawBound === '') {
+                            $estimate[$bound] = null;
+
+                            continue;
+                        }
+
+                        $normalizedBound = filter_var(
+                            $rawBound,
+                            FILTER_VALIDATE_INT,
+                            ['options' => ['min_range' => 1]],
+                        );
+
+                        if (is_int($normalizedBound) === false || is_float($rawBound) || is_bool($rawBound)) {
+                            throw new ConfigurationException(
+                                PersistenceErrorCode::CONTENT_INVALID,
+                                'settings.shippingZones.' . $zoneIndex . '.options.' . $optionIndex . '.deliveryEstimate.' . $bound,
+                            );
+                        }
+
+                        $estimate[$bound] = $normalizedBound;
+                    }
+
+                    if (($estimate['minimum'] ?? null) === null && ($estimate['maximum'] ?? null) === null) {
+                        $estimate = null;
+                    }
+                }
+
+                $option['deliveryEstimate'] = $estimate;
+                $options[$optionIndex] = $option;
+            }
+
+            $zone['options'] = $options;
+            $normalized[] = $zone;
+        }
+
+        return $normalized;
+    }
+
+    private function decodeList(mixed $value, string $path): mixed
+    {
+        if (is_string($value) === false) {
+            return $value;
+        }
+
+        try {
+            return Yaml::decode($value);
+        } catch (Throwable $error) {
+            throw new ConfigurationException(
+                PersistenceErrorCode::CONTENT_INVALID,
+                $path,
                 previous: $error,
             );
         }
