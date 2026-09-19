@@ -8,6 +8,8 @@ use Brick\Money\Money;
 use DateInterval;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSessionPresentation;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
@@ -960,6 +962,24 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             price: $price,
             stripeProductId: $stripePrice ? 'prod_checkouttest' : null,
         );
+        $checkout = new CheckoutContext(
+            items: [new CheckoutLineItem(
+                productReference: $request->reference(),
+                variantId: $product->variantId(),
+                sku: $product->sku(),
+                quantity: $request->quantity(),
+                price: $price,
+                subtotal: $price->multipliedBy($request->quantity()),
+                requiresShipping: true,
+                options: $product->selectedOptions(),
+                metadata: $product->metadata(),
+            )],
+            languageCode: null,
+            locale: 'en_US',
+            userUuid: null,
+            checkoutSource: CheckoutSource::Direct,
+            uiMode: $uiMode,
+        );
 
         return (new OrderCreationContextFactory($this->kirby))->create(
             uuid: $uuid,
@@ -970,9 +990,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             userUuid: null,
             languageCode: null,
             uiMode: $uiMode,
-            initiatingShipping: InitiatingShippingSnapshotFactory::create(
-                languageCode: null,
-            ),
+            initiatingShipping: InitiatingShippingSnapshotFactory::fromCheckout($checkout),
         );
     }
 

@@ -2,18 +2,25 @@
 
 declare(strict_types=1);
 
-namespace ProgrammatorDev\StripeCheckout\Order\Internal;
+namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingOption;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuoteStatus;
 use ProgrammatorDev\StripeCheckout\Shipping\StripeShippingCountryRegistry;
 
-/** @internal Frozen shipping quote used only while creating one Checkout Session request. */
+/**
+ * @internal Frozen shipping quote used only while creating one Checkout Session request.
+ *
+ * The checkout fingerprint binds the quote to its inputs; the quote fingerprint
+ * identifies the exact offered shipping policy and options.
+ */
 final readonly class InitiatingShippingSnapshot
 {
     /**
@@ -21,12 +28,10 @@ final readonly class InitiatingShippingSnapshot
      * @param list<ShippingOption> $options
      */
     private function __construct(
-        private ?string $shippingCountry,
         private array $allowedCountries,
-        private ?string $languageCode,
-        private string $locale,
         private string $currency,
         private array $options,
+        private string $checkoutFingerprint,
         private string $quoteFingerprint,
     ) {}
 
@@ -51,48 +56,32 @@ final readonly class InitiatingShippingSnapshot
         }
 
         $shippingCountry = $shipping->shippingCountry();
+        // A countryless quote comes from a resolver/fallback that is valid for
+        // every destination, so Checkout may expose Stripe's complete allowlist.
         $allowedCountries = $shippingCountry === null
             ? (new StripeShippingCountryRegistry())->codes()
             : [$shippingCountry];
-        $facts = self::facts(
+        $quoteFacts = self::quoteFacts(
             shippingCountry: $shippingCountry,
             allowedCountries: $allowedCountries,
-            languageCode: $checkout->languageCode(),
             locale: $checkout->locale(),
             currency: $currency,
             options: $quote->options(),
         );
 
         return new self(
-            shippingCountry: $shippingCountry,
             allowedCountries: $allowedCountries,
-            languageCode: $checkout->languageCode(),
-            locale: $checkout->locale(),
             currency: $currency,
             options: $quote->options(),
-            quoteFingerprint: hash('sha256', OrderData::json($facts)),
+            checkoutFingerprint: CheckoutContextFingerprint::fromCheckout($checkout),
+            quoteFingerprint: hash('sha256', OrderData::json($quoteFacts)),
         );
-    }
-
-    public function shippingCountry(): ?string
-    {
-        return $this->shippingCountry;
     }
 
     /** @return list<string> */
     public function allowedCountries(): array
     {
         return $this->allowedCountries;
-    }
-
-    public function languageCode(): ?string
-    {
-        return $this->languageCode;
-    }
-
-    public function locale(): string
-    {
-        return $this->locale;
     }
 
     public function currency(): string
@@ -111,15 +100,26 @@ final readonly class InitiatingShippingSnapshot
         return $this->quoteFingerprint;
     }
 
+    public function matches(OrderCreationContext $order): bool
+    {
+        return hash_equals(
+            $this->checkoutFingerprint,
+            CheckoutContextFingerprint::fromOrder($order),
+        );
+    }
+
     /**
+     * Locale participates only in quote correlation because a resolver may use
+     * it to localize or calculate options. SessionRequestContext remains the
+     * sole source for the effective Stripe locale sent to Checkout.
+     *
      * @param list<string> $allowedCountries
      * @param list<ShippingOption> $options
      * @return array<string, mixed>
      */
-    private static function facts(
+    private static function quoteFacts(
         ?string $shippingCountry,
         array $allowedCountries,
-        ?string $languageCode,
         string $locale,
         string $currency,
         array $options,
@@ -129,7 +129,6 @@ final readonly class InitiatingShippingSnapshot
         return [
             'shippingCountry' => $shippingCountry,
             'allowedCountries' => $allowedCountries,
-            'languageCode' => $languageCode,
             'locale' => $locale,
             'currency' => $currency,
             'options' => array_map(

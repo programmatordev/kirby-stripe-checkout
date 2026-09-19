@@ -35,18 +35,27 @@ final class OrderCreationContextFactoryTest extends KirbyTestCase
         $digital = $this->create(requiresShipping: false);
 
         $this->assertTrue($physical->requiresShipping());
-        $this->assertNotNull($physical->initiatingShipping());
         $this->assertFalse($digital->requiresShipping());
-        $this->assertNull($digital->initiatingShipping());
+    }
+
+    public function testRejectsQuoteCalculatedForDifferentPurchaseFacts(): void
+    {
+        $this->expectException(OrderDataException::class);
+        $this->create(
+            requiresShipping: true,
+            withShipping: true,
+            quantity: 2,
+        );
     }
 
     private function create(
         bool $requiresShipping,
         bool $withShipping = false,
+        int $quantity = 1,
     ): OrderCreationContext {
         $price = Money::of('16', 'EUR');
         $product = new Product(
-            request: new ProductRequest('product'),
+            request: new ProductRequest('product', $quantity),
             name: 'Product',
             requiresShipping: $requiresShipping,
             price: new Price($price),

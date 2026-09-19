@@ -9,10 +9,10 @@ use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\InitiatingShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
-use ProgrammatorDev\StripeCheckout\Order\Internal\InitiatingShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Product\Price;
@@ -37,10 +37,7 @@ final class InitiatingShippingSnapshotTest extends TestCase
         );
         $option = $snapshot->options()[0];
 
-        $this->assertSame('PT', $snapshot->shippingCountry());
         $this->assertSame(['PT'], $snapshot->allowedCountries());
-        $this->assertSame('pt', $snapshot->languageCode());
-        $this->assertSame('pt_PT', $snapshot->locale());
         $this->assertSame('EUR', $snapshot->currency());
         $this->assertCount(1, $snapshot->options());
         $this->assertSame('Expresso', $option->label());
@@ -59,10 +56,28 @@ final class InitiatingShippingSnapshotTest extends TestCase
             quote: $this->quote(),
         );
 
-        $this->assertNull($snapshot->shippingCountry());
         $this->assertSame(
             (new StripeShippingCountryRegistry())->codes(),
             $snapshot->allowedCountries(),
+        );
+    }
+
+    public function testQuoteFingerprintRetainsResolverLocaleCorrelation(): void
+    {
+        $portuguese = InitiatingShippingSnapshot::fromQuote(
+            checkout: $this->checkout(),
+            shipping: new ShippingContext('PT'),
+            quote: $this->quote(),
+        );
+        $english = InitiatingShippingSnapshot::fromQuote(
+            checkout: $this->checkout(locale: 'en_US'),
+            shipping: new ShippingContext('PT'),
+            quote: $this->quote(),
+        );
+
+        $this->assertNotSame(
+            $portuguese->quoteFingerprint(),
+            $english->quoteFingerprint(),
         );
     }
 
@@ -100,7 +115,7 @@ final class InitiatingShippingSnapshotTest extends TestCase
         );
     }
 
-    public function testOrderContextKeepsShippingEvidenceTransient(): void
+    public function testMatchesOnlyOrderBuiltFromQuotedCheckoutFacts(): void
     {
         $shippingSnapshot = InitiatingShippingSnapshot::fromQuote(
             checkout: $this->checkout(),
@@ -108,20 +123,19 @@ final class InitiatingShippingSnapshotTest extends TestCase
             quote: $this->quote(),
         );
         $physical = $this->orderLine(requiresShipping: true);
-        $digital = $this->orderLine(requiresShipping: false);
-        $physicalOrder = $this->order([$physical], $shippingSnapshot);
-        $digitalOrder = $this->order([$digital], null);
+        $differentQuantity = $this->orderLine(
+            requiresShipping: true,
+            quantity: 2,
+        );
 
-        $this->assertSame($shippingSnapshot, $physicalOrder->initiatingShipping());
-        $this->assertNull($digitalOrder->initiatingShipping());
-        $this->assertNull($this->order([$physical], null)->initiatingShipping());
-
-        $this->expectException(OrderDataException::class);
-        $this->order([$digital], $shippingSnapshot);
+        $this->assertTrue($shippingSnapshot->matches($this->order([$physical])));
+        $this->assertFalse($shippingSnapshot->matches($this->order([$differentQuantity])));
     }
 
-    private function checkout(bool $requiresShipping = true): CheckoutContext
-    {
+    private function checkout(
+        bool $requiresShipping = true,
+        string $locale = 'pt_PT',
+    ): CheckoutContext {
         $price = Money::of('16', 'EUR');
 
         return new CheckoutContext(
@@ -137,7 +151,7 @@ final class InitiatingShippingSnapshotTest extends TestCase
                 metadata: [],
             )],
             languageCode: 'pt',
-            locale: 'pt_PT',
+            locale: $locale,
             userUuid: null,
             checkoutSource: CheckoutSource::Direct,
             uiMode: UiMode::Hosted,
@@ -160,11 +174,13 @@ final class InitiatingShippingSnapshotTest extends TestCase
         )]);
     }
 
-    private function orderLine(bool $requiresShipping): OrderLineItemSnapshot
-    {
+    private function orderLine(
+        bool $requiresShipping,
+        int $quantity = 1,
+    ): OrderLineItemSnapshot {
         $price = Money::of('16', 'EUR');
         $product = new Product(
-            request: new ProductRequest('product'),
+            request: new ProductRequest('product', $quantity),
             name: 'Product',
             requiresShipping: $requiresShipping,
             price: new Price($price),
@@ -178,7 +194,6 @@ final class InitiatingShippingSnapshotTest extends TestCase
      */
     private function order(
         array $lineItems,
-        ?InitiatingShippingSnapshot $shipping,
     ): OrderCreationContext {
         return new OrderCreationContext(
             uuid: 'Abc123def456GHI7',
@@ -190,7 +205,6 @@ final class InitiatingShippingSnapshotTest extends TestCase
             uiMode: UiMode::Hosted,
             currency: 'EUR',
             lineItems: $lineItems,
-            initiatingShipping: $shipping,
         );
     }
 }

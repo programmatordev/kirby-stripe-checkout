@@ -31,7 +31,6 @@ use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
-use ProgrammatorDev\StripeCheckout\Test\Support\InitiatingShippingSnapshotFactory;
 use RuntimeException;
 use stdClass;
 
@@ -51,7 +50,6 @@ final class OrderValuesTest extends TestCase
         $this->assertSame('EUR', $context->currency());
         $this->assertSame('32.00', (string) $context->subtotal()->getAmount());
         $this->assertTrue($context->requiresShipping());
-        $this->assertSame('PT', $context->initiatingShipping()?->shippingCountry());
         $lineItems = $context->lineItems();
         $this->assertIsArray($lineItems[0]['options']);
         $this->assertIsArray($lineItems[0]['options'][0]);
@@ -778,15 +776,6 @@ final class OrderValuesTest extends TestCase
     private function context(?array $lineItems = null, CheckoutSource $checkoutSource = CheckoutSource::Cart, ?string $revision = 'revision', ?string $language = 'en', ?string $user = null): OrderCreationContext
     {
         $lineItems ??= [$this->lineItem()];
-        $requiresShipping = false;
-
-        foreach ($lineItems as $lineItem) {
-            if ($lineItem->toArray()['requiresShipping'] === true) {
-                $requiresShipping = true;
-
-                break;
-            }
-        }
 
         return new OrderCreationContext(
             uuid: 'Abc123def456GHI7',
@@ -798,11 +787,6 @@ final class OrderValuesTest extends TestCase
             uiMode: UiMode::Hosted,
             currency: 'EUR',
             lineItems: $lineItems,
-            initiatingShipping: $requiresShipping
-                ? InitiatingShippingSnapshotFactory::create(
-                    languageCode: $language === '' ? null : $language,
-                )
-                : null,
         );
     }
 

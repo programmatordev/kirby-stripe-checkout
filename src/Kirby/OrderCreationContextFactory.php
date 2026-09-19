@@ -6,15 +6,15 @@ namespace ProgrammatorDev\StripeCheckout\Kirby;
 
 use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\InitiatingShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
-use ProgrammatorDev\StripeCheckout\Order\Internal\InitiatingShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 
-/** Constructs order facts around an identity reserved before Checkout submission. */
+/** @internal Constructs order facts around an identity reserved before Checkout submission. */
 final class OrderCreationContextFactory
 {
     public function __construct(private readonly App $kirby) {}
@@ -47,12 +47,17 @@ final class OrderCreationContextFactory
             uiMode: $uiMode,
             currency: $currency,
             lineItems: $lineItems,
-            initiatingShipping: $initiatingShipping,
         );
 
-        // New shippable attempts must carry one already accepted quote. A
-        // rehydrated OrderCreationContext intentionally has no transient quote.
-        if ($context->requiresShipping() !== ($initiatingShipping !== null)) {
+        // The transient quote must have been calculated from the exact purchase
+        // facts that become this order; rehydrated orders bypass this factory.
+        if (
+            $context->requiresShipping() !== ($initiatingShipping !== null)
+            || $initiatingShipping !== null && (
+                $initiatingShipping->currency() !== $context->currency()
+                || $initiatingShipping->matches($context) === false
+            )
+        ) {
             throw new OrderDataException();
         }
 

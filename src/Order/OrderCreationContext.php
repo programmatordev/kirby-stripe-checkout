@@ -11,7 +11,6 @@ use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
-use ProgrammatorDev\StripeCheckout\Order\Internal\InitiatingShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 
@@ -42,7 +41,6 @@ final readonly class OrderCreationContext
         private UiMode $uiMode,
         private string $currency,
         array $lineItems,
-        private ?InitiatingShippingSnapshot $initiatingShipping = null,
     ) {
         // Snapshot the native content ID, not a live Page UUID object: its methods
         // can populate caches or generate missing IDs. Only the public reference
@@ -97,10 +95,6 @@ final readonly class OrderCreationContext
         $this->subtotal = $subtotal;
         $this->lineItems = $snapshots;
         $this->requiresShipping = $requiresShipping;
-
-        if ($initiatingShipping !== null && ($requiresShipping === false || $initiatingShipping->currency() !== $currency)) {
-            throw new OrderDataException();
-        }
     }
 
     /** Identifier to persist unchanged in the Page's native uuid field; not a UUID object. */
@@ -164,10 +158,5 @@ final readonly class OrderCreationContext
     public function requiresShipping(): bool
     {
         return $this->requiresShipping;
-    }
-
-    public function initiatingShipping(): ?InitiatingShippingSnapshot
-    {
-        return $this->initiatingShipping;
     }
 }

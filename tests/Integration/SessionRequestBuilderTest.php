@@ -19,7 +19,6 @@ use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
-use ProgrammatorDev\StripeCheckout\Test\Support\InitiatingShippingSnapshotFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 
 final class SessionRequestBuilderTest extends KirbyTestCase
@@ -542,9 +541,6 @@ final class SessionRequestBuilderTest extends KirbyTestCase
             uiMode: $uiMode,
             currency: 'EUR',
             lineItems: [$lineItem],
-            initiatingShipping: $lineItem->toArray()['requiresShipping']
-                ? InitiatingShippingSnapshotFactory::create(languageCode: $languageCode)
-                : null,
         );
     }
 

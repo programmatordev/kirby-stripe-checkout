@@ -8,8 +8,8 @@ use Brick\Money\Money;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\InitiatingShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
-use ProgrammatorDev\StripeCheckout\Order\Internal\InitiatingShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Shipping\DeliveryEstimate;
 use ProgrammatorDev\StripeCheckout\Shipping\DeliveryEstimateUnit;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
@@ -44,11 +44,19 @@ final class InitiatingShippingSnapshotFactory
             checkoutSource: CheckoutSource::Direct,
             uiMode: UiMode::Hosted,
         );
+
+        return self::fromCheckout($checkout, $shippingCountry);
+    }
+
+    public static function fromCheckout(
+        CheckoutContext $checkout,
+        ?string $shippingCountry = 'PT',
+    ): InitiatingShippingSnapshot {
         $shipping = new ShippingContext($shippingCountry);
         $quote = ShippingQuote::available([new ShippingOption(
             key: 'standard',
             label: 'Standard delivery',
-            amount: Money::of('5', $currency),
+            amount: Money::of('5', $checkout->currency()),
             deliveryEstimate: new DeliveryEstimate(
                 minimum: 2,
                 maximum: 4,

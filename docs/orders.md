@@ -115,6 +115,7 @@ Completing Checkout does not mean a delayed payment has succeeded. A refund also
 - `uiMode()` — the `UiMode` used for the attempt.
 - `currency()` — the store currency.
 - `subtotal()` — an exact Brick Money value.
+- `requiresShipping()` — whether at least one initiating line requires shipping.
 - `lineItems()` — the frozen initiating product, option, quantity and price facts.
 
 Each line retains its name, selected `options`, SKU, images and shipping requirement. `price` and `subtotal` are exact decimal strings; `currency` is uppercase. Stripe-backed lines also retain their Price reference and any supplied Product reference. The protected `providerAmounts` map retains Stripe's exact integer units. These are not always the same as a currency's ISO minor units.
