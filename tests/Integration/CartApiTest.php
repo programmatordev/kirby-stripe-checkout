@@ -29,7 +29,7 @@ use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingOption;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuoteStatus;
-use ProgrammatorDev\StripeCheckout\Shipping\StripeDestinationCountryRegistry;
+use ProgrammatorDev\StripeCheckout\Shipping\StripeShippingCountryRegistry;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
@@ -62,8 +62,8 @@ final class CartApiTest extends KirbyTestCase
         $this->assertFalse($cart->hasErrors());
         $this->assertSame('0.00', (string) $cart->subtotal()?->getAmount());
         $this->assertSame('EUR', $cart->currency()?->getCurrencyCode());
-        $this->assertNull($cart->destinationCountry());
-        $this->assertSame([], $cart->destinationCountries());
+        $this->assertNull($cart->shippingCountry());
+        $this->assertSame([], $cart->shippingCountryOptions());
         $this->assertNull($cart->shippingQuote());
     }
 
@@ -115,7 +115,7 @@ final class CartApiTest extends KirbyTestCase
             $cart = (new RuntimeFactory($this->kirby))->cart(resolve: false);
             $this->assertNotNull($cart);
             $this->assertSame($original->revision(), $cart->revision());
-            $this->assertNull($cart->destinationCountry());
+            $this->assertNull($cart->shippingCountry());
             $this->assertSame(0, $state->calls);
             $this->assertSame($expected, $read($cart));
             $this->assertSame(1, $state->calls);
@@ -156,7 +156,7 @@ final class CartApiTest extends KirbyTestCase
         $this->assertNull($cart->shippingQuote());
     }
 
-    public function testShippingQuoteProjectsBuiltInOptionsAndBlocksUnavailableDestinations(): void
+    public function testShippingQuoteProjectsBuiltInOptionsAndBlocksUnavailableCountries(): void
     {
         $this->restart(['programmatordev.stripe-checkout' => ['settings' => [
             'defaultRequiresShipping' => true,
@@ -180,12 +180,12 @@ final class CartApiTest extends KirbyTestCase
         $required = $cart->shippingQuote();
 
         $this->assertNotNull($required);
-        $this->assertSame(ShippingQuoteStatus::DestinationRequired, $required->status());
+        $this->assertSame(ShippingQuoteStatus::CountryRequired, $required->status());
         $this->assertSame([], $required->options());
-        $this->assertSame(['PT' => 'Portugal'], $cart->destinationCountries());
+        $this->assertSame(['PT' => 'Portugal'], $cart->shippingCountryOptions());
         $this->assertFalse($cart->hasErrors());
 
-        $cart->updateDestinationCountry('PT');
+        $cart->updateShippingCountry('PT');
         $available = $cart->shippingQuote();
         $this->assertNotNull($available);
         $this->assertSame(ShippingQuoteStatus::Available, $available->status());
@@ -199,7 +199,7 @@ final class CartApiTest extends KirbyTestCase
         $this->assertSame(2, $deliveryEstimate->minimum());
         $this->assertSame(4, $deliveryEstimate->maximum());
 
-        $cart->updateDestinationCountry('ES');
+        $cart->updateShippingCountry('ES');
         $unavailable = $cart->shippingQuote();
         $this->assertNotNull($unavailable);
         $this->assertSame(ShippingQuoteStatus::Unavailable, $unavailable->status());
@@ -209,7 +209,7 @@ final class CartApiTest extends KirbyTestCase
         $this->assertSame('16.00', (string) $cart->subtotal()?->getAmount());
     }
 
-    public function testFallbackZoneExposesEveryStripeDestinationCountry(): void
+    public function testFallbackZoneExposesEveryStripeShippingCountry(): void
     {
         $this->restart(['programmatordev.stripe-checkout' => ['settings' => [
             'defaultRequiresShipping' => true,
@@ -225,11 +225,11 @@ final class CartApiTest extends KirbyTestCase
             ]],
         ]]]);
         $cart = $this->cart()->add($this->product()->id());
-        $destinationCountries = $cart->destinationCountries();
+        $shippingCountryOptions = $cart->shippingCountryOptions();
 
-        $this->assertCount(count((new StripeDestinationCountryRegistry())->codes()), $destinationCountries);
-        $this->assertSame('Portugal', $destinationCountries['PT']);
-        $this->assertArrayHasKey('US', $destinationCountries);
+        $this->assertCount(count((new StripeShippingCountryRegistry())->codes()), $shippingCountryOptions);
+        $this->assertSame('Portugal', $shippingCountryOptions['PT']);
+        $this->assertArrayHasKey('US', $shippingCountryOptions);
         $this->assertSame(ShippingQuoteStatus::Available, $cart->shippingQuote()?->status());
     }
 
@@ -276,7 +276,7 @@ final class CartApiTest extends KirbyTestCase
         $cart = $this->cart()
             ->add('digital', 2)
             ->add('physical', 3)
-            ->updateDestinationCountry('PT');
+            ->updateShippingCountry('PT');
 
         $this->assertInstanceOf(CheckoutContext::class, $receivedCheckout);
         $this->assertSame(CheckoutSource::Cart, $receivedCheckout->checkoutSource());
@@ -291,10 +291,10 @@ final class CartApiTest extends KirbyTestCase
         $this->assertSame(['shippingClass' => 'physical'], $receivedCheckout->shippableItems()[0]->metadata());
         $this->assertSame('50.00', (string) $receivedCheckout->subtotal()->getAmount());
         $this->assertInstanceOf(ShippingContext::class, $receivedShipping);
-        $this->assertSame('PT', $receivedShipping->destinationCountry());
+        $this->assertSame('PT', $receivedShipping->shippingCountry());
         $this->assertCount(
-            count((new StripeDestinationCountryRegistry())->codes()),
-            $cart->destinationCountries(),
+            count((new StripeShippingCountryRegistry())->codes()),
+            $cart->shippingCountryOptions(),
         );
         $this->assertSame('stripe_default', $receivedShipping->taxBehavior()->value);
         $this->assertNull($receivedShipping->taxCode());
@@ -351,30 +351,30 @@ final class CartApiTest extends KirbyTestCase
         );
     }
 
-    public function testPhpDestinationCountryMutationRefreshesTheCartAndReportsSafeInputErrors(): void
+    public function testPhpShippingCountryMutationRefreshesTheCartAndReportsSafeInputErrors(): void
     {
         $cart = $this->cart();
         $initialRevision = $cart->revision();
-        $this->assertSame($cart, $cart->updateDestinationCountry('PT'));
-        $this->assertSame('PT', $cart->destinationCountry());
+        $this->assertSame($cart, $cart->updateShippingCountry('PT'));
+        $this->assertSame('PT', $cart->shippingCountry());
         $this->assertNotSame($initialRevision, $cart->revision());
 
         $revision = $cart->revision();
-        $cart->updateDestinationCountry('PT');
+        $cart->updateShippingCountry('PT');
         $this->assertSame($revision, $cart->revision());
 
         try {
-            $cart->updateDestinationCountry('pt');
-            $this->fail('Expected an invalid destination.');
+            $cart->updateShippingCountry('pt');
+            $this->fail('Expected an invalid shipping country.');
         } catch (CartException $error) {
-            $this->assertSame('shipping.destination_invalid', $error->errorCode());
-            $this->assertSame('Choose a supported destination country and try again.', $error->error()->message());
+            $this->assertSame('shipping.country_invalid', $error->errorCode());
+            $this->assertSame('Choose a supported shipping country and try again.', $error->error()->message());
         }
 
-        $this->assertSame('PT', $cart->destinationCountry());
-        $this->assertSame('PT', $this->cart()->destinationCountry());
-        $cart->updateDestinationCountry(null);
-        $this->assertNull($cart->destinationCountry());
+        $this->assertSame('PT', $cart->shippingCountry());
+        $this->assertSame('PT', $this->cart()->shippingCountry());
+        $cart->updateShippingCountry(null);
+        $this->assertNull($cart->shippingCountry());
     }
 
     public function testItemImageReturnsTheOriginalKirbyFileForTransforms(): void
@@ -674,7 +674,7 @@ final class CartApiTest extends KirbyTestCase
         $this->cart()->add($this->product()->id());
         $payload = $this->kirby->session()->data()->get(KirbySessionCartStore::KEY);
         $this->assertIsArray($payload);
-        $this->assertSame(['schema', 'id', 'revision', 'createdAt', 'updatedAt', 'destinationCountry', 'entries'], array_keys($payload));
+        $this->assertSame(['schema', 'id', 'revision', 'createdAt', 'updatedAt', 'shippingCountry', 'entries'], array_keys($payload));
         $this->assertStringNotContainsString('16.00', serialize($payload));
         $this->assertSame(['hello' => 'world'], $this->kirby->session()->data()->get('unrelated'));
     }
@@ -683,7 +683,7 @@ final class CartApiTest extends KirbyTestCase
     {
         $cart = $this->cart()
             ->add($this->product()->id(), 2)
-            ->updateDestinationCountry('PT');
+            ->updateShippingCountry('PT');
         $firstUser = $this->kirby->users()->create(['email' => 'first@example.test', 'role' => 'admin', 'password' => 'test-password-123']);
         $secondUser = $this->kirby->users()->create(['email' => 'second@example.test', 'role' => 'admin', 'password' => 'test-password-456']);
         $this->kirby->impersonate(null);
@@ -693,7 +693,7 @@ final class CartApiTest extends KirbyTestCase
         $this->assertNotSame($token, $session->token());
         $this->assertSame($cart->revision(), $this->cart()->revision());
         $this->assertSame(2, $this->cart()->totalQuantity());
-        $this->assertSame('PT', $this->cart()->destinationCountry());
+        $this->assertSame('PT', $this->cart()->shippingCountry());
         $token = $session->token();
         $firstUser->logout();
         $this->assertNotSame($token, $session->token());
@@ -701,7 +701,7 @@ final class CartApiTest extends KirbyTestCase
         $secondUser->loginPasswordless();
         $this->assertSame($cart->revision(), $this->cart()->revision());
         $this->assertSame($cart->items()[0]->id(), $this->cart()->items()[0]->id());
-        $this->assertSame('PT', $this->cart()->destinationCountry());
+        $this->assertSame('PT', $this->cart()->shippingCountry());
         $this->assertSame(300, $session->timeout());
     }
 

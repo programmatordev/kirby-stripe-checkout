@@ -44,13 +44,13 @@ final class CartSnapshotTest extends TestCase
         new CartSnapshot('cart', 'revision', [], 100, 99);
     }
 
-    public function testDestinationCountryMustBeAnUppercaseCountryCode(): void
+    public function testShippingCountryMustBeAnUppercaseCountryCode(): void
     {
         $this->expectException(InvalidArgumentException::class);
         new CartSnapshot('cart', 'revision', [], 100, 100, 'pt');
     }
 
-    public function testClearResetsReservedDestinationWithoutResolvingAndPreservesClockOrder(): void
+    public function testClearResetsReservedShippingCountryWithoutResolvingAndPreservesClockOrder(): void
     {
         $store = new InMemoryCartStore(new CartSnapshot('cart', 'revision', [], 100, 200, 'PT'));
         $mutator = new CartMutator(
@@ -62,7 +62,7 @@ final class CartSnapshotTest extends TestCase
         );
         $cleared = $mutator->clear('revision');
 
-        $this->assertNull($cleared->destinationCountry());
+        $this->assertNull($cleared->shippingCountry());
         $this->assertSame('cart', $cleared->id());
         $this->assertSame('new-revision', $cleared->revision());
         $this->assertSame(200, $cleared->updatedAt());

@@ -2,21 +2,21 @@
 
 Shipping is Kirby-owned. The built-in resolver uses the ordered zones and fixed whole-order options configured in the Stripe Checkout Settings Page. A project can replace that calculation with one PHP resolver for product-specific rules, free-shipping thresholds, pickup labels, carrier APIs, or other store policy.
 
-The quote engine and resolver contract power the [PHP Cart shipping preview](cart.md#preview-shipping), JSON Cart responses, and project-owned HTML Cart renderers. A destination can be retained through the [PHP Cart API](cart.md#set-the-shipping-destination) or the revision-safe [Cart HTTP route](cart-http.md#preview-shipping-for-a-destination). Checkout Session shipping mapping is not implemented yet.
+The quote engine and resolver contract power the [PHP Cart shipping preview](cart.md#preview-shipping), JSON Cart responses, and project-owned HTML Cart renderers. A shipping country can be retained through the [PHP Cart API](cart.md#set-the-shipping-country) or the revision-safe [Cart HTTP route](cart-http.md#preview-shipping-for-a-country). Checkout Session shipping mapping is not implemented yet.
 
 ## Built-in resolution
 
-Every shipping destination resolves to one zone:
+Every shipping country resolves to one zone:
 
-- an explicit zone containing the destination country wins;
+- an explicit zone containing the shipping country wins;
 - otherwise the optional rest-of-world fallback applies;
 - without either match, shipping is unavailable.
 
-Options from different zones are never combined. Before a destination is known, the resolver can return options only when a fallback is the sole configured zone and therefore applies everywhere. Otherwise it reports that a destination is required. An empty shipping configuration is unavailable rather than implicitly free.
+Options from different zones are never combined. Before a shipping country is known, the resolver can return options only when a fallback is the sole configured zone and therefore applies everywhere. Otherwise it reports that a country is required. An empty shipping configuration is unavailable rather than implicitly free.
 
 Digital-only orders do not produce a shipping quote and never call a custom resolver. Mixed orders provide every line to the resolver and identify the subset that requires shipping.
 
-For a shippable Cart, `destinationCountries()` exposes localized country choices for the storefront. Explicit built-in zones narrow the choices to their configured countries. A rest-of-world fallback, or a custom resolver whose eligibility cannot be inferred from settings, exposes every Stripe-supported destination and leaves the final availability decision to quote resolution.
+For a shippable Cart, `shippingCountryOptions()` exposes localized country choices for the storefront. Explicit built-in zones narrow the choices to their configured countries. A rest-of-world fallback, or a custom resolver whose eligibility cannot be inferred from settings, exposes every Stripe-supported shipping country and leaves the final availability decision to quote resolution.
 
 ## Replacing the resolver
 
@@ -38,8 +38,8 @@ return [
                 CheckoutContext $checkout,
                 ShippingContext $shipping,
             ): ShippingQuote {
-                if ($shipping->destinationCountry() === null) {
-                    return ShippingQuote::destinationRequired();
+                if ($shipping->shippingCountry() === null) {
+                    return ShippingQuote::countryRequired();
                 }
 
                 if ($checkout->subtotal()->isGreaterThanOrEqualTo(Money::of('75.00', $checkout->currency()))) {
@@ -83,7 +83,7 @@ The resolver receives two immutable contexts with separate responsibilities.
 
 `ShippingContext` contains the shipping policy inputs:
 
-- `destinationCountry()` returns the validated quote destination, when known;
+- `shippingCountry()` returns the validated shipping country, when known;
 - `taxBehavior()` and `taxCode()` provide the effective shipping tax defaults for new options.
 
 Each line item exposes `productReference()`, nullable `variantId()` and `sku()`, `quantity()`, effective `price()`, calculated `subtotal()`, `requiresShipping()`, selected `options()`, and safe project `metadata()`.
@@ -134,7 +134,7 @@ A resolver returns exactly one outcome:
 
 ```php
 ShippingQuote::available([$standard, $express]);
-ShippingQuote::destinationRequired();
+ShippingQuote::countryRequired();
 ShippingQuote::unavailable();
 ShippingQuote::unavailable('shipping.carrier_unavailable');
 ```
@@ -143,7 +143,7 @@ Available quotes require one through five ordered options. Keys and labels must 
 
 Reason codes are safe, language-neutral strings in the `shipping.*` namespace. Return a specific code when the storefront needs to distinguish a known unavailable condition. Do not put carrier messages, addresses, credentials, or other private data in a reason code.
 
-`$cart->shippingQuote()` returns these same immutable outcomes after rebuilding trusted Checkout and shipping contexts from the current Cart. Empty and digital-only carts return `null`. A destination-required outcome is informational; an unavailable outcome blocks Checkout. Shipping-resolution failures add one generic translated Cart error, while an existing product or configuration error is not duplicated. Resolver-specific reason codes remain on the quote for project logic without exposing exception messages.
+`$cart->shippingQuote()` returns these same immutable outcomes after rebuilding trusted Checkout and shipping contexts from the current Cart. Empty and digital-only carts return `null`. A country-required outcome is informational; an unavailable outcome blocks Checkout. Shipping-resolution failures add one generic translated Cart error, while an existing product or configuration error is not duplicated. Resolver-specific reason codes remain on the quote for project logic without exposing exception messages.
 
 The available options are preview information rather than Cart selection state. Stripe owns the final selection in Checkout and preselects the first ordered option. Checkout creation resolves the quote again from fresh product and configuration data.
 

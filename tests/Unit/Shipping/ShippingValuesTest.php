@@ -15,7 +15,7 @@ use ProgrammatorDev\StripeCheckout\Shipping\ShippingOption;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingTaxCode;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingZone;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingZoneScope;
-use ProgrammatorDev\StripeCheckout\Shipping\StripeDestinationCountryRegistry;
+use ProgrammatorDev\StripeCheckout\Shipping\StripeShippingCountryRegistry;
 use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 
 final class ShippingValuesTest extends TestCase
@@ -63,9 +63,9 @@ final class ShippingValuesTest extends TestCase
         $this->assertSame('txcd_00000000', ShippingTaxCode::Nontaxable->taxCode());
     }
 
-    public function testDestinationCountriesFollowTheCheckoutEnum(): void
+    public function testShippingCountryRegistryFollowsTheCheckoutEnum(): void
     {
-        $countries = new StripeDestinationCountryRegistry();
+        $countries = new StripeShippingCountryRegistry();
 
         $this->assertTrue($countries->supports('PT'));
         $this->assertTrue($countries->supports('AC'));

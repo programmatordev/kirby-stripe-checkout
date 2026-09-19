@@ -120,32 +120,32 @@ final class CartMutatorTest extends TestCase
         $this->assertNotSame($added->revision(), $updated->revision());
     }
 
-    public function testDestinationCountryChangesPreserveEntriesAndAreRevisionSafe(): void
+    public function testShippingCountryChangesPreserveEntriesAndAreRevisionSafe(): void
     {
         $added = $this->cart->add(new ProductRequest('shirt'));
-        $portugal = $this->cart->updateDestinationCountry('PT', $added->revision());
+        $portugal = $this->cart->updateShippingCountry('PT', $added->revision());
 
-        $this->assertSame('PT', $portugal->destinationCountry());
+        $this->assertSame('PT', $portugal->shippingCountry());
         $this->assertSame($added->entries(), $portugal->entries());
         $this->assertNotSame($added->revision(), $portugal->revision());
-        $this->assertSame($portugal, $this->cart->updateDestinationCountry('PT', $portugal->revision()));
+        $this->assertSame($portugal, $this->cart->updateShippingCountry('PT', $portugal->revision()));
 
         foreach (['pt', 'PT ', '', 'XX'] as $country) {
             try {
-                $this->cart->updateDestinationCountry($country, $portugal->revision());
-                $this->fail('Expected an invalid destination rejection.');
+                $this->cart->updateShippingCountry($country, $portugal->revision());
+                $this->fail('Expected an invalid shipping-country rejection.');
             } catch (CheckoutInputException $error) {
-                $this->assertSame(ShippingErrorCode::DESTINATION_INVALID, $error->errorCode());
+                $this->assertSame(ShippingErrorCode::COUNTRY_INVALID, $error->errorCode());
             }
 
             $this->assertSame($portugal, $this->store->read());
         }
 
-        $cleared = $this->cart->updateDestinationCountry(null, $portugal->revision());
-        $this->assertNull($cleared->destinationCountry());
+        $cleared = $this->cart->updateShippingCountry(null, $portugal->revision());
+        $this->assertNull($cleared->shippingCountry());
         $this->assertSame($portugal->entries(), $cleared->entries());
         $this->assertNotSame($portugal->revision(), $cleared->revision());
-        $this->assertSame($cleared, $this->cart->updateDestinationCountry(null, $cleared->revision()));
+        $this->assertSame($cleared, $this->cart->updateShippingCountry(null, $cleared->revision()));
     }
 
     #[DataProvider('revisionOperations')]
@@ -160,7 +160,7 @@ final class CartMutatorTest extends TestCase
                 match ($operation) {
                     'update' => $this->cart->update($id, 2, $revision),
                     'remove' => $this->cart->remove($id, $revision),
-                    'destinationCountry' => $this->cart->updateDestinationCountry('PT', $revision),
+                    'shippingCountry' => $this->cart->updateShippingCountry('PT', $revision),
                     default => $this->cart->clear($revision),
                 };
                 $this->fail('Expected a revision rejection.');
@@ -179,7 +179,7 @@ final class CartMutatorTest extends TestCase
     /** @return iterable<string, array{string}> */
     public static function revisionOperations(): iterable
     {
-        foreach (['update', 'remove', 'destinationCountry', 'clear'] as $operation) {
+        foreach (['update', 'remove', 'shippingCountry', 'clear'] as $operation) {
             yield $operation => [$operation];
         }
     }

@@ -166,7 +166,7 @@ The plugin never calculates VAT percentages or changes tax registrations. Your S
 
 Shipping is Kirby-owned. Add zones in the Settings tab, then add the ordered fixed options available in each zone. The same complete zone list can be locked through PHP.
 
-An explicit zone owns a non-empty list chosen from the destinations supported by Stripe Checkout. A single optional fallback zone represents every supported country that is not assigned to an explicit zone. When no explicit zones exist, that fallback effectively covers every destination. Countries cannot appear in more than one explicit zone.
+An explicit zone owns a non-empty list chosen from the shipping countries supported by Stripe Checkout. A single optional fallback zone represents every supported country that is not assigned to an explicit zone. When no explicit zones exist, that fallback effectively covers every shipping country. Countries cannot appear in more than one explicit zone.
 
 Each option applies to the complete order and contains:
 
@@ -176,15 +176,15 @@ Each option applies to the complete order and contains:
 
 The Panel generates an immutable internal key for each option. PHP-configured options supply their own stable lowercase `key`, which is exposed through the public shipping API and must remain unchanged after orders begin referring to it.
 
-Every destination resolves to exactly one zone, so options never combine across zones. A zone requires one through five options because Stripe Checkout accepts at most five. Option keys are unique across the complete store configuration, and customer-facing labels are distinct inside their zone. Invalid configuration is rejected rather than truncated.
+Every shipping country resolves to exactly one zone, so options never combine across zones. A zone requires one through five options because Stripe Checkout accepts at most five. Option keys are unique across the complete store configuration, and customer-facing labels are distinct inside their zone. Invalid configuration is rejected rather than truncated.
 
 When configuring shipping in PHP, write amounts as exact decimal strings such as `'4.90'`. Binary floating-point values are rejected to avoid storing rounded money.
 
-The global `shippingTaxBehavior` values match the normal tax-inclusion choices. `shippingTaxCode` accepts `stripe_default`, `shipping`, or `nontaxable`. These values are retained but dormant while Automatic Tax is disabled. They classify the shipping charge for Stripe; the plugin does not calculate a shipping VAT percentage. Confirm before choosing `nontaxable`, as the correct treatment depends on the store and destination.
+The global `shippingTaxBehavior` values match the normal tax-inclusion choices. `shippingTaxCode` accepts `stripe_default`, `shipping`, or `nontaxable`. These values are retained but dormant while Automatic Tax is disabled. They classify the shipping charge for Stripe; the plugin does not calculate a shipping VAT percentage. Confirm before choosing `nontaxable`, as the correct treatment depends on the store and shipping country.
 
 PHP options can add localized labels with a `labels` map and can override `taxBehavior` or an exact `taxCode` per option. In the Panel, the default language owns zones, countries, option membership/order, and technical values. Other languages can translate only customer-facing option labels; stable internal IDs keep both nested levels synchronized. Existing reusable Stripe Shipping Rate IDs are deliberately not accepted: later Checkout mapping will create inline, checkout-specific backing Rates.
 
-The current package resolves and validates this configuration, implements the built-in quote engine, and exposes destination-aware Cart quote previews to PHP, JSON, and project-owned HTML renderers. See [Shipping quotes](shipping.md) for destination behavior and the PHP replacement resolver. The Cart destination can also be changed through the revision-safe [HTTP route](cart-http.md#preview-shipping-for-a-destination). Checkout Session shipping mapping is not implemented yet.
+The current package resolves and validates this configuration, implements the built-in quote engine, and exposes shipping-country-aware Cart quote previews to PHP, JSON, and project-owned HTML renderers. See [Shipping quotes](shipping.md) for country behavior and the PHP replacement resolver. The Cart shipping country can also be changed through the revision-safe [HTTP route](cart-http.md#preview-shipping-for-a-country). Checkout Session shipping mapping is not implemented yet.
 
 ## Reading effective settings
 

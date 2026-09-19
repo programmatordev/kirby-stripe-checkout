@@ -8,7 +8,7 @@ $endpoint = $site->url() . '/stripe-checkout/cart';
 $error = isset($context) ? $context->error() : null;
 $checkout = $site->stripeCheckout();
 $shippingQuote = $cart?->shippingQuote();
-$destinationCountries = $cart?->destinationCountries() ?? [];
+$shippingCountryOptions = $cart?->shippingCountryOptions() ?? [];
 ?>
 <details class="cart-panel" data-cart-view data-cart-url="<?= esc($endpoint, 'attr') ?>" open>
     <summary>
@@ -77,24 +77,24 @@ $destinationCountries = $cart?->destinationCountries() ?? [];
             <?php if ($shippingQuote !== null): ?>
                 <section class="cart-shipping" aria-labelledby="cart-shipping-title">
                     <h3 id="cart-shipping-title">Shipping preview</h3>
-                    <form action="<?= esc($endpoint, 'attr') ?>" method="post" data-cart-method="PATCH" data-cart-success="Shipping destination updated.">
+                    <form action="<?= esc($endpoint, 'attr') ?>" method="post" data-cart-method="PATCH" data-cart-success="Shipping country updated.">
                         <fieldset>
                             <input type="hidden" name="csrf" value="<?= esc(csrf(), 'attr') ?>">
                             <input type="hidden" name="revision" value="<?= esc($cart->revision(), 'attr') ?>">
                             <label>
-                                Destination country
-                                <select name="destinationCountry">
+                                Shipping country
+                                <select name="shippingCountry">
                                     <option value="">Choose a country</option>
-                                    <?php foreach ($destinationCountries as $country => $name): ?>
-                                        <option value="<?= esc($country, 'attr') ?>"<?= $cart->destinationCountry() === $country ? ' selected' : '' ?>><?= esc($name) ?></option>
+                                    <?php foreach ($shippingCountryOptions as $country => $name): ?>
+                                        <option value="<?= esc($country, 'attr') ?>"<?= $cart->shippingCountry() === $country ? ' selected' : '' ?>><?= esc($name) ?></option>
                                     <?php endforeach ?>
                                 </select>
                             </label>
                             <button type="submit">Update shipping</button>
                         </fieldset>
                     </form>
-                    <?php if ($shippingQuote->status() === ProgrammatorDev\StripeCheckout\Shipping\ShippingQuoteStatus::DestinationRequired): ?>
-                        <p class="cart-note">Choose a destination to preview the available shipping options.</p>
+                    <?php if ($shippingQuote->status() === ProgrammatorDev\StripeCheckout\Shipping\ShippingQuoteStatus::CountryRequired): ?>
+                        <p class="cart-note">Choose a shipping country to preview the available options.</p>
                     <?php elseif ($shippingQuote->status() === ProgrammatorDev\StripeCheckout\Shipping\ShippingQuoteStatus::Available): ?>
                         <ul class="cart-shipping-options">
                             <?php foreach ($shippingQuote->options() as $shippingOption): ?>

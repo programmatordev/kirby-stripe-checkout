@@ -26,7 +26,7 @@ final readonly class CartSnapshot
         array $entries,
         private int $createdAt,
         private int $updatedAt,
-        private ?string $destinationCountry = null,
+        private ?string $shippingCountry = null,
     ) {
         ProductData::identifier($id);
         ProductData::identifier($revision);
@@ -38,7 +38,7 @@ final readonly class CartSnapshot
             || count($entries) > ProductRequestNormalizer::MAX_ENTRIES
             || $createdAt < 0
             || $updatedAt < $createdAt
-            || ($destinationCountry !== null && preg_match('/\A[A-Z]{2}\z/D', $destinationCountry) !== 1)
+            || ($shippingCountry !== null && preg_match('/\A[A-Z]{2}\z/D', $shippingCountry) !== 1)
         ) {
             throw new InvalidArgumentException('Invalid cart snapshot.');
         }
@@ -89,8 +89,8 @@ final readonly class CartSnapshot
         return $this->updatedAt;
     }
 
-    public function destinationCountry(): ?string
+    public function shippingCountry(): ?string
     {
-        return $this->destinationCountry;
+        return $this->shippingCountry;
     }
 }

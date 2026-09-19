@@ -44,7 +44,7 @@ final class SettingsBlueprint
         // The provider registry and active Panel locale make these options
         // runtime data; the YAML blueprint supplies only their static field.
         $settingsFields['currency']['options'] = self::currencyOptions();
-        $settingsFields['shippingZones']['countryOptions'] = (new DestinationCountryOptions())->all();
+        $settingsFields['shippingZones']['countryOptions'] = (new ShippingCountryOptions())->all();
 
         // Use the same defaults for native Page creation and runtime fallbacks.
         foreach (Defaults::SETTINGS as $name => $default) {

@@ -14,19 +14,19 @@ use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuoteStatus;
 
 final class ShippingQuoteTest extends TestCase
 {
-    public function testCreatesAvailableDestinationRequiredAndUnavailableQuotes(): void
+    public function testCreatesAvailableCountryRequiredAndUnavailableQuotes(): void
     {
         $option = self::option();
         $available = ShippingQuote::available([$option]);
-        $destinationRequired = ShippingQuote::destinationRequired();
+        $countryRequired = ShippingQuote::countryRequired();
         $unavailable = ShippingQuote::unavailable('shipping.carrier_unavailable');
 
         $this->assertSame(ShippingQuoteStatus::Available, $available->status());
         $this->assertSame([$option], $available->options());
         $this->assertNull($available->reasonCode());
-        $this->assertSame(ShippingQuoteStatus::DestinationRequired, $destinationRequired->status());
-        $this->assertSame(ShippingErrorCode::DESTINATION_REQUIRED, $destinationRequired->reasonCode());
-        $this->assertSame([], $destinationRequired->options());
+        $this->assertSame(ShippingQuoteStatus::CountryRequired, $countryRequired->status());
+        $this->assertSame(ShippingErrorCode::COUNTRY_REQUIRED, $countryRequired->reasonCode());
+        $this->assertSame([], $countryRequired->options());
         $this->assertSame(ShippingQuoteStatus::Unavailable, $unavailable->status());
         $this->assertSame('shipping.carrier_unavailable', $unavailable->reasonCode());
     }

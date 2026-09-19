@@ -9,7 +9,7 @@ enum CartOperation: string
     case Read = 'read';
     case AddItem = 'add_item';
     case UpdateItem = 'update_item';
-    case UpdateDestinationCountry = 'update_destination_country';
+    case UpdateShippingCountry = 'update_shipping_country';
     case RemoveItem = 'remove_item';
     case Clear = 'clear';
 }

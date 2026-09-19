@@ -20,7 +20,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Exception\MoneyException;
-use ProgrammatorDev\StripeCheckout\Kirby\DestinationCountryOptions;
+use ProgrammatorDev\StripeCheckout\Kirby\ShippingCountryOptions;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
@@ -52,7 +52,7 @@ final class CartViewFactory
                 currency: null,
                 subtotal: null,
                 shippingQuote: null,
-                destinationCountries: [],
+                shippingCountryOptions: [],
                 errors: [],
                 mutator: $mutator,
                 views: $this,
@@ -64,7 +64,7 @@ final class CartViewFactory
         $currency = null;
         $subtotal = null;
         $shippingQuote = null;
-        $destinationCountries = [];
+        $shippingCountryOptions = [];
         $errors = [];
         $items = [];
         $checkoutItems = [];
@@ -155,8 +155,8 @@ final class CartViewFactory
                 );
 
                 if ($checkoutContext->shippableItems() !== []) {
-                    $destinationCountries = (new DestinationCountryOptions())->forCodes(
-                        $runtime->destinationCountryCodes(),
+                    $shippingCountryOptions = (new ShippingCountryOptions())->forCodes(
+                        $runtime->shippingCountryCodes(),
                     );
                 }
 
@@ -188,7 +188,7 @@ final class CartViewFactory
             currency: $currency,
             subtotal: $resolvedSubtotal,
             shippingQuote: $shippingQuote,
-            destinationCountries: $destinationCountries,
+            shippingCountryOptions: $shippingCountryOptions,
             errors: $errors,
             mutator: $mutator,
             views: $this,
@@ -206,7 +206,7 @@ final class CartViewFactory
         return $runtime->resolveShippingQuote(
             $checkoutContext,
             new ShippingContext(
-                destinationCountry: $snapshot->destinationCountry(),
+                shippingCountry: $snapshot->shippingCountry(),
                 taxBehavior: $automaticTax
                     ? $settings->shippingTaxBehavior()
                     : TaxBehavior::StripeDefault,
@@ -228,7 +228,7 @@ final class CartViewFactory
             $error instanceof CheckoutInputException => match ($error->errorCode()) {
                 SelectionErrorCode::QUANTITY_INVALID => CartErrorCode::QUANTITY_INVALID,
                 SelectionErrorCode::LINE_LIMIT_EXCEEDED => CartErrorCode::LINE_LIMIT_EXCEEDED,
-                ShippingErrorCode::DESTINATION_INVALID => ShippingErrorCode::DESTINATION_INVALID,
+                ShippingErrorCode::COUNTRY_INVALID => ShippingErrorCode::COUNTRY_INVALID,
                 default => CartErrorCode::SELECTION_INVALID,
             },
             $error instanceof CartMutationException && $error->errorCode() === CartErrorCode::REVISION_CONFLICT => CartErrorCode::REVISION_CONFLICT,

@@ -41,29 +41,29 @@ Adding the same product and options again increases the existing quantity. Diffe
 
 Each successful mutation refreshes the same Cart object and returns it. Existing CartItem objects remain immutable. Call `$site->stripeCheckout()->cart()` again to read changes made elsewhere or to re-resolve product data without changing selections.
 
-## Set the shipping destination
+## Set the shipping country
 
-The cart can retain a destination country before Checkout so the shipping flow can resolve the applicable options. Pass an uppercase country code supported by Stripe Checkout, or `null` to clear it:
+The cart can retain a shipping country before Checkout so the shipping flow can resolve the applicable options. Pass an uppercase country code supported by Stripe Checkout, or `null` to clear it:
 
 ```php
 <?php
 
 /** @var ProgrammatorDev\StripeCheckout\Cart\Cart $cart */
-$countries = $cart->destinationCountries(); // ['PT' => 'Portugal', ...]
-$cart->updateDestinationCountry('PT');
-$cart->destinationCountry(); // 'PT'
+$countries = $cart->shippingCountryOptions(); // ['PT' => 'Portugal', ...]
+$cart->updateShippingCountry('PT');
+$cart->shippingCountry(); // 'PT'
 
-$cart->updateDestinationCountry(null);
+$cart->updateShippingCountry(null);
 ```
 
-This country is bounded quote input, not a saved address. Stripe Checkout still collects the authoritative shipping address. Updating the destination uses the same revision protection as item updates; setting the current value again is a no-op and keeps the revision unchanged.
+This country is bounded quote input, not a saved address. Stripe Checkout still collects the authoritative shipping address. Updating the shipping country uses the same revision protection as item updates; setting the current value again is a no-op and keeps the revision unchanged.
 
-`destinationCountries()` returns localized `code => name` choices for the current Cart. It is empty for an empty or digital-only Cart. With built-in shipping, explicit zones limit the list to their configured countries, while a rest-of-world fallback exposes every Stripe-supported destination. With a custom resolver, the list also contains every Stripe-supported destination because only the resolver can decide whether the customer's selected country is eligible.
+`shippingCountryOptions()` returns localized `code => name` choices for the current Cart. It is empty for an empty or digital-only Cart. With built-in shipping, explicit zones limit the list to their configured countries, while a rest-of-world fallback exposes every Stripe-supported shipping country. With a custom resolver, the list also contains every Stripe-supported shipping country because only the resolver can decide whether the customer's selected country is eligible.
 
 ```php
-<select name="destinationCountry">
-    <?php foreach ($cart->destinationCountries() as $code => $name): ?>
-        <option value="<?= esc($code, 'attr') ?>"<?= $cart->destinationCountry() === $code ? ' selected' : '' ?>>
+<select name="shippingCountry">
+    <?php foreach ($cart->shippingCountryOptions() as $code => $name): ?>
+        <option value="<?= esc($code, 'attr') ?>"<?= $cart->shippingCountry() === $code ? ' selected' : '' ?>>
             <?= esc($name) ?>
         </option>
     <?php endforeach ?>
@@ -72,7 +72,7 @@ This country is bounded quote input, not a saved address. Stripe Checkout still 
 
 ## Preview shipping
 
-`shippingQuote()` resolves the current products, destination, language, user, and shipping configuration together:
+`shippingQuote()` resolves the current products, shipping country, language, user, and shipping configuration together:
 
 ```php
 <?php
@@ -94,12 +94,12 @@ The result is:
 
 - `null` for an empty or entirely digital cart;
 - `available` with one to five ordered options;
-- `destination_required` when the customer needs to choose a country first; or
+- `country_required` when the customer needs to choose a shipping country first; or
 - `unavailable` with a safe `shipping.*` reason code.
 
 Quote options are an optional preview of what Checkout will offer. They are not selectable Cart state: Stripe preselects the first supplied option and owns the customer's final choice. Checkout creation will resolve products and shipping again rather than trusting a previously displayed quote.
 
-Each available `ShippingOption` exposes `key()`, `label()`, exact `amount()`, optional `deliveryEstimate()`, `taxBehavior()` and `taxCode()`. A destination-required quote is not a Cart error. An unavailable quote is blocking. Shipping-resolution failures add the translated `shipping.unavailable` Cart error, while leaving a valid merchandise `subtotal()` readable; an existing product or configuration error is not duplicated as a shipping error.
+Each available `ShippingOption` exposes `key()`, `label()`, exact `amount()`, optional `deliveryEstimate()`, `taxBehavior()` and `taxCode()`. A country-required quote is not a Cart error. An unavailable quote is blocking. Shipping-resolution failures add the translated `shipping.unavailable` Cart error, while leaving a valid merchandise `subtotal()` readable; an existing product or configuration error is not duplicated as a shipping error.
 
 ## Read the cart
 
@@ -172,7 +172,7 @@ An item that becomes unavailable stays visible with `hasErrors()` and `errors()`
 
 ## Revisions and rejected changes
 
-Item updates, removals, destination changes, and clearing use the Cart object's current `revision()` by default. Adding is relative and always applies to the latest stored cart.
+Item updates, removals, shipping-country changes, and clearing use the Cart object's current `revision()` by default. Adding is relative and always applies to the latest stored cart.
 
 For forms or other requests, include the revision displayed with the cart and pass it explicitly. Reading a new Cart on submission and using its default revision would lose protection against changes made in another browser tab.
 

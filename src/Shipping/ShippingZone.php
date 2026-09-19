@@ -7,7 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Shipping;
 use InvalidArgumentException;
 use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 
-/** Groups fixed shipping options for one explicit or fallback destination zone. */
+/** Groups fixed shipping options for one explicit-country or fallback zone. */
 final readonly class ShippingZone
 {
     /** @var list<string> */
@@ -40,7 +40,7 @@ final readonly class ShippingZone
         }
 
         $normalizedCountries = [];
-        $countryRegistry = new StripeDestinationCountryRegistry();
+        $countryRegistry = new StripeShippingCountryRegistry();
 
         foreach ($countries as $country) {
             if (

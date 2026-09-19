@@ -42,10 +42,10 @@ final readonly class ShippingQuote
         return new self(ShippingQuoteStatus::Available, $options, null);
     }
 
-    public static function destinationRequired(
-        string $reasonCode = ShippingErrorCode::DESTINATION_REQUIRED,
+    public static function countryRequired(
+        string $reasonCode = ShippingErrorCode::COUNTRY_REQUIRED,
     ): self {
-        return new self(ShippingQuoteStatus::DestinationRequired, [], $reasonCode);
+        return new self(ShippingQuoteStatus::CountryRequired, [], $reasonCode);
     }
 
     public static function unavailable(

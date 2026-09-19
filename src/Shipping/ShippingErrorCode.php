@@ -9,9 +9,9 @@ final class ShippingErrorCode
 {
     public const CURRENCY_MISMATCH = 'shipping.currency_mismatch';
 
-    public const DESTINATION_INVALID = 'shipping.destination_invalid';
+    public const COUNTRY_INVALID = 'shipping.country_invalid';
 
-    public const DESTINATION_REQUIRED = 'shipping.destination_required';
+    public const COUNTRY_REQUIRED = 'shipping.country_required';
 
     public const FILTER_FAILED = 'shipping.filter_failed';
 

@@ -65,8 +65,8 @@ final class CartEndpoint
                 CartOperation::Read => $cart,
                 CartOperation::AddItem => $cart->add($input['reference'] ?? '', $input['quantity'] ?? 1, $input['options'] ?? []),
                 CartOperation::UpdateItem => $cart->update($itemId ?? '', $input['quantity'] ?? 0, $input['revision'] ?? ''),
-                CartOperation::UpdateDestinationCountry => $cart->updateDestinationCountry(
-                    $input['destinationCountry'] ?? null,
+                CartOperation::UpdateShippingCountry => $cart->updateShippingCountry(
+                    $input['shippingCountry'] ?? null,
                     $input['revision'] ?? '',
                 ),
                 CartOperation::RemoveItem => $cart->remove($itemId ?? '', $input['revision'] ?? ''),

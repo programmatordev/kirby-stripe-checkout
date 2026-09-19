@@ -8,6 +8,6 @@ namespace ProgrammatorDev\StripeCheckout\Shipping;
 enum ShippingQuoteStatus: string
 {
     case Available = 'available';
-    case DestinationRequired = 'destination_required';
+    case CountryRequired = 'country_required';
     case Unavailable = 'unavailable';
 }

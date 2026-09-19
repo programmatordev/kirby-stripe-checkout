@@ -13,7 +13,7 @@ use ProgrammatorDev\StripeCheckout\Shipping\Exception\InvalidShippingOptionExcep
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingOption;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingZone;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingZoneScope;
-use ProgrammatorDev\StripeCheckout\Shipping\StripeDestinationCountryRegistry;
+use ProgrammatorDev\StripeCheckout\Shipping\StripeShippingCountryRegistry;
 use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 use Throwable;
@@ -356,7 +356,7 @@ final class ShippingZoneFactory
         }
 
         $normalized = [];
-        $countryRegistry = new StripeDestinationCountryRegistry();
+        $countryRegistry = new StripeShippingCountryRegistry();
 
         foreach ($countries as $index => $country) {
             if (is_string($country) === false) {

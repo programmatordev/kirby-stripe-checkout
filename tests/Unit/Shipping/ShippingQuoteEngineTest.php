@@ -35,14 +35,14 @@ final class ShippingQuoteEngineTest extends TestCase
             self::zone('Iberia', ShippingZoneScope::SelectedCountries, ['PT', 'ES'], [$explicit]),
         ]));
 
-        $quote = $engine->quote(self::checkout(), self::shipping(destination: 'PT'));
+        $quote = $engine->quote(self::checkout(), self::shipping(country: 'PT'));
 
         $this->assertNotNull($quote);
         $this->assertSame(ShippingQuoteStatus::Available, $quote->status());
         $this->assertSame([$explicit], $quote->options());
     }
 
-    public function testKnownDestinationUsesFallbackOrReportsUnavailable(): void
+    public function testKnownShippingCountryUsesFallbackOrReportsUnavailable(): void
     {
         $fallback = self::option('world', 'Worldwide');
         $withFallback = new ShippingQuoteEngine(new ShippingZoneResolver([
@@ -53,8 +53,8 @@ final class ShippingQuoteEngineTest extends TestCase
             self::zone('Iberia', ShippingZoneScope::SelectedCountries, ['PT'], [self::option()]),
         ]));
 
-        $fallbackQuote = $withFallback->quote(self::checkout(), self::shipping(destination: 'ES'));
-        $unavailableQuote = $withoutFallback->quote(self::checkout(), self::shipping(destination: 'ES'));
+        $fallbackQuote = $withFallback->quote(self::checkout(), self::shipping(country: 'ES'));
+        $unavailableQuote = $withoutFallback->quote(self::checkout(), self::shipping(country: 'ES'));
 
         $this->assertNotNull($fallbackQuote);
         $this->assertSame([$fallback], $fallbackQuote->options());
@@ -62,7 +62,7 @@ final class ShippingQuoteEngineTest extends TestCase
         $this->assertSame(ShippingQuoteStatus::Unavailable, $unavailableQuote->status());
     }
 
-    public function testUnknownDestinationOnlyUsesASoleFallbackZone(): void
+    public function testUnknownShippingCountryOnlyUsesASoleFallbackZone(): void
     {
         $fallback = self::option('world', 'Worldwide');
         $fallbackOnly = new ShippingQuoteEngine(new ShippingZoneResolver([
@@ -73,14 +73,14 @@ final class ShippingQuoteEngineTest extends TestCase
         ]));
         $unconfigured = new ShippingQuoteEngine(new ShippingZoneResolver([]));
 
-        $fallbackQuote = $fallbackOnly->quote(self::checkout(), self::shipping(destination: null));
-        $requiredQuote = $explicit->quote(self::checkout(), self::shipping(destination: null));
-        $unavailableQuote = $unconfigured->quote(self::checkout(), self::shipping(destination: null));
+        $fallbackQuote = $fallbackOnly->quote(self::checkout(), self::shipping(country: null));
+        $requiredQuote = $explicit->quote(self::checkout(), self::shipping(country: null));
+        $unavailableQuote = $unconfigured->quote(self::checkout(), self::shipping(country: null));
 
         $this->assertNotNull($fallbackQuote);
         $this->assertSame([$fallback], $fallbackQuote->options());
         $this->assertNotNull($requiredQuote);
-        $this->assertSame(ShippingQuoteStatus::DestinationRequired, $requiredQuote->status());
+        $this->assertSame(ShippingQuoteStatus::CountryRequired, $requiredQuote->status());
         $this->assertNotNull($unavailableQuote);
         $this->assertSame(ShippingQuoteStatus::Unavailable, $unavailableQuote->status());
     }
@@ -194,10 +194,10 @@ final class ShippingQuoteEngineTest extends TestCase
         );
     }
 
-    private static function shipping(?string $destination = 'PT'): ShippingContext
+    private static function shipping(?string $country = 'PT'): ShippingContext
     {
         return new ShippingContext(
-            destinationCountry: $destination,
+            shippingCountry: $country,
         );
     }
 

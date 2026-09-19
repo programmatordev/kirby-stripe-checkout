@@ -7,17 +7,17 @@ namespace ProgrammatorDev\StripeCheckout\Kirby;
 use Collator;
 use InvalidArgumentException;
 use Kirby\Toolkit\I18n;
-use ProgrammatorDev\StripeCheckout\Shipping\StripeDestinationCountryRegistry;
+use ProgrammatorDev\StripeCheckout\Shipping\StripeShippingCountryRegistry;
 use Symfony\Component\Intl\Countries;
 use Throwable;
 
-/** @internal Localizes and sorts Stripe-compatible destination countries. */
-final readonly class DestinationCountryOptions
+/** @internal Localizes and sorts Stripe-compatible shipping countries. */
+final readonly class ShippingCountryOptions
 {
     /** @return array<string, string> */
     public function all(): array
     {
-        return $this->forCodes((new StripeDestinationCountryRegistry())->codes());
+        return $this->forCodes((new StripeShippingCountryRegistry())->codes());
     }
 
     /**
@@ -27,10 +27,10 @@ final readonly class DestinationCountryOptions
     public function forCodes(array $countryCodes): array
     {
         if (array_is_list($countryCodes) === false) {
-            throw new InvalidArgumentException('Destination countries must be a list.');
+            throw new InvalidArgumentException('Shipping countries must be a list.');
         }
 
-        $registry = new StripeDestinationCountryRegistry();
+        $registry = new StripeShippingCountryRegistry();
         $options = [];
 
         foreach ($countryCodes as $countryCode) {
@@ -39,7 +39,7 @@ final readonly class DestinationCountryOptions
                 || $registry->supports($countryCode) === false
                 || isset($options[$countryCode])
             ) {
-                throw new InvalidArgumentException('Destination countries must be unique supported country codes.');
+                throw new InvalidArgumentException('Shipping countries must be unique supported country codes.');
             }
 
             try {

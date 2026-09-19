@@ -100,14 +100,14 @@ final class KirbySessionCartStore implements CartStoreInterface
     {
         if (
             is_array($payload) === false
-            || array_diff(array_keys($payload), ['schema', 'id', 'revision', 'createdAt', 'updatedAt', 'destinationCountry', 'entries']) !== []
-            || ($payload['schema'] ?? null) !== 1
+            || array_diff(array_keys($payload), ['schema', 'id', 'revision', 'createdAt', 'updatedAt', 'shippingCountry', 'entries']) !== []
+            || ($payload['schema'] ?? null) !== 2
             || is_string($payload['id'] ?? null) === false
             || is_string($payload['revision'] ?? null) === false
             || is_int($payload['createdAt'] ?? null) === false
             || is_int($payload['updatedAt'] ?? null) === false
-            || array_key_exists('destinationCountry', $payload) === false
-            || ($payload['destinationCountry'] !== null && is_string($payload['destinationCountry']) === false)
+            || array_key_exists('shippingCountry', $payload) === false
+            || ($payload['shippingCountry'] !== null && is_string($payload['shippingCountry']) === false)
             || is_array($payload['entries'] ?? null) === false
             || array_is_list($payload['entries']) === false
             || count($payload['entries']) > ProductRequestNormalizer::MAX_ENTRIES
@@ -137,7 +137,7 @@ final class KirbySessionCartStore implements CartStoreInterface
             $entries,
             $payload['createdAt'],
             $payload['updatedAt'],
-            $payload['destinationCountry'],
+            $payload['shippingCountry'],
         );
     }
 
@@ -145,12 +145,12 @@ final class KirbySessionCartStore implements CartStoreInterface
     private function encode(CartSnapshot $snapshot): array
     {
         return [
-            'schema' => 1,
+            'schema' => 2,
             'id' => $snapshot->id(),
             'revision' => $snapshot->revision(),
             'createdAt' => $snapshot->createdAt(),
             'updatedAt' => $snapshot->updatedAt(),
-            'destinationCountry' => $snapshot->destinationCountry(),
+            'shippingCountry' => $snapshot->shippingCountry(),
             'entries' => array_map(static fn(CartEntry $entry): array => [
                 'id' => $entry->id(),
                 'request' => ProductRequestData::toArray($entry->request()),

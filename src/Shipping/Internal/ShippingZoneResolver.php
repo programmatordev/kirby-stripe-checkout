@@ -39,9 +39,9 @@ final readonly class ShippingZoneResolver implements ShippingResolverInterface
         CheckoutContext $checkout,
         ShippingContext $shipping,
     ): ShippingQuote {
-        $destination = $shipping->destinationCountry();
+        $shippingCountry = $shipping->shippingCountry();
 
-        if ($destination === null) {
+        if ($shippingCountry === null) {
             if ($this->zones === []) {
                 return ShippingQuote::unavailable();
             }
@@ -53,7 +53,7 @@ final readonly class ShippingZoneResolver implements ShippingResolverInterface
                 return ShippingQuote::available($this->zones[0]->options());
             }
 
-            return ShippingQuote::destinationRequired();
+            return ShippingQuote::countryRequired();
         }
 
         $fallback = null;
@@ -65,7 +65,7 @@ final readonly class ShippingZoneResolver implements ShippingResolverInterface
                 continue;
             }
 
-            if (in_array($destination, $zone->countries(), true)) {
+            if (in_array($shippingCountry, $zone->countries(), true)) {
                 return ShippingQuote::available($zone->options());
             }
         }

@@ -71,14 +71,14 @@ final class KirbySessionCartStoreTest extends KirbyTestCase
     {
         yield 'scalar' => ['private-data'];
         yield 'empty' => [[]];
-        $base = ['schema' => 1, 'id' => 'cart', 'revision' => 'revision', 'createdAt' => 1, 'updatedAt' => 1, 'destinationCountry' => null, 'entries' => []];
-        yield 'unknown schema' => [array_replace($base, ['schema' => 2])];
+        $base = ['schema' => 2, 'id' => 'cart', 'revision' => 'revision', 'createdAt' => 1, 'updatedAt' => 1, 'shippingCountry' => null, 'entries' => []];
+        yield 'unknown schema' => [array_replace($base, ['schema' => 3])];
         yield 'impossible times' => [array_replace($base, ['updatedAt' => 0])];
         yield 'protected fields' => [array_replace($base, ['entries' => [['id' => 'item', 'request' => ['reference' => 'shirt', 'price' => '1.00']]]])];
         yield 'string quantity' => [array_replace($base, ['entries' => [['id' => 'item', 'request' => ['reference' => 'shirt', 'quantity' => '1']]]])];
         $entry = ['id' => 'item', 'request' => ['reference' => 'shirt']];
         $missingCountry = $base;
-        unset($missingCountry['destinationCountry']);
+        unset($missingCountry['shippingCountry']);
         yield 'missing nullable country' => [$missingCountry];
         yield 'unknown payload field' => [[...$base, 'unexpected' => null]];
         yield 'unknown entry field' => [array_replace($base, ['entries' => [[...$entry, 'unexpected' => null]]])];
@@ -113,12 +113,12 @@ final class KirbySessionCartStoreTest extends KirbyTestCase
         $mutator = $this->mutator($store);
         $first = $mutator->add(new ProductRequest('shirt'));
         $second = $mutator->add(new ProductRequest('shirt'));
-        $destination = $mutator->updateDestinationCountry('PT', $second->revision());
-        $this->assertSame($destination->revision(), $mutator->clearIfMatches($first->id(), $first->revision())->revision());
-        $this->assertSame($destination->revision(), $mutator->clearIfMatches('other-cart', $destination->revision())->revision());
-        $cleared = $mutator->clearIfMatches($destination->id(), $destination->revision());
+        $withShippingCountry = $mutator->updateShippingCountry('PT', $second->revision());
+        $this->assertSame($withShippingCountry->revision(), $mutator->clearIfMatches($first->id(), $first->revision())->revision());
+        $this->assertSame($withShippingCountry->revision(), $mutator->clearIfMatches('other-cart', $withShippingCountry->revision())->revision());
+        $cleared = $mutator->clearIfMatches($withShippingCountry->id(), $withShippingCountry->revision());
         $this->assertSame([], $cleared->entries());
-        $this->assertNull($cleared->destinationCountry());
+        $this->assertNull($cleared->shippingCountry());
         $this->assertSame($second->id(), $cleared->id());
     }
 
@@ -135,17 +135,17 @@ final class KirbySessionCartStoreTest extends KirbyTestCase
         $secondSession->destroy();
     }
 
-    public function testDestinationCountryPersistsAcrossIndependentStoreInstances(): void
+    public function testShippingCountryPersistsAcrossIndependentStoreInstances(): void
     {
         $session = $this->sessions()->create();
         $store = new KirbySessionCartStore($session, Uuid::generate(...));
         $initial = $store->read();
-        $updated = $this->mutator($store)->updateDestinationCountry('PT', $initial->revision());
+        $updated = $this->mutator($store)->updateShippingCountry('PT', $initial->revision());
         $token = $session->token();
         $this->assertNotNull($token);
 
         $reloaded = new KirbySessionCartStore($this->sessions()->get($token), Uuid::generate(...));
-        $this->assertSame('PT', $reloaded->read()->destinationCountry());
+        $this->assertSame('PT', $reloaded->read()->shippingCountry());
         $this->assertSame($updated->revision(), $reloaded->read()->revision());
         $session->destroy();
     }

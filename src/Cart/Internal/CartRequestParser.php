@@ -18,7 +18,7 @@ use stdClass;
 final class CartRequestParser
 {
     /**
-     * @return array{reference?: string, quantity?: int, options?: array<string, string>, revision?: string, destinationCountry?: string|null}
+     * @return array{reference?: string, quantity?: int, options?: array<string, string>, revision?: string, shippingCountry?: string|null}
      */
     public static function parse(App $kirby, CartOperation $operation): array
     {
@@ -73,15 +73,15 @@ final class CartRequestParser
                 $body['quantity'] = self::formQuantity($body['quantity']);
             }
 
-            if ($operation === CartOperation::UpdateDestinationCountry && ($body['destinationCountry'] ?? null) === '') {
-                $body['destinationCountry'] = null;
+            if ($operation === CartOperation::UpdateShippingCountry && ($body['shippingCountry'] ?? null) === '') {
+                $body['shippingCountry'] = null;
             }
         }
 
         $keys = match ($operation) {
             CartOperation::AddItem => ['reference', 'quantity', 'options'],
             CartOperation::UpdateItem => ['revision', 'quantity'],
-            CartOperation::UpdateDestinationCountry => ['revision', 'destinationCountry'],
+            CartOperation::UpdateShippingCountry => ['revision', 'shippingCountry'],
             default => ['revision'],
         };
 
@@ -119,16 +119,16 @@ final class CartRequestParser
         }
 
         if (
-            $operation === CartOperation::UpdateDestinationCountry
+            $operation === CartOperation::UpdateShippingCountry
             && (
-                array_key_exists('destinationCountry', $body) === false
-                || (is_string($body['destinationCountry']) === false && $body['destinationCountry'] !== null)
+                array_key_exists('shippingCountry', $body) === false
+                || (is_string($body['shippingCountry']) === false && $body['shippingCountry'] !== null)
             )
         ) {
-            throw new CheckoutInputException(ShippingErrorCode::DESTINATION_INVALID);
+            throw new CheckoutInputException(ShippingErrorCode::COUNTRY_INVALID);
         }
 
-        /** @var array{revision: string, quantity?: int, destinationCountry?: string|null} $body */
+        /** @var array{revision: string, quantity?: int, shippingCountry?: string|null} $body */
         return $body;
     }
 

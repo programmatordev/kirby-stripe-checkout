@@ -27,7 +27,7 @@ final class Cart
     /**
      * @internal Constructed by the Site-scoped plugin entry point.
      * @param list<CartItem> $items
-     * @param array<string, string> $destinationCountries
+     * @param array<string, string> $shippingCountryOptions
      * @param list<CartError> $errors
      */
     public function __construct(
@@ -36,7 +36,7 @@ final class Cart
         private ?Currency $currency,
         private ?Money $subtotal,
         private ?ShippingQuote $shippingQuote,
-        private array $destinationCountries,
+        private array $shippingCountryOptions,
         private array $errors,
         private readonly CartMutator $mutator,
         private readonly CartViewFactory $views,
@@ -63,10 +63,10 @@ final class Cart
         return $this->mutate(fn(): CartSnapshot => $this->mutator->remove($itemId, $revision ?? $this->revision()));
     }
 
-    public function updateDestinationCountry(?string $destinationCountry, ?string $revision = null): self
+    public function updateShippingCountry(?string $shippingCountry, ?string $revision = null): self
     {
-        return $this->mutate(fn(): CartSnapshot => $this->mutator->updateDestinationCountry(
-            $destinationCountry,
+        return $this->mutate(fn(): CartSnapshot => $this->mutator->updateShippingCountry(
+            $shippingCountry,
             $revision ?? $this->revision(),
         ));
     }
@@ -100,17 +100,17 @@ final class Cart
         return $this->snapshot->revision();
     }
 
-    public function destinationCountry(): ?string
+    public function shippingCountry(): ?string
     {
-        return $this->snapshot->destinationCountry();
+        return $this->snapshot->shippingCountry();
     }
 
     /** @return array<string, string> Supported code-to-name choices for this Cart. */
-    public function destinationCountries(): array
+    public function shippingCountryOptions(): array
     {
         $this->resolvePresentation();
 
-        return $this->destinationCountries;
+        return $this->shippingCountryOptions;
     }
 
     public function count(): int
@@ -200,7 +200,7 @@ final class Cart
         $this->currency = $next->currency;
         $this->subtotal = $next->subtotal;
         $this->shippingQuote = $next->shippingQuote;
-        $this->destinationCountries = $next->destinationCountries;
+        $this->shippingCountryOptions = $next->shippingCountryOptions;
         $this->errors = $next->errors;
         $this->presentationResolved = true;
     }

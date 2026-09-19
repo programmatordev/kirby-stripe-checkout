@@ -32,7 +32,7 @@ final class CartRoutes
         $resources = [
             'stripe-checkout/cart' => [
                 'GET' => CartOperation::Read,
-                'PATCH' => CartOperation::UpdateDestinationCountry,
+                'PATCH' => CartOperation::UpdateShippingCountry,
                 'DELETE' => CartOperation::Clear,
             ],
             'stripe-checkout/cart/items' => ['POST' => CartOperation::AddItem],
