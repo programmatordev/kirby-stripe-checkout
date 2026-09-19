@@ -10,6 +10,10 @@ use ProgrammatorDev\StripeCheckout\Collection\CustomField;
 use ProgrammatorDev\StripeCheckout\Collection\CustomFieldOption;
 use ProgrammatorDev\StripeCheckout\Collection\CustomFieldType;
 use ProgrammatorDev\StripeCheckout\Collection\Exception\InvalidCustomFieldException;
+use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
+use ProgrammatorDev\StripeCheckout\Shipping\StripeShippingCountryRegistry;
+use ProgrammatorDev\StripeCheckout\Support\TextValidator;
+use Throwable;
 
 /** Validates the Stripe parameter shapes the plugin officially supports. */
 final class SupportedSessionParametersValidator
@@ -26,6 +30,178 @@ final class SupportedSessionParametersValidator
         $this->validateAllowPromotionCodes($parameters);
         $this->validateAutomaticTax($parameters);
         $this->validateTaxBehavior($parameters);
+        $this->validateShipping($parameters);
+    }
+
+    /** @param array<string, mixed> $parameters */
+    private function validateShipping(array $parameters): void
+    {
+        if (
+            array_key_exists('shipping_address_collection', $parameters) === false
+            && array_key_exists('shipping_options', $parameters) === false
+        ) {
+            return;
+        }
+
+        $collection = $this->map(
+            $parameters['shipping_address_collection'] ?? null,
+            'shipping_address_collection',
+        );
+        $countries = $collection['allowed_countries'] ?? null;
+
+        if (is_array($countries) === false || array_is_list($countries) === false || $countries === []) {
+            $this->invalid('shipping_address_collection.allowed_countries');
+        }
+
+        $countryRegistry = new StripeShippingCountryRegistry();
+
+        foreach ($countries as $index => $country) {
+            if (
+                is_string($country) === false
+                || $countryRegistry->supports($country) === false
+            ) {
+                $this->invalid('shipping_address_collection.allowed_countries.' . $index);
+            }
+        }
+
+        $options = $parameters['shipping_options'] ?? null;
+
+        if (
+            is_array($options) === false
+            || array_is_list($options) === false
+            || $options === []
+            || count($options) > 5
+        ) {
+            $this->invalid('shipping_options');
+        }
+
+        foreach ($options as $index => $value) {
+            $path = 'shipping_options.' . $index . '.shipping_rate_data';
+            $option = $this->map($value, 'shipping_options.' . $index);
+            $data = $this->map($option['shipping_rate_data'] ?? null, $path);
+            $label = $this->requiredString($data, 'display_name', $path . '.display_name');
+
+            if (
+                $label === ''
+                || trim($label) !== $label
+                || mb_strlen($label) > 100
+                || TextValidator::isSingleLine($label) === false
+            ) {
+                $this->invalid($path . '.display_name');
+            }
+
+            if (($data['type'] ?? null) !== 'fixed_amount') {
+                $this->invalid($path . '.type');
+            }
+
+            $this->validateShippingAmount(
+                data: $data,
+                expectedCurrency: $parameters['currency'] ?? null,
+                path: $path,
+            );
+            $this->validateDeliveryEstimate($data, $path);
+
+            if (
+                array_key_exists('tax_behavior', $data)
+                && in_array($data['tax_behavior'], ['inclusive', 'exclusive', 'unspecified'], true) === false
+            ) {
+                $this->invalid($path . '.tax_behavior');
+            }
+
+            if (
+                array_key_exists('tax_code', $data)
+                && (
+                    is_string($data['tax_code']) === false
+                    || preg_match('/\Atxcd_[A-Za-z0-9]{1,249}\z/D', $data['tax_code']) !== 1
+                )
+            ) {
+                $this->invalid($path . '.tax_code');
+            }
+        }
+    }
+
+    /** @param array<string, mixed> $data */
+    private function validateShippingAmount(
+        array $data,
+        mixed $expectedCurrency,
+        string $path,
+    ): void {
+        $amount = $this->map($data['fixed_amount'] ?? null, $path . '.fixed_amount');
+        $providerAmount = $amount['amount'] ?? null;
+        $currency = $amount['currency'] ?? null;
+
+        if (
+            is_int($providerAmount) === false
+            || $providerAmount < 0
+            || is_string($currency) === false
+            || strtolower($currency) !== $currency
+            || $currency !== $expectedCurrency
+            || array_key_exists('currency_options', $amount)
+        ) {
+            $this->invalid($path . '.fixed_amount');
+        }
+
+        try {
+            (new StripeCurrencyRegistry())->fromProviderAmount(
+                $providerAmount,
+                strtoupper($currency),
+            );
+        } catch (Throwable $error) {
+            $this->invalid($path . '.fixed_amount', $error);
+        }
+    }
+
+    /** @param array<string, mixed> $data */
+    private function validateDeliveryEstimate(array $data, string $path): void
+    {
+        if (array_key_exists('delivery_estimate', $data) === false) {
+            return;
+        }
+
+        $estimate = $this->map(
+            $data['delivery_estimate'],
+            $path . '.delivery_estimate',
+        );
+        $bounds = ['minimum', 'maximum'];
+        $found = false;
+
+        foreach ($bounds as $bound) {
+            if (array_key_exists($bound, $estimate) === false) {
+                continue;
+            }
+
+            $found = true;
+            $boundPath = $path . '.delivery_estimate.' . $bound;
+            $value = $this->map($estimate[$bound], $boundPath);
+
+            if (
+                is_int($value['value'] ?? null) === false
+                || $value['value'] < 1
+                || in_array($value['unit'] ?? null, ['hour', 'day', 'business_day', 'week', 'month'], true) === false
+            ) {
+                $this->invalid($boundPath);
+            }
+        }
+
+        if ($found === false) {
+            $this->invalid($path . '.delivery_estimate');
+        }
+
+        $minimum = $estimate['minimum'] ?? null;
+        $maximum = $estimate['maximum'] ?? null;
+
+        // A filter receives provider-shaped arrays, so repeat the ordered,
+        // single-unit range invariant normally guaranteed by DeliveryEstimate.
+        if (
+            is_array($minimum)
+            && is_array($maximum)
+            && (
+                $minimum['unit'] !== $maximum['unit']
+                || $minimum['value'] > $maximum['value']
+            )
+        ) {
+            $this->invalid($path . '.delivery_estimate.maximum');
+        }
     }
 
     /** @param array<string, mixed> $parameters */
@@ -382,7 +558,7 @@ final class SupportedSessionParametersValidator
         return $values[$field];
     }
 
-    private function invalid(string $path, ?InvalidCustomFieldException $previous = null): never
+    private function invalid(string $path, ?Throwable $previous = null): never
     {
         throw new InvalidSessionRequestException(
             SessionRequestErrorCode::PARAMETER_INVALID,

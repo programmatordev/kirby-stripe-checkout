@@ -85,6 +85,7 @@ final class SessionRequestValidator
         $this->validateProhibitedParameters($parameters);
         $this->validateMetadata($expected, $parameters);
         $this->validateLineItems($expected, $parameters);
+        $this->validateShipping($expected, $parameters);
         $this->validatePrivateMetadataLocations($parameters);
         $this->supportedParametersValidator->validate($parameters);
 
@@ -283,6 +284,79 @@ final class SessionRequestValidator
         }
     }
 
+    /**
+     * Keeps the quoted destination scope and option identities stable while
+     * allowing trusted filters to customize supported customer-facing fields.
+     *
+     * @param array<string, mixed> $expected
+     * @param array<string, mixed> $parameters
+     */
+    private function validateShipping(array $expected, array $parameters): void
+    {
+        $expectedCollection = $expected['shipping_address_collection'] ?? null;
+        $expectedOptions = $expected['shipping_options'] ?? null;
+
+        if ($expectedCollection === null && $expectedOptions === null) {
+            $this->assertAbsent(
+                $parameters,
+                'shipping_address_collection',
+                'shipping_address_collection',
+            );
+            $this->assertAbsent($parameters, 'shipping_options', 'shipping_options');
+
+            return;
+        }
+
+        $this->assertSame(
+            $expected,
+            $parameters,
+            'shipping_address_collection',
+        );
+        $options = $parameters['shipping_options'] ?? null;
+
+        if (
+            is_array($expectedOptions) === false
+            || array_is_list($expectedOptions) === false
+            || is_array($options) === false
+            || array_is_list($options) === false
+            || count($options) !== count($expectedOptions)
+        ) {
+            throw new InvalidSessionRequestException(
+                SessionRequestErrorCode::INVARIANT_VIOLATION,
+                'shipping_options',
+            );
+        }
+
+        foreach ($expectedOptions as $index => $expectedOption) {
+            $option = $options[$index] ?? null;
+            $path = 'shipping_options.' . $index;
+
+            if (is_array($expectedOption) === false || is_array($option) === false) {
+                throw new InvalidSessionRequestException(
+                    SessionRequestErrorCode::INVARIANT_VIOLATION,
+                    $path,
+                );
+            }
+
+            $this->assertAbsent($option, 'shipping_rate', $path . '.shipping_rate');
+            $expectedData = $expectedOption['shipping_rate_data'] ?? null;
+            $data = $option['shipping_rate_data'] ?? null;
+
+            if (is_array($expectedData) === false || is_array($data) === false) {
+                throw new InvalidSessionRequestException(
+                    SessionRequestErrorCode::INVARIANT_VIOLATION,
+                    $path . '.shipping_rate_data',
+                );
+            }
+
+            $this->assertProtectedMetadata(
+                $expectedData['metadata'] ?? null,
+                $data['metadata'] ?? null,
+                $path . '.shipping_rate_data.metadata',
+            );
+        }
+    }
+
     private function assertProtectedMetadata(mixed $expected, mixed $actual, string $path): void
     {
         if (
@@ -331,7 +405,8 @@ final class SessionRequestValidator
             if (str_starts_with($key, self::PRIVATE_METADATA_PREFIX)) {
                 $allowed = $path === 'metadata'
                     || $path === 'payment_intent_data.metadata'
-                    || preg_match('/\Aline_items\.\d+\.metadata\z/D', $path) === 1;
+                    || preg_match('/\Aline_items\.\d+\.metadata\z/D', $path) === 1
+                    || preg_match('/\Ashipping_options\.\d+\.shipping_rate_data\.metadata\z/D', $path) === 1;
 
                 if ($allowed === false) {
                     throw new InvalidSessionRequestException(

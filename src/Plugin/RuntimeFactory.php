@@ -18,6 +18,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionCreator;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\InitiatingShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestBuilder;
@@ -399,8 +400,10 @@ final class RuntimeFactory
         return new StripeApiCheckoutSessionGateway($this->stripeClient());
     }
 
-    public function checkoutSessionRequest(SessionRequestContext $context): SessionRequest
-    {
+    public function checkoutSessionRequest(
+        SessionRequestContext $context,
+        ?InitiatingShippingSnapshot $initiatingShipping,
+    ): SessionRequest {
         $configuration = $this->configurationReport()->configurationOrFail();
         $settings = $configuration->settings();
 
@@ -424,7 +427,7 @@ final class RuntimeFactory
         $request = (new SessionRequestBuilder(
             kirby: $this->kirby,
             settings: $settings,
-        ))->build($context);
+        ))->build($context, $initiatingShipping);
 
         return (new SessionRequestCustomizer($this->kirby))->customize(
             $context,
@@ -441,7 +444,13 @@ final class RuntimeFactory
             requestContextFactory: new SessionRequestContextFactory($this->kirby),
             orderPageStore: new OrderPageStore($this->kirby),
             sessionGateway: $this->checkoutSessionGateway(),
-            prepareSessionRequest: fn(SessionRequestContext $context): SessionRequest => $this->checkoutSessionRequest($context),
+            prepareSessionRequest: fn(
+                SessionRequestContext $context,
+                ?InitiatingShippingSnapshot $initiatingShipping,
+            ): SessionRequest => $this->checkoutSessionRequest(
+                $context,
+                $initiatingShipping,
+            ),
             stripeApiVersion: ApiVersion::CURRENT,
         );
     }

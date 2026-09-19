@@ -116,6 +116,207 @@ final class SessionRequestValidatorTest extends TestCase
         );
     }
 
+    public function testAllowsShippingBusinessOverridesWhilePreservingCorrelation(): void
+    {
+        $request = $this->standardShippingRequest();
+        $parameters = $request->parameters();
+        $options = $this->valueList($parameters['shipping_options']);
+        $option = $this->map($options[0]);
+        $data = $this->map($option['shipping_rate_data']);
+        $data['display_name'] = 'Next-day delivery';
+        $data['fixed_amount'] = [
+            'amount' => 1_250,
+            'currency' => 'eur',
+        ];
+        $data['tax_behavior'] = 'exclusive';
+        $data['tax_code'] = 'txcd_92010001';
+        $option['shipping_rate_data'] = $data;
+        $options[0] = $option;
+        $parameters['shipping_options'] = $options;
+        $customizedRequest = new SessionRequest($parameters);
+
+        $this->assertSame(
+            $customizedRequest,
+            (new SessionRequestValidator())->validate($request, $customizedRequest),
+        );
+    }
+
+    #[DataProvider('invalidShippingChanges')]
+    public function testRejectsShippingChangesThatBreakInitiatingEvidence(
+        callable $change,
+        string $errorCode,
+        string $path,
+    ): void {
+        $request = $this->standardShippingRequest();
+        $parameters = $request->parameters();
+        $change($parameters);
+
+        try {
+            (new SessionRequestValidator())->validate(
+                $request,
+                new SessionRequest($parameters),
+            );
+            $this->fail('Expected the customized shipping request to be rejected.');
+        } catch (InvalidSessionRequestException $error) {
+            $this->assertSame($errorCode, $error->errorCode());
+            $this->assertSame($path, $error->path());
+        }
+    }
+
+    /** @return iterable<string, array{callable(array<string, mixed>&): void, string, string}> */
+    public static function invalidShippingChanges(): iterable
+    {
+        yield 'destination scope' => [
+            static function (array &$parameters): void {
+                $parameters['shipping_address_collection'] = [
+                    'allowed_countries' => ['ES'],
+                ];
+            },
+            'session_request.invariant_violation',
+            'shipping_address_collection',
+        ];
+        yield 'missing option' => [
+            static function (array &$parameters): void {
+                $parameters['shipping_options'] = [];
+            },
+            'session_request.invariant_violation',
+            'shipping_options',
+        ];
+        yield 'reusable Shipping Rate' => [
+            static function (array &$parameters): void {
+                $parameters['shipping_options'] = [[
+                    'shipping_rate' => 'shr_existing',
+                ]];
+            },
+            'session_request.parameter_protected',
+            'shipping_options.0.shipping_rate',
+        ];
+        yield 'missing option correlation' => [
+            static function (array &$parameters): void {
+                $options = self::valueList($parameters['shipping_options']);
+                $option = self::map($options[0]);
+                $data = self::map($option['shipping_rate_data']);
+                $metadata = self::map($data['metadata']);
+                unset($metadata['kirby_stripe_checkout_shipping_option']);
+                $data['metadata'] = $metadata;
+                $option['shipping_rate_data'] = $data;
+                $options[0] = $option;
+                $parameters['shipping_options'] = $options;
+            },
+            'session_request.invariant_violation',
+            'shipping_options.0.shipping_rate_data.metadata.kirby_stripe_checkout_shipping_option',
+        ];
+    }
+
+    #[DataProvider('invalidSupportedShippingParameters')]
+    public function testRejectsInvalidSupportedShippingParameters(
+        callable $change,
+        string $path,
+    ): void {
+        $request = $this->standardShippingRequest();
+        $parameters = $request->parameters();
+        $change($parameters);
+
+        try {
+            (new SessionRequestValidator())->validate(
+                $request,
+                new SessionRequest($parameters),
+            );
+            $this->fail('Expected the customized shipping parameter to be rejected.');
+        } catch (InvalidSessionRequestException $error) {
+            $this->assertSame('session_request.parameter_invalid', $error->errorCode());
+            $this->assertSame($path, $error->path());
+        }
+    }
+
+    /** @return iterable<string, array{callable(array<string, mixed>&): void, string}> */
+    public static function invalidSupportedShippingParameters(): iterable
+    {
+        yield 'display name' => [
+            static function (array &$parameters): void {
+                self::changeShippingRateData(
+                    $parameters,
+                    static function (array &$data): void {
+                        $data['display_name'] = str_repeat('x', 101);
+                    },
+                );
+            },
+            'shipping_options.0.shipping_rate_data.display_name',
+        ];
+        yield 'provider amount' => [
+            static function (array &$parameters): void {
+                self::changeShippingRateData(
+                    $parameters,
+                    static function (array &$data): void {
+                        $data['fixed_amount'] = [
+                            'amount' => -1,
+                            'currency' => 'eur',
+                        ];
+                    },
+                );
+            },
+            'shipping_options.0.shipping_rate_data.fixed_amount',
+        ];
+        yield 'delivery estimate' => [
+            static function (array &$parameters): void {
+                self::changeShippingRateData(
+                    $parameters,
+                    static function (array &$data): void {
+                        $data['delivery_estimate'] = [
+                            'minimum' => [
+                                'unit' => 'business_day',
+                                'value' => 0,
+                            ],
+                        ];
+                    },
+                );
+            },
+            'shipping_options.0.shipping_rate_data.delivery_estimate.minimum',
+        ];
+        yield 'reversed delivery estimate' => [
+            static function (array &$parameters): void {
+                self::changeShippingRateData(
+                    $parameters,
+                    static function (array &$data): void {
+                        $data['delivery_estimate'] = [
+                            'minimum' => [
+                                'unit' => 'business_day',
+                                'value' => 5,
+                            ],
+                            'maximum' => [
+                                'unit' => 'business_day',
+                                'value' => 3,
+                            ],
+                        ];
+                    },
+                );
+            },
+            'shipping_options.0.shipping_rate_data.delivery_estimate.maximum',
+        ];
+        yield 'tax behavior' => [
+            static function (array &$parameters): void {
+                self::changeShippingRateData(
+                    $parameters,
+                    static function (array &$data): void {
+                        $data['tax_behavior'] = 'sometimes';
+                    },
+                );
+            },
+            'shipping_options.0.shipping_rate_data.tax_behavior',
+        ];
+    }
+
+    public function testRejectsShippingParametersForADigitalOrder(): void
+    {
+        $parameters = $this->standardShippingRequest()->parameters();
+
+        $this->assertRejected(
+            parameters: $parameters,
+            errorCode: 'session_request.parameter_protected',
+            path: 'shipping_address_collection',
+        );
+    }
+
     #[DataProvider('invalidSupportedParameters')]
     public function testRejectsInvalidSupportedParameters(callable $change, string $path): void
     {
@@ -473,6 +674,23 @@ final class SessionRequestValidatorTest extends TestCase
         return $value;
     }
 
+    /**
+     * @param array<mixed, mixed> $parameters
+     * @param callable(array<mixed, mixed>&): void $change
+     */
+    private static function changeShippingRateData(
+        array &$parameters,
+        callable $change,
+    ): void {
+        $options = self::valueList($parameters['shipping_options']);
+        $option = self::map($options[0]);
+        $data = self::map($option['shipping_rate_data']);
+        $change($data);
+        $option['shipping_rate_data'] = $data;
+        $options[0] = $option;
+        $parameters['shipping_options'] = $options;
+    }
+
     private function standardRequest(): SessionRequest
     {
         return new SessionRequest([
@@ -510,5 +728,37 @@ final class SessionRequestValidatorTest extends TestCase
             'success_url' => 'https://example.com/stripe-checkout/success?session_id={CHECKOUT_SESSION_ID}',
             'ui_mode' => 'hosted_page',
         ]);
+    }
+
+    private function standardShippingRequest(): SessionRequest
+    {
+        $parameters = $this->standardRequest()->parameters();
+        $parameters['shipping_address_collection'] = [
+            'allowed_countries' => ['PT'],
+        ];
+        $parameters['shipping_options'] = [[
+            'shipping_rate_data' => [
+                'delivery_estimate' => [
+                    'minimum' => [
+                        'unit' => 'business_day',
+                        'value' => 2,
+                    ],
+                ],
+                'display_name' => 'Standard delivery',
+                'fixed_amount' => [
+                    'amount' => 500,
+                    'currency' => 'eur',
+                ],
+                'metadata' => [
+                    'kirby_stripe_checkout_order' => 'page://Order123',
+                    'kirby_stripe_checkout_owner' => 'programmatordev/stripe-checkout',
+                    'kirby_stripe_checkout_shipping_option' => 'standard',
+                    'kirby_stripe_checkout_shipping_quote' => str_repeat('a', 64),
+                ],
+                'type' => 'fixed_amount',
+            ],
+        ]];
+
+        return new SessionRequest($parameters);
     }
 }

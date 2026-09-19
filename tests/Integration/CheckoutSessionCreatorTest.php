@@ -8,8 +8,6 @@ use Brick\Money\Money;
 use DateInterval;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\DataProvider;
-use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
-use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSessionPresentation;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
@@ -17,6 +15,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutSessionException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptBinding;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptToken;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionCreator;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\InitiatingShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestBuilder;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestContextFactory;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
@@ -67,6 +66,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             guestReference: 'guest-browser',
             now: $now,
             initiatingUrl: 'https://kirby-stripe-checkout.test/product',
+            initiatingShipping: InitiatingShippingSnapshotFactory::fromOrder($order),
         );
 
         $this->assertPresentation($presentation, $uiMode, reused: false);
@@ -126,13 +126,20 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $creator = $this->creator(
             configuration: $configuration,
             gateway: $gateway,
-            prepareSessionRequest: static function (SessionRequestContext $context) use (&$requestCalls, $kirby, $settings): SessionRequest {
+            prepareSessionRequest: static function (
+                SessionRequestContext $context,
+                ?InitiatingShippingSnapshot $initiatingShipping,
+            ) use (&$requestCalls, $kirby, $settings): SessionRequest {
                 $requestCalls++;
 
                 return (new SessionRequestBuilder(
                     kirby: $kirby,
                     settings: $settings,
-                ))->build($context);
+                ))->build(
+                    $context,
+                    $initiatingShipping
+                        ?? InitiatingShippingSnapshotFactory::fromOrder($context->order()),
+                );
             },
         );
         $first = $creator->create(
@@ -962,25 +969,6 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             price: $price,
             stripeProductId: $stripePrice ? 'prod_checkouttest' : null,
         );
-        $checkout = new CheckoutContext(
-            items: [new CheckoutLineItem(
-                productReference: $request->reference(),
-                variantId: $product->variantId(),
-                sku: $product->sku(),
-                quantity: $request->quantity(),
-                price: $price,
-                subtotal: $price->multipliedBy($request->quantity()),
-                requiresShipping: true,
-                options: $product->selectedOptions(),
-                metadata: $product->metadata(),
-            )],
-            languageCode: null,
-            locale: 'en_US',
-            userUuid: null,
-            checkoutSource: CheckoutSource::Direct,
-            uiMode: $uiMode,
-        );
-
         return (new OrderCreationContextFactory($this->kirby))->create(
             uuid: $uuid,
             lineItems: [$lineItem],
@@ -990,7 +978,6 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             userUuid: null,
             languageCode: null,
             uiMode: $uiMode,
-            initiatingShipping: InitiatingShippingSnapshotFactory::fromCheckout($checkout),
         );
     }
 
@@ -1009,7 +996,10 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         return (new SessionRequestBuilder(
             kirby: $this->kirby,
             settings: $configuration->settings(),
-        ))->build($context);
+        ))->build(
+            $context,
+            InitiatingShippingSnapshotFactory::fromOrder($order),
+        );
     }
 
     /** @param array{clientReferenceId?: string, metadata?: array<string, string>, liveMode?: bool} $overrides */
@@ -1047,16 +1037,23 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         );
     }
 
-    /** @param (callable(SessionRequestContext): SessionRequest)|null $prepareSessionRequest */
+    /** @param (callable(SessionRequestContext, ?InitiatingShippingSnapshot): SessionRequest)|null $prepareSessionRequest */
     private function creator(
         Configuration $configuration,
         FakeCheckoutSessionGateway $gateway,
         ?callable $prepareSessionRequest = null,
     ): CheckoutSessionCreator {
-        $prepareSessionRequest ??= fn(SessionRequestContext $context): SessionRequest => (new SessionRequestBuilder(
+        $prepareSessionRequest ??= fn(
+            SessionRequestContext $context,
+            ?InitiatingShippingSnapshot $initiatingShipping,
+        ): SessionRequest => (new SessionRequestBuilder(
             kirby: $this->kirby,
             settings: $configuration->settings(),
-        ))->build($context);
+        ))->build(
+            $context,
+            $initiatingShipping
+                ?? InitiatingShippingSnapshotFactory::fromOrder($context->order()),
+        );
 
         return new CheckoutSessionCreator(
             configuration: $configuration,

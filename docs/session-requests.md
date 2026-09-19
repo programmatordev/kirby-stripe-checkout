@@ -50,6 +50,14 @@ The immutable `SessionRequestContext` contains information known before the cust
 
 The final request is stored on the Order exactly as submitted. Do not place secrets, payment credentials, or unnecessary personal data in it. If an uncertain Stripe call is retried, the plugin reuses that saved request unchanged and does not run the filter again.
 
+## Shipping customization
+
+For a shippable order, the standard request converts the accepted Kirby shipping quote into Stripe's `shipping_address_collection` and ordered inline `shipping_options`. Each option contains its fixed amount, customer-facing label, optional delivery estimate, applicable Automatic Tax settings, and protected order/quote/option metadata. Digital-only orders contain neither shipping parameter.
+
+Prefer the typed `programmatordev.stripe-checkout.shipping.quote` filter or a custom shipping resolver when changing eligibility, options, prices, estimates, or tax classification. The Session-parameters filter remains a lower-level escape hatch and may change supported customer-facing Shipping Rate fields. It cannot add shipping to a digital order, remove shipping from a shippable order, widen the accepted destination-country policy, change the option count/order, replace inline options with reusable Stripe Shipping Rate IDs, or alter private correlation metadata.
+
+The final customized shipping request is persisted exactly. If a filter changes an option's supported presentation or amount, that exact request—not mutable Settings or a newly resolved quote—is reused after an uncertain Stripe response.
+
 ## Tax customization
 
 Automatic Tax and the Kirby price inclusion policy are defaults for new Sessions, not locks on trusted per-order logic. The filter can enable or disable Automatic Tax, change inline `tax_behavior`, or supply Stripe-owned manual `tax_rates`. Stripe validates whether the final combination is supported; the plugin does not calculate tax or maintain its own manual-rate engine. Existing Stripe Price IDs remain fixed, so their Price/Product tax configuration stays in Stripe.
@@ -72,7 +80,7 @@ This example assumes the first line is a Kirby-priced event, `$eventTaxCodeId` i
 
 Every filter result passes final validation before an order or Stripe Session can be created. The validator has three responsibilities:
 
-1. Fields the plugin officially models through Settings are validated when present. This currently covers billing-address, name, phone, tax-ID and consent collection, custom fields, promotion-code entry, Automatic Tax enablement, and inline tax inclusion policy. Additional Stripe-owned fields inside those parameter maps remain Stripe's responsibility.
+1. Fields the plugin officially models through Settings and shipping quotes are validated when present. This currently covers billing-address, name, phone, tax-ID and consent collection, custom fields, promotion-code entry, Automatic Tax enablement, inline tax inclusion policy, shipping-address countries, and inline Shipping Rate data. Additional Stripe-owned fields inside those parameter maps remain Stripe's responsibility.
 2. Values required by the order and payment lifecycle are protected from changes.
 3. Other serializable Stripe parameters pass through without the plugin duplicating Stripe's semantic validation. A malformed or incompatible provider-owned value is rejected by Stripe and the Order records a safe `creation_failed` outcome.
 
@@ -82,7 +90,8 @@ The protected lifecycle values are:
 - the exact store currency, fixed lifetime, locale, and installation identifier;
 - the plugin's internal success/cancel/return routes and literal `{CHECKOUT_SESSION_ID}` placeholder;
 - the order reference and private Session, PaymentIntent, and line-item metadata;
-- the original line count, quantities, price source, Price IDs or inline amounts, and currencies.
+- the original line count, quantities, price source, Price IDs or inline amounts, and currencies;
+- whether shipping exists, its accepted destination-country policy, ordered option identities, inline-rate shape, and private Shipping Rate metadata.
 
 The validator also rejects lifecycle shapes the current order model cannot represent: subscriptions and setup mode, Connect transfers or fees or invoice issuers, manual capture, saved/future payment methods, adjustable quantities, optional items, Adaptive Pricing, Managed Payments, recovery Sessions, and server-controlled dynamic shipping updates. Static `payment_method_types` is also rejected so that Stripe's [dynamic payment methods](https://docs.stripe.com/payments/payment-methods/dynamic-payment-methods) remain authoritative. Provider hints such as `origin_context`, explicit customer references, dynamic payment-method controls and configurations, discounts, invoice creation, and other Stripe-owned parameters are allowed when they do not change those guarantees.
 

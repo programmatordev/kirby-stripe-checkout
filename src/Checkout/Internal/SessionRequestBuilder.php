@@ -17,7 +17,10 @@ use ProgrammatorDev\StripeCheckout\Collection\TaxIdCollection;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
+use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
+use ProgrammatorDev\StripeCheckout\Shipping\DeliveryEstimate;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingOption;
 use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 use Stripe\Checkout\Session;
 
@@ -38,14 +41,34 @@ final class SessionRequestBuilder
 
     private const STRIPE_METADATA_LINE = 'kirby_stripe_checkout_line';
 
+    private const STRIPE_METADATA_SHIPPING_OPTION = 'kirby_stripe_checkout_shipping_option';
+
+    private const STRIPE_METADATA_SHIPPING_QUOTE = 'kirby_stripe_checkout_shipping_quote';
+
     public function __construct(
         private readonly App $kirby,
         private readonly Settings $settings,
     ) {}
 
-    public function build(SessionRequestContext $context): SessionRequest
-    {
+    public function build(
+        SessionRequestContext $context,
+        ?InitiatingShippingSnapshot $initiatingShipping,
+    ): SessionRequest {
         $order = $context->order();
+        $hasShipping = $initiatingShipping !== null;
+
+        // Certify the transient quote against the frozen purchase before its
+        // mapped request becomes the attempt's permanent initiating evidence.
+        if ($order->requiresShipping() !== $hasShipping) {
+            throw new LogicException('The initiating shipping quote does not match the order.');
+        }
+
+        if ($initiatingShipping !== null && (
+            $initiatingShipping->currency() !== $order->currency()
+            || $initiatingShipping->matches($order) === false
+        )) {
+            throw new LogicException('The initiating shipping quote does not match the order.');
+        }
 
         // Keep the same order correlation on both Stripe resources because
         // later lifecycle events may expose either the Session or PaymentIntent.
@@ -72,6 +95,13 @@ final class SessionRequestBuilder
             },
         ];
 
+        if ($initiatingShipping !== null) {
+            $parameters = [
+                ...$parameters,
+                ...$this->shippingParameters($context, $initiatingShipping),
+            ];
+        }
+
         if ($context->uiMode() === UiMode::Hosted) {
             $parameters['cancel_url'] = $this->routeUrl('cancel', $context);
             $parameters['success_url'] = $this->routeUrl('success', $context, true);
@@ -90,6 +120,8 @@ final class SessionRequestBuilder
             'billing_address_collection' => $this->settings->billingAddressCollection()->value,
         ];
 
+        // Without Automatic Tax these fields are dormant local configuration;
+        // omission leaves Stripe's non-tax Session behavior authoritative.
         if ($this->settings->automaticTax()) {
             $parameters['automatic_tax'] = ['enabled' => true];
         }
@@ -326,6 +358,93 @@ final class SessionRequestBuilder
         }
 
         return $priceData;
+    }
+
+    /** @return array<string, mixed> */
+    private function shippingParameters(
+        SessionRequestContext $context,
+        InitiatingShippingSnapshot $shipping,
+    ): array {
+        return [
+            'shipping_address_collection' => [
+                'allowed_countries' => $shipping->allowedCountries(),
+            ],
+            // Checkout accepts no more than five options and preselects the
+            // first. ShippingQuote preserves the validated merchant order.
+            // https://docs.stripe.com/api/checkout/sessions/create#checkout_session_create-shipping_options
+            'shipping_options' => array_map(
+                fn(ShippingOption $option): array => [
+                    'shipping_rate_data' => $this->shippingRateData(
+                        context: $context,
+                        shipping: $shipping,
+                        option: $option,
+                    ),
+                ],
+                $shipping->options(),
+            ),
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function shippingRateData(
+        SessionRequestContext $context,
+        InitiatingShippingSnapshot $shipping,
+        ShippingOption $option,
+    ): array {
+        $order = $context->order();
+        $registry = new StripeCurrencyRegistry();
+        $data = [
+            'display_name' => $option->label(),
+            'fixed_amount' => [
+                'amount' => $registry->fromMoney($option->amount())->minorAmount(),
+                'currency' => strtolower($shipping->currency()),
+            ],
+            'metadata' => [
+                self::STRIPE_METADATA_OWNER => PluginMetadata::NAME,
+                self::STRIPE_METADATA_ORDER => $order->pageUuid(),
+                self::STRIPE_METADATA_SHIPPING_OPTION => $option->key(),
+                self::STRIPE_METADATA_SHIPPING_QUOTE => $shipping->quoteFingerprint(),
+            ],
+            'type' => 'fixed_amount',
+        ];
+
+        if ($option->deliveryEstimate() !== null) {
+            $data['delivery_estimate'] = $this->deliveryEstimate($option->deliveryEstimate());
+        }
+
+        if ($this->settings->automaticTax()) {
+            if ($option->taxBehavior() !== TaxBehavior::StripeDefault) {
+                $data['tax_behavior'] = $option->taxBehavior()->value;
+            }
+
+            if ($option->taxCode() !== null) {
+                $data['tax_code'] = $option->taxCode();
+            }
+        }
+
+        return $data;
+    }
+
+    /** @return array<string, array{unit: string, value: int}> */
+    private function deliveryEstimate(DeliveryEstimate $estimate): array
+    {
+        $data = [];
+
+        if ($estimate->minimum() !== null) {
+            $data['minimum'] = [
+                'unit' => $estimate->unit()->value,
+                'value' => $estimate->minimum(),
+            ];
+        }
+
+        if ($estimate->maximum() !== null) {
+            $data['maximum'] = [
+                'unit' => $estimate->unit()->value,
+                'value' => $estimate->maximum(),
+            ];
+        }
+
+        return $data;
     }
 
     private function integrationIdentifier(): string

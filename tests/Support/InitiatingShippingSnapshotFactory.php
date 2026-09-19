@@ -10,6 +10,9 @@ use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\InitiatingShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
+use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Shipping\DeliveryEstimate;
 use ProgrammatorDev\StripeCheckout\Shipping\DeliveryEstimateUnit;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
@@ -65,5 +68,67 @@ final class InitiatingShippingSnapshotFactory
         )]);
 
         return InitiatingShippingSnapshot::fromQuote($checkout, $shipping, $quote);
+    }
+
+    public static function fromOrder(
+        OrderCreationContext $order,
+        ?string $shippingCountry = 'PT',
+        string $locale = 'en_US',
+    ): InitiatingShippingSnapshot {
+        return self::fromCheckout(
+            self::checkoutFromOrder($order, $locale),
+            $shippingCountry,
+        );
+    }
+
+    public static function checkoutFromOrder(
+        OrderCreationContext $order,
+        string $locale = 'en_US',
+    ): CheckoutContext {
+        $items = array_map(
+            static function (array $lineItem): CheckoutLineItem {
+                $options = array_map(
+                    static function (mixed $option): SelectedOption {
+                        $option = OrderData::map($option);
+
+                        return new SelectedOption(
+                            optionId: OrderData::text($option['optionId'] ?? null),
+                            optionName: OrderData::text($option['optionName'] ?? null),
+                            valueId: OrderData::text($option['valueId'] ?? null),
+                            valueName: OrderData::text($option['valueName'] ?? null),
+                        );
+                    },
+                    OrderData::list($lineItem['options']),
+                );
+
+                return new CheckoutLineItem(
+                    productReference: OrderData::text($lineItem['reference']),
+                    variantId: OrderData::nullableString($lineItem['variantId']),
+                    sku: OrderData::nullableString($lineItem['sku']),
+                    quantity: OrderData::integer($lineItem['quantity']),
+                    price: Money::of(
+                        OrderData::text($lineItem['price']),
+                        OrderData::text($lineItem['currency']),
+                    ),
+                    subtotal: Money::of(
+                        OrderData::text($lineItem['subtotal']),
+                        OrderData::text($lineItem['currency']),
+                    ),
+                    requiresShipping: OrderData::boolean($lineItem['requiresShipping']),
+                    options: $options,
+                    metadata: OrderData::map($lineItem['metadata']),
+                );
+            },
+            $order->lineItems(),
+        );
+
+        return new CheckoutContext(
+            items: $items,
+            languageCode: $order->languageCode(),
+            locale: $locale,
+            userUuid: $order->userUuid(),
+            checkoutSource: $order->checkoutSource(),
+            uiMode: $order->uiMode(),
+        );
     }
 }

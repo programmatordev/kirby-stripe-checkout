@@ -32,10 +32,10 @@ use Throwable;
 /** Creates, resumes, and repairs one persisted idempotent Checkout Session attempt. */
 final class CheckoutSessionCreator
 {
-    /** @var Closure(SessionRequestContext): SessionRequest */
+    /** @var Closure(SessionRequestContext, ?InitiatingShippingSnapshot): SessionRequest */
     private readonly Closure $prepareSessionRequest;
 
-    /** @param Closure(SessionRequestContext): SessionRequest $prepareSessionRequest */
+    /** @param Closure(SessionRequestContext, ?InitiatingShippingSnapshot): SessionRequest $prepareSessionRequest */
     public function __construct(
         private readonly Configuration $configuration,
         private readonly SessionRequestContextFactory $requestContextFactory,
@@ -55,6 +55,7 @@ final class CheckoutSessionCreator
         ?string $guestReference,
         DateTimeImmutable $now,
         ?string $initiatingUrl = null,
+        ?InitiatingShippingSnapshot $initiatingShipping = null,
     ): CheckoutSessionPresentation {
         // The structured token reserves the only Order identity this request
         // may create or reuse. Reject mismatches before configuration or writes.
@@ -70,14 +71,31 @@ final class CheckoutSessionCreator
         $checkoutAttempt = null;
         $page = $this->orderPageStore->createAttemptOnce(
             orderUuid: $token->orderUuid(),
-            prepare: function () use ($order, $binding, $token, $guestReference, $now, $initiatingUrl, &$requestContext, &$sessionRequest, &$checkoutAttempt): array {
+            prepare: function () use (
+                $order,
+                $binding,
+                $token,
+                $guestReference,
+                $now,
+                $initiatingUrl,
+                $initiatingShipping,
+                &$requestContext,
+                &$sessionRequest,
+                &$checkoutAttempt,
+            ): array {
                 $requestContext = $this->requestContextFactory->create(
                     order: $order,
                     configuration: $this->configuration,
                     createdAt: $now,
                     initiatingUrl: $initiatingUrl,
                 );
-                $sessionRequest = ($this->prepareSessionRequest)($requestContext);
+                // Shipping remains transient only until it becomes part of the
+                // exact Session request persisted with this new attempt. Reuse
+                // reads that request instead of reconstructing mutable policy.
+                $sessionRequest = ($this->prepareSessionRequest)(
+                    $requestContext,
+                    $initiatingShipping,
+                );
                 $checkoutAttempt = new CheckoutAttempt(
                     order: $order,
                     context: $requestContext,

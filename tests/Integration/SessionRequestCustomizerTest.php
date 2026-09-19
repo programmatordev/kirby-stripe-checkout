@@ -111,7 +111,7 @@ final class SessionRequestCustomizerTest extends KirbyTestCase
         ]);
 
         $parameters = (new RuntimeFactory($this->kirby))
-            ->checkoutSessionRequest($this->context())
+            ->checkoutSessionRequest($this->context(), null)
             ->parameters();
 
         $this->assertSame(

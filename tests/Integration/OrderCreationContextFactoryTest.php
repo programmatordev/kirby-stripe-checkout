@@ -9,53 +9,30 @@ use Kirby\Uuid\Uuid;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderCreationContextFactory;
-use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
-use ProgrammatorDev\StripeCheckout\Test\Support\InitiatingShippingSnapshotFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 
 final class OrderCreationContextFactoryTest extends KirbyTestCase
 {
-    public function testNewShippableAttemptRequiresAcceptedShippingQuote(): void
+    public function testDerivesTheOrderShippingRequirementFromItsLines(): void
     {
-        $this->expectException(OrderDataException::class);
-        $this->create(requiresShipping: true);
-    }
-
-    public function testAcceptedShippingQuoteIsOnlyRequiredForShippableAttempt(): void
-    {
-        $physical = $this->create(
-            requiresShipping: true,
-            withShipping: true,
-        );
+        $physical = $this->create(requiresShipping: true);
         $digital = $this->create(requiresShipping: false);
 
         $this->assertTrue($physical->requiresShipping());
         $this->assertFalse($digital->requiresShipping());
     }
 
-    public function testRejectsQuoteCalculatedForDifferentPurchaseFacts(): void
-    {
-        $this->expectException(OrderDataException::class);
-        $this->create(
-            requiresShipping: true,
-            withShipping: true,
-            quantity: 2,
-        );
-    }
-
     private function create(
         bool $requiresShipping,
-        bool $withShipping = false,
-        int $quantity = 1,
     ): OrderCreationContext {
         $price = Money::of('16', 'EUR');
         $product = new Product(
-            request: new ProductRequest('product', $quantity),
+            request: new ProductRequest('product'),
             name: 'Product',
             requiresShipping: $requiresShipping,
             price: new Price($price),
@@ -70,9 +47,6 @@ final class OrderCreationContextFactoryTest extends KirbyTestCase
             userUuid: null,
             languageCode: null,
             uiMode: UiMode::Hosted,
-            initiatingShipping: $withShipping
-                ? InitiatingShippingSnapshotFactory::create(languageCode: null)
-                : null,
         );
     }
 }
