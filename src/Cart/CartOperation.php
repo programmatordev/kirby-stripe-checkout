@@ -7,8 +7,9 @@ namespace ProgrammatorDev\StripeCheckout\Cart;
 enum CartOperation: string
 {
     case Read = 'read';
-    case Add = 'add';
-    case Update = 'update';
-    case Remove = 'remove';
+    case AddItem = 'add_item';
+    case UpdateItem = 'update_item';
+    case UpdateDestinationCountry = 'update_destination_country';
+    case RemoveItem = 'remove_item';
     case Clear = 'clear';
 }

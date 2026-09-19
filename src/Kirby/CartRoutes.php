@@ -30,9 +30,13 @@ final class CartRoutes
         }
 
         $resources = [
-            'stripe-checkout/cart' => ['GET' => CartOperation::Read, 'DELETE' => CartOperation::Clear],
-            'stripe-checkout/cart/items' => ['POST' => CartOperation::Add],
-            'stripe-checkout/cart/items/(:any)' => ['PATCH' => CartOperation::Update, 'DELETE' => CartOperation::Remove],
+            'stripe-checkout/cart' => [
+                'GET' => CartOperation::Read,
+                'PATCH' => CartOperation::UpdateDestinationCountry,
+                'DELETE' => CartOperation::Clear,
+            ],
+            'stripe-checkout/cart/items' => ['POST' => CartOperation::AddItem],
+            'stripe-checkout/cart/items/(:any)' => ['PATCH' => CartOperation::UpdateItem, 'DELETE' => CartOperation::RemoveItem],
         ];
         $routes = [];
 

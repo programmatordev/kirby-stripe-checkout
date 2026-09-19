@@ -12,7 +12,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
-use ProgrammatorDev\StripeCheckout\Shipping\StripeShippingCountryRegistry;
+use ProgrammatorDev\StripeCheckout\Shipping\StripeDestinationCountryRegistry;
 
 /**
  * Applies cart mutations against current state inside the store's atomic operation.
@@ -115,7 +115,7 @@ final class CartMutator
 
             // Zone membership belongs to quote resolution: a supported country
             // with no matching zone is valid input that resolves as unavailable.
-            if ($destinationCountry !== null && (new StripeShippingCountryRegistry())->supports($destinationCountry) === false) {
+            if ($destinationCountry !== null && (new StripeDestinationCountryRegistry())->supports($destinationCountry) === false) {
                 throw new CheckoutInputException(ShippingErrorCode::DESTINATION_INVALID);
             }
 

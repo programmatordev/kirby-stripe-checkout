@@ -13,6 +13,7 @@ Paths are relative to the current site's language URL. For example, a Portuguese
 | Method | Path | Body |
 | --- | --- | --- |
 | GET | `/stripe-checkout/cart` | None |
+| PATCH | `/stripe-checkout/cart` | `{"destinationCountry":"PT","revision":"…"}` |
 | POST | `/stripe-checkout/cart/items` | `{"reference":"products/shirt","quantity":1}` |
 | PATCH | `/stripe-checkout/cart/items/{itemId}` | `{"quantity":2,"revision":"…"}` |
 | DELETE | `/stripe-checkout/cart/items/{itemId}` | `{"revision":"…"}` |
@@ -28,7 +29,7 @@ Products with options add `options` alongside `reference` and `quantity`, as an 
 
 The HTTP key and the PHP `add()` argument are both named `options`.
 
-Send the revision last displayed to the visitor for updates, removals and clearing. If it is stale, the route returns `409` with the current cart and makes no change. Refresh the controls and let the visitor decide; do not automatically retry the write.
+Send the revision last displayed to the visitor for destination changes, item updates, removals and clearing. If it is stale, the route returns `409` with the current cart and makes no change. Refresh the controls and let the visitor decide; do not automatically retry the write.
 
 All responses are private and use `Cache-Control: no-store, private` and `Vary: Accept`. There is no CORS configuration or cross-session cart lookup. With PHP `cart.enabled` set to `false`, the routes are absent.
 
@@ -127,12 +128,46 @@ Disable cart mutation controls while a write is pending and handle network failu
 
 This is optimistic concurrency control. The `revision` body field is this plugin's contract, not a standard HTTP field. HTTP also defines conditional writes through [ETag and If-Match](https://www.rfc-editor.org/rfc/rfc9110.html#name-if-match); the explicit body value keeps JSON and ordinary form submissions consistent here.
 
+## Preview shipping for a destination
+
+For a shippable cart, update the customer's destination country before Checkout to receive the matching shipping quote:
+
+```js
+async function updateDestination(destinationCountry) {
+    const response = await fetch(cartUrl, {
+        method: 'PATCH',
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'X-CSRF': csrfToken,
+        },
+        body: JSON.stringify({ destinationCountry, revision: cart.revision }),
+    });
+    const result = await response.json();
+
+    if (result.data?.cart) {
+        cart = result.data.cart;
+        renderCart(cart);
+    }
+
+    if (!response.ok) {
+        throw new Error(result.error.message);
+    }
+}
+```
+
+`destinationCountry` is either an uppercase country code supported by Stripe Checkout, such as `PT`, or JSON `null` to clear it. A form-encoded empty value also clears it. Missing, lower-case, unsupported, non-string and browser-supplied shipping-option values are rejected. The browser never supplies a shipping amount, label, eligibility rule or Stripe resource ID.
+
+Use the response's `destinationCountries` object to render the country control. It maps supported country codes to names in the current Kirby language and follows the same filtering as PHP's `Cart::destinationCountries()`.
+
+A successful response contains the quote for the newly saved destination. Reapplying the same destination is a semantic no-op and preserves the Cart revision. This country is only preview input: Checkout still collects and validates the authoritative shipping address, and the customer chooses the final shipping option there.
+
 ## JSON responses
 
 Successful reads and writes return `200` with `data.cart`. It contains:
 
 - `revision`, `items`, `count`, `totalQuantity`, `empty`, `hasErrors` and `errors`;
-- `currency`, `subtotal`, nullable `destinationCountry` and nullable `shippingQuote`;
+- `currency`, `subtotal`, nullable `destinationCountry`, localized `destinationCountries` and nullable `shippingQuote`;
 - each item's `id`, canonical `request`, resolved `product`, `price`, `subtotal`, `hasErrors` and `errors`.
 
 Product details include `name`, `description`, `images` (URLs), `sku`, `requiresShipping` and the chosen `options`, with option/value IDs and names. PHP's native Kirby File is not serialized. Internal cart IDs, provider IDs, metadata and session data are not included.
@@ -158,7 +193,7 @@ Failures contain `error.code` and a translated `error.message`, plus `field`, `i
 | 503 | Stripe Price retrieval temporarily unavailable: `product.resolution_unavailable` |
 | 500 | Unexpected failure: `internal.error` |
 
-Validation codes include `selection.invalid`, `selection.quantity_invalid`, `selection.line_limit_exceeded`, `product.unavailable`, `product.invalid` and `configuration.not_ready`. Unknown, draft and otherwise unavailable products deliberately share a non-disclosing error. Cart/line read errors retain the PHP API's `cart.*` codes. Method/representation rejections have an empty body.
+Validation codes include `selection.invalid`, `selection.quantity_invalid`, `selection.line_limit_exceeded`, `shipping.destination_invalid`, `product.unavailable`, `product.invalid` and `configuration.not_ready`. Unknown, draft and otherwise unavailable products deliberately share a non-disclosing error. Cart/line read errors retain the PHP API's `cart.*` codes. Method/representation rejections have an empty body.
 
 ## Return HTML instead
 
@@ -182,7 +217,7 @@ Request `Accept: text/html` on the same routes. The response body is the fragmen
 
 The renderer receives the Cart when available, including after a rejected mutation, or `null` for errors before one can be read. Rejection does not erase the cart's controls; render them alongside the error. `CartRenderContext` exposes only:
 
-- `operation()`: `CartOperation::Read`, `Add`, `Update`, `Remove` or `Clear`;
+- `operation()`: `CartOperation::Read`, `AddItem`, `UpdateItem`, `UpdateDestinationCountry`, `RemoveItem` or `Clear`;
 - `httpStatus()`: the HTTP status;
 - `error()`: the safe CartError, or `null` on success.
 

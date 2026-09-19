@@ -197,7 +197,6 @@ final class ShippingQuoteEngineTest extends TestCase
     private static function shipping(?string $destination = 'PT'): ShippingContext
     {
         return new ShippingContext(
-            allowedCountries: ['PT', 'ES'],
             destinationCountry: $destination,
         );
     }

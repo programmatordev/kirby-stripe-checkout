@@ -29,6 +29,7 @@ use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingOption;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuoteStatus;
+use ProgrammatorDev\StripeCheckout\Shipping\StripeDestinationCountryRegistry;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
@@ -62,6 +63,7 @@ final class CartApiTest extends KirbyTestCase
         $this->assertSame('0.00', (string) $cart->subtotal()?->getAmount());
         $this->assertSame('EUR', $cart->currency()?->getCurrencyCode());
         $this->assertNull($cart->destinationCountry());
+        $this->assertSame([], $cart->destinationCountries());
         $this->assertNull($cart->shippingQuote());
     }
 
@@ -180,6 +182,7 @@ final class CartApiTest extends KirbyTestCase
         $this->assertNotNull($required);
         $this->assertSame(ShippingQuoteStatus::DestinationRequired, $required->status());
         $this->assertSame([], $required->options());
+        $this->assertSame(['PT' => 'Portugal'], $cart->destinationCountries());
         $this->assertFalse($cart->hasErrors());
 
         $cart->updateDestinationCountry('PT');
@@ -204,6 +207,30 @@ final class CartApiTest extends KirbyTestCase
         $this->assertTrue($cart->hasErrors());
         $this->assertSame('shipping.unavailable', $cart->errors()[0]->code());
         $this->assertSame('16.00', (string) $cart->subtotal()?->getAmount());
+    }
+
+    public function testFallbackZoneExposesEveryStripeDestinationCountry(): void
+    {
+        $this->restart(['programmatordev.stripe-checkout' => ['settings' => [
+            'defaultRequiresShipping' => true,
+            'shippingZones' => [[
+                'name' => 'Rest of the world',
+                'scope' => 'fallback',
+                'countries' => [],
+                'options' => [[
+                    'key' => 'standard',
+                    'label' => 'Standard delivery',
+                    'amount' => '9.90',
+                ]],
+            ]],
+        ]]]);
+        $cart = $this->cart()->add($this->product()->id());
+        $destinationCountries = $cart->destinationCountries();
+
+        $this->assertCount(count((new StripeDestinationCountryRegistry())->codes()), $destinationCountries);
+        $this->assertSame('Portugal', $destinationCountries['PT']);
+        $this->assertArrayHasKey('US', $destinationCountries);
+        $this->assertSame(ShippingQuoteStatus::Available, $cart->shippingQuote()?->status());
     }
 
     public function testCartBuildsCompleteTrustedShippingResolverContexts(): void
@@ -265,7 +292,10 @@ final class CartApiTest extends KirbyTestCase
         $this->assertSame('50.00', (string) $receivedCheckout->subtotal()->getAmount());
         $this->assertInstanceOf(ShippingContext::class, $receivedShipping);
         $this->assertSame('PT', $receivedShipping->destinationCountry());
-        $this->assertContains('PT', $receivedShipping->allowedCountries());
+        $this->assertCount(
+            count((new StripeDestinationCountryRegistry())->codes()),
+            $cart->destinationCountries(),
+        );
         $this->assertSame('stripe_default', $receivedShipping->taxBehavior()->value);
         $this->assertNull($receivedShipping->taxCode());
         $this->assertSame(ShippingQuoteStatus::Available, $cart->shippingQuote()?->status());
@@ -338,7 +368,7 @@ final class CartApiTest extends KirbyTestCase
             $this->fail('Expected an invalid destination.');
         } catch (CartException $error) {
             $this->assertSame('shipping.destination_invalid', $error->errorCode());
-            $this->assertSame('Choose a supported shipping country and try again.', $error->error()->message());
+            $this->assertSame('Choose a supported destination country and try again.', $error->error()->message());
         }
 
         $this->assertSame('PT', $cart->destinationCountry());

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Kirby;
 
-use Collator;
 use Kirby\Cms\App;
 use Kirby\Data\Data;
 use Kirby\Toolkit\I18n;
@@ -15,8 +14,6 @@ use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Panel\DiagnosticsSections;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingZone;
-use ProgrammatorDev\StripeCheckout\Shipping\StripeShippingCountryRegistry;
-use Symfony\Component\Intl\Countries;
 use Symfony\Component\Intl\Currencies;
 use Throwable;
 
@@ -47,7 +44,7 @@ final class SettingsBlueprint
         // The provider registry and active Panel locale make these options
         // runtime data; the YAML blueprint supplies only their static field.
         $settingsFields['currency']['options'] = self::currencyOptions();
-        $settingsFields['shippingZones']['countryOptions'] = self::countryOptions();
+        $settingsFields['shippingZones']['countryOptions'] = (new DestinationCountryOptions())->all();
 
         // Use the same defaults for native Page creation and runtime fallbacks.
         foreach (Defaults::SETTINGS as $name => $default) {
@@ -175,34 +172,6 @@ final class SettingsBlueprint
 
             $options[$currency] = $currency . ' — ' . $name;
         }
-
-        return $options;
-    }
-
-    /** @return array<string, string> */
-    private static function countryOptions(): array
-    {
-        $options = [];
-
-        foreach ((new StripeShippingCountryRegistry())->codes() as $country) {
-            try {
-                $name = Countries::getName($country, I18n::locale());
-            } catch (Throwable) {
-                $name = $country;
-            }
-
-            if ($name === $country) {
-                $translatedName = I18n::translate(
-                    'programmatordev.stripe-checkout.settings.shippingZones.countries.' . strtolower($country),
-                    $country,
-                );
-                $name = is_string($translatedName) ? $translatedName : $country;
-            }
-
-            $options[$country] = $name;
-        }
-
-        (new Collator(I18n::locale()))->asort($options, Collator::SORT_STRING);
 
         return $options;
     }

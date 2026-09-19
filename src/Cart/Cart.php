@@ -27,6 +27,7 @@ final class Cart
     /**
      * @internal Constructed by the Site-scoped plugin entry point.
      * @param list<CartItem> $items
+     * @param array<string, string> $destinationCountries
      * @param list<CartError> $errors
      */
     public function __construct(
@@ -35,6 +36,7 @@ final class Cart
         private ?Currency $currency,
         private ?Money $subtotal,
         private ?ShippingQuote $shippingQuote,
+        private array $destinationCountries,
         private array $errors,
         private readonly CartMutator $mutator,
         private readonly CartViewFactory $views,
@@ -101,6 +103,14 @@ final class Cart
     public function destinationCountry(): ?string
     {
         return $this->snapshot->destinationCountry();
+    }
+
+    /** @return array<string, string> Supported code-to-name choices for this Cart. */
+    public function destinationCountries(): array
+    {
+        $this->resolvePresentation();
+
+        return $this->destinationCountries;
     }
 
     public function count(): int
@@ -190,6 +200,7 @@ final class Cart
         $this->currency = $next->currency;
         $this->subtotal = $next->subtotal;
         $this->shippingQuote = $next->shippingQuote;
+        $this->destinationCountries = $next->destinationCountries;
         $this->errors = $next->errors;
         $this->presentationResolved = true;
     }

@@ -184,7 +184,7 @@ The global `shippingTaxBehavior` values match the normal tax-inclusion choices. 
 
 PHP options can add localized labels with a `labels` map and can override `taxBehavior` or an exact `taxCode` per option. In the Panel, the default language owns zones, countries, option membership/order, and technical values. Other languages can translate only customer-facing option labels; stable internal IDs keep both nested levels synchronized. Existing reusable Stripe Shipping Rate IDs are deliberately not accepted: later Checkout mapping will create inline, checkout-specific backing Rates.
 
-The current package resolves and validates this configuration, implements the built-in quote engine, and exposes destination-aware Cart quote previews to PHP, JSON, and project-owned HTML renderers. See [Shipping quotes](shipping.md) for destination behavior and the PHP replacement resolver. HTTP destination mutation and Checkout Session shipping mapping are not implemented yet.
+The current package resolves and validates this configuration, implements the built-in quote engine, and exposes destination-aware Cart quote previews to PHP, JSON, and project-owned HTML renderers. See [Shipping quotes](shipping.md) for destination behavior and the PHP replacement resolver. The Cart destination can also be changed through the revision-safe [HTTP route](cart-http.md#preview-shipping-for-a-destination). Checkout Session shipping mapping is not implemented yet.
 
 ## Reading effective settings
 

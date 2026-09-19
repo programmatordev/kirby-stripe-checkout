@@ -22,6 +22,7 @@
             if (busy) return;
             const previous = cartView();
             const method = form?.dataset.cartMethod ?? 'GET';
+            const successMessage = form?.dataset.cartSuccess;
             // Capture CSRF and the displayed revision before disabling fields;
             // FormData excludes controls inside a disabled fieldset.
             const body = form ? new URLSearchParams(new FormData(form)) : undefined;
@@ -61,7 +62,7 @@
                 // and fresh revision inputs, but must never trigger a write retry.
                 previous.replaceWith(next);
                 feedback.textContent = response.ok
-                    ? ({ POST: 'Added to cart.', PATCH: 'Quantity updated.', DELETE: 'Cart updated.', GET: 'Cart refreshed.' }[method])
+                    ? (successMessage ?? { POST: 'Added to cart.', PATCH: 'Quantity updated.', DELETE: 'Cart updated.', GET: 'Cart refreshed.' }[method])
                     : response.status === 409
                         ? 'The cart changed in another tab. Review it before trying again.'
                         : 'Could not update the cart. Review the message above.';

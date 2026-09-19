@@ -11,13 +11,14 @@ use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
 use ProgrammatorDev\StripeCheckout\Checkout\RequestErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
 use stdClass;
 
 /** @internal Validates HTTP transport only; product rules remain in the shared cart API. */
 final class CartRequestParser
 {
     /**
-     * @return array{reference?: string, quantity?: int, options?: array<string, string>, revision?: string}
+     * @return array{reference?: string, quantity?: int, options?: array<string, string>, revision?: string, destinationCountry?: string|null}
      */
     public static function parse(App $kirby, CartOperation $operation): array
     {
@@ -68,14 +69,19 @@ final class CartRequestParser
             unset($body['csrf']);
 
             // Form values are strings; normalize only the documented quantity.
-            if (in_array($operation, [CartOperation::Add, CartOperation::Update], true) && array_key_exists('quantity', $body)) {
+            if (in_array($operation, [CartOperation::AddItem, CartOperation::UpdateItem], true) && array_key_exists('quantity', $body)) {
                 $body['quantity'] = self::formQuantity($body['quantity']);
+            }
+
+            if ($operation === CartOperation::UpdateDestinationCountry && ($body['destinationCountry'] ?? null) === '') {
+                $body['destinationCountry'] = null;
             }
         }
 
         $keys = match ($operation) {
-            CartOperation::Add => ['reference', 'quantity', 'options'],
-            CartOperation::Update => ['revision', 'quantity'],
+            CartOperation::AddItem => ['reference', 'quantity', 'options'],
+            CartOperation::UpdateItem => ['revision', 'quantity'],
+            CartOperation::UpdateDestinationCountry => ['revision', 'destinationCountry'],
             default => ['revision'],
         };
 
@@ -83,7 +89,7 @@ final class CartRequestParser
             throw new CheckoutInputException(SelectionErrorCode::INVALID);
         }
 
-        if ($operation === CartOperation::Add) {
+        if ($operation === CartOperation::AddItem) {
             $selection = $body;
 
             // HTTP uses the concise Cart vocabulary; the shared selection
@@ -108,11 +114,21 @@ final class CartRequestParser
             throw new CheckoutInputException(SelectionErrorCode::INVALID);
         }
 
-        if ($operation === CartOperation::Update && (is_int($body['quantity'] ?? null) === false || $body['quantity'] < 1)) {
+        if ($operation === CartOperation::UpdateItem && (is_int($body['quantity'] ?? null) === false || $body['quantity'] < 1)) {
             throw new CheckoutInputException(SelectionErrorCode::QUANTITY_INVALID);
         }
 
-        /** @var array{revision: string, quantity?: int} $body */
+        if (
+            $operation === CartOperation::UpdateDestinationCountry
+            && (
+                array_key_exists('destinationCountry', $body) === false
+                || (is_string($body['destinationCountry']) === false && $body['destinationCountry'] !== null)
+            )
+        ) {
+            throw new CheckoutInputException(ShippingErrorCode::DESTINATION_INVALID);
+        }
+
+        /** @var array{revision: string, quantity?: int, destinationCountry?: string|null} $body */
         return $body;
     }
 

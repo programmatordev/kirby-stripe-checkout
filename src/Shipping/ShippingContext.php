@@ -13,31 +13,16 @@ use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
  */
 final readonly class ShippingContext
 {
-    /** @var list<string> */
-    private array $allowedCountries;
-
-    /** @param array<mixed> $allowedCountries */
     public function __construct(
-        array $allowedCountries,
         private ?string $destinationCountry,
         private TaxBehavior $taxBehavior = TaxBehavior::StripeDefault,
         private ?string $taxCode = null,
     ) {
-        $this->allowedCountries = self::validateCountries($allowedCountries);
-        self::validateDestination(
-            $this->destinationCountry,
-            $this->allowedCountries,
-        );
+        self::validateDestination($this->destinationCountry);
 
         if ($this->taxCode !== null && preg_match('/\Atxcd_[A-Za-z0-9]{1,249}\z/D', $this->taxCode) !== 1) {
             throw new InvalidArgumentException('A shipping context contains an invalid tax code.');
         }
-    }
-
-    /** @return list<string> */
-    public function allowedCountries(): array
-    {
-        return $this->allowedCountries;
     }
 
     public function destinationCountry(): ?string
@@ -55,43 +40,16 @@ final readonly class ShippingContext
         return $this->taxCode;
     }
 
-    /**
-     * @param array<mixed> $countries
-     * @return list<string>
-     */
-    private static function validateCountries(array $countries): array
-    {
-        if (array_is_list($countries) === false || $countries === []) {
-            throw new InvalidArgumentException('A shipping context requires allowed countries.');
-        }
-
-        $registry = new StripeShippingCountryRegistry();
-        $normalized = [];
-
-        foreach ($countries as $country) {
-            if (
-                is_string($country) === false
-                || $registry->supports($country) === false
-                || isset($normalized[$country])
-            ) {
-                throw new InvalidArgumentException('A shipping context contains invalid allowed countries.');
-            }
-
-            $normalized[$country] = true;
-        }
-
-        return array_keys($normalized);
-    }
-
-    /** @param list<string> $allowedCountries */
-    private static function validateDestination(?string $country, array $allowedCountries): void
+    private static function validateDestination(?string $country): void
     {
         if ($country === null) {
             return;
         }
 
-        if (in_array($country, $allowedCountries, true) === false) {
-            throw new InvalidArgumentException('The destination is not an allowed shipping country.');
+        // Provider support is a structural constraint. Store-specific zone or
+        // resolver eligibility is evaluated later when the quote is resolved.
+        if ((new StripeDestinationCountryRegistry())->supports($country) === false) {
+            throw new InvalidArgumentException('The destination country is not supported by Stripe Checkout.');
         }
     }
 }

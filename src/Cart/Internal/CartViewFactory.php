@@ -20,6 +20,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Exception\MoneyException;
+use ProgrammatorDev\StripeCheckout\Kirby\DestinationCountryOptions;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
@@ -31,7 +32,6 @@ use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuoteStatus;
-use ProgrammatorDev\StripeCheckout\Shipping\StripeShippingCountryRegistry;
 use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 use ProgrammatorDev\StripeCheckout\Tax\TaxErrorCode;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
@@ -52,6 +52,7 @@ final class CartViewFactory
                 currency: null,
                 subtotal: null,
                 shippingQuote: null,
+                destinationCountries: [],
                 errors: [],
                 mutator: $mutator,
                 views: $this,
@@ -63,6 +64,7 @@ final class CartViewFactory
         $currency = null;
         $subtotal = null;
         $shippingQuote = null;
+        $destinationCountries = [];
         $errors = [];
         $items = [];
         $checkoutItems = [];
@@ -142,6 +144,22 @@ final class CartViewFactory
                 // complete cart needs shipping or which options are valid.
                 $shippingQuote = ShippingQuote::unavailable();
             } else {
+                $requiresShipping = false;
+
+                foreach ($checkoutItems as $checkoutItem) {
+                    if ($checkoutItem->requiresShipping()) {
+                        $requiresShipping = true;
+
+                        break;
+                    }
+                }
+
+                if ($requiresShipping) {
+                    $destinationCountries = (new DestinationCountryOptions())->forCodes(
+                        $runtime->destinationCountryCodes(),
+                    );
+                }
+
                 try {
                     $shippingQuote = $this->resolveShippingQuote(
                         runtime: $runtime,
@@ -170,6 +188,7 @@ final class CartViewFactory
             currency: $currency,
             subtotal: $resolvedSubtotal,
             shippingQuote: $shippingQuote,
+            destinationCountries: $destinationCountries,
             errors: $errors,
             mutator: $mutator,
             views: $this,
@@ -197,7 +216,6 @@ final class CartViewFactory
                 uiMode: $settings->uiMode(),
             ),
             new ShippingContext(
-                allowedCountries: (new StripeShippingCountryRegistry())->codes(),
                 destinationCountry: $snapshot->destinationCountry(),
                 taxBehavior: $automaticTax
                     ? $settings->shippingTaxBehavior()

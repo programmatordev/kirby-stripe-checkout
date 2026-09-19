@@ -52,6 +52,8 @@ use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingZoneResolver;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingResolverInterface;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingZoneScope;
+use ProgrammatorDev\StripeCheckout\Shipping\StripeDestinationCountryRegistry;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionGatewayInterface;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\StripeApiCheckoutSessionGateway;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogue;
@@ -157,6 +159,30 @@ final class RuntimeFactory
             $checkout,
             $shipping,
         );
+    }
+
+    /** @return list<string> */
+    public function destinationCountryCodes(): array
+    {
+        if ($this->shipping()->resolver() !== null) {
+            // A replacement resolver owns destination eligibility, so the
+            // built-in zones cannot narrow its possible input countries.
+            return (new StripeDestinationCountryRegistry())->codes();
+        }
+
+        $countries = [];
+
+        foreach ($this->settings()->shippingZones() as $zone) {
+            if ($zone->scope() === ShippingZoneScope::Fallback) {
+                return (new StripeDestinationCountryRegistry())->codes();
+            }
+
+            foreach ($zone->countries() as $country) {
+                $countries[$country] = true;
+            }
+        }
+
+        return array_keys($countries);
     }
 
     private function taxCodeValidator(): TaxCodeValidator

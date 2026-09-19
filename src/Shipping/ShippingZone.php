@@ -40,7 +40,7 @@ final readonly class ShippingZone
         }
 
         $normalizedCountries = [];
-        $countryRegistry = new StripeShippingCountryRegistry();
+        $countryRegistry = new StripeDestinationCountryRegistry();
 
         foreach ($countries as $country) {
             if (

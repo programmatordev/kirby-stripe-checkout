@@ -7,6 +7,8 @@
 $endpoint = $site->url() . '/stripe-checkout/cart';
 $error = isset($context) ? $context->error() : null;
 $checkout = $site->stripeCheckout();
+$shippingQuote = $cart?->shippingQuote();
+$destinationCountries = $cart?->destinationCountries() ?? [];
 ?>
 <details class="cart-panel" data-cart-view data-cart-url="<?= esc($endpoint, 'attr') ?>" open>
     <summary>
@@ -72,7 +74,59 @@ $checkout = $site->stripeCheckout();
                 <span>Subtotal</span>
                 <span><?= $cart->subtotal() === null ? 'Unavailable' : esc($checkout->formatMoney($cart->subtotal())) ?></span>
             </div>
-            <p class="cart-note">Shipping and tax are not calculated here.</p>
+            <?php if ($shippingQuote !== null): ?>
+                <section class="cart-shipping" aria-labelledby="cart-shipping-title">
+                    <h3 id="cart-shipping-title">Shipping preview</h3>
+                    <form action="<?= esc($endpoint, 'attr') ?>" method="post" data-cart-method="PATCH" data-cart-success="Shipping destination updated.">
+                        <fieldset>
+                            <input type="hidden" name="csrf" value="<?= esc(csrf(), 'attr') ?>">
+                            <input type="hidden" name="revision" value="<?= esc($cart->revision(), 'attr') ?>">
+                            <label>
+                                Destination country
+                                <select name="destinationCountry">
+                                    <option value="">Choose a country</option>
+                                    <?php foreach ($destinationCountries as $country => $name): ?>
+                                        <option value="<?= esc($country, 'attr') ?>"<?= $cart->destinationCountry() === $country ? ' selected' : '' ?>><?= esc($name) ?></option>
+                                    <?php endforeach ?>
+                                </select>
+                            </label>
+                            <button type="submit">Update shipping</button>
+                        </fieldset>
+                    </form>
+                    <?php if ($shippingQuote->status() === ProgrammatorDev\StripeCheckout\Shipping\ShippingQuoteStatus::DestinationRequired): ?>
+                        <p class="cart-note">Choose a destination to preview the available shipping options.</p>
+                    <?php elseif ($shippingQuote->status() === ProgrammatorDev\StripeCheckout\Shipping\ShippingQuoteStatus::Available): ?>
+                        <ul class="cart-shipping-options">
+                            <?php foreach ($shippingQuote->options() as $shippingOption): ?>
+                                <li>
+                                    <span>
+                                        <strong><?= esc($shippingOption->label()) ?></strong>
+                                        <?php if ($deliveryEstimate = $shippingOption->deliveryEstimate()): ?>
+                                            <?php
+                                            $bounds = array_values(array_filter([
+                                                $deliveryEstimate->minimum(),
+                                                $deliveryEstimate->maximum(),
+                                            ], static fn(?int $bound): bool => $bound !== null));
+                                            $unit = str_replace('_', ' ', $deliveryEstimate->unit()->value);
+                                            $plural = max($bounds) === 1 ? $unit : $unit . 's';
+                                            $range = match (true) {
+                                                $deliveryEstimate->minimum() === null => 'Up to ' . $deliveryEstimate->maximum(),
+                                                $deliveryEstimate->maximum() === null => 'From ' . $deliveryEstimate->minimum(),
+                                                default => implode('–', array_unique($bounds)),
+                                            };
+                                            ?>
+                                            <small><?= esc($range . ' ' . $plural) ?></small>
+                                        <?php endif ?>
+                                    </span>
+                                    <strong><?= esc($checkout->formatMoney($shippingOption->amount())) ?></strong>
+                                </li>
+                            <?php endforeach ?>
+                        </ul>
+                        <p class="cart-note">The customer chooses the final shipping option in Checkout.</p>
+                    <?php endif ?>
+                </section>
+            <?php endif ?>
+            <p class="cart-note">Tax is calculated later in Checkout when configured.</p>
             <?php if (!$cart->isEmpty()): ?>
                 <button class="cart-checkout" type="button" disabled>Checkout — coming later</button>
                 <form class="cart-clear" action="<?= esc($endpoint, 'attr') ?>" method="post" data-cart-method="DELETE">

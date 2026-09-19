@@ -9,7 +9,7 @@ namespace ProgrammatorDev\StripeCheckout\Shipping;
  *
  * @internal
  */
-final class StripeShippingCountryRegistry
+final class StripeDestinationCountryRegistry
 {
     /**
      * Stripe documents this as the enum for

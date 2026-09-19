@@ -122,6 +122,13 @@
     .text-button { padding-inline: .25rem; background: transparent; color: var(--muted); font-size: .75rem; font-weight: 500; text-decoration: underline; }
     .cart-item-controls > form:last-child { margin-left: auto; }
     .cart-total { display: flex; justify-content: space-between; border-top: 1px solid var(--border); padding-top: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .cart-shipping { display: grid; gap: .75rem; border-top: 1px solid var(--border); margin-top: 1.25rem; padding-top: 1.25rem; }
+    .cart-shipping form fieldset { display: grid; gap: .65rem; }
+    .cart-shipping form button { justify-self: start; min-height: 2.25rem; padding: .4rem .7rem; font-size: .75rem; background: var(--soft); color: var(--text); }
+    .cart-shipping-options { display: grid; gap: .5rem; list-style: none; margin: 0; padding: 0; }
+    .cart-shipping-options li { display: flex; align-items: start; justify-content: space-between; gap: .75rem; padding: .65rem; border-radius: .5rem; background: var(--soft); font-size: .75rem; }
+    .cart-shipping-options li > span { display: grid; min-width: 0; }
+    .cart-shipping-options small { color: var(--muted); }
     .cart-note { margin-block: .5rem 1rem; color: var(--muted); font-size: .7rem; }
     .cart-checkout { width: 100%; }
     .cart-clear { text-align: center; margin-top: .5rem; }

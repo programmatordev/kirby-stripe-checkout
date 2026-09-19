@@ -63,9 +63,13 @@ final class CartEndpoint
 
             match ($operation) {
                 CartOperation::Read => $cart,
-                CartOperation::Add => $cart->add($input['reference'] ?? '', $input['quantity'] ?? 1, $input['options'] ?? []),
-                CartOperation::Update => $cart->update($itemId ?? '', $input['quantity'] ?? 0, $input['revision'] ?? ''),
-                CartOperation::Remove => $cart->remove($itemId ?? '', $input['revision'] ?? ''),
+                CartOperation::AddItem => $cart->add($input['reference'] ?? '', $input['quantity'] ?? 1, $input['options'] ?? []),
+                CartOperation::UpdateItem => $cart->update($itemId ?? '', $input['quantity'] ?? 0, $input['revision'] ?? ''),
+                CartOperation::UpdateDestinationCountry => $cart->updateDestinationCountry(
+                    $input['destinationCountry'] ?? null,
+                    $input['revision'] ?? '',
+                ),
+                CartOperation::RemoveItem => $cart->remove($itemId ?? '', $input['revision'] ?? ''),
                 CartOperation::Clear => $cart->clear($input['revision'] ?? ''),
             };
         } catch (CartException $failure) {

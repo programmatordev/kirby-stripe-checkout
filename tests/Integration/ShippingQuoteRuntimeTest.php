@@ -244,7 +244,6 @@ final class ShippingQuoteRuntimeTest extends KirbyTestCase
     private static function shipping(): ShippingContext
     {
         return new ShippingContext(
-            allowedCountries: ['PT'],
             destinationCountry: 'PT',
         );
     }

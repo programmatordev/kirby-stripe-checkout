@@ -152,7 +152,7 @@ return [
     'programmatordev.stripe-checkout.cart.revision_conflict' => 'O carrinho foi alterado. Reveja-o antes de tentar novamente.',
     'programmatordev.stripe-checkout.cart.item_not_found' => 'Este artigo já não está no carrinho.',
     'programmatordev.stripe-checkout.cart.unavailable' => 'Não foi possível atualizar o carrinho. Tente novamente.',
-    'programmatordev.stripe-checkout.shipping.destination_invalid' => 'Escolha um país de envio suportado e tente novamente.',
+    'programmatordev.stripe-checkout.shipping.destination_invalid' => 'Escolha um país de destino suportado e tente novamente.',
     'programmatordev.stripe-checkout.shipping.unavailable' => 'O envio não está disponível para este carrinho. Reveja o destino ou tente novamente.',
     'programmatordev.stripe-checkout.area.label' => 'Stripe Checkout',
     'programmatordev.stripe-checkout.overview.description' => 'Configure a loja e confirme se a integração local está pronta.',

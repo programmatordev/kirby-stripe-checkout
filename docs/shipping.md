@@ -2,7 +2,7 @@
 
 Shipping is Kirby-owned. The built-in resolver uses the ordered zones and fixed whole-order options configured in the Stripe Checkout Settings Page. A project can replace that calculation with one PHP resolver for product-specific rules, free-shipping thresholds, pickup labels, carrier APIs, or other store policy.
 
-The quote engine and resolver contract power the [PHP Cart shipping preview](cart.md#preview-shipping), JSON Cart responses, and project-owned HTML Cart renderers. A destination can be retained through the [PHP Cart API](cart.md#set-the-shipping-destination). HTTP destination mutation and Checkout Session shipping mapping are not implemented yet.
+The quote engine and resolver contract power the [PHP Cart shipping preview](cart.md#preview-shipping), JSON Cart responses, and project-owned HTML Cart renderers. A destination can be retained through the [PHP Cart API](cart.md#set-the-shipping-destination) or the revision-safe [Cart HTTP route](cart-http.md#preview-shipping-for-a-destination). Checkout Session shipping mapping is not implemented yet.
 
 ## Built-in resolution
 
@@ -15,6 +15,8 @@ Every shipping destination resolves to one zone:
 Options from different zones are never combined. Before a destination is known, the resolver can return options only when a fallback is the sole configured zone and therefore applies everywhere. Otherwise it reports that a destination is required. An empty shipping configuration is unavailable rather than implicitly free.
 
 Digital-only orders do not produce a shipping quote and never call a custom resolver. Mixed orders provide every line to the resolver and identify the subset that requires shipping.
+
+For a shippable Cart, `destinationCountries()` exposes localized country choices for the storefront. Explicit built-in zones narrow the choices to their configured countries. A rest-of-world fallback, or a custom resolver whose eligibility cannot be inferred from settings, exposes every Stripe-supported destination and leaves the final availability decision to quote resolution.
 
 ## Replacing the resolver
 
@@ -81,7 +83,7 @@ The resolver receives two immutable contexts with separate responsibilities.
 
 `ShippingContext` contains the shipping policy inputs:
 
-- `allowedCountries()` and `destinationCountry()` describe the current country policy;
+- `destinationCountry()` returns the validated quote destination, when known;
 - `taxBehavior()` and `taxCode()` provide the effective shipping tax defaults for new options.
 
 Each line item exposes `productReference()`, nullable `variantId()` and `sku()`, `quantity()`, effective `price()`, calculated `subtotal()`, `requiresShipping()`, selected `options()`, and safe project `metadata()`.

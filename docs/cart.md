@@ -49,6 +49,7 @@ The cart can retain a destination country before Checkout so the shipping flow c
 <?php
 
 /** @var ProgrammatorDev\StripeCheckout\Cart\Cart $cart */
+$countries = $cart->destinationCountries(); // ['PT' => 'Portugal', ...]
 $cart->updateDestinationCountry('PT');
 $cart->destinationCountry(); // 'PT'
 
@@ -56,6 +57,18 @@ $cart->updateDestinationCountry(null);
 ```
 
 This country is bounded quote input, not a saved address. Stripe Checkout still collects the authoritative shipping address. Updating the destination uses the same revision protection as item updates; setting the current value again is a no-op and keeps the revision unchanged.
+
+`destinationCountries()` returns localized `code => name` choices for the current Cart. It is empty for an empty or digital-only Cart. With built-in shipping, explicit zones limit the list to their configured countries, while a rest-of-world fallback exposes every Stripe-supported destination. A custom resolver also receives every Stripe-supported country as possible input because only the resolver can decide its actual eligibility.
+
+```php
+<select name="destinationCountry">
+    <?php foreach ($cart->destinationCountries() as $code => $name): ?>
+        <option value="<?= esc($code, 'attr') ?>"<?= $cart->destinationCountry() === $code ? ' selected' : '' ?>>
+            <?= esc($name) ?>
+        </option>
+    <?php endforeach ?>
+</select>
+```
 
 ## Preview shipping
 

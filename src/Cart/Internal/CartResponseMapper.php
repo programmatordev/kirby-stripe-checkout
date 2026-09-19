@@ -63,6 +63,7 @@ final class CartResponseMapper
             'currency' => $cart->currency()?->getCurrencyCode(),
             'subtotal' => self::money($cart->subtotal()),
             'destinationCountry' => $cart->destinationCountry(),
+            'destinationCountries' => (object) $cart->destinationCountries(),
             'shippingQuote' => self::shippingQuote($cart->shippingQuote()),
             'empty' => $cart->isEmpty(),
             'hasErrors' => $cart->hasErrors(),

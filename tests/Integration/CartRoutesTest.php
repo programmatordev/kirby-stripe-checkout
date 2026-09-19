@@ -131,6 +131,124 @@ final class CartRoutesTest extends KirbyTestCase
         $this->assertSame('16.00', $this->data($unavailable, 'data.cart.subtotal.amount'));
     }
 
+    public function testDestinationPatchUpdatesClearsAndReturnsTheCurrentQuote(): void
+    {
+        $operations = [];
+        $this->restart([
+            'settings' => [
+                'defaultRequiresShipping' => true,
+                'shippingZones' => [[
+                    'name' => 'Portugal',
+                    'scope' => 'selected_countries',
+                    'countries' => ['PT'],
+                    'options' => [[
+                        'key' => 'standard',
+                        'label' => 'Standard delivery',
+                        'amount' => '4.90',
+                    ]],
+                ]],
+            ],
+            'cart' => ['renderer' => static function (?Cart $cart, CartRenderContext $context) use (&$operations): string {
+                $operations[] = $context->operation();
+
+                return '<div>' . $cart?->destinationCountry() . ':' . $cart?->shippingQuote()?->status()->value . '</div>';
+            }],
+        ]);
+        $cart = $this->cart()->add($this->product()->id());
+        $originalRevision = $cart->revision();
+        $updated = $this->send('PATCH', body: [
+            'revision' => $originalRevision,
+            'destinationCountry' => 'PT',
+        ]);
+
+        $this->assertSame(200, $updated->code());
+        $this->assertSame('PT', $this->data($updated, 'data.cart.destinationCountry'));
+        $this->assertSame('Portugal', $this->data($updated, 'data.cart.destinationCountries.PT'));
+        $this->assertSame('available', $this->data($updated, 'data.cart.shippingQuote.status'));
+        $this->assertSame('standard', $this->data($updated, 'data.cart.shippingQuote.options.0.key'));
+        $updatedRevision = $this->data($updated, 'data.cart.revision');
+        $this->assertIsString($updatedRevision);
+        $this->assertNotSame($originalRevision, $updatedRevision);
+
+        $unchanged = $this->send('PATCH', body: [
+            'revision' => $updatedRevision,
+            'destinationCountry' => 'PT',
+        ]);
+        $this->assertSame($updatedRevision, $this->data($unchanged, 'data.cart.revision'));
+
+        $jsonCleared = $this->send('PATCH', body: [
+            'revision' => $updatedRevision,
+            'destinationCountry' => null,
+        ]);
+        $this->assertSame(200, $jsonCleared->code());
+        $this->assertNull($this->data($jsonCleared, 'data.cart.destinationCountry'));
+        $this->assertSame('destination_required', $this->data($jsonCleared, 'data.cart.shippingQuote.status'));
+
+        $formUpdated = $this->send('PATCH', body: http_build_query([
+            'revision' => $this->data($jsonCleared, 'data.cart.revision'),
+            'destinationCountry' => 'PT',
+        ]), headers: ['Content-Type' => 'application/x-www-form-urlencoded']);
+        $this->assertSame(200, $formUpdated->code());
+        $this->assertSame('PT', $this->data($formUpdated, 'data.cart.destinationCountry'));
+
+        $form = http_build_query([
+            'revision' => $this->data($formUpdated, 'data.cart.revision'),
+            'destinationCountry' => '',
+        ]);
+        $cleared = $this->send('PATCH', body: $form, headers: ['Content-Type' => 'application/x-www-form-urlencoded']);
+        $this->assertSame(200, $cleared->code());
+        $this->assertNull($this->data($cleared, 'data.cart.destinationCountry'));
+        $this->assertSame('destination_required', $this->data($cleared, 'data.cart.shippingQuote.status'));
+
+        $html = $this->send('PATCH', body: [
+            'revision' => $this->data($cleared, 'data.cart.revision'),
+            'destinationCountry' => 'PT',
+        ], headers: ['Accept' => 'text/html']);
+        $this->assertSame(200, $html->code());
+        $this->assertSame('<div>PT:available</div>', $html->body());
+        $this->assertSame([CartOperation::UpdateDestinationCountry], $operations);
+    }
+
+    public function testDestinationPatchRejectsUntrustedInputWithoutChangingTheCart(): void
+    {
+        $cart = $this->cart()->add($this->product()->id());
+        $revision = $cart->revision();
+
+        foreach ([
+            [],
+            ['destinationCountry' => []],
+            ['destinationCountry' => 1],
+            ['destinationCountry' => false],
+            ['destinationCountry' => 'pt'],
+            ['destinationCountry' => 'CU'],
+        ] as $body) {
+            $response = $this->send('PATCH', body: [...$body, 'revision' => $revision]);
+            $this->assertSame(422, $response->code());
+            $this->assertSame('shipping.destination_invalid', $this->data($response, 'error.code'));
+            $this->assertSame($revision, $this->cart()->revision());
+            $this->assertNull($this->cart()->destinationCountry());
+        }
+
+        $this->assertSame(422, $this->send('PATCH', body: ['destinationCountry' => 'PT'])->code());
+        $this->assertSame(422, $this->send('PATCH', body: [
+            'revision' => $revision,
+            'destinationCountry' => 'PT',
+            'shippingOption' => 'standard',
+        ])->code());
+        $this->assertSame(403, $this->send('PATCH', body: [
+            'revision' => $revision,
+            'destinationCountry' => 'PT',
+        ], csrf: false)->code());
+
+        $this->cart()->updateDestinationCountry('PT');
+        $stale = $this->send('PATCH', body: [
+            'revision' => $revision,
+            'destinationCountry' => null,
+        ]);
+        $this->assertSame(409, $stale->code());
+        $this->assertSame('PT', $this->cart()->destinationCountry());
+    }
+
     public function testStaleWritesReturnCurrentCartAndDoNotMutate(): void
     {
         $cart = $this->cart()->add($this->product()->id());
@@ -357,7 +475,7 @@ final class CartRoutesTest extends KirbyTestCase
         $this->assertSame(200, $response->code());
         $this->assertStringContainsString('>1</div>', $response->body());
         /** @var list<CartRenderContext> $calls */
-        $this->assertSame(CartOperation::Add, $calls[0]->operation());
+        $this->assertSame(CartOperation::AddItem, $calls[0]->operation());
         $this->assertSame(200, $calls[0]->httpStatus());
         $this->assertNull($calls[0]->error());
         $response = $this->send('DELETE', '', ['revision' => 'stale'], ['Accept' => 'text/html']);
@@ -389,7 +507,7 @@ final class CartRoutesTest extends KirbyTestCase
 
     public function testUnsupportedMethodsAndDisabledRoutes(): void
     {
-        foreach ([['POST', ''], ['PATCH', ''], ['GET', '/items'], ['POST', '/items/id'], ['OPTIONS', '']] as [$method, $path]) {
+        foreach ([['POST', ''], ['PUT', ''], ['GET', '/items'], ['POST', '/items/id'], ['OPTIONS', '']] as [$method, $path]) {
             $response = $this->send($method, $path);
             $this->assertSame(405, $response->code());
             $this->assertArrayHasKey('Allow', $response->headers());
@@ -543,11 +661,27 @@ final class CartRoutesTest extends KirbyTestCase
     public function testDevelopmentSnippetCanRenderTheTypedContext(): void
     {
         $snippet = dirname(__DIR__, 2) . '/site/snippets/cart.php';
-        $this->restart(['cart' => ['renderer' => function (?Cart $cart, CartRenderContext $context): string {
-            $html = $this->kirby->snippet('cart', ['cart' => $cart, 'context' => $context, 'site' => $this->kirby->site()], true);
-            $this->assertIsString($html);
-            return $html;
-        }]]);
+        $this->restart([
+            'settings' => [
+                'defaultRequiresShipping' => true,
+                'shippingZones' => [[
+                    'name' => 'Portugal',
+                    'scope' => 'selected_countries',
+                    'countries' => ['PT'],
+                    'options' => [[
+                        'key' => 'standard',
+                        'label' => 'Standard delivery',
+                        'amount' => '4.90',
+                    ]],
+                ]],
+            ],
+            'cart' => ['renderer' => function (?Cart $cart, CartRenderContext $context): string {
+                $html = $this->kirby->snippet('cart', ['cart' => $cart, 'context' => $context, 'site' => $this->kirby->site()], true);
+                $this->assertIsString($html);
+
+                return $html;
+            }],
+        ]);
         $root = $this->kirby->root('snippets');
         $this->assertIsString($root);
         Dir::make($root);
@@ -555,6 +689,17 @@ final class CartRoutesTest extends KirbyTestCase
         $response = $this->send('GET', headers: ['Accept' => 'text/html']);
         $this->assertSame(200, $response->code());
         $this->assertStringContainsString('Your cart is empty.', $response->body());
+
+        $cart = $this->cart()->add($this->product()->id());
+        $response = $this->send('GET', headers: ['Accept' => 'text/html']);
+        $this->assertStringContainsString('name="destinationCountry"', $response->body());
+        $this->assertStringContainsString('Choose a destination to preview', $response->body());
+        $response = $this->send('PATCH', body: [
+            'revision' => $cart->revision(),
+            'destinationCountry' => 'PT',
+        ], headers: ['Accept' => 'text/html']);
+        $this->assertStringContainsString('Standard delivery', $response->body());
+        $this->assertStringContainsString('€4.90', $response->body());
     }
 
     private function product(): Page
