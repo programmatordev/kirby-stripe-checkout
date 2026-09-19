@@ -35,6 +35,7 @@ use ProgrammatorDev\StripeCheckout\Configuration\ShippingConfiguration;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
+use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Internal\ClosureProductResolver;
 use ProgrammatorDev\StripeCheckout\Product\Internal\GuardedProductResolver;
@@ -167,16 +168,7 @@ final class RuntimeFactory
             $lineItems[] = $this->checkoutLineItem($product);
         }
 
-        $settings = $this->settings();
-
-        return new CheckoutContext(
-            items: $lineItems,
-            languageCode: $this->kirby->language()?->code(),
-            locale: (new LocaleResolver($this->kirby))->resolve(),
-            userUuid: $this->kirby->user()?->uuid()->toString(),
-            checkoutSource: CheckoutSource::Direct,
-            uiMode: $settings->uiMode(),
-        );
+        return $this->checkoutContext($lineItems, CheckoutSource::Direct);
     }
 
     /** Projects one trusted Product through the pricing path shared by Cart and direct Checkout. */
@@ -206,6 +198,29 @@ final class RuntimeFactory
             options: $product->selectedOptions(),
             metadata: $product->metadata(),
         );
+    }
+
+    /**
+     * Builds current-request facts and validates invariants shared by Cart and direct Checkout.
+     *
+     * @param list<CheckoutLineItem> $lineItems
+     */
+    public function checkoutContext(array $lineItems, CheckoutSource $checkoutSource): CheckoutContext
+    {
+        $context = new CheckoutContext(
+            items: $lineItems,
+            languageCode: $this->kirby->language()?->code(),
+            locale: (new LocaleResolver($this->kirby))->resolve(),
+            userUuid: $this->kirby->user()?->uuid()->toString(),
+            checkoutSource: $checkoutSource,
+            uiMode: $this->settings()->uiMode(),
+        );
+
+        // Individually valid lines can still exceed provider-unit integer bounds
+        // when their subtotals are combined.
+        (new StripeCurrencyRegistry())->fromMoney($context->subtotal());
+
+        return $context;
     }
 
     /** Maps the optional direct-input country to the same trusted policy used by Cart Checkout. */

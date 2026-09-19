@@ -11,7 +11,6 @@ use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Cart\CartError;
 use ProgrammatorDev\StripeCheckout\Cart\CartErrorCode;
 use ProgrammatorDev\StripeCheckout\Cart\CartItem;
-use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
@@ -20,7 +19,6 @@ use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Exception\MoneyException;
 use ProgrammatorDev\StripeCheckout\Kirby\ShippingCountryOptions;
-use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductException;
@@ -95,7 +93,6 @@ final class CartViewFactory
                 $checkoutItem = $runtime->checkoutLineItem($product);
                 $itemPrice = $checkoutItem->price();
                 $itemSubtotal = $checkoutItem->subtotal();
-                $subtotal = $subtotal?->plus($itemSubtotal);
                 $checkoutItems[] = $checkoutItem;
             } catch (Throwable $error) {
                 $product = null;
@@ -108,11 +105,15 @@ final class CartViewFactory
             array_push($errors, ...$itemErrors);
         }
 
-        // Individually valid lines can still add up to an unsupported amount;
-        // validate the aggregate before exposing it as the cart subtotal.
-        if ($subtotal !== null && $errors === []) {
+        $checkoutContext = null;
+
+        if ($snapshot->entries() !== [] && $errors === []) {
             try {
-                (new StripeCurrencyRegistry())->fromMoney($subtotal);
+                $checkoutContext = $runtime->checkoutContext(
+                    $checkoutItems,
+                    CheckoutSource::Cart,
+                );
+                $subtotal = $checkoutContext->subtotal();
             } catch (Throwable $error) {
                 $errors[] = $this->error($error);
             }
@@ -122,21 +123,11 @@ final class CartViewFactory
         $resolvedSubtotal = $errors === [] ? $subtotal : null;
 
         if ($snapshot->entries() !== []) {
-            if ($errors !== []) {
-                // A partial product projection cannot establish whether the
-                // complete cart needs shipping or which options are valid.
+            if ($checkoutContext === null) {
+                // Without one complete valid Checkout context, neither the need
+                // for shipping nor its available options can be trusted.
                 $shippingQuote = ShippingQuote::unavailable();
             } else {
-                $settings = $runtime->settings();
-                $checkoutContext = new CheckoutContext(
-                    items: $checkoutItems,
-                    languageCode: $this->kirby->language()?->code(),
-                    locale: (new LocaleResolver($this->kirby))->resolve(),
-                    userUuid: $this->kirby->user()?->uuid()->toString(),
-                    checkoutSource: CheckoutSource::Cart,
-                    uiMode: $settings->uiMode(),
-                );
-
                 if ($checkoutContext->shippableItems() !== []) {
                     $shippingCountryOptions = (new ShippingCountryOptions())->forCodes(
                         $runtime->shippingCountryCodes(),
