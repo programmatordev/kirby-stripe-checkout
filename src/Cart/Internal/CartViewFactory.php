@@ -12,7 +12,6 @@ use ProgrammatorDev\StripeCheckout\Cart\CartError;
 use ProgrammatorDev\StripeCheckout\Cart\CartErrorCode;
 use ProgrammatorDev\StripeCheckout\Cart\CartItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
-use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
@@ -25,14 +24,11 @@ use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductException;
-use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
 use ProgrammatorDev\StripeCheckout\Shipping\Exception\ShippingException;
-use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuoteStatus;
-use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 use ProgrammatorDev\StripeCheckout\Tax\TaxErrorCode;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 use ProgrammatorDev\StripeCheckout\Translation\LocaleResolver;
@@ -96,24 +92,11 @@ final class CartViewFactory
                     throw new InvalidProductException(ProductErrorCode::RESOLVER_CHANGED_REQUEST);
                 }
 
-                $price = $product->price();
-                $itemPrice = $price instanceof Price
-                    ? $price->price()
-                    : $runtime->stripePriceResolver()->resolve($price, $currency?->getCurrencyCode() ?? '')->price();
-                $itemSubtotal = $itemPrice->multipliedBy($entry->request()->quantity());
-                (new StripeCurrencyRegistry())->fromMoney($itemSubtotal);
+                $checkoutItem = $runtime->checkoutLineItem($product);
+                $itemPrice = $checkoutItem->price();
+                $itemSubtotal = $checkoutItem->subtotal();
                 $subtotal = $subtotal?->plus($itemSubtotal);
-                $checkoutItems[] = new CheckoutLineItem(
-                    productReference: $product->request()->reference(),
-                    variantId: $product->variantId(),
-                    sku: $product->sku(),
-                    quantity: $entry->request()->quantity(),
-                    price: $itemPrice,
-                    subtotal: $itemSubtotal,
-                    requiresShipping: $product->requiresShipping(),
-                    options: $product->selectedOptions(),
-                    metadata: $product->metadata(),
-                );
+                $checkoutItems[] = $checkoutItem;
             } catch (Throwable $error) {
                 $product = null;
                 $itemPrice = null;
@@ -161,10 +144,9 @@ final class CartViewFactory
                 }
 
                 try {
-                    $shippingQuote = $this->resolveShippingQuote(
-                        runtime: $runtime,
-                        snapshot: $snapshot,
-                        checkoutContext: $checkoutContext,
+                    $shippingQuote = $runtime->resolveShippingQuote(
+                        $checkoutContext,
+                        $runtime->shippingContext($snapshot->shippingCountry()),
                     );
 
                     if ($shippingQuote?->status() === ShippingQuoteStatus::Unavailable) {
@@ -192,28 +174,6 @@ final class CartViewFactory
             errors: $errors,
             mutator: $mutator,
             views: $this,
-        );
-    }
-
-    private function resolveShippingQuote(
-        RuntimeFactory $runtime,
-        CartSnapshot $snapshot,
-        CheckoutContext $checkoutContext,
-    ): ?ShippingQuote {
-        $settings = $runtime->settings();
-        $automaticTax = $settings->automaticTax();
-
-        return $runtime->resolveShippingQuote(
-            $checkoutContext,
-            new ShippingContext(
-                shippingCountry: $snapshot->shippingCountry(),
-                taxBehavior: $automaticTax
-                    ? $settings->shippingTaxBehavior()
-                    : TaxBehavior::StripeDefault,
-                taxCode: $automaticTax
-                    ? $settings->shippingTaxCode()->taxCode()
-                    : null,
-            ),
         );
     }
 

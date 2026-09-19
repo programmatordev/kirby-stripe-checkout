@@ -14,7 +14,11 @@ use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutator;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartViewFactory;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\KirbySessionCartStore;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionCreator;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestBuilder;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestContextFactory;
@@ -38,6 +42,7 @@ use ProgrammatorDev\StripeCheckout\Product\Internal\KirbyPageLocator;
 use ProgrammatorDev\StripeCheckout\Product\Internal\KirbyPageProductResolver;
 use ProgrammatorDev\StripeCheckout\Product\Internal\ProductOptionsFactory;
 use ProgrammatorDev\StripeCheckout\Product\Internal\TaxCodeValidator;
+use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
@@ -50,6 +55,7 @@ use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingQuoteCustomizer;
 use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingQuoteEngine;
 use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingZoneResolver;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingResolverInterface;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingZoneScope;
@@ -64,6 +70,7 @@ use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 use ProgrammatorDev\StripeCheckout\Stripe\StripeApiClientFactory;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\StripeApiTaxProvider;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeCatalogue;
+use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
 use ProgrammatorDev\StripeCheckout\Translation\LocaleResolver;
 use Stripe\StripeClient;
@@ -138,6 +145,100 @@ final class RuntimeFactory
         $this->taxCodeValidator()->validate($product->taxCode(), $context);
 
         return $product;
+    }
+
+    /** Resolves untrusted cartless product input into the shared trusted context. */
+    public function directCheckoutContext(mixed $items): CheckoutContext
+    {
+        $requests = (new ProductRequestNormalizer($this->resolveProduct(...)))
+            ->normalizeDirectInput($items);
+        $lineItems = [];
+
+        foreach ($requests as $request) {
+            // Normalization can merge duplicate lines. Resolve the resulting request
+            // so quantity limits and product facts reflect the final quantity.
+            $product = $this->resolveProduct($request);
+
+            // Canonicalization may change a locator, never the selected product.
+            if (ProductRequestData::sameItem($request, $product->request()) === false) {
+                throw new InvalidProductException(ProductErrorCode::RESOLVER_CHANGED_REQUEST);
+            }
+
+            $lineItems[] = $this->checkoutLineItem($product);
+        }
+
+        $settings = $this->settings();
+
+        return new CheckoutContext(
+            items: $lineItems,
+            languageCode: $this->kirby->language()?->code(),
+            locale: (new LocaleResolver($this->kirby))->resolve(),
+            userUuid: $this->kirby->user()?->uuid()->toString(),
+            checkoutSource: CheckoutSource::Direct,
+            uiMode: $settings->uiMode(),
+        );
+    }
+
+    /** Projects one trusted Product through the pricing path shared by Cart and direct Checkout. */
+    public function checkoutLineItem(Product $product): CheckoutLineItem
+    {
+        $currency = $this->settings()->currency();
+
+        if ($currency === null) {
+            throw new ConfigurationException(ConfigurationErrorCode::REQUIRED_MISSING, 'settings.currency');
+        }
+
+        $productPrice = $product->price();
+        $price = $productPrice instanceof Price
+            ? $productPrice->price()
+            : $this->stripePriceResolver()->resolve($productPrice, $currency)->price();
+
+        $subtotal = $price->multipliedBy($product->request()->quantity());
+
+        return new CheckoutLineItem(
+            productReference: $product->request()->reference(),
+            variantId: $product->variantId(),
+            sku: $product->sku(),
+            quantity: $product->request()->quantity(),
+            price: $price,
+            subtotal: $subtotal,
+            requiresShipping: $product->requiresShipping(),
+            options: $product->selectedOptions(),
+            metadata: $product->metadata(),
+        );
+    }
+
+    /** Maps the optional direct-input country to the same trusted policy used by Cart Checkout. */
+    public function directShippingContext(mixed $shippingCountry = null): ShippingContext
+    {
+        if (
+            $shippingCountry !== null
+            && (
+                is_string($shippingCountry) === false
+                || (new StripeShippingCountryRegistry())->supports($shippingCountry) === false
+            )
+        ) {
+            throw new CheckoutInputException(ShippingErrorCode::COUNTRY_INVALID);
+        }
+
+        return $this->shippingContext($shippingCountry);
+    }
+
+    /** Applies the settings-owned tax policy to a trusted shipping country. */
+    public function shippingContext(?string $shippingCountry): ShippingContext
+    {
+        $settings = $this->settings();
+        $automaticTax = $settings->automaticTax();
+
+        return new ShippingContext(
+            shippingCountry: $shippingCountry,
+            taxBehavior: $automaticTax
+                ? $settings->shippingTaxBehavior()
+                : TaxBehavior::StripeDefault,
+            taxCode: $automaticTax
+                ? $settings->shippingTaxCode()->taxCode()
+                : null,
+        );
     }
 
     public function resolveShippingQuote(
