@@ -11,6 +11,9 @@ use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Cart\CartError;
 use ProgrammatorDev\StripeCheckout\Cart\CartErrorCode;
 use ProgrammatorDev\StripeCheckout\Cart\CartItem;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
 use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
@@ -23,7 +26,13 @@ use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductException;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
+use ProgrammatorDev\StripeCheckout\Shipping\Exception\ShippingException;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuoteStatus;
+use ProgrammatorDev\StripeCheckout\Shipping\StripeShippingCountryRegistry;
+use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 use ProgrammatorDev\StripeCheckout\Tax\TaxErrorCode;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 use ProgrammatorDev\StripeCheckout\Translation\LocaleResolver;
@@ -37,14 +46,26 @@ final class CartViewFactory
     public function create(CartSnapshot $snapshot, CartMutator $mutator, bool $resolve = true): Cart
     {
         if ($resolve === false) {
-            return new Cart($snapshot, [], null, null, [], $mutator, $this, presentationResolved: false);
+            return new Cart(
+                snapshot: $snapshot,
+                items: [],
+                currency: null,
+                subtotal: null,
+                shippingQuote: null,
+                errors: [],
+                mutator: $mutator,
+                views: $this,
+                presentationResolved: false,
+            );
         }
 
         $runtime = new RuntimeFactory($this->kirby);
         $currency = null;
         $subtotal = null;
+        $shippingQuote = null;
         $errors = [];
         $items = [];
+        $checkoutItems = [];
 
         try {
             $code = $runtime->settings()->currency();
@@ -80,6 +101,17 @@ final class CartViewFactory
                 $itemSubtotal = $itemPrice->multipliedBy($entry->request()->quantity());
                 (new StripeCurrencyRegistry())->fromMoney($itemSubtotal);
                 $subtotal = $subtotal?->plus($itemSubtotal);
+                $checkoutItems[] = new CheckoutLineItem(
+                    productReference: $product->request()->reference(),
+                    variantId: $product->variantId(),
+                    sku: $product->sku(),
+                    quantity: $entry->request()->quantity(),
+                    price: $itemPrice,
+                    subtotal: $itemSubtotal,
+                    requiresShipping: $product->requiresShipping(),
+                    options: $product->selectedOptions(),
+                    metadata: $product->metadata(),
+                );
             } catch (Throwable $error) {
                 $product = null;
                 $itemPrice = null;
@@ -101,8 +133,80 @@ final class CartViewFactory
             }
         }
 
+        // Shipping availability does not change the resolved merchandise subtotal.
+        $resolvedSubtotal = $errors === [] ? $subtotal : null;
+
+        if ($snapshot->entries() !== []) {
+            if ($errors !== []) {
+                // A partial product projection cannot establish whether the
+                // complete cart needs shipping or which options are valid.
+                $shippingQuote = ShippingQuote::unavailable();
+            } else {
+                try {
+                    $shippingQuote = $this->resolveShippingQuote(
+                        runtime: $runtime,
+                        snapshot: $snapshot,
+                        items: $checkoutItems,
+                    );
+
+                    if ($shippingQuote?->status() === ShippingQuoteStatus::Unavailable) {
+                        $errors[] = $this->translatedError(ShippingErrorCode::UNAVAILABLE);
+                    }
+                } catch (Throwable $error) {
+                    $shippingQuote = ShippingQuote::unavailable(
+                        $error instanceof ShippingException
+                            ? $error->errorCode()
+                            : ShippingErrorCode::UNAVAILABLE,
+                    );
+                    $errors[] = $this->translatedError(ShippingErrorCode::UNAVAILABLE);
+                }
+            }
+        }
+
         // Keep readable lines, but never present their partial sum as the whole cart.
-        return new Cart($snapshot, $items, $currency, $errors === [] ? $subtotal : null, $errors, $mutator, $this);
+        return new Cart(
+            snapshot: $snapshot,
+            items: $items,
+            currency: $currency,
+            subtotal: $resolvedSubtotal,
+            shippingQuote: $shippingQuote,
+            errors: $errors,
+            mutator: $mutator,
+            views: $this,
+        );
+    }
+
+    /**
+     * @param list<CheckoutLineItem> $items
+     */
+    private function resolveShippingQuote(
+        RuntimeFactory $runtime,
+        CartSnapshot $snapshot,
+        array $items,
+    ): ?ShippingQuote {
+        $settings = $runtime->settings();
+        $automaticTax = $settings->automaticTax();
+
+        return $runtime->resolveShippingQuote(
+            new CheckoutContext(
+                items: $items,
+                languageCode: $this->kirby->language()?->code(),
+                locale: (new LocaleResolver($this->kirby))->resolve(),
+                userUuid: $this->kirby->user()?->uuid()->toString(),
+                checkoutSource: CheckoutSource::Cart,
+                uiMode: $settings->uiMode(),
+            ),
+            new ShippingContext(
+                allowedCountries: (new StripeShippingCountryRegistry())->codes(),
+                destinationCountry: $snapshot->destinationCountry(),
+                taxBehavior: $automaticTax
+                    ? $settings->shippingTaxBehavior()
+                    : TaxBehavior::StripeDefault,
+                taxCode: $automaticTax
+                    ? $settings->shippingTaxCode()->taxCode()
+                    : null,
+            ),
+        );
     }
 
     public function error(Throwable $error, ?string $itemId = null): CartError
@@ -130,7 +234,6 @@ final class CartViewFactory
     /** Only call with plugin-owned codes, never raw exception/provider messages. */
     public function translatedError(string $code, ?string $field = null, ?string $itemId = null): CartError
     {
-
         // Only plugin-owned codes cross this edge. Even a custom resolver's
         // exception code/message can contain arbitrary, sensitive provider data.
         $key = Catalogue::PREFIX . $code;

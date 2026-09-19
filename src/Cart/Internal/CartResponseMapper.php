@@ -7,6 +7,8 @@ namespace ProgrammatorDev\StripeCheckout\Cart\Internal;
 use Brick\Money\Money;
 use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Cart\CartError;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingOption;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
 
 /** @internal Explicit public JSON allowlist; never serialize domain objects wholesale. */
 final class CartResponseMapper
@@ -61,6 +63,7 @@ final class CartResponseMapper
             'currency' => $cart->currency()?->getCurrencyCode(),
             'subtotal' => self::money($cart->subtotal()),
             'destinationCountry' => $cart->destinationCountry(),
+            'shippingQuote' => self::shippingQuote($cart->shippingQuote()),
             'empty' => $cart->isEmpty(),
             'hasErrors' => $cart->hasErrors(),
             'errors' => array_map(self::error(...), $cart->errors()),
@@ -87,6 +90,33 @@ final class CartResponseMapper
         return $money === null ? null : [
             'amount' => (string) $money->getAmount(),
             'currency' => $money->getCurrency()->getCurrencyCode(),
+        ];
+    }
+
+    /**
+     * @return array{
+     *     status: string,
+     *     options: list<array<string, mixed>>,
+     *     reasonCode: ?string
+     * }|null
+     */
+    private static function shippingQuote(?ShippingQuote $quote): ?array
+    {
+        if ($quote === null) {
+            return null;
+        }
+
+        return [
+            'status' => $quote->status()->value,
+            'options' => array_map(static fn(ShippingOption $option): array => [
+                'key' => $option->key(),
+                'label' => $option->label(),
+                'amount' => self::money($option->amount()),
+                'deliveryEstimate' => $option->deliveryEstimate()?->toArray(),
+                'taxBehavior' => $option->taxBehavior()->value,
+                'taxCode' => $option->taxCode(),
+            ], $quote->options()),
+            'reasonCode' => $quote->reasonCode(),
         ];
     }
 }

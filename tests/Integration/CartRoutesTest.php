@@ -50,6 +50,7 @@ final class CartRoutesTest extends KirbyTestCase
         $this->assertSame('no-store, private', $read->headers()['Cache-Control']);
         $this->assertSame('Accept', $read->headers()['Vary']);
         $this->assertSame('0.00', $this->data($read, 'data.cart.subtotal.amount'));
+        $this->assertNull($this->data($read, 'data.cart.shippingQuote'));
         $added = $this->send('POST', '/items', ['reference' => $product->id()]);
         $this->assertSame(200, $added->code());
         $itemId = $this->data($added, 'data.cart.items.0.id');
@@ -73,6 +74,46 @@ final class CartRoutesTest extends KirbyTestCase
         $cleared = $this->send('DELETE', '', ['revision' => $this->cart()->revision()]);
         $this->assertSame(200, $cleared->code());
         $this->assertTrue($this->cart()->isEmpty());
+    }
+
+    public function testJsonAndHtmlResponsesExposeTheResolvedShippingQuote(): void
+    {
+        $this->restart([
+            'settings' => [
+                'defaultRequiresShipping' => true,
+                'shippingZones' => [[
+                    'name' => 'Portugal',
+                    'scope' => 'selected_countries',
+                    'countries' => ['PT'],
+                    'options' => [[
+                        'key' => 'standard',
+                        'label' => 'Standard delivery',
+                        'amount' => '4.90',
+                    ]],
+                ]],
+            ],
+            'cart' => ['renderer' => static function (?Cart $cart): string {
+                $quote = $cart?->shippingQuote();
+
+                return '<div>' . $quote?->status()->value . ':' . $quote?->options()[0]->key() . '</div>';
+            }],
+        ]);
+        $this->cart()
+            ->add($this->product()->id())
+            ->updateDestinationCountry('PT');
+        $json = $this->send('GET');
+
+        $this->assertSame('available', $this->data($json, 'data.cart.shippingQuote.status'));
+        $this->assertSame('standard', $this->data($json, 'data.cart.shippingQuote.options.0.key'));
+        $this->assertSame(
+            ['amount' => '4.90', 'currency' => 'EUR'],
+            $this->data($json, 'data.cart.shippingQuote.options.0.amount'),
+        );
+        $this->assertNull($this->data($json, 'data.cart.shippingQuote.reasonCode'));
+
+        $html = $this->send('GET', headers: ['Accept' => 'text/html']);
+        $this->assertSame(200, $html->code());
+        $this->assertSame('<div>available:standard</div>', $html->body());
     }
 
     public function testStaleWritesReturnCurrentCartAndDoNotMutate(): void

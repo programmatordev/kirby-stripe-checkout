@@ -15,6 +15,8 @@ use ProgrammatorDev\StripeCheckout\Cart\Exception\CartException;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartEntry;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartSnapshot;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\KirbySessionCartStore;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Price;
@@ -22,7 +24,12 @@ use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingOption;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuoteStatus;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
+use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use RuntimeException;
@@ -54,6 +61,7 @@ final class CartApiTest extends KirbyTestCase
         $this->assertSame('0.00', (string) $cart->subtotal()?->getAmount());
         $this->assertSame('EUR', $cart->currency()?->getCurrencyCode());
         $this->assertNull($cart->destinationCountry());
+        $this->assertNull($cart->shippingQuote());
     }
 
     public function testDisabledCartCreatesNoSessionAndSupportsDottedConfiguration(): void
@@ -95,6 +103,7 @@ final class CartApiTest extends KirbyTestCase
             [static fn(Cart $cart) => $cart->totalQuantity(), 2],
             [static fn(Cart $cart) => $cart->currency()?->getCurrencyCode(), 'EUR'],
             [static fn(Cart $cart) => (string) $cart->subtotal()?->getAmount(), '20.00'],
+            [static fn(Cart $cart) => $cart->shippingQuote(), null],
             [static fn(Cart $cart) => $cart->isEmpty(), false],
             [static fn(Cart $cart) => $cart->hasErrors(), false],
             [static fn(Cart $cart) => $cart->errors(), []],
@@ -141,6 +150,159 @@ final class CartApiTest extends KirbyTestCase
         $revision = $cart->revision();
         $cart->clear();
         $this->assertSame($revision, $cart->revision());
+        $this->assertNull($cart->shippingQuote());
+    }
+
+    public function testShippingQuoteProjectsBuiltInOptionsAndBlocksUnavailableDestinations(): void
+    {
+        $this->restart(['programmatordev.stripe-checkout' => ['settings' => [
+            'defaultRequiresShipping' => true,
+            'shippingZones' => [[
+                'name' => 'Portugal',
+                'scope' => 'selected_countries',
+                'countries' => ['PT'],
+                'options' => [[
+                    'key' => 'standard',
+                    'label' => 'Standard delivery',
+                    'amount' => '4.90',
+                    'deliveryEstimate' => [
+                        'minimum' => 2,
+                        'maximum' => 4,
+                        'unit' => 'business_day',
+                    ],
+                ]],
+            ]],
+        ]]]);
+        $cart = $this->cart()->add($this->product()->id());
+        $required = $cart->shippingQuote();
+
+        $this->assertNotNull($required);
+        $this->assertSame(ShippingQuoteStatus::DestinationRequired, $required->status());
+        $this->assertSame([], $required->options());
+        $this->assertFalse($cart->hasErrors());
+
+        $cart->updateDestinationCountry('PT');
+        $available = $cart->shippingQuote();
+        $this->assertNotNull($available);
+        $this->assertSame(ShippingQuoteStatus::Available, $available->status());
+        $this->assertNull($available->reasonCode());
+        $this->assertFalse($cart->hasErrors());
+        $this->assertCount(1, $available->options());
+        $this->assertSame('standard', $available->options()[0]->key());
+        $this->assertSame('4.90', (string) $available->options()[0]->amount()->getAmount());
+        $deliveryEstimate = $available->options()[0]->deliveryEstimate();
+        $this->assertNotNull($deliveryEstimate);
+        $this->assertSame(2, $deliveryEstimate->minimum());
+        $this->assertSame(4, $deliveryEstimate->maximum());
+
+        $cart->updateDestinationCountry('ES');
+        $unavailable = $cart->shippingQuote();
+        $this->assertNotNull($unavailable);
+        $this->assertSame(ShippingQuoteStatus::Unavailable, $unavailable->status());
+        $this->assertSame('shipping.unavailable', $unavailable->reasonCode());
+        $this->assertTrue($cart->hasErrors());
+        $this->assertSame('shipping.unavailable', $cart->errors()[0]->code());
+        $this->assertSame('16.00', (string) $cart->subtotal()?->getAmount());
+    }
+
+    public function testCartBuildsCompleteTrustedShippingResolverContexts(): void
+    {
+        $receivedCheckout = null;
+        $receivedShipping = null;
+        $this->restart(['programmatordev.stripe-checkout' => [
+            'settings' => [
+                'automaticTax' => false,
+                'shippingTaxBehavior' => 'inclusive',
+                'shippingTaxCode' => 'shipping',
+            ],
+            'products' => ['resolver' => static fn(ProductRequest $request): Product => new Product(
+                request: $request,
+                name: $request->reference(),
+                requiresShipping: $request->reference() === 'physical',
+                price: new Price(Money::of('10.00', 'EUR')),
+                metadata: ['shippingClass' => $request->reference()],
+            )],
+            'shipping' => ['resolver' => static function (
+                CheckoutContext $checkout,
+                ShippingContext $shipping,
+            ) use (&$receivedCheckout, &$receivedShipping): ShippingQuote {
+                $receivedCheckout = $checkout;
+                $receivedShipping = $shipping;
+
+                return ShippingQuote::available([
+                    new ShippingOption('standard', 'Standard delivery', Money::of('5.00', 'EUR')),
+                ]);
+            }],
+        ]]);
+        $cart = $this->cart()
+            ->add('digital', 2)
+            ->add('physical', 3)
+            ->updateDestinationCountry('PT');
+
+        $this->assertInstanceOf(CheckoutContext::class, $receivedCheckout);
+        $this->assertSame(CheckoutSource::Cart, $receivedCheckout->checkoutSource());
+        $this->assertCount(2, $receivedCheckout->items());
+        $this->assertCount(1, $receivedCheckout->shippableItems());
+        $this->assertSame('physical', $receivedCheckout->shippableItems()[0]->productReference());
+        $this->assertSame(3, $receivedCheckout->shippableItems()[0]->quantity());
+        $this->assertSame(['shippingClass' => 'physical'], $receivedCheckout->shippableItems()[0]->metadata());
+        $this->assertSame('50.00', (string) $receivedCheckout->subtotal()->getAmount());
+        $this->assertInstanceOf(ShippingContext::class, $receivedShipping);
+        $this->assertSame('PT', $receivedShipping->destinationCountry());
+        $this->assertContains('PT', $receivedShipping->allowedCountries());
+        $this->assertSame('stripe_default', $receivedShipping->taxBehavior()->value);
+        $this->assertNull($receivedShipping->taxCode());
+        $this->assertSame(ShippingQuoteStatus::Available, $cart->shippingQuote()?->status());
+    }
+
+    public function testCartPassesActiveShippingTaxDefaultsToTheResolver(): void
+    {
+        $receivedShipping = null;
+        $this->restart(['programmatordev.stripe-checkout' => [
+            'settings' => [
+                'automaticTax' => true,
+                'defaultRequiresShipping' => true,
+                'shippingTaxBehavior' => 'inclusive',
+                'shippingTaxCode' => 'shipping',
+            ],
+            'shipping' => ['resolver' => static function (
+                CheckoutContext $checkout,
+                ShippingContext $shipping,
+            ) use (&$receivedShipping): ShippingQuote {
+                $receivedShipping = $shipping;
+
+                return ShippingQuote::available([
+                    new ShippingOption('standard', 'Standard delivery', Money::of('5.00', 'EUR')),
+                ]);
+            }],
+        ]]);
+
+        $cart = $this->cart()->add($this->product()->id());
+
+        $this->assertSame(ShippingQuoteStatus::Available, $cart->shippingQuote()?->status());
+        $this->assertInstanceOf(ShippingContext::class, $receivedShipping);
+        $this->assertSame(TaxBehavior::Inclusive, $receivedShipping->taxBehavior());
+        $this->assertSame('txcd_92010001', $receivedShipping->taxCode());
+    }
+
+    public function testShippingResolverFailuresBecomeSafeUnavailableCartState(): void
+    {
+        $this->restart(['programmatordev.stripe-checkout' => [
+            'settings' => ['defaultRequiresShipping' => true],
+            'shipping' => ['resolver' => static fn(): never => throw new RuntimeException('private carrier token')],
+        ]]);
+        $cart = $this->cart()->add($this->product()->id());
+        $quote = $cart->shippingQuote();
+
+        $this->assertNotNull($quote);
+        $this->assertSame(ShippingQuoteStatus::Unavailable, $quote->status());
+        $this->assertSame('shipping.resolver_failed', $quote->reasonCode());
+        $this->assertSame('shipping.unavailable', $cart->errors()[0]->code());
+        $this->assertSame('16.00', (string) $cart->subtotal()?->getAmount());
+        $this->assertStringNotContainsString(
+            'private carrier token',
+            serialize([$cart->errors(), $quote->reasonCode()]),
+        );
     }
 
     public function testPhpDestinationCountryMutationRefreshesTheCartAndReportsSafeInputErrors(): void

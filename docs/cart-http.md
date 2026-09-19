@@ -132,12 +132,16 @@ This is optimistic concurrency control. The `revision` body field is this plugin
 Successful reads and writes return `200` with `data.cart`. It contains:
 
 - `revision`, `items`, `count`, `totalQuantity`, `empty`, `hasErrors` and `errors`;
-- `currency`, `subtotal` and nullable `destinationCountry`;
+- `currency`, `subtotal`, nullable `destinationCountry` and nullable `shippingQuote`;
 - each item's `id`, canonical `request`, resolved `product`, `price`, `subtotal`, `hasErrors` and `errors`.
 
 Product details include `name`, `description`, `images` (URLs), `sku`, `requiresShipping` and the chosen `options`, with option/value IDs and names. PHP's native Kirby File is not serialized. Internal cart IDs, provider IDs, metadata and session data are not included.
 
+`shippingQuote` is `null` when no resolved line requires shipping. Otherwise it contains `status`, ordered `options`, and nullable `reasonCode`. Available options expose their stable `key`, translated `label`, exact `amount`, optional `deliveryEstimate`, `taxBehavior`, and nullable `taxCode`. The options are preview data; Stripe Checkout owns the final selection and initially preselects the first option.
+
 Amounts are decimal strings, for example `{"amount":"16.00","currency":"EUR"}`, never JSON numbers. An unresolved item has `null` product and amounts. Any unresolved line makes the cart subtotal `null`; valid lines remain readable. A successful GET can therefore have `hasErrors: true`.
+
+`destination_required` asks the customer for a country and does not add a Cart error. `unavailable` is blocking. A shipping-resolution failure adds `shipping.unavailable`; an existing product or configuration error is not duplicated. Shipping failure does not erase a valid merchandise subtotal.
 
 Failures contain `error.code` and a translated `error.message`, plus `field`, `itemId` or safe `details` when applicable. Rejected mutations retain the available cart in `data.cart`; a revision conflict supplies the newer cart. Errors before the cart can be read, such as invalid CSRF or malformed input, may omit it.
 

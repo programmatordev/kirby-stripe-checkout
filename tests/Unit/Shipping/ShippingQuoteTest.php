@@ -23,12 +23,12 @@ final class ShippingQuoteTest extends TestCase
 
         $this->assertSame(ShippingQuoteStatus::Available, $available->status());
         $this->assertSame([$option], $available->options());
-        $this->assertNull($available->issueCode());
+        $this->assertNull($available->reasonCode());
         $this->assertSame(ShippingQuoteStatus::DestinationRequired, $destinationRequired->status());
-        $this->assertSame(ShippingErrorCode::DESTINATION_REQUIRED, $destinationRequired->issueCode());
+        $this->assertSame(ShippingErrorCode::DESTINATION_REQUIRED, $destinationRequired->reasonCode());
         $this->assertSame([], $destinationRequired->options());
         $this->assertSame(ShippingQuoteStatus::Unavailable, $unavailable->status());
-        $this->assertSame('shipping.carrier_unavailable', $unavailable->issueCode());
+        $this->assertSame('shipping.carrier_unavailable', $unavailable->reasonCode());
     }
 
     public function testRejectsAnEmptyAvailableQuote(): void

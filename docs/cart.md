@@ -57,6 +57,37 @@ $cart->updateDestinationCountry(null);
 
 This country is bounded quote input, not a saved address. Stripe Checkout still collects the authoritative shipping address. Updating the destination uses the same revision protection as item updates; setting the current value again is a no-op and keeps the revision unchanged.
 
+## Preview shipping
+
+`shippingQuote()` resolves the current products, destination, language, user, and shipping configuration together:
+
+```php
+<?php
+
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuoteStatus;
+
+/** @var ProgrammatorDev\StripeCheckout\Cart\Cart $cart */
+$quote = $cart->shippingQuote();
+
+if ($quote?->status() === ShippingQuoteStatus::Available) {
+    foreach ($quote->options() as $option) {
+        echo esc($option->label());
+        echo esc($site->stripeCheckout()->formatMoney($option->amount()));
+    }
+}
+```
+
+The result is:
+
+- `null` for an empty or entirely digital cart;
+- `available` with one to five ordered options;
+- `destination_required` when the customer needs to choose a country first; or
+- `unavailable` with a safe `shipping.*` reason code.
+
+Quote options are an optional preview of what Checkout will offer. They are not selectable Cart state: Stripe preselects the first supplied option and owns the customer's final choice. Checkout creation will resolve products and shipping again rather than trusting a previously displayed quote.
+
+Each available `ShippingOption` exposes `key()`, `label()`, exact `amount()`, optional `deliveryEstimate()`, `taxBehavior()` and `taxCode()`. A destination-required quote is not a Cart error. An unavailable quote is blocking. Shipping-resolution failures add the translated `shipping.unavailable` Cart error, while leaving a valid merchandise `subtotal()` readable; an existing product or configuration error is not duplicated as a shipping error.
+
 ## Read the cart
 
 ```php

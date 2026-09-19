@@ -17,19 +17,19 @@ final readonly class ShippingQuote
     private function __construct(
         private ShippingQuoteStatus $status,
         array $options,
-        private ?string $issueCode,
+        private ?string $reasonCode,
     ) {
         if ($status === ShippingQuoteStatus::Available) {
             $this->options = self::validateOptions($options);
 
-            if ($issueCode !== null) {
+            if ($reasonCode !== null) {
                 throw new InvalidShippingQuoteException();
             }
 
             return;
         }
 
-        if ($options !== [] || self::validIssueCode($issueCode) === false) {
+        if ($options !== [] || self::validReasonCode($reasonCode) === false) {
             throw new InvalidShippingQuoteException();
         }
 
@@ -43,15 +43,15 @@ final readonly class ShippingQuote
     }
 
     public static function destinationRequired(
-        string $issueCode = ShippingErrorCode::DESTINATION_REQUIRED,
+        string $reasonCode = ShippingErrorCode::DESTINATION_REQUIRED,
     ): self {
-        return new self(ShippingQuoteStatus::DestinationRequired, [], $issueCode);
+        return new self(ShippingQuoteStatus::DestinationRequired, [], $reasonCode);
     }
 
     public static function unavailable(
-        string $issueCode = ShippingErrorCode::UNAVAILABLE,
+        string $reasonCode = ShippingErrorCode::UNAVAILABLE,
     ): self {
-        return new self(ShippingQuoteStatus::Unavailable, [], $issueCode);
+        return new self(ShippingQuoteStatus::Unavailable, [], $reasonCode);
     }
 
     public function status(): ShippingQuoteStatus
@@ -65,9 +65,10 @@ final readonly class ShippingQuote
         return $this->options;
     }
 
-    public function issueCode(): ?string
+    /** Safe machine-readable reason for a non-available status; otherwise null. */
+    public function reasonCode(): ?string
     {
-        return $this->issueCode;
+        return $this->reasonCode;
     }
 
     /**
@@ -110,12 +111,12 @@ final readonly class ShippingQuote
         return $options;
     }
 
-    private static function validIssueCode(?string $issueCode): bool
+    private static function validReasonCode(?string $reasonCode): bool
     {
-        return is_string($issueCode)
-            && str_starts_with($issueCode, 'shipping.')
-            && strlen($issueCode) <= 128
-            && TextValidator::isSingleLine($issueCode)
-            && preg_match('/\Ashipping\.[a-z0-9_.-]+\z/D', $issueCode) === 1;
+        return is_string($reasonCode)
+            && str_starts_with($reasonCode, 'shipping.')
+            && strlen($reasonCode) <= 128
+            && TextValidator::isSingleLine($reasonCode)
+            && preg_match('/\Ashipping\.[a-z0-9_.-]+\z/D', $reasonCode) === 1;
     }
 }

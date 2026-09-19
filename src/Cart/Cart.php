@@ -13,13 +13,14 @@ use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutator;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartSnapshot;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartViewFactory;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
 use Throwable;
 
 /**
  * Reads and changes the current browser's cart. Successful mutations refresh
  * this object's presentation; previously returned CartItems remain immutable.
- * Update/remove/clear default to this view's revision. HTTP callers must pass
- * the revision submitted by the visitor, not one freshly read on the server.
+ * Revision-bound mutations default to this view's revision. HTTP callers must
+ * pass the revision submitted by the visitor, not one freshly read on the server.
  */
 final class Cart
 {
@@ -33,6 +34,7 @@ final class Cart
         private array $items,
         private ?Currency $currency,
         private ?Money $subtotal,
+        private ?ShippingQuote $shippingQuote,
         private array $errors,
         private readonly CartMutator $mutator,
         private readonly CartViewFactory $views,
@@ -125,6 +127,14 @@ final class Cart
         return $this->subtotal;
     }
 
+    /** Preview only; Checkout resolves shipping again before creating a Session. */
+    public function shippingQuote(): ?ShippingQuote
+    {
+        $this->resolvePresentation();
+
+        return $this->shippingQuote;
+    }
+
     public function isEmpty(): bool
     {
         return $this->items() === [];
@@ -179,6 +189,7 @@ final class Cart
         $this->items = $next->items;
         $this->currency = $next->currency;
         $this->subtotal = $next->subtotal;
+        $this->shippingQuote = $next->shippingQuote;
         $this->errors = $next->errors;
         $this->presentationResolved = true;
     }

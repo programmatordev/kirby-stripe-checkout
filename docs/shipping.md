@@ -2,7 +2,7 @@
 
 Shipping is Kirby-owned. The built-in resolver uses the ordered zones and fixed whole-order options configured in the Stripe Checkout Settings Page. A project can replace that calculation with one PHP resolver for product-specific rules, free-shipping thresholds, pickup labels, carrier APIs, or other store policy.
 
-The quote engine and resolver contract are implemented as the foundation for the public shipping flow. A destination can be retained through the [PHP Cart API](cart.md#set-the-shipping-destination). Public quote projection, HTTP destination mutation, and Checkout Session shipping mapping are not implemented yet, so configuring a resolver does not affect a storefront until that integration is complete.
+The quote engine and resolver contract power the [PHP Cart shipping preview](cart.md#preview-shipping), JSON Cart responses, and project-owned HTML Cart renderers. A destination can be retained through the [PHP Cart API](cart.md#set-the-shipping-destination). HTTP destination mutation and Checkout Session shipping mapping are not implemented yet.
 
 ## Built-in resolution
 
@@ -139,7 +139,11 @@ ShippingQuote::unavailable('shipping.carrier_unavailable');
 
 Available quotes require one through five ordered options. Keys and labels must be unique inside the quote, amounts must be exact and non-negative, and every option must use the Checkout currency. The first option remains first for Stripe's later preselection.
 
-Issue codes are safe, language-neutral strings in the `shipping.*` namespace. Return a specific code when the storefront needs to distinguish a known unavailable condition. Do not put carrier messages, addresses, credentials, or other private data in an issue code.
+Reason codes are safe, language-neutral strings in the `shipping.*` namespace. Return a specific code when the storefront needs to distinguish a known unavailable condition. Do not put carrier messages, addresses, credentials, or other private data in a reason code.
+
+`$cart->shippingQuote()` returns these same immutable outcomes after rebuilding trusted Checkout and shipping contexts from the current Cart. Empty and digital-only carts return `null`. A destination-required outcome is informational; an unavailable outcome blocks Checkout. Shipping-resolution failures add one generic translated Cart error, while an existing product or configuration error is not duplicated. Resolver-specific reason codes remain on the quote for project logic without exposing exception messages.
+
+The available options are preview information rather than Cart selection state. Stripe owns the final selection in Checkout and preselects the first ordered option. Checkout creation resolves the quote again from fresh product and configuration data.
 
 Resolver exceptions are normalized to `shipping.resolver_failed`. Hook failures use `shipping.filter_failed`, while an invalid hook return uses `shipping.filter_invalid`. Original exception details are retained only as the previous cause for developer debugging; they are not copied into the safe public error code or message. Neither extension point receives a Stripe client, mutable Cart, order storage, or raw browser request. They must not trust browser-supplied amounts or create Stripe resources.
 

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Shipping;
 
-/** Stable shipping error and quote issue codes for boundary mappings. */
+/** Stable shipping error and quote reason codes for boundary mappings. */
 final class ShippingErrorCode
 {
     public const CURRENCY_MISMATCH = 'shipping.currency_mismatch';
