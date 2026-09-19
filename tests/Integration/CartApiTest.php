@@ -17,6 +17,7 @@ use ProgrammatorDev\StripeCheckout\Cart\Internal\CartSnapshot;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\KirbySessionCartStore;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Price;
@@ -214,6 +215,7 @@ final class CartApiTest extends KirbyTestCase
                 'automaticTax' => false,
                 'shippingTaxBehavior' => 'inclusive',
                 'shippingTaxCode' => 'shipping',
+                'uiMode' => 'embedded',
             ],
             'products' => ['resolver' => static fn(ProductRequest $request): Product => new Product(
                 request: $request,
@@ -233,7 +235,17 @@ final class CartApiTest extends KirbyTestCase
                     new ShippingOption('standard', 'Standard delivery', Money::of('5.00', 'EUR')),
                 ]);
             }],
-        ]]);
+        ]], languages: [
+            ['code' => 'en', 'default' => true, 'locale' => 'en_US', 'name' => 'English'],
+            ['code' => 'pt', 'locale' => 'pt_PT', 'name' => 'Português'],
+        ]);
+        $this->kirby->setCurrentLanguage('pt');
+        $user = $this->kirby->users()->create([
+            'email' => 'shipping@example.test',
+            'role' => 'admin',
+            'password' => 'test-password-123',
+        ]);
+        $this->kirby->impersonate($user->id());
         $cart = $this->cart()
             ->add('digital', 2)
             ->add('physical', 3)
@@ -241,6 +253,10 @@ final class CartApiTest extends KirbyTestCase
 
         $this->assertInstanceOf(CheckoutContext::class, $receivedCheckout);
         $this->assertSame(CheckoutSource::Cart, $receivedCheckout->checkoutSource());
+        $this->assertSame('pt', $receivedCheckout->languageCode());
+        $this->assertSame('pt_PT', $receivedCheckout->locale());
+        $this->assertSame($user->uuid()->toString(), $receivedCheckout->userUuid());
+        $this->assertSame(UiMode::Embedded, $receivedCheckout->uiMode());
         $this->assertCount(2, $receivedCheckout->items());
         $this->assertCount(1, $receivedCheckout->shippableItems());
         $this->assertSame('physical', $receivedCheckout->shippableItems()[0]->productReference());

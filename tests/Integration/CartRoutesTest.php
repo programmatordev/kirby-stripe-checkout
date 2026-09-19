@@ -98,9 +98,15 @@ final class CartRoutesTest extends KirbyTestCase
                 return '<div>' . $quote?->status()->value . ':' . $quote?->options()[0]->key() . '</div>';
             }],
         ]);
-        $this->cart()
-            ->add($this->product()->id())
-            ->updateDestinationCountry('PT');
+        $cart = $this->cart()->add($this->product()->id());
+        $required = $this->send('GET');
+
+        $this->assertSame('destination_required', $this->data($required, 'data.cart.shippingQuote.status'));
+        $this->assertSame('shipping.destination_required', $this->data($required, 'data.cart.shippingQuote.reasonCode'));
+        $this->assertSame([], $this->data($required, 'data.cart.shippingQuote.options'));
+        $this->assertFalse($this->data($required, 'data.cart.hasErrors'));
+
+        $cart->updateDestinationCountry('PT');
         $json = $this->send('GET');
 
         $this->assertSame('available', $this->data($json, 'data.cart.shippingQuote.status'));
@@ -114,6 +120,15 @@ final class CartRoutesTest extends KirbyTestCase
         $html = $this->send('GET', headers: ['Accept' => 'text/html']);
         $this->assertSame(200, $html->code());
         $this->assertSame('<div>available:standard</div>', $html->body());
+
+        $cart->updateDestinationCountry('ES');
+        $unavailable = $this->send('GET');
+        $this->assertSame('unavailable', $this->data($unavailable, 'data.cart.shippingQuote.status'));
+        $this->assertSame('shipping.unavailable', $this->data($unavailable, 'data.cart.shippingQuote.reasonCode'));
+        $this->assertSame([], $this->data($unavailable, 'data.cart.shippingQuote.options'));
+        $this->assertTrue($this->data($unavailable, 'data.cart.hasErrors'));
+        $this->assertSame('shipping.unavailable', $this->data($unavailable, 'data.cart.errors.0.code'));
+        $this->assertSame('16.00', $this->data($unavailable, 'data.cart.subtotal.amount'));
     }
 
     public function testStaleWritesReturnCurrentCartAndDoNotMutate(): void

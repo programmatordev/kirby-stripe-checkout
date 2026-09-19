@@ -61,7 +61,7 @@ final class ShippingQuoteTest extends TestCase
         }
     }
 
-    public function testRejectsUnsafeIssueCodes(): void
+    public function testRejectsUnsafeReasonCodes(): void
     {
         $this->expectException(InvalidShippingQuoteException::class);
 
