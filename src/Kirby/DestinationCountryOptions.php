@@ -21,44 +21,44 @@ final readonly class DestinationCountryOptions
     }
 
     /**
-     * @param array<mixed> $countries
+     * @param array<mixed> $countryCodes
      * @return array<string, string>
      */
-    public function forCodes(array $countries): array
+    public function forCodes(array $countryCodes): array
     {
-        if (array_is_list($countries) === false) {
+        if (array_is_list($countryCodes) === false) {
             throw new InvalidArgumentException('Destination countries must be a list.');
         }
 
         $registry = new StripeDestinationCountryRegistry();
         $options = [];
 
-        foreach ($countries as $country) {
+        foreach ($countryCodes as $countryCode) {
             if (
-                is_string($country) === false
-                || $registry->supports($country) === false
-                || isset($options[$country])
+                is_string($countryCode) === false
+                || $registry->supports($countryCode) === false
+                || isset($options[$countryCode])
             ) {
                 throw new InvalidArgumentException('Destination countries must be unique supported country codes.');
             }
 
             try {
-                $name = Countries::getName($country, I18n::locale());
+                $name = Countries::getName($countryCode, I18n::locale());
             } catch (Throwable) {
-                $name = $country;
+                $name = $countryCode;
             }
 
-            if ($name === $country) {
+            if ($name === $countryCode) {
                 // Symfony Intl does not label every special country code that
                 // Stripe accepts, so bundled translations cover those gaps.
                 $translatedName = I18n::translate(
-                    'programmatordev.stripe-checkout.settings.shippingZones.countries.' . strtolower($country),
-                    $country,
+                    'programmatordev.stripe-checkout.settings.shippingZones.countries.' . strtolower($countryCode),
+                    $countryCode,
                 );
-                $name = is_string($translatedName) ? $translatedName : $country;
+                $name = is_string($translatedName) ? $translatedName : $countryCode;
             }
 
-            $options[$country] = $name;
+            $options[$countryCode] = $name;
         }
 
         (new Collator(I18n::locale()))->asort($options, Collator::SORT_STRING);

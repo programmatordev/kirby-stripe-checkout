@@ -49,7 +49,7 @@ final readonly class ShippingZone
                 || $countryRegistry->supports($country) === false
                 || isset($normalizedCountries[$country])
             ) {
-                throw new InvalidArgumentException('Shipping zone countries must be unique ISO alpha-2 codes.');
+                throw new InvalidArgumentException('Shipping zone countries must be unique Stripe-supported two-letter codes.');
             }
 
             $normalizedCountries[$country] = true;

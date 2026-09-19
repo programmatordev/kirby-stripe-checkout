@@ -144,17 +144,17 @@ final class CartViewFactory
                 // complete cart needs shipping or which options are valid.
                 $shippingQuote = ShippingQuote::unavailable();
             } else {
-                $requiresShipping = false;
+                $settings = $runtime->settings();
+                $checkoutContext = new CheckoutContext(
+                    items: $checkoutItems,
+                    languageCode: $this->kirby->language()?->code(),
+                    locale: (new LocaleResolver($this->kirby))->resolve(),
+                    userUuid: $this->kirby->user()?->uuid()->toString(),
+                    checkoutSource: CheckoutSource::Cart,
+                    uiMode: $settings->uiMode(),
+                );
 
-                foreach ($checkoutItems as $checkoutItem) {
-                    if ($checkoutItem->requiresShipping()) {
-                        $requiresShipping = true;
-
-                        break;
-                    }
-                }
-
-                if ($requiresShipping) {
+                if ($checkoutContext->shippableItems() !== []) {
                     $destinationCountries = (new DestinationCountryOptions())->forCodes(
                         $runtime->destinationCountryCodes(),
                     );
@@ -164,7 +164,7 @@ final class CartViewFactory
                     $shippingQuote = $this->resolveShippingQuote(
                         runtime: $runtime,
                         snapshot: $snapshot,
-                        items: $checkoutItems,
+                        checkoutContext: $checkoutContext,
                     );
 
                     if ($shippingQuote?->status() === ShippingQuoteStatus::Unavailable) {
@@ -195,26 +195,16 @@ final class CartViewFactory
         );
     }
 
-    /**
-     * @param list<CheckoutLineItem> $items
-     */
     private function resolveShippingQuote(
         RuntimeFactory $runtime,
         CartSnapshot $snapshot,
-        array $items,
+        CheckoutContext $checkoutContext,
     ): ?ShippingQuote {
         $settings = $runtime->settings();
         $automaticTax = $settings->automaticTax();
 
         return $runtime->resolveShippingQuote(
-            new CheckoutContext(
-                items: $items,
-                languageCode: $this->kirby->language()?->code(),
-                locale: (new LocaleResolver($this->kirby))->resolve(),
-                userUuid: $this->kirby->user()?->uuid()->toString(),
-                checkoutSource: CheckoutSource::Cart,
-                uiMode: $settings->uiMode(),
-            ),
+            $checkoutContext,
             new ShippingContext(
                 destinationCountry: $snapshot->destinationCountry(),
                 taxBehavior: $automaticTax
