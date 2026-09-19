@@ -8,6 +8,8 @@ use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
+use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
+use ProgrammatorDev\StripeCheckout\Order\Internal\InitiatingShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
@@ -30,12 +32,12 @@ final class OrderCreationContextFactory
         ?string $userUuid,
         ?string $languageCode,
         UiMode $uiMode,
+        ?InitiatingShippingSnapshot $initiatingShipping = null,
     ): OrderCreationContext {
         /** @var array<string, mixed> $options */
         $options = $this->kirby->options();
         $formatter = (new ConfigurationResolver())->orderNumberFormatter($options);
-
-        return new OrderCreationContext(
+        $context = new OrderCreationContext(
             uuid: $uuid,
             orderNumber: (new OrderNumberFormatter($formatter))->format($uuid),
             checkoutSource: $checkoutSource,
@@ -45,6 +47,15 @@ final class OrderCreationContextFactory
             uiMode: $uiMode,
             currency: $currency,
             lineItems: $lineItems,
+            initiatingShipping: $initiatingShipping,
         );
+
+        // New shippable attempts must carry one already accepted quote. A
+        // rehydrated OrderCreationContext intentionally has no transient quote.
+        if ($context->requiresShipping() !== ($initiatingShipping !== null)) {
+            throw new OrderDataException();
+        }
+
+        return $context;
     }
 }

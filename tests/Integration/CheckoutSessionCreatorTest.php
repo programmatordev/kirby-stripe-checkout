@@ -37,6 +37,7 @@ use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailure;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailureType;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Exception\CheckoutSessionGatewayException;
+use ProgrammatorDev\StripeCheckout\Test\Support\InitiatingShippingSnapshotFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\Stripe\FakeCheckoutSessionGateway;
 use RuntimeException;
@@ -969,6 +970,9 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             userUuid: null,
             languageCode: null,
             uiMode: $uiMode,
+            initiatingShipping: InitiatingShippingSnapshotFactory::create(
+                languageCode: null,
+            ),
         );
     }
 

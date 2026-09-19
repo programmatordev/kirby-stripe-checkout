@@ -65,6 +65,8 @@ final class OrderSerializer
             'createdAt' => OrderData::timestamp($createdAt),
             'updatedAt' => OrderData::timestamp($createdAt),
             'checkoutExpiresAt' => OrderData::timestamp($checkoutAttempt->expiresAt()),
+            // Keep provider-neutral product/variant facts independently from the
+            // exact Stripe request, whose Price lines may contain only an ID and quantity.
             'initiatingLineItems' => $context->lineItems(),
         ]);
     }
