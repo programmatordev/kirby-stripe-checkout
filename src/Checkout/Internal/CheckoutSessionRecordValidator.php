@@ -10,6 +10,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
+use Stripe\Checkout\Session;
 
 /** Validates the minimal correlation and presentation facts returned by Session creation/retrieval. */
 final class CheckoutSessionRecordValidator
@@ -32,8 +33,8 @@ final class CheckoutSessionRecordValidator
             ARRAY_FILTER_USE_BOTH,
         );
         $uiMode = match ($context->uiMode()) {
-            UiMode::Hosted => 'hosted_page',
-            UiMode::Embedded => 'embedded_page',
+            UiMode::Hosted => Session::UI_MODE_HOSTED_PAGE,
+            UiMode::Embedded => Session::UI_MODE_EMBEDDED_PAGE,
         };
         $hasPresentation = match ($context->uiMode()) {
             UiMode::Hosted => CheckoutUrlValidator::isHostedPresentation($sessionRecord->url) && $sessionRecord->clientSecret === null,
@@ -48,10 +49,13 @@ final class CheckoutSessionRecordValidator
             || $sessionRecord->createdAt === null
             || $sessionRecord->createdAt < 0
             || $sessionRecord->expiresAt !== $context->expiresAt()->getTimestamp()
-            || $sessionRecord->status !== 'open'
-            || in_array($sessionRecord->paymentStatus, ['unpaid', 'no_payment_required'], true) === false
+            || $sessionRecord->status !== Session::STATUS_OPEN
+            || in_array($sessionRecord->paymentStatus, [
+                Session::PAYMENT_STATUS_UNPAID,
+                Session::PAYMENT_STATUS_NO_PAYMENT_REQUIRED,
+            ], true) === false
             || $liveMode !== null && $sessionRecord->liveMode !== $liveMode
-            || $sessionRecord->mode !== 'payment'
+            || $sessionRecord->mode !== Session::MODE_PAYMENT
             || $sessionRecord->uiMode !== $uiMode
             || strtolower((string) $sessionRecord->currency) !== strtolower($context->order()->currency())
             || $sessionRecord->clientReferenceId !== $context->order()->pageUuid()

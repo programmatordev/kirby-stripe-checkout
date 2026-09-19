@@ -108,6 +108,47 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $this->assertSame(['order.created', 'session.created'], $types);
     }
 
+    public function testPassesTheInitiatingShippingSnapshotToRequestPreparation(): void
+    {
+        $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
+        $configuration = $this->configuration(UiMode::Hosted);
+        $order = $this->order(UiMode::Hosted);
+        $request = $this->request(order: $order, configuration: $configuration, now: $now);
+        $snapshot = InitiatingShippingSnapshotFactory::fromOrder($order);
+        $receivedSnapshot = null;
+        $gateway = new FakeCheckoutSessionGateway([
+            $this->sessionRecord(
+                order: $order,
+                request: $request,
+                now: $now,
+                uiMode: UiMode::Hosted,
+            ),
+        ]);
+        $creator = $this->creator(
+            configuration: $configuration,
+            gateway: $gateway,
+            prepareSessionRequest: static function (
+                SessionRequestContext $context,
+                ?InitiatingShippingSnapshot $initiatingShipping,
+            ) use (&$receivedSnapshot, $request): SessionRequest {
+                $receivedSnapshot = $initiatingShipping;
+
+                return $request;
+            },
+        );
+
+        $creator->create(
+            order: $order,
+            binding: $this->binding(),
+            token: $this->token(),
+            guestReference: 'guest-browser',
+            now: $now,
+            initiatingShipping: $snapshot,
+        );
+
+        $this->assertSame($snapshot, $receivedSnapshot);
+    }
+
     public function testDuplicateTokenReusesTheOrderAndRetrievesTheExistingSession(): void
     {
         $now = new DateTimeImmutable('2026-09-11T12:00:00Z');

@@ -11,8 +11,12 @@ use ProgrammatorDev\StripeCheckout\Collection\CustomFieldOption;
 use ProgrammatorDev\StripeCheckout\Collection\CustomFieldType;
 use ProgrammatorDev\StripeCheckout\Collection\Exception\InvalidCustomFieldException;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
+use ProgrammatorDev\StripeCheckout\Shipping\DeliveryEstimateUnit;
 use ProgrammatorDev\StripeCheckout\Shipping\StripeShippingCountryRegistry;
 use ProgrammatorDev\StripeCheckout\Support\TextValidator;
+use Stripe\Checkout\Session;
+use Stripe\Price;
+use Stripe\ShippingRate;
 use Throwable;
 
 /** Validates the Stripe parameter shapes the plugin officially supports. */
@@ -90,7 +94,7 @@ final class SupportedSessionParametersValidator
                 $this->invalid($path . '.display_name');
             }
 
-            if (($data['type'] ?? null) !== 'fixed_amount') {
+            if (($data['type'] ?? null) !== ShippingRate::TYPE_FIXED_AMOUNT) {
                 $this->invalid($path . '.type');
             }
 
@@ -103,7 +107,7 @@ final class SupportedSessionParametersValidator
 
             if (
                 array_key_exists('tax_behavior', $data)
-                && in_array($data['tax_behavior'], ['inclusive', 'exclusive', 'unspecified'], true) === false
+                && $this->isStripeTaxBehavior($data['tax_behavior']) === false
             ) {
                 $this->invalid($path . '.tax_behavior');
             }
@@ -177,7 +181,8 @@ final class SupportedSessionParametersValidator
             if (
                 is_int($value['value'] ?? null) === false
                 || $value['value'] < 1
-                || in_array($value['unit'] ?? null, ['hour', 'day', 'business_day', 'week', 'month'], true) === false
+                || is_string($value['unit'] ?? null) === false
+                || DeliveryEstimateUnit::tryFrom($value['unit']) === null
             ) {
                 $this->invalid($boundPath);
             }
@@ -222,10 +227,21 @@ final class SupportedSessionParametersValidator
 
             $priceData = $lineItem['price_data'];
 
-            if (array_key_exists('tax_behavior', $priceData) && in_array($priceData['tax_behavior'], ['inclusive', 'exclusive', 'unspecified'], true) === false) {
+            if (
+                array_key_exists('tax_behavior', $priceData)
+                && $this->isStripeTaxBehavior($priceData['tax_behavior']) === false
+            ) {
                 $this->invalid('line_items.' . $index . '.price_data.tax_behavior');
             }
         }
+    }
+
+    private function isStripeTaxBehavior(mixed $value): bool
+    {
+        // Stripe exposes this same value set for Prices and Shipping Rates.
+        return $value === Price::TAX_BEHAVIOR_UNSPECIFIED
+            || $value === Price::TAX_BEHAVIOR_INCLUSIVE
+            || $value === Price::TAX_BEHAVIOR_EXCLUSIVE;
     }
 
     /** @param array<string, mixed> $parameters */
@@ -251,7 +267,10 @@ final class SupportedSessionParametersValidator
 
         if (
             is_string($parameters['billing_address_collection']) === false
-            || in_array($parameters['billing_address_collection'], ['auto', 'required'], true) === false
+            || in_array($parameters['billing_address_collection'], [
+                Session::BILLING_ADDRESS_COLLECTION_AUTO,
+                Session::BILLING_ADDRESS_COLLECTION_REQUIRED,
+            ], true) === false
         ) {
             $this->invalid('billing_address_collection');
         }

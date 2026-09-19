@@ -23,6 +23,7 @@ use ProgrammatorDev\StripeCheckout\Shipping\DeliveryEstimate;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingOption;
 use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 use Stripe\Checkout\Session;
+use Stripe\ShippingRate;
 
 /** Builds the protected standard Stripe Checkout Session request. */
 final class SessionRequestBuilder
@@ -405,7 +406,7 @@ final class SessionRequestBuilder
                 self::STRIPE_METADATA_SHIPPING_OPTION => $option->key(),
                 self::STRIPE_METADATA_SHIPPING_QUOTE => $shipping->quoteFingerprint(),
             ],
-            'type' => 'fixed_amount',
+            'type' => ShippingRate::TYPE_FIXED_AMOUNT,
         ];
 
         if ($option->deliveryEstimate() !== null) {

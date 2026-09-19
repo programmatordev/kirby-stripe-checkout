@@ -163,6 +163,29 @@ final class SessionRequestValidatorTest extends TestCase
         }
     }
 
+    public function testRejectsReorderedShippingOptions(): void
+    {
+        $request = $this->standardShippingRequestWithTwoOptions();
+        $parameters = $request->parameters();
+        $parameters['shipping_options'] = array_reverse(
+            $this->valueList($parameters['shipping_options']),
+        );
+
+        try {
+            (new SessionRequestValidator())->validate(
+                $request,
+                new SessionRequest($parameters),
+            );
+            $this->fail('Expected reordered shipping options to be rejected.');
+        } catch (InvalidSessionRequestException $error) {
+            $this->assertSame('session_request.invariant_violation', $error->errorCode());
+            $this->assertSame(
+                'shipping_options.0.shipping_rate_data.metadata.kirby_stripe_checkout_shipping_option',
+                $error->path(),
+            );
+        }
+    }
+
     /** @return iterable<string, array{callable(array<string, mixed>&): void, string, string}> */
     public static function invalidShippingChanges(): iterable
     {
@@ -758,6 +781,23 @@ final class SessionRequestValidatorTest extends TestCase
                 'type' => 'fixed_amount',
             ],
         ]];
+
+        return new SessionRequest($parameters);
+    }
+
+    private function standardShippingRequestWithTwoOptions(): SessionRequest
+    {
+        $parameters = $this->standardShippingRequest()->parameters();
+        $options = $this->valueList($parameters['shipping_options']);
+        $express = $this->map($options[0]);
+        $rateData = $this->map($express['shipping_rate_data']);
+        $rateData['display_name'] = 'Express delivery';
+        $metadata = $this->map($rateData['metadata']);
+        $metadata['kirby_stripe_checkout_shipping_option'] = 'express';
+        $rateData['metadata'] = $metadata;
+        $express['shipping_rate_data'] = $rateData;
+        $options[] = $express;
+        $parameters['shipping_options'] = $options;
 
         return new SessionRequest($parameters);
     }

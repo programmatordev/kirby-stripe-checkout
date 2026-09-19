@@ -26,6 +26,7 @@
 - Preserve useful Stripe identifiers and event context for reconciliation and debugging without coupling the public API to one payment method.
 - Use money value objects and integer minor units at system boundaries. Do not use binary floating-point values for persisted or calculated amounts.
 - Validate sensitive or mutually exclusive Stripe parameters clearly. Allow advanced customization through documented escape hatches without weakening safe defaults.
+- At Stripe API boundaries, use existing Stripe SDK constants for provider-owned enum-like values instead of hard-coded strings. Do not use SDK constants for parameter keys, plugin-owned domain values, or persisted schemas merely because their strings happen to match.
 
 ## Architecture and code
 

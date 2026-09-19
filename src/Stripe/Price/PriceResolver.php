@@ -9,6 +9,7 @@ use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
+use Stripe\Price;
 use Throwable;
 
 /**
@@ -49,8 +50,8 @@ final class PriceResolver
             ($expectedPriceId !== null && $record->priceId !== $expectedPriceId)
             || preg_match('/^price_[A-Za-z0-9]{1,249}$/D', $record->priceId) !== 1
             || $record->active === false
-            || $record->type !== 'one_time'
-            || $record->billingScheme !== 'per_unit'
+            || $record->type !== Price::TYPE_ONE_TIME
+            || $record->billingScheme !== Price::BILLING_SCHEME_PER_UNIT
             || $record->hasCustomUnitAmount
             || $record->hasRecurring
             || $record->hasTiers
@@ -86,7 +87,7 @@ final class PriceResolver
             throw new InvalidProductException(ProductErrorCode::PRICE_INVALID, $error);
         }
 
-        $taxBehavior = $record->taxBehavior ?? 'unspecified';
+        $taxBehavior = $record->taxBehavior ?? Price::TAX_BEHAVIOR_UNSPECIFIED;
 
         return new StripePrice(
             priceId: $record->priceId,

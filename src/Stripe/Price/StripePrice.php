@@ -11,6 +11,7 @@ use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
+use Stripe\Price;
 use Throwable;
 
 /**
@@ -59,7 +60,11 @@ final readonly class StripePrice
             throw new InvalidProductException(ProductErrorCode::PRICE_INVALID);
         }
 
-        if (in_array($taxBehavior, ['exclusive', 'inclusive', 'unspecified'], true) === false) {
+        if (in_array($taxBehavior, [
+            Price::TAX_BEHAVIOR_EXCLUSIVE,
+            Price::TAX_BEHAVIOR_INCLUSIVE,
+            Price::TAX_BEHAVIOR_UNSPECIFIED,
+        ], true) === false) {
             throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INELIGIBLE);
         }
 

@@ -264,6 +264,20 @@ final class SessionRequestBuilderTest extends KirbyTestCase
         $this->builder()->build($this->context(UiMode::Hosted, $order), null);
     }
 
+    public function testRejectsInitiatingShippingFromAnotherPurchase(): void
+    {
+        $order = $this->inlineOrder(amount: '16');
+        $shipping = InitiatingShippingSnapshotFactory::fromOrder(
+            $this->inlineOrder(amount: '17'),
+        );
+
+        $this->expectException(LogicException::class);
+        $this->builder()->build(
+            $this->context(UiMode::Hosted, $order),
+            $shipping,
+        );
+    }
+
     /** @return iterable<string, array{UiMode}> */
     public static function checkoutModes(): iterable
     {
