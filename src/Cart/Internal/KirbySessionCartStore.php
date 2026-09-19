@@ -13,7 +13,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use Throwable;
 
 /**
- * Stores only the plugin's selection payload in an ordinary Kirby session.
+ * Stores only the plugin's cart input payload in an ordinary Kirby session.
  *
  * @internal
  */
@@ -64,7 +64,7 @@ final class KirbySessionCartStore implements CartStoreInterface
 
             return $next;
         } finally {
-            // Release the lock even on rejection. Selection changes require a
+            // Release the lock even on rejection. Cart changes require a
             // successful callback; empty-cart initialization/repair and unrelated
             // Kirby writes can still be committed.
             $this->session->commit();

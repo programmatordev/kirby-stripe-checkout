@@ -2,7 +2,7 @@
 
 Shipping is Kirby-owned. The built-in resolver uses the ordered zones and fixed whole-order options configured in the Stripe Checkout Settings Page. A project can replace that calculation with one PHP resolver for product-specific rules, free-shipping thresholds, pickup labels, carrier APIs, or other store policy.
 
-The quote engine and resolver contract are implemented as the foundation for the public shipping flow. Cart destination mutation, public quote projection, and Checkout Session shipping mapping are not implemented yet, so configuring a resolver does not affect a storefront until that integration is complete.
+The quote engine and resolver contract are implemented as the foundation for the public shipping flow. A destination can be retained through the [PHP Cart API](cart.md#set-the-shipping-destination). Public quote projection, HTTP destination mutation, and Checkout Session shipping mapping are not implemented yet, so configuring a resolver does not affect a storefront until that integration is complete.
 
 ## Built-in resolution
 

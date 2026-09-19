@@ -113,10 +113,12 @@ final class KirbySessionCartStoreTest extends KirbyTestCase
         $mutator = $this->mutator($store);
         $first = $mutator->add(new ProductRequest('shirt'));
         $second = $mutator->add(new ProductRequest('shirt'));
-        $this->assertSame($second->revision(), $mutator->clearIfMatches($first->id(), $first->revision())->revision());
-        $this->assertSame($second->revision(), $mutator->clearIfMatches('other-cart', $second->revision())->revision());
-        $cleared = $mutator->clearIfMatches($second->id(), $second->revision());
+        $destination = $mutator->updateDestinationCountry('PT', $second->revision());
+        $this->assertSame($destination->revision(), $mutator->clearIfMatches($first->id(), $first->revision())->revision());
+        $this->assertSame($destination->revision(), $mutator->clearIfMatches('other-cart', $destination->revision())->revision());
+        $cleared = $mutator->clearIfMatches($destination->id(), $destination->revision());
         $this->assertSame([], $cleared->entries());
+        $this->assertNull($cleared->destinationCountry());
         $this->assertSame($second->id(), $cleared->id());
     }
 
@@ -131,6 +133,21 @@ final class KirbySessionCartStoreTest extends KirbyTestCase
         $this->assertNotSame($first->read()->id(), $second->read()->id());
         $firstSession->destroy();
         $secondSession->destroy();
+    }
+
+    public function testDestinationPersistsAcrossIndependentStoreInstances(): void
+    {
+        $session = $this->sessions()->create();
+        $store = new KirbySessionCartStore($session, Uuid::generate(...));
+        $initial = $store->read();
+        $updated = $this->mutator($store)->updateDestinationCountry('PT', $initial->revision());
+        $token = $session->token();
+        $this->assertNotNull($token);
+
+        $reloaded = new KirbySessionCartStore($this->sessions()->get($token), Uuid::generate(...));
+        $this->assertSame('PT', $reloaded->read()->destinationCountry());
+        $this->assertSame($updated->revision(), $reloaded->read()->revision());
+        $session->destroy();
     }
 
     public function testOverlappingProcessesSerializeNativeSessionWrites(): void

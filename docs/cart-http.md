@@ -132,7 +132,7 @@ This is optimistic concurrency control. The `revision` body field is this plugin
 Successful reads and writes return `200` with `data.cart`. It contains:
 
 - `revision`, `items`, `count`, `totalQuantity`, `empty`, `hasErrors` and `errors`;
-- `currency`, `subtotal` and `destinationCountry` (currently `null`);
+- `currency`, `subtotal` and nullable `destinationCountry`;
 - each item's `id`, canonical `request`, resolved `product`, `price`, `subtotal`, `hasErrors` and `errors`.
 
 Product details include `name`, `description`, `images` (URLs), `sku`, `requiresShipping` and the chosen `options`, with option/value IDs and names. PHP's native Kirby File is not serialized. Internal cart IDs, provider IDs, metadata and session data are not included.

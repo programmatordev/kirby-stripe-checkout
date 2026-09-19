@@ -59,6 +59,14 @@ final class Cart
         return $this->mutate(fn(): CartSnapshot => $this->mutator->remove($itemId, $revision ?? $this->revision()));
     }
 
+    public function updateDestinationCountry(?string $destinationCountry, ?string $revision = null): self
+    {
+        return $this->mutate(fn(): CartSnapshot => $this->mutator->updateDestinationCountry(
+            $destinationCountry,
+            $revision ?? $this->revision(),
+        ));
+    }
+
     public function clear(?string $revision = null): self
     {
         return $this->mutate(fn(): CartSnapshot => $this->mutator->clear($revision ?? $this->revision()));

@@ -152,6 +152,7 @@ return [
     'programmatordev.stripe-checkout.cart.revision_conflict' => 'Your cart has changed. Review it before trying again.',
     'programmatordev.stripe-checkout.cart.item_not_found' => 'This item is no longer in your cart.',
     'programmatordev.stripe-checkout.cart.unavailable' => 'The cart could not be updated. Please try again.',
+    'programmatordev.stripe-checkout.shipping.destination_invalid' => 'Choose a supported shipping country and try again.',
     'programmatordev.stripe-checkout.area.label' => 'Stripe Checkout',
     'programmatordev.stripe-checkout.overview.description' => 'Configure the store and check whether the local integration is ready.',
     'programmatordev.stripe-checkout.tabs.overview' => 'Overview',

@@ -19,6 +19,7 @@ use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
 use ProgrammatorDev\StripeCheckout\Test\Support\Cart\InMemoryCartStore;
 
 final class CartMutatorTest extends TestCase
@@ -119,6 +120,32 @@ final class CartMutatorTest extends TestCase
         $this->assertNotSame($added->revision(), $updated->revision());
     }
 
+    public function testDestinationChangesAreValidatedAndRevisionSafe(): void
+    {
+        $initial = $this->store->read();
+        $portugal = $this->cart->updateDestinationCountry('PT', $initial->revision());
+
+        $this->assertSame('PT', $portugal->destinationCountry());
+        $this->assertNotSame($initial->revision(), $portugal->revision());
+        $this->assertSame($portugal, $this->cart->updateDestinationCountry('PT', $portugal->revision()));
+
+        foreach (['pt', 'PT ', '', 'XX'] as $country) {
+            try {
+                $this->cart->updateDestinationCountry($country, $portugal->revision());
+                $this->fail('Expected an invalid destination rejection.');
+            } catch (CheckoutInputException $error) {
+                $this->assertSame(ShippingErrorCode::DESTINATION_INVALID, $error->errorCode());
+            }
+
+            $this->assertSame($portugal, $this->store->read());
+        }
+
+        $cleared = $this->cart->updateDestinationCountry(null, $portugal->revision());
+        $this->assertNull($cleared->destinationCountry());
+        $this->assertNotSame($portugal->revision(), $cleared->revision());
+        $this->assertSame($cleared, $this->cart->updateDestinationCountry(null, $cleared->revision()));
+    }
+
     #[DataProvider('revisionOperations')]
     public function testStaleAndMissingRevisionsCannotMutateOrResolve(string $operation): void
     {
@@ -131,6 +158,7 @@ final class CartMutatorTest extends TestCase
                 match ($operation) {
                     'update' => $this->cart->update($id, 2, $revision),
                     'remove' => $this->cart->remove($id, $revision),
+                    'destinationCountry' => $this->cart->updateDestinationCountry('PT', $revision),
                     default => $this->cart->clear($revision),
                 };
                 $this->fail('Expected a revision rejection.');
@@ -149,7 +177,7 @@ final class CartMutatorTest extends TestCase
     /** @return iterable<string, array{string}> */
     public static function revisionOperations(): iterable
     {
-        foreach (['update', 'remove', 'clear'] as $operation) {
+        foreach (['update', 'remove', 'destinationCountry', 'clear'] as $operation) {
             yield $operation => [$operation];
         }
     }

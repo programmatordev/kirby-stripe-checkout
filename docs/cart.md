@@ -41,6 +41,22 @@ Adding the same product and options again increases the existing quantity. Diffe
 
 Each successful mutation refreshes the same Cart object and returns it. Existing CartItem objects remain immutable. Call `$site->stripeCheckout()->cart()` again to read changes made elsewhere or to re-resolve product data without changing selections.
 
+## Set the shipping destination
+
+The cart can retain a destination country before Checkout so the shipping flow can resolve the applicable options. Pass an uppercase country code supported by Stripe Checkout, or `null` to clear it:
+
+```php
+<?php
+
+/** @var ProgrammatorDev\StripeCheckout\Cart\Cart $cart */
+$cart->updateDestinationCountry('PT');
+$cart->destinationCountry(); // 'PT'
+
+$cart->updateDestinationCountry(null);
+```
+
+This country is bounded quote input, not a saved address. Stripe Checkout still collects the authoritative shipping address. Updating the destination uses the same revision protection as item updates; setting the current value again is a no-op and keeps the revision unchanged.
+
 ## Read the cart
 
 ```php
@@ -112,7 +128,7 @@ An item that becomes unavailable stays visible with `hasErrors()` and `errors()`
 
 ## Revisions and rejected changes
 
-Updates, removals, and clearing use the Cart object's current `revision()` by default. Adding is relative and always applies to the latest stored cart.
+Item updates, removals, destination changes, and clearing use the Cart object's current `revision()` by default. Adding is relative and always applies to the latest stored cart.
 
 For forms or other requests, include the revision displayed with the cart and pass it explicitly. Reading a new Cart on submission and using its default revision would lose protection against changes made in another browser tab.
 

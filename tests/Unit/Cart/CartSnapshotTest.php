@@ -44,6 +44,12 @@ final class CartSnapshotTest extends TestCase
         new CartSnapshot('cart', 'revision', [], 100, 99);
     }
 
+    public function testDestinationMustBeSupportedByStripeCheckout(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        new CartSnapshot('cart', 'revision', [], 100, 100, 'XX');
+    }
+
     public function testClearResetsReservedDestinationWithoutResolvingAndPreservesClockOrder(): void
     {
         $store = new InMemoryCartStore(new CartSnapshot('cart', 'revision', [], 100, 200, 'PT'));

@@ -23,6 +23,7 @@ use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductException;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
 use ProgrammatorDev\StripeCheckout\Tax\TaxErrorCode;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 use ProgrammatorDev\StripeCheckout\Translation\LocaleResolver;
@@ -115,6 +116,7 @@ final class CartViewFactory
             $error instanceof CheckoutInputException => match ($error->errorCode()) {
                 SelectionErrorCode::QUANTITY_INVALID => CartErrorCode::QUANTITY_INVALID,
                 SelectionErrorCode::LINE_LIMIT_EXCEEDED => CartErrorCode::LINE_LIMIT_EXCEEDED,
+                ShippingErrorCode::DESTINATION_INVALID => ShippingErrorCode::DESTINATION_INVALID,
                 default => CartErrorCode::SELECTION_INVALID,
             },
             $error instanceof CartMutationException && $error->errorCode() === CartErrorCode::REVISION_CONFLICT => CartErrorCode::REVISION_CONFLICT,

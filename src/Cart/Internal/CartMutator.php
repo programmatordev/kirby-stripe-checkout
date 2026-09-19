@@ -11,9 +11,11 @@ use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
+use ProgrammatorDev\StripeCheckout\Shipping\StripeShippingCountryRegistry;
 
 /**
- * Applies selection mutations against current state inside the store's atomic operation.
+ * Applies cart mutations against current state inside the store's atomic operation.
  * Removal and clearing deliberately skip product resolution so an unavailable
  * product or provider cannot prevent the customer from emptying the cart.
  *
@@ -55,7 +57,7 @@ final class CartMutator
                 if (ProductRequestData::sameItem($entry->request(), $request)) {
                     $entries[$index] = new CartEntry($entry->id(), $this->requestNormalizer->merge($entry->request(), $request));
 
-                    return $this->changed($current, $entries);
+                    return $this->changed($current, $entries, $current->destinationCountry());
                 }
             }
 
@@ -65,7 +67,7 @@ final class CartMutator
 
             $entries[] = new CartEntry(($this->newId)(), $request);
 
-            return $this->changed($current, $entries);
+            return $this->changed($current, $entries, $current->destinationCountry());
         });
     }
 
@@ -91,7 +93,7 @@ final class CartMutator
 
             $entries[$index] = new CartEntry($entry->id(), $request);
 
-            return $this->changed($current, array_values($entries));
+            return $this->changed($current, array_values($entries), $current->destinationCountry());
         });
     }
 
@@ -102,7 +104,26 @@ final class CartMutator
             $entries = $current->entries();
             unset($entries[$this->itemIndex($current, $itemId)]);
 
-            return $this->changed($current, array_values($entries));
+            return $this->changed($current, array_values($entries), $current->destinationCountry());
+        });
+    }
+
+    public function updateDestinationCountry(?string $destinationCountry, string $revision): CartSnapshot
+    {
+        return $this->store->mutate(function (CartSnapshot $current) use ($destinationCountry, $revision): CartSnapshot {
+            $this->requireRevision($current, $revision);
+
+            // Zone membership belongs to quote resolution: a supported country
+            // with no matching zone is valid input that resolves as unavailable.
+            if ($destinationCountry !== null && (new StripeShippingCountryRegistry())->supports($destinationCountry) === false) {
+                throw new CheckoutInputException(ShippingErrorCode::DESTINATION_INVALID);
+            }
+
+            if ($destinationCountry === $current->destinationCountry()) {
+                return $current;
+            }
+
+            return $this->changed($current, $current->entries(), $destinationCountry);
         });
     }
 
@@ -113,7 +134,7 @@ final class CartMutator
 
             return $current->entries() === [] && $current->destinationCountry() === null
                 ? $current
-                : $this->changed($current, [], clearDestination: true);
+                : $this->changed($current, [], null);
         });
     }
 
@@ -127,7 +148,7 @@ final class CartMutator
 
             return $current->entries() === [] && $current->destinationCountry() === null
                 ? $current
-                : $this->changed($current, [], clearDestination: true);
+                : $this->changed($current, [], null);
         });
     }
 
@@ -154,8 +175,11 @@ final class CartMutator
     }
 
     /** @param list<CartEntry> $entries */
-    private function changed(CartSnapshot $current, array $entries, bool $clearDestination = false): CartSnapshot
-    {
+    private function changed(
+        CartSnapshot $current,
+        array $entries,
+        ?string $destinationCountry,
+    ): CartSnapshot {
         return new CartSnapshot(
             $current->id(),
             ($this->newRevision)(),
@@ -163,7 +187,7 @@ final class CartMutator
             $current->createdAt(),
             // Clock adjustments must not move the stored update time backwards.
             max($current->updatedAt(), ($this->clock)()),
-            $clearDestination ? null : $current->destinationCountry(),
+            $destinationCountry,
         );
     }
 }

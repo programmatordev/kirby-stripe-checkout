@@ -143,6 +143,32 @@ final class CartApiTest extends KirbyTestCase
         $this->assertSame($revision, $cart->revision());
     }
 
+    public function testPhpDestinationMutationRefreshesTheCartAndReportsSafeInputErrors(): void
+    {
+        $cart = $this->cart();
+        $initialRevision = $cart->revision();
+        $this->assertSame($cart, $cart->updateDestinationCountry('PT'));
+        $this->assertSame('PT', $cart->destinationCountry());
+        $this->assertNotSame($initialRevision, $cart->revision());
+
+        $revision = $cart->revision();
+        $cart->updateDestinationCountry('PT');
+        $this->assertSame($revision, $cart->revision());
+
+        try {
+            $cart->updateDestinationCountry('pt');
+            $this->fail('Expected an invalid destination.');
+        } catch (CartException $error) {
+            $this->assertSame('shipping.destination_invalid', $error->errorCode());
+            $this->assertSame('Choose a supported shipping country and try again.', $error->error()->message());
+        }
+
+        $this->assertSame('PT', $cart->destinationCountry());
+        $this->assertSame('PT', $this->cart()->destinationCountry());
+        $cart->updateDestinationCountry(null);
+        $this->assertNull($cart->destinationCountry());
+    }
+
     public function testItemImageReturnsTheOriginalKirbyFileForTransforms(): void
     {
         $this->restart(['programmatordev.stripe-checkout' => [
@@ -447,7 +473,9 @@ final class CartApiTest extends KirbyTestCase
 
     public function testNativeLoginLogoutAndAnotherLoginPreserveTheGuestCart(): void
     {
-        $cart = $this->cart()->add($this->product()->id(), 2);
+        $cart = $this->cart()
+            ->add($this->product()->id(), 2)
+            ->updateDestinationCountry('PT');
         $firstUser = $this->kirby->users()->create(['email' => 'first@example.test', 'role' => 'admin', 'password' => 'test-password-123']);
         $secondUser = $this->kirby->users()->create(['email' => 'second@example.test', 'role' => 'admin', 'password' => 'test-password-456']);
         $this->kirby->impersonate(null);
@@ -457,6 +485,7 @@ final class CartApiTest extends KirbyTestCase
         $this->assertNotSame($token, $session->token());
         $this->assertSame($cart->revision(), $this->cart()->revision());
         $this->assertSame(2, $this->cart()->totalQuantity());
+        $this->assertSame('PT', $this->cart()->destinationCountry());
         $token = $session->token();
         $firstUser->logout();
         $this->assertNotSame($token, $session->token());
@@ -464,6 +493,7 @@ final class CartApiTest extends KirbyTestCase
         $secondUser->loginPasswordless();
         $this->assertSame($cart->revision(), $this->cart()->revision());
         $this->assertSame($cart->items()[0]->id(), $this->cart()->items()[0]->id());
+        $this->assertSame('PT', $this->cart()->destinationCountry());
         $this->assertSame(300, $session->timeout());
     }
 
