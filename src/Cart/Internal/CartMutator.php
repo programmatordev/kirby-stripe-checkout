@@ -16,8 +16,8 @@ use ProgrammatorDev\StripeCheckout\Shipping\StripeShippingCountryRegistry;
 
 /**
  * Applies cart mutations against current state inside the store's atomic operation.
- * Removal and clearing deliberately skip product resolution so an unavailable
- * product or provider cannot prevent the customer from emptying the cart.
+ * Removal, destination changes, and clearing deliberately skip product resolution
+ * so an unavailable product or provider cannot block those state changes.
  *
  * @internal
  */

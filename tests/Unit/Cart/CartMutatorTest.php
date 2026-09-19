@@ -120,13 +120,14 @@ final class CartMutatorTest extends TestCase
         $this->assertNotSame($added->revision(), $updated->revision());
     }
 
-    public function testDestinationChangesAreValidatedAndRevisionSafe(): void
+    public function testDestinationCountryChangesPreserveEntriesAndAreRevisionSafe(): void
     {
-        $initial = $this->store->read();
-        $portugal = $this->cart->updateDestinationCountry('PT', $initial->revision());
+        $added = $this->cart->add(new ProductRequest('shirt'));
+        $portugal = $this->cart->updateDestinationCountry('PT', $added->revision());
 
         $this->assertSame('PT', $portugal->destinationCountry());
-        $this->assertNotSame($initial->revision(), $portugal->revision());
+        $this->assertSame($added->entries(), $portugal->entries());
+        $this->assertNotSame($added->revision(), $portugal->revision());
         $this->assertSame($portugal, $this->cart->updateDestinationCountry('PT', $portugal->revision()));
 
         foreach (['pt', 'PT ', '', 'XX'] as $country) {
@@ -142,6 +143,7 @@ final class CartMutatorTest extends TestCase
 
         $cleared = $this->cart->updateDestinationCountry(null, $portugal->revision());
         $this->assertNull($cleared->destinationCountry());
+        $this->assertSame($portugal->entries(), $cleared->entries());
         $this->assertNotSame($portugal->revision(), $cleared->revision());
         $this->assertSame($cleared, $this->cart->updateDestinationCountry(null, $cleared->revision()));
     }

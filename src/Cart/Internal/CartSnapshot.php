@@ -8,7 +8,6 @@ use InvalidArgumentException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
-use ProgrammatorDev\StripeCheckout\Shipping\StripeShippingCountryRegistry;
 
 /**
  * Immutable cart input state; presentation and session serialization are separate concerns.
@@ -32,14 +31,14 @@ final readonly class CartSnapshot
         ProductData::identifier($id);
         ProductData::identifier($revision);
 
-        // Session hydration constructs snapshots directly, so it must retain
-        // the same provider-bound country invariant as the public mutation.
+        // Persisted cart state stays provider-independent. Public input
+        // boundaries apply Stripe's narrower supported-country policy.
         if (
             array_is_list($entries) === false
             || count($entries) > ProductRequestNormalizer::MAX_ENTRIES
             || $createdAt < 0
             || $updatedAt < $createdAt
-            || ($destinationCountry !== null && (new StripeShippingCountryRegistry())->supports($destinationCountry) === false)
+            || ($destinationCountry !== null && preg_match('/\A[A-Z]{2}\z/D', $destinationCountry) !== 1)
         ) {
             throw new InvalidArgumentException('Invalid cart snapshot.');
         }

@@ -135,7 +135,7 @@ final class KirbySessionCartStoreTest extends KirbyTestCase
         $secondSession->destroy();
     }
 
-    public function testDestinationPersistsAcrossIndependentStoreInstances(): void
+    public function testDestinationCountryPersistsAcrossIndependentStoreInstances(): void
     {
         $session = $this->sessions()->create();
         $store = new KirbySessionCartStore($session, Uuid::generate(...));

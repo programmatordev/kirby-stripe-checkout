@@ -143,7 +143,7 @@ final class CartApiTest extends KirbyTestCase
         $this->assertSame($revision, $cart->revision());
     }
 
-    public function testPhpDestinationMutationRefreshesTheCartAndReportsSafeInputErrors(): void
+    public function testPhpDestinationCountryMutationRefreshesTheCartAndReportsSafeInputErrors(): void
     {
         $cart = $this->cart();
         $initialRevision = $cart->revision();

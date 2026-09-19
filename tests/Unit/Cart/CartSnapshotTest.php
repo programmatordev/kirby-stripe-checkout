@@ -44,10 +44,10 @@ final class CartSnapshotTest extends TestCase
         new CartSnapshot('cart', 'revision', [], 100, 99);
     }
 
-    public function testDestinationMustBeSupportedByStripeCheckout(): void
+    public function testDestinationCountryMustBeAnUppercaseCountryCode(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        new CartSnapshot('cart', 'revision', [], 100, 100, 'XX');
+        new CartSnapshot('cart', 'revision', [], 100, 100, 'pt');
     }
 
     public function testClearResetsReservedDestinationWithoutResolvingAndPreservesClockOrder(): void
