@@ -8,6 +8,7 @@ use Brick\Money\Money;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
@@ -90,7 +91,7 @@ final class RetentionPolicyTest extends TestCase
             languageCode: null,
             uiMode: UiMode::Hosted,
             currency: 'EUR',
-            lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)],
+            lineItems: [OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem($product))],
         );
         $createdAt = new DateTimeImmutable('2026-09-01T00:00:00Z');
         $data = OrderSerializer::creation(

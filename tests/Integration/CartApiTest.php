@@ -660,6 +660,16 @@ final class CartApiTest extends KirbyTestCase
         $this->kirby->impersonate(null);
         $this->assertSame('pt:guest', $this->cart()->items()[0]->product()?->name());
         $this->assertSame($revision, $this->cart()->revision());
+        // Reusing the same Cart must refresh the injected resolver too, not just
+        // a newly obtained Cart after a language or authentication change.
+        $cart->update($cart->items()[0]->id(), 2);
+        $this->assertSame('pt:guest', $cart->items()[0]->product()->name());
+        $this->kirby->setCurrentLanguage('en');
+        $this->kirby->impersonate('kirby');
+        $cart->add('external-product');
+        $this->assertSame('en:kirby', $cart->items()[0]->product()->name());
+        $this->kirby->setCurrentLanguage('pt');
+        $this->kirby->impersonate(null);
         $state->fail = true;
         $invalid = $this->cart();
         $this->assertSame('Este produto ou as opções escolhidas já não estão disponíveis.', $invalid->errors()[0]->message());

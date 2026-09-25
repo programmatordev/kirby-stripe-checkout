@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Test\Unit\Order;
 
 use Brick\Money\Money;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
@@ -132,6 +133,36 @@ final class InitiatingShippingSnapshotTest extends TestCase
         $this->assertFalse($shippingSnapshot->matches($this->order([$differentQuantity])));
     }
 
+    /** @param array<string, mixed> $changes */
+    #[DataProvider('changedInitiatingFacts')]
+    public function testQuoteBindingIncludesTheCompleteResolvedLine(array $changes): void
+    {
+        $shippingSnapshot = InitiatingShippingSnapshot::fromQuote(
+            checkout: $this->checkout(),
+            shipping: new ShippingContext('PT'),
+            quote: $this->quote(),
+        );
+        $data = array_replace($this->orderLine(requiresShipping: true)->toArray(), $changes);
+
+        $this->assertFalse($shippingSnapshot->matches($this->order([
+            OrderLineItemSnapshot::fromArray($data),
+        ])));
+    }
+
+    /** @return iterable<string, array{array<string, mixed>}> */
+    public static function changedInitiatingFacts(): iterable
+    {
+        yield 'name' => [['name' => 'Different product name']];
+        yield 'description' => [['description' => 'Different description']];
+        yield 'images' => [['images' => ['https://example.test/different.jpg']]];
+        yield 'classification' => [['taxCode' => 'txcd_99999999']];
+        yield 'price source and provider references' => [[
+            'priceSource' => 'stripe',
+            'stripePriceId' => 'price_other',
+            'stripeProductId' => 'prod_other',
+        ]];
+    }
+
     private function checkout(
         bool $requiresShipping = true,
         string $locale = 'pt_PT',
@@ -139,17 +170,12 @@ final class InitiatingShippingSnapshotTest extends TestCase
         $price = Money::of('16', 'EUR');
 
         return new CheckoutContext(
-            items: [new CheckoutLineItem(
-                productReference: 'product',
-                variantId: null,
-                sku: null,
-                quantity: 1,
-                price: $price,
-                subtotal: $price,
+            items: [new CheckoutLineItem(new Product(
+                request: new ProductRequest('product', 1, []),
+                name: 'Product',
                 requiresShipping: $requiresShipping,
-                options: [],
-                metadata: [],
-            )],
+                price: new Price($price),
+            ))],
             languageCode: 'pt',
             locale: $locale,
             userUuid: null,
@@ -186,7 +212,7 @@ final class InitiatingShippingSnapshotTest extends TestCase
             price: new Price($price),
         );
 
-        return OrderLineItemSnapshot::fromProduct($product, $price);
+        return OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem($product));
     }
 
     /**

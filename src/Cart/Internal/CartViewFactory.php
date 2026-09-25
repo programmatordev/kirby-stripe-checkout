@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Cart\Internal;
 
 use Brick\Money\Currency;
 use Brick\Money\Money;
+use Closure;
 use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Cart\CartError;
@@ -13,13 +14,12 @@ use ProgrammatorDev\StripeCheckout\Cart\CartErrorCode;
 use ProgrammatorDev\StripeCheckout\Cart\CartItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutResolver;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
 use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
-use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Exception\MoneyException;
 use ProgrammatorDev\StripeCheckout\Kirby\ShippingCountryOptions;
-use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductException;
 use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
@@ -35,7 +35,16 @@ use Throwable;
 /** @internal Resolves presentation afresh without making it stored cart authority. */
 final class CartViewFactory
 {
-    public function __construct(private readonly App $kirby) {}
+    /**
+     * The closure creates a fresh resolver for each presentation. Keeping one
+     * resolver here would retain user/language context across Cart operations.
+     *
+     * @param Closure(): CheckoutResolver $checkoutResolver
+     */
+    public function __construct(
+        private readonly App $kirby,
+        private readonly Closure $checkoutResolver,
+    ) {}
 
     public function create(CartSnapshot $snapshot, CartMutator $mutator, bool $resolve = true): Cart
     {
@@ -54,7 +63,7 @@ final class CartViewFactory
             );
         }
 
-        $runtime = new RuntimeFactory($this->kirby);
+        $resolver = null;
         $currency = null;
         $subtotal = null;
         $shippingQuote = null;
@@ -64,13 +73,8 @@ final class CartViewFactory
         $checkoutItems = [];
 
         try {
-            $code = $runtime->settings()->currency();
-
-            if ($code === null) {
-                throw new ConfigurationException(ConfigurationErrorCode::REQUIRED_MISSING, 'settings.currency');
-            }
-
-            $currency = Currency::of($code);
+            $resolver = ($this->checkoutResolver)();
+            $currency = Currency::of($resolver->currency());
             $subtotal = Money::zero($currency);
         } catch (Throwable $error) {
             $errors[] = $this->error($error);
@@ -83,14 +87,15 @@ final class CartViewFactory
             $itemErrors = [];
 
             try {
-                $product = $runtime->resolveProduct($entry->request());
+                $resolver ??= ($this->checkoutResolver)();
+                $product = $resolver->resolveProduct($entry->request());
 
                 // A saved selection may become unavailable, never a different product.
                 if (ProductRequestData::sameItem($entry->request(), $product->request()) === false) {
                     throw new InvalidProductException(ProductErrorCode::RESOLVER_CHANGED_REQUEST);
                 }
 
-                $checkoutItem = $runtime->checkoutLineItem($product);
+                $checkoutItem = $resolver->checkoutLineItem($product);
                 $itemPrice = $checkoutItem->price();
                 $itemSubtotal = $checkoutItem->subtotal();
                 $checkoutItems[] = $checkoutItem;
@@ -107,9 +112,9 @@ final class CartViewFactory
 
         $checkoutContext = null;
 
-        if ($snapshot->entries() !== [] && $errors === []) {
+        if ($snapshot->entries() !== [] && $errors === [] && $resolver !== null) {
             try {
-                $checkoutContext = $runtime->checkoutContext(
+                $checkoutContext = $resolver->checkoutContext(
                     $checkoutItems,
                     CheckoutSource::Cart,
                 );
@@ -123,21 +128,21 @@ final class CartViewFactory
         $resolvedSubtotal = $errors === [] ? $subtotal : null;
 
         if ($snapshot->entries() !== []) {
-            if ($checkoutContext === null) {
+            if ($checkoutContext === null || $resolver === null) {
                 // Without one complete valid Checkout context, neither the need
                 // for shipping nor its available options can be trusted.
                 $shippingQuote = ShippingQuote::unavailable();
             } else {
                 if ($checkoutContext->shippableItems() !== []) {
                     $shippingCountryOptions = (new ShippingCountryOptions())->forCodes(
-                        $runtime->shippingCountryCodes(),
+                        $resolver->shippingCountryCodes(),
                     );
                 }
 
                 try {
-                    $shippingQuote = $runtime->resolveShippingQuote(
+                    $shippingQuote = $resolver->resolveShippingQuote(
                         $checkoutContext,
-                        $runtime->shippingContext($snapshot->shippingCountry()),
+                        $resolver->shippingContext($snapshot->shippingCountry()),
                     );
 
                     if ($shippingQuote?->status() === ShippingQuoteStatus::Unavailable) {

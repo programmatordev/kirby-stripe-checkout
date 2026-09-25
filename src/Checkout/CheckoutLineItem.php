@@ -6,45 +6,74 @@ namespace ProgrammatorDev\StripeCheckout\Checkout;
 
 use Brick\Money\Money;
 use InvalidArgumentException;
+use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
+use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
-use ProgrammatorDev\StripeCheckout\Support\TextValidator;
+use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
+use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
 use Throwable;
 
 /**
- * Projects the trusted resolved product facts available before order creation.
- * This operation value is distinct from the persisted Order line-item snapshot.
+ * Complete resolved line facts shared by shipping and initiating order snapshots.
+ * Copies values, never the Product's mutable Kirby File presentation handle.
  */
 final readonly class CheckoutLineItem
 {
+    private string $productReference;
+
+    private ?string $variantId;
+
+    private ?string $sku;
+
+    private int $quantity;
+
+    private string $name;
+
+    private ?string $description;
+
+    /** @var list<string> */
+    private array $imageUrls;
+
+    private bool $requiresShipping;
+
     /** @var list<SelectedOption> */
     private array $options;
 
     /** @var array<string, bool|int|string> */
     private array $metadata;
 
-    /**
-     * @param array<mixed> $options
-     * @param array<mixed, mixed> $metadata
-     */
-    public function __construct(
-        private string $productReference,
-        private ?string $variantId,
-        private ?string $sku,
-        private int $quantity,
-        private Money $price,
-        private Money $subtotal,
-        private bool $requiresShipping,
-        array $options = [],
-        array $metadata = [],
-    ) {
-        self::validateString($this->productReference, 2048, false);
-        self::validateString($this->variantId, 128, true);
-        self::validateString($this->sku, 500, true);
+    private PriceSource $priceSource;
 
-        if ($this->quantity < 1) {
-            throw new InvalidArgumentException('A checkout line item requires a positive quantity.');
+    private ?string $stripePriceId;
+
+    private ?string $stripeProductId;
+
+    private ?TaxCode $taxCode;
+
+    private Money $price;
+
+    private Money $subtotal;
+
+    public function __construct(Product $product, ?StripePrice $stripePrice = null)
+    {
+        $productPrice = $product->price();
+
+        if (
+            $productPrice instanceof StripePriceReference
+                ? $stripePrice === null || $stripePrice->priceId() !== $productPrice->priceId()
+                : $stripePrice !== null
+        ) {
+            throw new InvalidArgumentException('A checkout line item requires its matching resolved price source.');
         }
+
+        $this->price = $productPrice instanceof Price
+            ? $productPrice->price()
+            : $stripePrice->price();
+        $this->quantity = $product->request()->quantity();
+        $this->subtotal = $this->price->multipliedBy($this->quantity);
 
         try {
             $currencies = new StripeCurrencyRegistry();
@@ -54,16 +83,20 @@ final readonly class CheckoutLineItem
             throw new InvalidArgumentException('A checkout line item requires exact non-negative money.', previous: $error);
         }
 
-        if (
-            $this->subtotal->getCurrency()->getCurrencyCode()
-            !== $this->price->getCurrency()->getCurrencyCode()
-            || $this->subtotal->isEqualTo($this->price->multipliedBy($this->quantity)) === false
-        ) {
-            throw new InvalidArgumentException('A checkout line item subtotal must match its price and quantity.');
-        }
-
-        $this->options = self::validateOptions($options);
-        $this->metadata = self::validateMetadata($metadata);
+        $this->productReference = $product->request()->reference();
+        $this->variantId = $product->variantId();
+        $this->sku = $product->sku();
+        // Local descriptions remain local even when Stripe owns the amount.
+        $this->name = $product->name();
+        $this->description = $product->description();
+        $this->imageUrls = $product->imageUrls();
+        $this->requiresShipping = $product->requiresShipping();
+        $this->options = $product->selectedOptions();
+        $this->metadata = $product->metadata();
+        $this->priceSource = $product->priceSource();
+        $this->stripePriceId = $stripePrice?->priceId();
+        $this->stripeProductId = $stripePrice?->productId();
+        $this->taxCode = $productPrice instanceof Price ? $product->taxCode() : null;
     }
 
     public function productReference(): string
@@ -86,14 +119,20 @@ final readonly class CheckoutLineItem
         return $this->quantity;
     }
 
-    public function price(): Money
+    public function name(): string
     {
-        return $this->price;
+        return $this->name;
     }
 
-    public function subtotal(): Money
+    public function description(): ?string
     {
-        return $this->subtotal;
+        return $this->description;
+    }
+
+    /** @return list<string> */
+    public function imageUrls(): array
+    {
+        return $this->imageUrls;
     }
 
     public function requiresShipping(): bool
@@ -113,78 +152,33 @@ final readonly class CheckoutLineItem
         return $this->metadata;
     }
 
-    private static function validateString(?string $value, int $maximum, bool $nullable): void
+    public function priceSource(): PriceSource
     {
-        if ($nullable && $value === null) {
-            return;
-        }
-
-        if (
-            $value === null
-            || $value === ''
-            || trim($value) !== $value
-            || strlen($value) > $maximum
-            || TextValidator::isSingleLine($value) === false
-        ) {
-            throw new InvalidArgumentException('A checkout line item contains invalid product data.');
-        }
+        return $this->priceSource;
     }
 
-    /**
-     * @param array<mixed> $options
-     * @return list<SelectedOption>
-     */
-    private static function validateOptions(array $options): array
+    public function stripePriceId(): ?string
     {
-        if (array_is_list($options) === false || count($options) > 32) {
-            throw new InvalidArgumentException('A checkout line item contains invalid options.');
-        }
-
-        $optionIds = [];
-
-        foreach ($options as $option) {
-            if ($option instanceof SelectedOption === false || isset($optionIds[$option->optionId()])) {
-                throw new InvalidArgumentException('A checkout line item contains invalid options.');
-            }
-
-            $optionIds[$option->optionId()] = true;
-        }
-
-        /** @var list<SelectedOption> $options */
-        return $options;
+        return $this->stripePriceId;
     }
 
-    /**
-     * @param array<mixed, mixed> $metadata
-     * @return array<string, bool|int|string>
-     */
-    private static function validateMetadata(array $metadata): array
+    public function stripeProductId(): ?string
     {
-        if (count($metadata) > 20) {
-            throw new InvalidArgumentException('A checkout line item contains invalid metadata.');
-        }
+        return $this->stripeProductId;
+    }
 
-        foreach ($metadata as $key => $value) {
-            if (
-                is_string($key) === false
-                || $key === ''
-                || trim($key) !== $key
-                || strlen($key) > 128
-                || TextValidator::isSingleLine($key) === false
-                || is_bool($value) === false && is_int($value) === false && is_string($value) === false
-                || is_string($value) && (
-                    $value === ''
-                    || trim($value) !== $value
-                    || strlen($value) > 500
-                    || TextValidator::isSingleLine($value) === false
-                )
-            ) {
-                throw new InvalidArgumentException('A checkout line item contains invalid metadata.');
-            }
-        }
+    public function taxCode(): ?TaxCode
+    {
+        return $this->taxCode;
+    }
 
-        ksort($metadata);
+    public function price(): Money
+    {
+        return $this->price;
+    }
 
-        return $metadata;
+    public function subtotal(): Money
+    {
+        return $this->subtotal;
     }
 }

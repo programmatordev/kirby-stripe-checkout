@@ -37,13 +37,13 @@ final class DirectShippingContextTest extends KirbyTestCase
     public function testDirectInputBuildsTheSharedCheckoutAndShippingContexts(): void
     {
         $runtime = new RuntimeFactory($this->kirby);
-        $checkout = $runtime->directCheckoutContext([
+        $checkout = $runtime->checkoutResolver()->directCheckoutContext([
             ['reference' => 'digital', 'quantity' => 2],
             ['reference' => 'physical', 'quantity' => 2],
             ['reference' => 'physical'],
         ]);
-        $shipping = $runtime->directShippingContext('PT');
-        $quote = $runtime->resolveShippingQuote($checkout, $shipping);
+        $shipping = $runtime->checkoutResolver()->directShippingContext('PT');
+        $quote = $runtime->checkoutResolver()->resolveShippingQuote($checkout, $shipping);
 
         $this->assertSame(CheckoutSource::Direct, $checkout->checkoutSource());
         $this->assertCount(2, $checkout->items());
@@ -62,11 +62,11 @@ final class DirectShippingContextTest extends KirbyTestCase
     public function testMissingCountryUsesTheNormalQuoteOutcome(): void
     {
         $runtime = new RuntimeFactory($this->kirby);
-        $checkout = $runtime->directCheckoutContext([
+        $checkout = $runtime->checkoutResolver()->directCheckoutContext([
             ['reference' => 'physical'],
         ]);
-        $shipping = $runtime->directShippingContext();
-        $quote = $runtime->resolveShippingQuote($checkout, $shipping);
+        $shipping = $runtime->checkoutResolver()->directShippingContext();
+        $quote = $runtime->checkoutResolver()->resolveShippingQuote($checkout, $shipping);
 
         $this->assertNull($shipping->shippingCountry());
         $this->assertNotNull($quote);
@@ -78,7 +78,7 @@ final class DirectShippingContextTest extends KirbyTestCase
     public function testDirectInputRejectsInvalidShippingCountries(mixed $shippingCountry): void
     {
         try {
-            (new RuntimeFactory($this->kirby))->directShippingContext($shippingCountry);
+            (new RuntimeFactory($this->kirby))->checkoutResolver()->directShippingContext($shippingCountry);
             self::fail('The direct shipping country should be rejected.');
         } catch (CheckoutInputException $error) {
             $this->assertSame(ShippingErrorCode::COUNTRY_INVALID, $error->errorCode());
@@ -98,13 +98,13 @@ final class DirectShippingContextTest extends KirbyTestCase
     public function testDigitalOnlyDirectInputSkipsShippingResolution(): void
     {
         $runtime = new RuntimeFactory($this->kirby);
-        $checkout = $runtime->directCheckoutContext([
+        $checkout = $runtime->checkoutResolver()->directCheckoutContext([
             ['reference' => 'digital'],
         ]);
 
-        $this->assertNull($runtime->resolveShippingQuote(
+        $this->assertNull($runtime->checkoutResolver()->resolveShippingQuote(
             $checkout,
-            $runtime->directShippingContext('PT'),
+            $runtime->checkoutResolver()->directShippingContext('PT'),
         ));
     }
 
@@ -114,19 +114,19 @@ final class DirectShippingContextTest extends KirbyTestCase
         $cart = (new StripeCheckout($this->kirby))->cart();
         $this->assertNotNull($cart);
         $cart->add('physical', 2)->updateShippingCountry('PT');
-        $directCheckout = $runtime->directCheckoutContext([
+        $directCheckout = $runtime->checkoutResolver()->directCheckoutContext([
             ['reference' => 'physical', 'quantity' => 2],
         ]);
-        $directQuote = $runtime->resolveShippingQuote(
+        $directQuote = $runtime->checkoutResolver()->resolveShippingQuote(
             $directCheckout,
-            $runtime->directShippingContext('PT'),
+            $runtime->checkoutResolver()->directShippingContext('PT'),
         );
 
         $this->assertEquals($cart->shippingQuote(), $directQuote);
         $this->assertSame('PT', $cart->shippingCountry());
 
         // Direct input is request-scoped and never mutates the browser Cart.
-        $runtime->directShippingContext('US');
+        $runtime->checkoutResolver()->directShippingContext('US');
         $this->assertSame('PT', (new StripeCheckout($this->kirby))->cart()?->shippingCountry());
     }
 
@@ -152,8 +152,8 @@ final class DirectShippingContextTest extends KirbyTestCase
         ]);
         $this->kirby->impersonate($user->id());
         $runtime = new RuntimeFactory($this->kirby);
-        $checkout = $runtime->directCheckoutContext([['reference' => 'physical']]);
-        $shipping = $runtime->directShippingContext('PT');
+        $checkout = $runtime->checkoutResolver()->directCheckoutContext([['reference' => 'physical']]);
+        $shipping = $runtime->checkoutResolver()->directShippingContext('PT');
 
         $this->assertSame('pt', $checkout->languageCode());
         $this->assertSame('pt_PT', $checkout->locale());
@@ -207,7 +207,7 @@ final class DirectShippingContextTest extends KirbyTestCase
         ]);
         ApiRequestor::setHttpClient($client);
 
-        $checkout = (new RuntimeFactory($this->kirby))->directCheckoutContext([
+        $checkout = (new RuntimeFactory($this->kirby))->checkoutResolver()->directCheckoutContext([
             ['reference' => 'stripe-product', 'quantity' => 2],
         ]);
 
@@ -227,7 +227,7 @@ final class DirectShippingContextTest extends KirbyTestCase
         ]]);
 
         try {
-            (new RuntimeFactory($this->kirby))->directCheckoutContext([
+            (new RuntimeFactory($this->kirby))->checkoutResolver()->directCheckoutContext([
                 ['reference' => 'first'],
                 ['reference' => 'second'],
             ]);

@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 use Brick\Money\Money;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestContextFactory;
@@ -275,7 +276,7 @@ final class SessionRequestContextTest extends KirbyTestCase
             languageCode: $languageCode,
             uiMode: $uiMode,
             currency: 'EUR',
-            lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)],
+            lineItems: [OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem($product))],
         );
     }
 

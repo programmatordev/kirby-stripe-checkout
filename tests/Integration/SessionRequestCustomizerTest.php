@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Brick\Money\Money;
 use DateTimeImmutable;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\InvalidSessionRequestException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestCustomizer;
@@ -111,7 +112,7 @@ final class SessionRequestCustomizerTest extends KirbyTestCase
         ]);
 
         $parameters = (new RuntimeFactory($this->kirby))
-            ->checkoutSessionRequest($this->context(), null)
+            ->checkoutPreparationFactory()->sessionRequest($this->context(), null)
             ->parameters();
 
         $this->assertSame(
@@ -176,7 +177,7 @@ final class SessionRequestCustomizerTest extends KirbyTestCase
             languageCode: null,
             uiMode: UiMode::Hosted,
             currency: 'EUR',
-            lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)],
+            lineItems: [OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem($product))],
         );
 
         return new SessionRequestContext(

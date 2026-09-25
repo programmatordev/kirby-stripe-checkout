@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Order\Internal;
 
 use Brick\Money\Money;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Product\Price;
@@ -21,38 +22,35 @@ final readonly class OrderLineItemSnapshot
     /** @param array<string, mixed> $data */
     private function __construct(private array $data, private Money $subtotal) {}
 
-    /** Stripe-backed prices must already be resolved by the caller; snapshotting performs no lookup. */
-    public static function fromProduct(Product $product, Money $price, ?string $stripeProductId = null): self
+    /** Snapshotting consumes the same completed resolution as shipping; no provider lookup. */
+    public static function fromCheckoutLineItem(CheckoutLineItem $lineItem): self
     {
         $registry = new StripeCurrencyRegistry();
-        $subtotal = $price->multipliedBy($product->request()->quantity());
-
-        if ($product->price() instanceof Price && $product->price()->price()->isEqualTo($price) === false) {
-            throw new OrderDataException();
-        }
+        $price = $lineItem->price();
+        $subtotal = $lineItem->subtotal();
 
         return self::fromArray([
-            'reference' => $product->request()->reference(),
-            'quantity' => $product->request()->quantity(),
-            'variantId' => $product->variantId(),
-            'name' => $product->name(),
-            'description' => $product->description(),
-            'images' => $product->imageUrls(),
-            'sku' => $product->sku(),
-            'requiresShipping' => $product->requiresShipping(),
+            'reference' => $lineItem->productReference(),
+            'quantity' => $lineItem->quantity(),
+            'variantId' => $lineItem->variantId(),
+            'name' => $lineItem->name(),
+            'description' => $lineItem->description(),
+            'images' => $lineItem->imageUrls(),
+            'sku' => $lineItem->sku(),
+            'requiresShipping' => $lineItem->requiresShipping(),
             'options' => array_map(static fn(SelectedOption $option): array => [
                 'optionId' => $option->optionId(),
                 'optionName' => $option->optionName(),
                 'valueId' => $option->valueId(),
                 'valueName' => $option->valueName(),
-            ], $product->selectedOptions()),
-            'metadata' => $product->metadata(),
-            'priceSource' => $product->priceSource()->value,
-            'stripePriceId' => $product->price() instanceof StripePriceReference ? $product->price()->priceId() : null,
-            'stripeProductId' => $stripeProductId,
+            ], $lineItem->options()),
+            'metadata' => $lineItem->metadata(),
+            'priceSource' => $lineItem->priceSource()->value,
+            'stripePriceId' => $lineItem->stripePriceId(),
+            'stripeProductId' => $lineItem->stripeProductId(),
             // Freeze the effective local classification alongside the initiating
             // price. Retrying an exact request must not re-read edited content.
-            'taxCode' => $product->price() instanceof Price ? $product->taxCode()?->id() : null,
+            'taxCode' => $lineItem->taxCode()?->id(),
             'currency' => $price->getCurrency()->getCurrencyCode(),
             'price' => (string) $price->getAmount(),
             'subtotal' => (string) $subtotal->getAmount(),

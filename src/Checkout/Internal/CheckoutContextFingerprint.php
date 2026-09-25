@@ -13,8 +13,8 @@ use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 /**
  * @internal Canonical purchase fingerprint shared by quote and order preparation.
  *
- * Only facts exposed to shipping resolution are included. Provider enrichment
- * added later to the Order snapshot cannot have influenced the accepted quote.
+ * Includes the complete initiating line facts exposed to shipping resolution,
+ * not later provider-authoritative reconciliation data.
  */
 final class CheckoutContextFingerprint
 {
@@ -39,6 +39,13 @@ final class CheckoutContextFingerprint
                     $item->options(),
                 ),
                 'metadata' => $item->metadata(),
+                'name' => $item->name(),
+                'description' => $item->description(),
+                'images' => $item->imageUrls(),
+                'priceSource' => $item->priceSource()->value,
+                'stripePriceId' => $item->stripePriceId(),
+                'stripeProductId' => $item->stripeProductId(),
+                'taxCode' => $item->taxCode()?->id(),
             ],
             $context->items(),
         );
@@ -67,6 +74,13 @@ final class CheckoutContextFingerprint
                 'requiresShipping' => $item['requiresShipping'],
                 'options' => $item['options'],
                 'metadata' => $item['metadata'],
+                'name' => $item['name'],
+                'description' => $item['description'],
+                'images' => $item['images'],
+                'priceSource' => $item['priceSource'],
+                'stripePriceId' => $item['stripePriceId'],
+                'stripeProductId' => $item['stripeProductId'],
+                'taxCode' => $item['taxCode'],
             ],
             $context->lineItems(),
         );

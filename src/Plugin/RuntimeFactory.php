@@ -13,13 +13,10 @@ use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutator;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartViewFactory;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\KirbySessionCartStore;
-use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
-use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
-use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
-use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutPreparationFactory;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutResolver;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionCreator;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\InitiatingShippingSnapshot;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestBuilder;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestContextFactory;
@@ -29,14 +26,13 @@ use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationReport;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
-use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Configuration\ShippingConfiguration;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
-use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Internal\ClosureProductResolver;
 use ProgrammatorDev\StripeCheckout\Product\Internal\GuardedProductResolver;
@@ -44,7 +40,6 @@ use ProgrammatorDev\StripeCheckout\Product\Internal\KirbyPageLocator;
 use ProgrammatorDev\StripeCheckout\Product\Internal\KirbyPageProductResolver;
 use ProgrammatorDev\StripeCheckout\Product\Internal\ProductOptionsFactory;
 use ProgrammatorDev\StripeCheckout\Product\Internal\TaxCodeValidator;
-use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
@@ -55,12 +50,7 @@ use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Shipping\Internal\ClosureShippingResolver;
 use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingQuotePipeline;
 use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingZoneResolver;
-use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
-use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
-use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingResolverInterface;
-use ProgrammatorDev\StripeCheckout\Shipping\ShippingZoneScope;
-use ProgrammatorDev\StripeCheckout\Shipping\StripeShippingCountryRegistry;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionGatewayInterface;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\StripeApiCheckoutSessionGateway;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogue;
@@ -71,7 +61,6 @@ use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 use ProgrammatorDev\StripeCheckout\Stripe\StripeApiClientFactory;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\StripeApiTaxProvider;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeCatalogue;
-use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
 use ProgrammatorDev\StripeCheckout\Translation\LocaleResolver;
 use Stripe\StripeClient;
@@ -111,186 +100,12 @@ final class RuntimeFactory
         }
 
         $store = new KirbySessionCartStore($this->kirby->session(), Uuid::generate(...));
-        $requestNormalizer = new ProductRequestNormalizer(function (ProductRequest $request): Product {
-            // Rebuild context after login/language changes, even when a project
-            // keeps the same Cart object for several operations in one request.
-            $runtime = new self($this->kirby);
-            $product = $runtime->resolveProduct($request);
-
-            if ($product->price() instanceof StripePriceReference) {
-                $currency = $runtime->settings()->currency();
-
-                if ($currency === null) {
-                    throw new ConfigurationException(ConfigurationErrorCode::REQUIRED_MISSING, 'settings.currency');
-                }
-
-                // A syntactically valid ID is not proof the current Price is usable.
-                $runtime->stripePriceResolver()->resolve($product->price(), $currency);
-            }
-
-            return $product;
-        });
+        $requestNormalizer = new ProductRequestNormalizer(
+            fn(ProductRequest $request): Product => (new self($this->kirby))->checkoutResolver()->cartProduct($request),
+        );
         $mutator = new CartMutator($store, $requestNormalizer, Uuid::generate(...));
 
-        return (new CartViewFactory($this->kirby))->create($store->read(), $mutator, $resolve);
-    }
-
-    public function resolveProduct(ProductRequest $request): Product
-    {
-        $context = $this->productContext();
-        $product = (new GuardedProductResolver($this->productResolver()))->resolve(
-            $request,
-            $context,
-        );
-
-        $this->taxCodeValidator()->validate($product->taxCode(), $context);
-
-        return $product;
-    }
-
-    /** Resolves untrusted cartless product input into the shared trusted context. */
-    public function directCheckoutContext(mixed $items): CheckoutContext
-    {
-        $requests = (new ProductRequestNormalizer($this->resolveProduct(...)))
-            ->normalizeDirectInput($items);
-        $lineItems = [];
-
-        foreach ($requests as $request) {
-            // Normalization can merge duplicate lines. Resolve the resulting request
-            // so quantity limits and product facts reflect the final quantity.
-            $product = $this->resolveProduct($request);
-
-            // Canonicalization may change a locator, never the selected product.
-            if (ProductRequestData::sameItem($request, $product->request()) === false) {
-                throw new InvalidProductException(ProductErrorCode::RESOLVER_CHANGED_REQUEST);
-            }
-
-            $lineItems[] = $this->checkoutLineItem($product);
-        }
-
-        return $this->checkoutContext($lineItems, CheckoutSource::Direct);
-    }
-
-    /** Projects one trusted Product through the pricing path shared by Cart and direct Checkout. */
-    public function checkoutLineItem(Product $product): CheckoutLineItem
-    {
-        $currency = $this->settings()->currency();
-
-        if ($currency === null) {
-            throw new ConfigurationException(ConfigurationErrorCode::REQUIRED_MISSING, 'settings.currency');
-        }
-
-        $productPrice = $product->price();
-        $price = $productPrice instanceof Price
-            ? $productPrice->price()
-            : $this->stripePriceResolver()->resolve($productPrice, $currency)->price();
-
-        $subtotal = $price->multipliedBy($product->request()->quantity());
-
-        return new CheckoutLineItem(
-            productReference: $product->request()->reference(),
-            variantId: $product->variantId(),
-            sku: $product->sku(),
-            quantity: $product->request()->quantity(),
-            price: $price,
-            subtotal: $subtotal,
-            requiresShipping: $product->requiresShipping(),
-            options: $product->selectedOptions(),
-            metadata: $product->metadata(),
-        );
-    }
-
-    /**
-     * Builds current-request facts and validates invariants shared by Cart and direct Checkout.
-     *
-     * @param list<CheckoutLineItem> $lineItems
-     */
-    public function checkoutContext(array $lineItems, CheckoutSource $checkoutSource): CheckoutContext
-    {
-        $context = new CheckoutContext(
-            items: $lineItems,
-            languageCode: $this->kirby->language()?->code(),
-            locale: (new LocaleResolver($this->kirby))->resolve(),
-            userUuid: $this->kirby->user()?->uuid()->toString(),
-            checkoutSource: $checkoutSource,
-            uiMode: $this->settings()->uiMode(),
-        );
-
-        // Individually valid lines can still exceed provider-unit integer bounds
-        // when their subtotals are combined.
-        (new StripeCurrencyRegistry())->fromMoney($context->subtotal());
-
-        return $context;
-    }
-
-    /** Maps the optional direct-input country to the same trusted policy used by Cart Checkout. */
-    public function directShippingContext(mixed $shippingCountry = null): ShippingContext
-    {
-        if (
-            $shippingCountry !== null
-            && (
-                is_string($shippingCountry) === false
-                || (new StripeShippingCountryRegistry())->supports($shippingCountry) === false
-            )
-        ) {
-            throw new CheckoutInputException(ShippingErrorCode::COUNTRY_INVALID);
-        }
-
-        return $this->shippingContext($shippingCountry);
-    }
-
-    /** Applies the settings-owned tax policy to a trusted shipping country. */
-    public function shippingContext(?string $shippingCountry): ShippingContext
-    {
-        $settings = $this->settings();
-        $automaticTax = $settings->automaticTax();
-
-        return new ShippingContext(
-            shippingCountry: $shippingCountry,
-            taxBehavior: $automaticTax
-                ? $settings->shippingTaxBehavior()
-                : TaxBehavior::StripeDefault,
-            taxCode: $automaticTax
-                ? $settings->shippingTaxCode()->taxCode()
-                : null,
-        );
-    }
-
-    public function resolveShippingQuote(
-        CheckoutContext $checkout,
-        ShippingContext $shipping,
-    ): ?ShippingQuote {
-        return (new ShippingQuotePipeline(
-            kirby: $this->kirby,
-            resolver: $this->shippingResolver(),
-        ))->resolve(
-            $checkout,
-            $shipping,
-        );
-    }
-
-    /** @return list<string> */
-    public function shippingCountryCodes(): array
-    {
-        if ($this->shipping()->resolver() !== null) {
-            // A replacement resolver owns shipping-country eligibility, so the
-            // built-in zones cannot narrow its possible input countries.
-            return (new StripeShippingCountryRegistry())->codes();
-        }
-
-        $countries = [];
-
-        foreach ($this->settings()->shippingZones() as $zone) {
-            if ($zone->scope() === ShippingZoneScope::Fallback) {
-                return (new StripeShippingCountryRegistry())->codes();
-            }
-
-            foreach ($zone->countries() as $country) {
-                $countries[$country] = true;
-            }
-        }
-
-        return array_keys($countries);
+        return $this->cartViewFactory()->create($store->read(), $mutator, $resolve);
     }
 
     private function taxCodeValidator(): TaxCodeValidator
@@ -391,38 +206,39 @@ final class RuntimeFactory
         return new StripeApiCheckoutSessionGateway($this->stripeClient());
     }
 
-    public function checkoutSessionRequest(
-        SessionRequestContext $context,
-        ?InitiatingShippingSnapshot $initiatingShipping,
-    ): SessionRequest {
-        $configuration = $this->configurationReport()->configurationOrFail();
-        $settings = $configuration->settings();
-
-        if ($settings->automaticTax() && $settings->priceSource() === PriceSource::Kirby) {
-            $taxCodeValidator = null;
-            $productContext = $this->productContext();
-
-            foreach ($context->order()->lineItems() as $lineItem) {
-                if (is_string($lineItem['taxCode'])) {
-                    // This callback runs before Order persistence and only for a
-                    // new attempt. Recheck frozen local IDs against this operation's
-                    // cached catalogue; exact persisted retries skip preparation.
-                    ($taxCodeValidator ??= $this->taxCodeValidator())->validate(
-                        new TaxCode($lineItem['taxCode']),
-                        $productContext,
-                    );
-                }
-            }
-        }
-
-        $request = (new SessionRequestBuilder(
+    public function cartViewFactory(): CartViewFactory
+    {
+        return new CartViewFactory(
             kirby: $this->kirby,
-            settings: $settings,
-        ))->build($context, $initiatingShipping);
+            // A retained Cart can survive login/logout and language changes in
+            // the same request. Capture current inputs for each new presentation.
+            checkoutResolver: fn(): CheckoutResolver => (new self($this->kirby))->checkoutResolver(),
+        );
+    }
 
-        return (new SessionRequestCustomizer($this->kirby))->customize(
-            $context,
-            $request,
+    public function checkoutResolver(): CheckoutResolver
+    {
+        return new CheckoutResolver(
+            settings: $this->settings(),
+            productContext: $this->productContext(...),
+            productResolver: new GuardedProductResolver($this->productResolver()),
+            stripePriceResolver: $this->stripePriceResolver(...),
+            taxCodeValidator: $this->taxCodeValidator(),
+            shippingQuotes: new ShippingQuotePipeline($this->kirby, $this->shippingResolver()),
+            customShippingResolver: $this->shipping()->resolver() !== null,
+        );
+    }
+
+    public function checkoutPreparationFactory(): CheckoutPreparationFactory
+    {
+        /** @var array<string, mixed> $options */
+        $options = $this->kirby->options();
+
+        return new CheckoutPreparationFactory(
+            resolver: $this->checkoutResolver(),
+            orderNumbers: new OrderNumberFormatter((new ConfigurationResolver())->orderNumberFormatter($options)),
+            requestBuilder: new SessionRequestBuilder($this->kirby, $this->settings()),
+            requestCustomizer: new SessionRequestCustomizer($this->kirby),
         );
     }
 
@@ -438,7 +254,7 @@ final class RuntimeFactory
             prepareSessionRequest: fn(
                 SessionRequestContext $context,
                 ?InitiatingShippingSnapshot $initiatingShipping,
-            ): SessionRequest => $this->checkoutSessionRequest(
+            ): SessionRequest => $this->checkoutPreparationFactory()->sessionRequest(
                 $context,
                 $initiatingShipping,
             ),

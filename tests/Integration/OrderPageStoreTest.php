@@ -21,10 +21,11 @@ use Kirby\Toolkit\I18n;
 use Kirby\Uuid\Uri;
 use Kirby\Uuid\Uuid;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
-use ProgrammatorDev\StripeCheckout\Kirby\OrderCreationContextFactory;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\OrdersPage;
@@ -32,11 +33,12 @@ use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
-use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
+use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
@@ -818,16 +820,19 @@ final class OrderPageStoreTest extends KirbyTestCase
     {
         $price = Money::of('16', 'EUR');
         $product = new Product(new ProductRequest('product', 2), 'Product', false, new Price($price));
-        $context = (new OrderCreationContextFactory($this->kirby))->create(
-            uuid: Uuid::generate(),
-            lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)],
-            currency: 'EUR',
-            checkoutSource: CheckoutSource::Direct,
-            cartRevision: null,
-            userUuid: $userUuid,
+        $checkout = new CheckoutContext(
+            items: [new CheckoutLineItem($product)],
             languageCode: $this->kirby->languageCode(),
+            locale: 'en_US',
+            userUuid: $userUuid,
+            checkoutSource: CheckoutSource::Direct,
             uiMode: UiMode::Hosted,
         );
+        $context = (new RuntimeFactory($this->kirby))->checkoutPreparationFactory()->create(
+            uuid: Uuid::generate(),
+            checkout: $checkout,
+            shipping: new ShippingContext(null),
+        )->order();
         $createdAt ??= new DateTimeImmutable();
 
         return (new OrderPageStore($this->kirby))->create(

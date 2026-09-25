@@ -10,14 +10,21 @@ use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\InitiatingShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
+use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\Product;
+use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
+use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Shipping\DeliveryEstimate;
 use ProgrammatorDev\StripeCheckout\Shipping\DeliveryEstimateUnit;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingOption;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
+use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
 
 /** Creates complete initiating shipping evidence for unrelated order tests. */
 final class InitiatingShippingSnapshotFactory
@@ -30,17 +37,12 @@ final class InitiatingShippingSnapshotFactory
     ): InitiatingShippingSnapshot {
         $price = Money::of('16', $currency);
         $checkout = new CheckoutContext(
-            items: [new CheckoutLineItem(
-                productReference: 'product',
-                variantId: null,
-                sku: null,
-                quantity: 1,
-                price: $price,
-                subtotal: $price,
+            items: [new CheckoutLineItem(new Product(
+                request: new ProductRequest('product', 1, []),
+                name: 'Product',
                 requiresShipping: true,
-                options: [],
-                metadata: [],
-            )],
+                price: new Price($price),
+            ))],
             languageCode: $languageCode,
             locale: $locale,
             userUuid: null,
@@ -106,23 +108,44 @@ final class InitiatingShippingSnapshotFactory
                     OrderData::list($lineItem['options']),
                 );
 
-                return new CheckoutLineItem(
-                    productReference: OrderData::text($lineItem['reference']),
-                    variantId: OrderData::nullableString($lineItem['variantId']),
-                    sku: OrderData::nullableString($lineItem['sku']),
-                    quantity: OrderData::integer($lineItem['quantity']),
-                    price: Money::of(
-                        OrderData::text($lineItem['price']),
-                        OrderData::text($lineItem['currency']),
-                    ),
-                    subtotal: Money::of(
-                        OrderData::text($lineItem['subtotal']),
-                        OrderData::text($lineItem['currency']),
-                    ),
-                    requiresShipping: OrderData::boolean($lineItem['requiresShipping']),
-                    options: $options,
-                    metadata: OrderData::map($lineItem['metadata']),
+                $selection = [];
+
+                foreach ($options as $option) {
+                    $selection[$option->optionId()] = $option->valueId();
+                }
+
+                $price = Money::of(
+                    OrderData::text($lineItem['price']),
+                    OrderData::text($lineItem['currency']),
                 );
+                $stripePrice = $lineItem['priceSource'] === 'stripe'
+                    ? new StripePrice(
+                        priceId: OrderData::text($lineItem['stripePriceId']),
+                        productId: OrderData::text($lineItem['stripeProductId']),
+                        name: OrderData::text($lineItem['name']),
+                        unitPrice: (new StripeCurrencyRegistry())->fromMoney($price),
+                        taxBehavior: \Stripe\Price::TAX_BEHAVIOR_UNSPECIFIED,
+                    )
+                    : null;
+                $product = new Product(
+                    request: new ProductRequest(
+                        reference: OrderData::text($lineItem['reference']),
+                        quantity: OrderData::integer($lineItem['quantity']),
+                        selectedOptions: $selection,
+                    ),
+                    name: OrderData::text($lineItem['name']),
+                    requiresShipping: OrderData::boolean($lineItem['requiresShipping']),
+                    price: $stripePrice === null ? new Price($price) : new StripePriceReference($stripePrice->priceId()),
+                    selectedOptions: $options,
+                    description: OrderData::nullableString($lineItem['description']),
+                    imageUrls: OrderData::list($lineItem['images']),
+                    sku: OrderData::nullableString($lineItem['sku']),
+                    metadata: OrderData::map($lineItem['metadata']),
+                    variantId: OrderData::nullableString($lineItem['variantId']),
+                    taxCode: $lineItem['taxCode'] === null ? null : new TaxCode(OrderData::text($lineItem['taxCode'])),
+                );
+
+                return new CheckoutLineItem($product, $stripePrice);
             },
             $order->lineItems(),
         );

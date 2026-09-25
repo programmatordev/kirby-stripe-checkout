@@ -10,15 +10,17 @@ use Kirby\Cms\Page;
 use Kirby\Content\Field;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Cart\Exception\CartException;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptBinding;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptToken;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutPreparation;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\StripeConfiguration;
-use ProgrammatorDev\StripeCheckout\Kirby\OrderCreationContextFactory;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
+use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Price;
@@ -54,9 +56,10 @@ final class ProductTaxCodeTest extends KirbyTestCase
             taxCode: new TaxCode('txcd_unknown', providerName: 'Unknown', confirmed: true),
         );
         $token = AttemptToken::generate();
-        $order = (new OrderCreationContextFactory($this->kirby))->create(
+        $order = new OrderCreationContext(
             uuid: $token->orderUuid(),
-            lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)],
+            orderNumber: (new OrderNumberFormatter())->format($token->orderUuid()),
+            lineItems: [OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem($product))],
             currency: 'EUR',
             checkoutSource: CheckoutSource::Direct,
             cartRevision: null,
@@ -99,7 +102,7 @@ final class ProductTaxCodeTest extends KirbyTestCase
         $page = $this->product(['taxCode' => $code]);
         $runtime = new RuntimeFactory($this->kirby);
 
-        $this->assertNull($runtime->resolveProduct(new ProductRequest($page->id()))->taxCode());
+        $this->assertNull($runtime->checkoutResolver()->resolveProduct(new ProductRequest($page->id()))->taxCode());
         $this->assertSame([], $runtime->taxCodeCatalogue()->cached()['items']);
     }
 
@@ -128,7 +131,7 @@ final class ProductTaxCodeTest extends KirbyTestCase
         $catalogue = $this->catalogue($provider);
         $catalogue->refresh();
 
-        $product = (new RuntimeFactory($this->kirby))->resolveProduct(new ProductRequest($page->id()));
+        $product = (new RuntimeFactory($this->kirby))->checkoutResolver()->resolveProduct(new ProductRequest($page->id()));
 
         $this->assertSame('txcd_test', $product->taxCode()?->id());
         $this->assertSame([null, null], $provider->listCursors);
@@ -157,7 +160,7 @@ final class ProductTaxCodeTest extends KirbyTestCase
             ],
         ]);
         $provider = $this->seedCatalogue();
-        $product = (new RuntimeFactory($this->kirby))->resolveProduct(new ProductRequest(
+        $product = (new RuntimeFactory($this->kirby))->checkoutResolver()->resolveProduct(new ProductRequest(
             reference: $page->id(),
             selectedOptions: ['sizeOption000001' => 'largeValue00001'],
         ));
@@ -176,7 +179,7 @@ final class ProductTaxCodeTest extends KirbyTestCase
         ]);
         $this->seedCatalogue();
         $runtime = new RuntimeFactory($this->kirby);
-        $product = $runtime->resolveProduct(new ProductRequest(
+        $product = $runtime->checkoutResolver()->resolveProduct(new ProductRequest(
             reference: $page->id(),
             selectedOptions: ['sizeOption000001' => 'largeValue00001'],
         ));
@@ -236,7 +239,7 @@ final class ProductTaxCodeTest extends KirbyTestCase
             static fn(ProductVariant $variant): ?string => $variant->taxCode()?->id(),
             $runtime->productOptions($page)->variants(),
         ));
-        $this->assertSame('txcd_other', $runtime->resolveProduct(new ProductRequest(
+        $this->assertSame('txcd_other', $runtime->checkoutResolver()->resolveProduct(new ProductRequest(
             reference: $page->id(),
             selectedOptions: ['sizeOption000001' => 'smallValue00001'],
         ))->taxCode()?->id());
@@ -264,7 +267,7 @@ final class ProductTaxCodeTest extends KirbyTestCase
         $runtime = new RuntimeFactory($this->kirby);
 
         $this->assertSame('txcd_test', $runtime->productOptions($page)->variants()[0]->taxCode()?->id());
-        $this->assertSame('txcd_test', $runtime->resolveProduct(new ProductRequest(
+        $this->assertSame('txcd_test', $runtime->checkoutResolver()->resolveProduct(new ProductRequest(
             reference: $page->id(),
             selectedOptions: ['sizeOption000001' => 'largeValue00001'],
         ))->taxCode()?->id());
@@ -278,7 +281,7 @@ final class ProductTaxCodeTest extends KirbyTestCase
         $runtime = new RuntimeFactory($this->kirby);
 
         $this->assertNull($runtime->productOptions($page)->variants()[0]->taxCode());
-        $this->assertNull($runtime->resolveProduct(new ProductRequest(
+        $this->assertNull($runtime->checkoutResolver()->resolveProduct(new ProductRequest(
             reference: $page->id(),
             selectedOptions: ['sizeOption000001' => 'largeValue00001'],
         ))->taxCode());
@@ -312,7 +315,7 @@ final class ProductTaxCodeTest extends KirbyTestCase
         $this->restart(settings: $settings);
         $page = $this->product(['taxCode' => ['invalid'], 'stripePrice' => 'price_test']);
 
-        $this->assertNull((new RuntimeFactory($this->kirby))->resolveProduct(new ProductRequest($page->id()))->taxCode());
+        $this->assertNull((new RuntimeFactory($this->kirby))->checkoutResolver()->resolveProduct(new ProductRequest($page->id()))->taxCode());
     }
 
     /** @return iterable<string, array{array<string, mixed>}> */
@@ -329,7 +332,7 @@ final class ProductTaxCodeTest extends KirbyTestCase
         $provider = $seed ? $this->seedCatalogue() : null;
 
         try {
-            (new RuntimeFactory($this->kirby))->resolveProduct(new ProductRequest($page->id()));
+            (new RuntimeFactory($this->kirby))->checkoutResolver()->resolveProduct(new ProductRequest($page->id()));
             $this->fail('Expected an invalid classification to fail.');
         } catch (InvalidProductException $error) {
             $this->assertSame($errorCode, $error->errorCode());
@@ -354,12 +357,12 @@ final class ProductTaxCodeTest extends KirbyTestCase
         $page = $this->product(['taxCode' => 'txcd_test']);
         $provider = $this->seedCatalogue();
         $runtime = new RuntimeFactory($this->kirby);
-        $this->assertSame('txcd_test', $runtime->resolveProduct(new ProductRequest($page->id()))->taxCode()?->id());
+        $this->assertSame('txcd_test', $runtime->checkoutResolver()->resolveProduct(new ProductRequest($page->id()))->taxCode()?->id());
         $provider->pages = ['first' => new TaxCodeListResult([], false)];
         $this->catalogue($provider)->refresh();
 
         try {
-            $runtime->resolveProduct(new ProductRequest($page->id()));
+            $runtime->checkoutResolver()->resolveProduct(new ProductRequest($page->id()));
             $this->fail('Expected a removed code to fail.');
         } catch (InvalidProductException $error) {
             $this->assertSame('tax.code_invalid', $error->errorCode());
@@ -385,12 +388,12 @@ final class ProductTaxCodeTest extends KirbyTestCase
         $this->catalogue($foreignProvider, 'sk_test_foreign')->refresh();
         $runtime = new RuntimeFactory($this->kirby);
 
-        $this->assertSame('txcd_test', $runtime->resolveProduct(new ProductRequest($page->id()))->taxCode()?->id());
+        $this->assertSame('txcd_test', $runtime->checkoutResolver()->resolveProduct(new ProductRequest($page->id()))->taxCode()?->id());
         $page = $page->update(['taxCode' => 'txcd_foreign']);
 
         $this->expectException(InvalidProductException::class);
         $this->expectExceptionMessage('tax.code_invalid');
-        $runtime->resolveProduct(new ProductRequest($page->id()));
+        $runtime->checkoutResolver()->resolveProduct(new ProductRequest($page->id()));
     }
 
     public function testCredentialRotationNeedsItsOwnCatalogueWithoutFetchingDuringResolution(): void
@@ -402,7 +405,7 @@ final class ProductTaxCodeTest extends KirbyTestCase
         $client->expects($this->never())->method('request');
         ApiRequestor::setHttpClient($client);
         $this->seedCatalogue($secretKey);
-        $this->assertSame('txcd_test', (new RuntimeFactory($this->kirby))->resolveProduct(new ProductRequest($page->id()))->taxCode()?->id());
+        $this->assertSame('txcd_test', (new RuntimeFactory($this->kirby))->checkoutResolver()->resolveProduct(new ProductRequest($page->id()))->taxCode()?->id());
 
         // Keep the same content and cache root while changing only the credentials.
         $rotatedSecretKey = 'sk_test_rotated_product_tax';
@@ -412,14 +415,14 @@ final class ProductTaxCodeTest extends KirbyTestCase
         $runtime = new RuntimeFactory($this->kirby);
 
         try {
-            $runtime->resolveProduct(new ProductRequest($page->id()));
+            $runtime->checkoutResolver()->resolveProduct(new ProductRequest($page->id()));
             $this->fail('A previous credential catalogue cannot confirm the rotated credentials.');
         } catch (InvalidProductException $error) {
             $this->assertSame('tax.catalogue_unavailable', $error->errorCode());
         }
 
         $this->seedCatalogue($rotatedSecretKey);
-        $this->assertSame('txcd_test', $runtime->resolveProduct(new ProductRequest($page->id()))->taxCode()?->id());
+        $this->assertSame('txcd_test', $runtime->checkoutResolver()->resolveProduct(new ProductRequest($page->id()))->taxCode()?->id());
     }
 
     public function testMissingCatalogueRemainsATemporaryCartErrorOnReadsAndMutations(): void
@@ -457,7 +460,7 @@ final class ProductTaxCodeTest extends KirbyTestCase
         $this->seedCatalogue();
         $this->expectException(InvalidProductException::class);
         $this->expectExceptionMessage('tax.code_invalid');
-        (new RuntimeFactory($this->kirby))->resolveProduct(new ProductRequest('external:42'));
+        (new RuntimeFactory($this->kirby))->checkoutResolver()->resolveProduct(new ProductRequest('external:42'));
     }
 
     public function testCustomResolversCanClassifyAnEffectiveVariant(): void
@@ -470,7 +473,7 @@ final class ProductTaxCodeTest extends KirbyTestCase
             taxCode: new TaxCode('txcd_test'),
         )]);
         $provider = $this->seedCatalogue();
-        $product = (new RuntimeFactory($this->kirby))->resolveProduct(new ProductRequest('external:42'));
+        $product = (new RuntimeFactory($this->kirby))->checkoutResolver()->resolveProduct(new ProductRequest('external:42'));
 
         $this->assertSame('txcd_test', $product->taxCode()?->id());
         $this->assertSame([null], $provider->listCursors);

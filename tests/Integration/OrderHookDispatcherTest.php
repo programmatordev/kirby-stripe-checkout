@@ -11,11 +11,11 @@ use Kirby\Data\Data;
 use Kirby\Exception\PermissionException;
 use Kirby\Uuid\Uuid;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
-use ProgrammatorDev\StripeCheckout\Kirby\OrderCreationContextFactory;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderHookDispatcher;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
@@ -25,8 +25,10 @@ use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
 use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
+use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
@@ -503,9 +505,11 @@ final class OrderHookDispatcherTest extends KirbyTestCase
     {
         $price = Money::of('16', 'EUR');
         $product = new Product(new ProductRequest('product', 1), 'Product', false, new Price($price));
-        $context = (new OrderCreationContextFactory($this->kirby))->create(
-            uuid: Uuid::generate(),
-            lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)],
+        $uuid = Uuid::generate();
+        $context = new OrderCreationContext(
+            uuid: $uuid,
+            orderNumber: (new OrderNumberFormatter())->format($uuid),
+            lineItems: [OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem($product))],
             currency: 'EUR',
             checkoutSource: CheckoutSource::Direct,
             cartRevision: null,

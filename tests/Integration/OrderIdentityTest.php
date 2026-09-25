@@ -10,6 +10,7 @@ use Kirby\Uuid\Uuid;
 use Kirby\Uuid\Uuids;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptToken;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
@@ -71,7 +72,7 @@ final class OrderIdentityTest extends TestCase
                 languageCode: null,
                 uiMode: UiMode::Hosted,
                 currency: 'EUR',
-                lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)],
+                lineItems: [OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem($product))],
             );
             $createdAt = new DateTimeImmutable();
             $content = OrderSerializer::creation(

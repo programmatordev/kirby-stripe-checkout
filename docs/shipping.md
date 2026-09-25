@@ -88,6 +88,10 @@ The resolver receives two immutable contexts with separate responsibilities.
 
 Each line item exposes `productReference()`, nullable `variantId()` and `sku()`, `quantity()`, effective `price()`, calculated `subtotal()`, `requiresShipping()`, selected `options()`, and safe project `metadata()`.
 
+It also exposes the local `name()`, `description()` and `imageUrls()`, plus `priceSource()`. Stripe-priced lines include `stripePriceId()` and `stripeProductId()`; Kirby-priced lines expose their optional local `taxCode()`. Stripe owns classification for Stripe Prices, so those lines return `null` from `taxCode()`.
+
+These same resolved facts supply the initiating order snapshot without another Price lookup. Local descriptions are not replaced by Stripe's product descriptions. Lines contain image URLs only; use the Cart item's `image()` when you need a Kirby File for cropping.
+
 ## Adjusting a resolved quote
 
 Use the `programmatordev.stripe-checkout.shipping.quote` Kirby hook when configured zones or a replacement resolver provide the correct starting point but one Checkout needs an adjustment. The hook receives the resolved quote and both contexts and must return a `ShippingQuote`:

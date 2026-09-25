@@ -8,6 +8,7 @@ use Brick\Money\Money;
 use DateInterval;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSessionPresentation;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
@@ -24,12 +25,13 @@ use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\Configuration;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
-use ProgrammatorDev\StripeCheckout\Kirby\OrderCreationContextFactory;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
+use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
@@ -41,6 +43,7 @@ use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailure;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailureType;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Exception\CheckoutSessionGatewayException;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 use ProgrammatorDev\StripeCheckout\Test\Support\InitiatingShippingSnapshotFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\Stripe\FakeCheckoutSessionGateway;
@@ -1222,13 +1225,16 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             )],
             variantId: 'variant-' . $selectedOption,
         );
-        $lineItem = OrderLineItemSnapshot::fromProduct(
-            product: $product,
-            price: $price,
-            stripeProductId: $stripePrice ? 'prod_checkouttest' : null,
-        );
-        return (new OrderCreationContextFactory($this->kirby))->create(
+        $lineItem = OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem($product, $stripePrice ? new StripePrice(
+            priceId: 'price_checkouttest',
+            productId: 'prod_checkouttest',
+            name: 'Provider product',
+            unitPrice: (new StripeCurrencyRegistry())->fromMoney($price),
+            taxBehavior: \Stripe\Price::TAX_BEHAVIOR_UNSPECIFIED,
+        ) : null));
+        return new OrderCreationContext(
             uuid: $uuid,
+            orderNumber: (new OrderNumberFormatter())->format($uuid),
             lineItems: [$lineItem],
             currency: 'EUR',
             checkoutSource: CheckoutSource::Direct,

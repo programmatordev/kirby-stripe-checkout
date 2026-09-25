@@ -11,6 +11,9 @@ use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\Product;
+use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 
 final class CheckoutContextTest extends TestCase
@@ -45,17 +48,16 @@ final class CheckoutContextTest extends TestCase
     public function testLineItemExposesResolvedProductFacts(): void
     {
         $option = new SelectedOption('size', 'Size', 'medium', 'Medium');
-        $lineItem = new CheckoutLineItem(
-            productReference: 'page://shirt',
-            variantId: 'variant-medium',
-            sku: 'SHIRT-M',
-            quantity: 2,
-            price: Money::of('20.00', 'EUR'),
-            subtotal: Money::of('40.00', 'EUR'),
+        $lineItem = new CheckoutLineItem(new Product(
+            request: new ProductRequest('page://shirt', 2, ['size' => 'medium']),
+            name: 'Product',
             requiresShipping: true,
-            options: [$option],
+            price: new Price(Money::of('20.00', 'EUR')),
+            selectedOptions: [$option],
+            sku: 'SHIRT-M',
             metadata: ['shipping_class' => 'parcel'],
-        );
+            variantId: 'variant-medium',
+        ));
 
         $this->assertSame('page://shirt', $lineItem->productReference());
         $this->assertSame('variant-medium', $lineItem->variantId());
@@ -66,36 +68,6 @@ final class CheckoutContextTest extends TestCase
         $this->assertTrue($lineItem->requiresShipping());
         $this->assertSame([$option], $lineItem->options());
         $this->assertSame(['shipping_class' => 'parcel'], $lineItem->metadata());
-    }
-
-    public function testRejectsAnInconsistentLineSubtotal(): void
-    {
-        $this->expectException(InvalidArgumentException::class);
-
-        new CheckoutLineItem(
-            productReference: 'page://shirt',
-            variantId: null,
-            sku: null,
-            quantity: 2,
-            price: Money::of('20.00', 'EUR'),
-            subtotal: Money::of('20.00', 'EUR'),
-            requiresShipping: true,
-        );
-    }
-
-    public function testRejectsALineSubtotalInAnotherCurrency(): void
-    {
-        $this->expectException(InvalidArgumentException::class);
-
-        new CheckoutLineItem(
-            productReference: 'page://shirt',
-            variantId: null,
-            sku: null,
-            quantity: 1,
-            price: Money::of('20.00', 'EUR'),
-            subtotal: Money::of('20.00', 'USD'),
-            requiresShipping: true,
-        );
     }
 
     public function testRejectsMixedCurrencies(): void
@@ -128,14 +100,11 @@ final class CheckoutContextTest extends TestCase
         int $quantity = 1,
         bool $requiresShipping = true,
     ): CheckoutLineItem {
-        return new CheckoutLineItem(
-            productReference: $reference,
-            variantId: null,
-            sku: null,
-            quantity: $quantity,
-            price: Money::of($amount, $currency),
-            subtotal: Money::of($amount, $currency)->multipliedBy($quantity),
+        return new CheckoutLineItem(new Product(
+            request: new ProductRequest($reference, $quantity, []),
+            name: 'Product',
             requiresShipping: $requiresShipping,
-        );
+            price: new Price(Money::of($amount, $currency)),
+        ));
     }
 }

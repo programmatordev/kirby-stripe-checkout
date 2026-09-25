@@ -8,12 +8,14 @@ use Brick\Money\Money;
 use DateTimeImmutable;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\InitiatingShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestBuilder;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
@@ -27,6 +29,7 @@ use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingOption;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
 use ProgrammatorDev\StripeCheckout\Shipping\StripeShippingCountryRegistry;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
 use ProgrammatorDev\StripeCheckout\Test\Support\InitiatingShippingSnapshotFactory;
@@ -698,7 +701,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
         );
 
         return $this->order(
-            OrderLineItemSnapshot::fromProduct($product, $price),
+            OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem($product)),
             $languageCode,
             $uiMode,
         );
@@ -715,7 +718,13 @@ final class SessionRequestBuilderTest extends KirbyTestCase
         );
 
         return $this->order(
-            OrderLineItemSnapshot::fromProduct($product, $price, 'prod_standard'),
+            OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem($product, new StripePrice(
+                priceId: 'price_standard',
+                productId: 'prod_standard',
+                name: 'Provider product',
+                unitPrice: (new StripeCurrencyRegistry())->fromMoney($price),
+                taxBehavior: \Stripe\Price::TAX_BEHAVIOR_UNSPECIFIED,
+            ))),
             uiMode: UiMode::Embedded,
         );
     }

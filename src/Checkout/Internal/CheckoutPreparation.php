@@ -6,7 +6,10 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 
-/** Groups the purchase and optional accepted shipping quote for one new attempt. */
+/**
+ * Groups initiating order facts and optional accepted shipping evidence for one new attempt.
+ * This is input to Session creation, not a persisted Order or a created Stripe Session.
+ */
 final readonly class CheckoutPreparation
 {
     public function __construct(

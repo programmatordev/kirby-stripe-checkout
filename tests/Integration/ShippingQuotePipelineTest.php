@@ -9,6 +9,9 @@ use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\Product;
+use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Shipping\Exception\InvalidShippingQuoteException;
 use ProgrammatorDev\StripeCheckout\Shipping\Exception\ShippingException;
 use ProgrammatorDev\StripeCheckout\Shipping\Internal\ClosureShippingResolver;
@@ -178,15 +181,12 @@ final class ShippingQuotePipelineTest extends KirbyTestCase
         bool $requiresShipping = true,
     ): CheckoutContext {
         return new CheckoutContext(
-            items: [new CheckoutLineItem(
-                productReference: 'page://product',
-                variantId: null,
-                sku: null,
-                quantity: 1,
-                price: Money::of('20.00', 'EUR'),
-                subtotal: Money::of('20.00', 'EUR'),
+            items: [new CheckoutLineItem(new Product(
+                request: new ProductRequest('page://product', 1, []),
+                name: 'Product',
                 requiresShipping: $requiresShipping,
-            )],
+                price: new Price(Money::of('20.00', 'EUR')),
+            ))],
             languageCode: 'en',
             locale: 'en_US',
             userUuid: null,

@@ -83,7 +83,7 @@ final class StripeCheckout
 
     public function resolveProduct(ProductRequest $request): Product
     {
-        return (new RuntimeFactory($this->kirby))->resolveProduct($request);
+        return (new RuntimeFactory($this->kirby))->checkoutResolver()->resolveProduct($request);
     }
 
     public function productOptions(Page|string $reference): ProductOptions

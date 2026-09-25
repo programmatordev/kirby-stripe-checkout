@@ -42,7 +42,7 @@ final class CartEndpoint
         $renderer = null;
         $error = null;
         $status = 200;
-        $views = new CartViewFactory($this->kirby);
+        $views = (new RuntimeFactory($this->kirby))->cartViewFactory();
 
         try {
             /** @var array<string, mixed> $options */

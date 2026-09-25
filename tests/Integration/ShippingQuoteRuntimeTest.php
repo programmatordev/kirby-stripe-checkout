@@ -10,6 +10,9 @@ use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
+use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\Product;
+use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Shipping\Exception\InvalidShippingQuoteException;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
@@ -43,7 +46,7 @@ final class ShippingQuoteRuntimeTest extends KirbyTestCase
             ],
         ]);
 
-        $quote = (new RuntimeFactory($this->kirby))->resolveShippingQuote(
+        $quote = (new RuntimeFactory($this->kirby))->checkoutResolver()->resolveShippingQuote(
             self::checkout(),
             self::shipping(),
         );
@@ -94,7 +97,7 @@ final class ShippingQuoteRuntimeTest extends KirbyTestCase
         $checkout = self::checkout();
         $shipping = self::shipping();
 
-        $quote = (new RuntimeFactory($this->kirby))->resolveShippingQuote(
+        $quote = (new RuntimeFactory($this->kirby))->checkoutResolver()->resolveShippingQuote(
             $checkout,
             $shipping,
         );
@@ -144,7 +147,7 @@ final class ShippingQuoteRuntimeTest extends KirbyTestCase
         $checkout = self::checkout();
         $shipping = self::shipping();
 
-        $quote = (new RuntimeFactory($this->kirby))->resolveShippingQuote(
+        $quote = (new RuntimeFactory($this->kirby))->checkoutResolver()->resolveShippingQuote(
             $checkout,
             $shipping,
         );
@@ -172,7 +175,7 @@ final class ShippingQuoteRuntimeTest extends KirbyTestCase
         ]);
 
         try {
-            (new RuntimeFactory($this->kirby))->resolveShippingQuote(
+            (new RuntimeFactory($this->kirby))->checkoutResolver()->resolveShippingQuote(
                 self::checkout(),
                 self::shipping(),
             );
@@ -191,7 +194,7 @@ final class ShippingQuoteRuntimeTest extends KirbyTestCase
         ]);
 
         try {
-            (new RuntimeFactory($this->kirby))->resolveShippingQuote(
+            (new RuntimeFactory($this->kirby))->checkoutResolver()->resolveShippingQuote(
                 self::checkout(),
                 self::shipping(),
             );
@@ -210,7 +213,7 @@ final class ShippingQuoteRuntimeTest extends KirbyTestCase
         ]);
 
         try {
-            (new RuntimeFactory($this->kirby))->resolveShippingQuote(
+            (new RuntimeFactory($this->kirby))->checkoutResolver()->resolveShippingQuote(
                 self::checkout(),
                 self::shipping(),
             );
@@ -224,15 +227,12 @@ final class ShippingQuoteRuntimeTest extends KirbyTestCase
     private static function checkout(): CheckoutContext
     {
         return new CheckoutContext(
-            items: [new CheckoutLineItem(
-                productReference: 'page://product',
-                variantId: null,
-                sku: null,
-                quantity: 1,
-                price: Money::of('20.00', 'EUR'),
-                subtotal: Money::of('20.00', 'EUR'),
+            items: [new CheckoutLineItem(new Product(
+                request: new ProductRequest('page://product', 1, []),
+                name: 'Product',
                 requiresShipping: true,
-            )],
+                price: new Price(Money::of('20.00', 'EUR')),
+            ))],
             languageCode: 'en',
             locale: 'en_US',
             userUuid: null,

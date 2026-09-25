@@ -9,10 +9,12 @@ use DateTimeImmutable;
 use Kirby\Data\Txt;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEvent;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
+use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\DisputeStatus;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
@@ -30,6 +32,7 @@ use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
 use RuntimeException;
 use stdClass;
@@ -81,7 +84,7 @@ final class OrderValuesTest extends TestCase
     public function testExactPriceAndProviderUnits(string $currency, string $amount, int $providerPrice): void
     {
         $price = Money::of($amount, $currency);
-        $lineItem = OrderLineItemSnapshot::fromProduct(new Product(new ProductRequest('product', 2), 'Product', false, new Price($price)), $price);
+        $lineItem = OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem(new Product(new ProductRequest('product', 2), 'Product', false, new Price($price))));
         $data = $lineItem->toArray();
         $this->assertSame([
             'price' => $providerPrice,
@@ -105,7 +108,13 @@ final class OrderValuesTest extends TestCase
 
     public function testStripeLineItemsRetainResolvedMoneyAndPriceProductReferences(): void
     {
-        $lineItem = OrderLineItemSnapshot::fromProduct(new Product(new ProductRequest('product'), 'Stripe product', false, new StripePriceReference('price_test')), Money::of('25', 'EUR'), 'prod_test');
+        $lineItem = OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem(new Product(new ProductRequest('product'), 'Stripe product', false, new StripePriceReference('price_test')), new StripePrice(
+            priceId: 'price_test',
+            productId: 'prod_test',
+            name: 'Provider product',
+            unitPrice: (new StripeCurrencyRegistry())->fromMoney(Money::of('25', 'EUR')),
+            taxBehavior: \Stripe\Price::TAX_BEHAVIOR_UNSPECIFIED,
+        )));
         $data = $lineItem->toArray();
         $this->assertSame('stripe', $data['priceSource']);
         $this->assertSame('price_test', $data['stripePriceId']);
@@ -124,7 +133,7 @@ final class OrderValuesTest extends TestCase
             [new SelectedOption('size', 'Tamanho', 'large', 'Grande — 大')],
             variantId: 'large-variant',
         );
-        $context = $this->context(lineItems: [OrderLineItemSnapshot::fromProduct($product, $price)]);
+        $context = $this->context(lineItems: [OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem($product))]);
         $createdAt = new DateTimeImmutable();
         $data = OrderSerializer::creation(
             context: $context,
@@ -227,7 +236,13 @@ final class OrderValuesTest extends TestCase
 
     public function testContextRejectsMixedSources(): void
     {
-        $stripe = OrderLineItemSnapshot::fromProduct(new Product(new ProductRequest('other'), 'Other', false, new StripePriceReference('price_other')), Money::of('16', 'EUR'));
+        $stripe = OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem(new Product(new ProductRequest('other'), 'Other', false, new StripePriceReference('price_other')), new StripePrice(
+            priceId: 'price_other',
+            productId: 'prod_other',
+            name: 'Provider product',
+            unitPrice: (new StripeCurrencyRegistry())->fromMoney(Money::of('16', 'EUR')),
+            taxBehavior: \Stripe\Price::TAX_BEHAVIOR_UNSPECIFIED,
+        )));
         $this->expectException(OrderDataException::class);
         $this->context(lineItems: [$this->lineItem(), $stripe]);
     }
@@ -235,7 +250,7 @@ final class OrderValuesTest extends TestCase
     public function testContextRejectsMixedCurrencies(): void
     {
         $price = Money::of('16', 'USD');
-        $lineItem = OrderLineItemSnapshot::fromProduct(new Product(new ProductRequest('other'), 'Other', false, new Price($price)), $price);
+        $lineItem = OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem(new Product(new ProductRequest('other'), 'Other', false, new Price($price))));
         $this->expectException(OrderDataException::class);
         $this->context(lineItems: [$this->lineItem(), $lineItem]);
     }
@@ -631,11 +646,12 @@ final class OrderValuesTest extends TestCase
         }
     }
 
-    public function testInlineSnapshotCannotSubstituteADifferentPrice(): void
+    public function testInlineSnapshotUsesTheResolvedProductPrice(): void
     {
         $product = new Product(new ProductRequest('product'), 'Product', false, new Price(Money::of('16', 'EUR')));
-        $this->expectException(OrderDataException::class);
-        OrderLineItemSnapshot::fromProduct($product, Money::of('17', 'EUR'));
+        $snapshot = OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem($product));
+
+        $this->assertSame('16.00', $snapshot->toArray()['price']);
     }
 
     public function testBothOrNeitherActorAreRejected(): void
@@ -822,7 +838,7 @@ final class OrderValuesTest extends TestCase
         $price = Money::of('16', 'EUR');
         $product = new Product(new ProductRequest('page://shirt', 2, ['size' => 'large']), 'T-shirt', true, new Price($price), [new SelectedOption('size', 'Size', 'large', 'Large')], imageUrls: ['https://example.com/shirt.jpg'], sku: 'SHIRT-L', variantId: 'large-variant');
 
-        return OrderLineItemSnapshot::fromProduct($product, $price);
+        return OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem($product));
     }
 
     /** @return array<string, mixed> */
