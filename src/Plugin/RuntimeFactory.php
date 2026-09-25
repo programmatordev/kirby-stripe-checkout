@@ -16,13 +16,10 @@ use ProgrammatorDev\StripeCheckout\Cart\Internal\KirbySessionCartStore;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutPreparationFactory;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutResolver;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionCreator;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\InitiatingShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestBuilder;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestContextFactory;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestCustomizer;
-use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
-use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationReport;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
@@ -251,13 +248,7 @@ final class RuntimeFactory
             requestContextFactory: new SessionRequestContextFactory($this->kirby),
             orderPageStore: new OrderPageStore($this->kirby),
             sessionGateway: $this->checkoutSessionGateway(),
-            prepareSessionRequest: fn(
-                SessionRequestContext $context,
-                ?InitiatingShippingSnapshot $initiatingShipping,
-            ): SessionRequest => $this->checkoutPreparationFactory()->sessionRequest(
-                $context,
-                $initiatingShipping,
-            ),
+            preparationFactory: $this->checkoutPreparationFactory(),
             stripeApiVersion: ApiVersion::CURRENT,
         );
     }

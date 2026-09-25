@@ -5,40 +5,52 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Brick\Money\Money;
+use Closure;
 use DateInterval;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ProgrammatorDev\StripeCheckout\Cart\Internal\CartEntry;
+use ProgrammatorDev\StripeCheckout\Cart\Internal\CartSnapshot;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSessionPresentation;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutSessionException;
+use ProgrammatorDev\StripeCheckout\Checkout\Exception\InvalidSessionRequestException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptBinding;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptToken;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutPreparation;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutPreparationFactory;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionCreator;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\InitiatingShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestBuilder;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestContextFactory;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestCustomizer;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\Configuration;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderWriteLock;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
+use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
+use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingQuotePipeline;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingOption;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailure;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailureType;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
@@ -56,21 +68,69 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
 
     private const SECOND_ORDER_UUID = 'checkoutorder002';
 
-    #[DataProvider('sessionModesAndPriceSources')]
-    public function testCreatesAValidatedSessionForBothModesAndPriceSources(UiMode $uiMode, bool $stripePrice): void
+    /** @var list<ShippingOption>|null */
+    private ?array $shippingOptions = null;
+
+    /** @var Closure(CheckoutContext, ShippingContext): ShippingQuote|null */
+    private ?Closure $quoteResolver = null;
+
+    /** @var Closure(array<mixed>, SessionRequestContext): array<mixed>|null */
+    private ?Closure $requestFilter = null;
+
+    private int $quoteCalls = 0;
+
+    private int $numberCalls = 0;
+
+    private int $requestCalls = 0;
+
+    protected function setUp(): void
     {
+        parent::setUp();
+        // Kirby binds hooks to App; capture test state without relying on $this.
+        $quoteCalls = &$this->quoteCalls;
+        $quoteResolver = &$this->quoteResolver;
+        $shippingOptions = &$this->shippingOptions;
+        $requestCalls = &$this->requestCalls;
+        $requestFilter = &$this->requestFilter;
+        $this->kirby->extend(['hooks' => [
+            ShippingQuotePipeline::FILTER => function (ShippingQuote $quote, CheckoutContext $checkout, ShippingContext $shipping) use (&$quoteCalls, &$quoteResolver, &$shippingOptions): ShippingQuote {
+                $quoteCalls++;
+
+                return $quoteResolver !== null
+                    ? $quoteResolver($checkout, $shipping)
+                    : ShippingQuote::available($shippingOptions ?? InitiatingShippingSnapshotFactory::fromCheckout($checkout)->options());
+            },
+            SessionRequestCustomizer::FILTER => function (array $parameters, SessionRequestContext $context) use (&$requestCalls, &$requestFilter): array {
+                $requestCalls++;
+
+                return $requestFilter !== null
+                    ? $requestFilter($parameters, $context)
+                    : $parameters;
+            },
+        ]]);
+    }
+
+    #[DataProvider('sessionModesAndPriceSources')]
+    public function testCreatesAValidatedSessionForBothModesAndPriceSources(
+        UiMode $uiMode,
+        bool $stripePrice,
+        CheckoutSource $checkoutSource,
+        bool $requiresShipping,
+        bool $mixed,
+    ): void {
         $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
         $configuration = $this->configuration($uiMode);
-        $order = $this->order($uiMode, $stripePrice);
+        $order = $this->order($uiMode, $stripePrice, requiresShipping: $requiresShipping, checkoutSource: $checkoutSource, mixed: $mixed);
         $request = $this->request(order: $order, configuration: $configuration, now: $now);
         $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: $uiMode);
-        $gateway = new FakeCheckoutSessionGateway([$sessionRecord]);
+        $gateway = new FakeCheckoutSessionGateway(
+            results: [$sessionRecord],
+            retrievalResults: [$sessionRecord->id => $sessionRecord],
+        );
         $presentation = $this->creator($configuration, $gateway)->create(
-            checkout: new CheckoutPreparation(
-                order: $order,
-                shipping: InitiatingShippingSnapshotFactory::fromOrder($order),
-            ),
-            binding: $this->binding(),
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+            shipping: new ShippingContext('PT'),
+            binding: $this->binding(checkoutSource: $checkoutSource),
             token: $this->token(),
             guestReference: 'guest-browser',
             now: $now,
@@ -78,7 +138,6 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         );
 
         $this->assertPresentation($presentation, $uiMode, reused: false);
-        $this->assertCount(1, $gateway->requests);
         $this->assertSame($request->parameters(), $gateway->requests[0]->parameters());
         $this->assertSame(['stripe-checkout/session/' . $order->uuid()], $gateway->idempotencyKeys);
 
@@ -89,7 +148,10 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $this->assertSame(CheckoutStatus::Open->value, $data['checkoutStatus']);
         $this->assertSame($sessionRecord->id, $data['stripeCheckoutSessionId']);
         $this->assertSame($request->parameters(), $checkoutAttempt['sessionRequest']);
-        $this->assertSame($this->binding()->fingerprint(), $checkoutAttempt['bindingFingerprint']);
+        $this->assertSame($this->binding(checkoutSource: $checkoutSource)->fingerprint(), $checkoutAttempt['bindingFingerprint']);
+        $this->assertSame($order->cartRevision(), $checkoutAttempt['cartRevision']);
+        $this->assertSame($checkoutSource->value, $checkoutAttempt['source']);
+        $this->assertCount($mixed ? 2 : 1, OrderData::list($data['initiatingLineItems']));
         $this->assertSame($request->fingerprint(), $checkoutAttempt['requestFingerprint']);
         $this->assertArrayNotHasKey('stripeShippingRateIds', $checkoutAttempt);
         $this->assertSame(ApiVersion::CURRENT, $checkoutAttempt['stripeApiVersion']);
@@ -99,7 +161,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             $checkoutAttempt['credentialFingerprint'],
         );
         $this->assertSame('stripe-checkout/session/' . $order->uuid(), $checkoutAttempt['idempotencyKey']);
-        $this->assertSame(['shr_test_option_0'], $data['stripeShippingRateIds']);
+        $this->assertSame($requiresShipping ? ['shr_test_option_0'] : [], $data['stripeShippingRateIds']);
         $persisted = OrderData::json($data);
 
         if ($sessionRecord->url !== null) {
@@ -116,6 +178,28 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             $deliveries,
         );
         $this->assertSame(['order.created', 'session.created'], $types);
+
+        $this->quoteResolver = static fn(): never => throw new RuntimeException('Reuse must not resolve shipping.');
+        $this->requestFilter = static fn(): never => throw new RuntimeException('Reuse must not customize the request.');
+        $reused = $this->creator(
+            configuration: $configuration,
+            gateway: $gateway,
+            numberFormatter: static fn(): never => throw new RuntimeException('Reuse must not format an order number.'),
+        )->create(
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+            shipping: new ShippingContext('PT'),
+            binding: $this->binding(checkoutSource: $checkoutSource),
+            token: $this->token(),
+            guestReference: 'guest-browser',
+            now: $now->add(new DateInterval('PT1M')),
+        );
+
+        $this->assertPresentation($reused, $uiMode, reused: true);
+        $this->assertCount(1, $gateway->requests);
+        $this->assertSame([$sessionRecord->id], $gateway->retrievals);
+        $this->assertSame($requiresShipping ? 1 : 0, $this->quoteCalls);
+        $this->assertSame(1, $this->requestCalls);
+        $this->assertSame(1, $this->numberCalls);
     }
 
     public function testDigitalSessionAssociationPersistsNoShippingRateIds(): void
@@ -132,7 +216,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         );
 
         $this->creator($configuration, new FakeCheckoutSessionGateway([$sessionRecord]))->create(
-            checkout: new CheckoutPreparation($order),
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+            shipping: new ShippingContext('PT'),
             binding: $this->binding(),
             token: $this->token(),
             guestReference: 'guest-browser',
@@ -161,7 +246,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
 
         try {
             $this->creator($configuration, new FakeCheckoutSessionGateway([$sessionRecord]))->create(
-                checkout: new CheckoutPreparation($order),
+                checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+                shipping: new ShippingContext('PT'),
                 binding: $this->binding(),
                 token: $this->token(),
                 guestReference: 'guest-browser',
@@ -199,6 +285,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
                 new ShippingOption('express', 'Express delivery', Money::of('10', 'EUR')),
             ],
         );
+        $this->shippingOptions = $snapshot->options();
         $request = $this->request(
             order: $order,
             configuration: $configuration,
@@ -218,10 +305,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
 
         try {
             $this->creator($configuration, new FakeCheckoutSessionGateway([$duplicateRecord]))->create(
-                checkout: new CheckoutPreparation(
-                    order: $order,
-                    shipping: $snapshot,
-                ),
+                checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+                shipping: new ShippingContext('PT'),
                 binding: $this->binding(),
                 token: $this->token(),
                 guestReference: 'guest-browser',
@@ -273,10 +358,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $token = $this->token(orderUuid: self::SECOND_ORDER_UUID, nonceByte: 'b');
         $binding = $this->binding();
         $creator->create(
-            checkout: new CheckoutPreparation(
-                order: $otherOrder,
-                shipping: $otherSnapshot,
-            ),
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($otherOrder),
+            shipping: new ShippingContext('PT'),
             binding: $binding,
             token: $token,
             guestReference: 'guest-browser',
@@ -285,7 +368,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
 
         try {
             $creator->create(
-                checkout: new CheckoutPreparation($otherOrder),
+                checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($otherOrder),
+                shipping: new ShippingContext('PT'),
                 binding: $binding,
                 token: $token,
                 guestReference: 'guest-browser',
@@ -306,7 +390,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
         $store = new OrderPageStore($this->kirby);
         $this->creator($configuration, new FakeCheckoutSessionGateway([$sessionRecord]))->create(
-            checkout: new CheckoutPreparation($order),
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+            shipping: new ShippingContext('PT'),
             binding: $this->binding(),
             token: $this->token(),
             guestReference: 'guest-browser',
@@ -321,14 +406,12 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         });
     }
 
-    public function testPassesTheInitiatingShippingSnapshotToRequestPreparation(): void
+    public function testPreparesMatchingShippingEvidenceForTheRequest(): void
     {
         $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
         $configuration = $this->configuration(UiMode::Hosted);
         $order = $this->order(UiMode::Hosted);
         $request = $this->request(order: $order, configuration: $configuration, now: $now);
-        $snapshot = InitiatingShippingSnapshotFactory::fromOrder($order);
-        $receivedSnapshot = null;
         $gateway = new FakeCheckoutSessionGateway([
             $this->sessionRecord(
                 order: $order,
@@ -337,31 +420,19 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
                 uiMode: UiMode::Hosted,
             ),
         ]);
-        $creator = $this->creator(
-            configuration: $configuration,
-            gateway: $gateway,
-            prepareSessionRequest: static function (
-                SessionRequestContext $context,
-                ?InitiatingShippingSnapshot $initiatingShipping,
-            ) use (&$receivedSnapshot, $request): SessionRequest {
-                $receivedSnapshot = $initiatingShipping;
 
-                return $request;
-            },
-        );
-
-        $creator->create(
-            checkout: new CheckoutPreparation(
-                order: $order,
-                shipping: $snapshot,
-            ),
+        $this->creator($configuration, $gateway)->create(
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+            shipping: new ShippingContext('PT'),
             binding: $this->binding(),
             token: $this->token(),
             guestReference: 'guest-browser',
             now: $now,
         );
 
-        $this->assertSame($snapshot, $receivedSnapshot);
+        $this->assertSame($request->parameters()['shipping_options'], $gateway->requests[0]->parameters()['shipping_options']);
+        $this->assertSame(['allowed_countries' => ['PT']], $gateway->requests[0]->parameters()['shipping_address_collection']);
+        $this->assertSame(1, $this->quoteCalls);
     }
 
     public function testDuplicateTokenReusesTheOrderAndRetrievesTheExistingSession(): void
@@ -375,38 +446,19 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             results: [$sessionRecord],
             retrievalResults: [$sessionRecord->id => $sessionRecord],
         );
-        $requestCalls = 0;
-        $kirby = $this->kirby;
-        $settings = $configuration->settings();
         $token = $this->token();
-        $creator = $this->creator(
-            configuration: $configuration,
-            gateway: $gateway,
-            prepareSessionRequest: static function (
-                SessionRequestContext $context,
-                ?InitiatingShippingSnapshot $initiatingShipping,
-            ) use (&$requestCalls, $kirby, $settings): SessionRequest {
-                $requestCalls++;
-
-                return (new SessionRequestBuilder(
-                    kirby: $kirby,
-                    settings: $settings,
-                ))->build(
-                    $context,
-                    $initiatingShipping
-                        ?? InitiatingShippingSnapshotFactory::fromOrder($context->order()),
-                );
-            },
-        );
+        $creator = $this->creator($configuration, $gateway);
         $first = $creator->create(
-            checkout: new CheckoutPreparation($order),
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+            shipping: new ShippingContext('PT'),
             binding: $this->binding(),
             token: $token,
             guestReference: 'guest-browser',
             now: $now,
         );
         $second = $creator->create(
-            checkout: new CheckoutPreparation($this->order(UiMode::Hosted)),
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($this->order(UiMode::Hosted)),
+            shipping: new ShippingContext('PT'),
             binding: $this->binding(),
             token: $token,
             guestReference: 'guest-browser',
@@ -417,7 +469,9 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $this->assertFalse($first->isReused());
         $this->assertTrue($second->isReused());
         $this->assertSame($first->orderPageUuid(), $second->orderPageUuid());
-        $this->assertSame(1, $requestCalls);
+        $this->assertSame(1, $this->requestCalls);
+        $this->assertSame(1, $this->quoteCalls);
+        $this->assertSame(1, $this->numberCalls);
         $this->assertCount(1, $gateway->requests);
         $this->assertSame([$sessionRecord->id], $gateway->retrievals);
         $this->assertCount(1, (new OrderPageStore($this->kirby))->orders());
@@ -438,7 +492,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $creator = $this->creator($configuration, $gateway);
         $token = $this->token();
         $creator->create(
-            checkout: new CheckoutPreparation($order),
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+            shipping: new ShippingContext('PT'),
             binding: $this->binding(),
             token: $token,
             guestReference: 'guest-browser',
@@ -448,7 +503,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
 
         try {
             $creator->create(
-                checkout: new CheckoutPreparation($this->order(UiMode::Hosted)),
+                checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($this->order(UiMode::Hosted)),
+                shipping: new ShippingContext('PT'),
                 binding: $this->binding(),
                 token: $changedToken,
                 guestReference: 'guest-browser',
@@ -464,28 +520,27 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $this->assertCount(1, (new OrderPageStore($this->kirby))->orders());
     }
 
-    public function testAnAttemptUuidMustMatchTheProspectiveOrder(): void
+    public function testAnIncompatibleActorStopsBeforePreparation(): void
     {
-        $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
         $configuration = $this->configuration(UiMode::Hosted);
-        $order = $this->order(UiMode::Hosted);
-        $request = $this->request(order: $order, configuration: $configuration, now: $now);
-        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
-        $gateway = new FakeCheckoutSessionGateway([$sessionRecord]);
+        $gateway = new FakeCheckoutSessionGateway();
 
         try {
             $this->creator($configuration, $gateway)->create(
-                checkout: new CheckoutPreparation($order),
+                checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($this->order(UiMode::Hosted)),
+                shipping: new ShippingContext('PT'),
                 binding: $this->binding(),
-                token: $this->token(orderUuid: self::SECOND_ORDER_UUID),
-                guestReference: 'guest-browser',
-                now: $now,
+                token: $this->token(),
+                guestReference: 'another-browser',
+                now: new DateTimeImmutable('2026-09-11T12:00:00Z'),
             );
-            $this->fail('Expected a token reserved for another Order to conflict.');
+            $this->fail('Expected an incompatible actor to conflict.');
         } catch (CheckoutInputException $error) {
             $this->assertSame('checkout.attempt_conflict', $error->errorCode());
         }
 
+        $this->assertSame(0, $this->quoteCalls);
+        $this->assertSame(0, $this->numberCalls);
         $this->assertCount(0, $gateway->requests);
         $this->assertCount(0, (new OrderPageStore($this->kirby))->orders());
     }
@@ -510,7 +565,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
 
         try {
             $this->creator($configuration, $firstGateway)->create(
-                checkout: new CheckoutPreparation($order),
+                checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+                shipping: new ShippingContext('PT'),
                 binding: $this->binding(),
                 token: $this->token(),
                 guestReference: 'guest-browser',
@@ -534,17 +590,11 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $request = new SessionRequest(OrderData::map($checkoutAttempt['sessionRequest']));
         $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
         $retryGateway = new FakeCheckoutSessionGateway([$sessionRecord]);
-        $retryRequestCalls = 0;
-        $presentation = $this->creator(
-            configuration: $configuration,
-            gateway: $retryGateway,
-            prepareSessionRequest: static function () use (&$retryRequestCalls): SessionRequest {
-                $retryRequestCalls++;
-
-                throw new RuntimeException('An existing request must not be rebuilt.');
-            },
-        )->create(
-            checkout: new CheckoutPreparation($this->order(UiMode::Hosted)),
+        $this->requestFilter = static fn(): never => throw new RuntimeException('An existing request must not be rebuilt.');
+        $this->quoteResolver = static fn(): never => throw new RuntimeException('An existing quote must not be resolved.');
+        $presentation = $this->creator($configuration, $retryGateway)->create(
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($this->order(UiMode::Hosted)),
+            shipping: new ShippingContext('PT'),
             binding: $this->binding(),
             token: $this->token(),
             guestReference: 'guest-browser',
@@ -552,7 +602,9 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         );
 
         $this->assertTrue($presentation->isReused());
-        $this->assertSame(0, $retryRequestCalls);
+        $this->assertSame(1, $this->requestCalls);
+        $this->assertSame(1, $this->quoteCalls);
+        $this->assertSame(1, $this->numberCalls);
         $this->assertSame($checkoutAttempt['sessionRequest'], $retryGateway->requests[0]->parameters());
         $this->assertSame([$checkoutAttempt['idempotencyKey']], $retryGateway->idempotencyKeys);
     }
@@ -576,7 +628,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
 
         try {
             $this->creator($configuration, $rejectedGateway)->create(
-                checkout: new CheckoutPreparation($rejectedOrder),
+                checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($rejectedOrder),
+                shipping: new ShippingContext('PT'),
                 binding: $this->binding(),
                 token: $this->token(),
                 guestReference: 'guest-browser',
@@ -607,7 +660,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
 
         try {
             $this->creator($configuration, new FakeCheckoutSessionGateway([$sessionRecord]))->create(
-                checkout: new CheckoutPreparation($incompatibleOrder),
+                checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($incompatibleOrder),
+                shipping: new ShippingContext('PT'),
                 binding: $this->binding(selectedOption: 'other'),
                 token: $this->token(orderUuid: self::SECOND_ORDER_UUID, nonceByte: 'b'),
                 guestReference: 'guest-browser',
@@ -638,7 +692,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
 
         try {
             $this->creator($configuration, $gateway)->create(
-                checkout: new CheckoutPreparation($order),
+                checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+                shipping: new ShippingContext('PT'),
                 binding: $this->binding(),
                 token: $this->token(),
                 guestReference: 'guest-browser',
@@ -651,7 +706,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
 
         try {
             $this->creator($configuration, $retryGateway)->create(
-                checkout: new CheckoutPreparation($this->order(UiMode::Hosted)),
+                checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($this->order(UiMode::Hosted)),
+                shipping: new ShippingContext('PT'),
                 binding: $this->binding(),
                 token: $this->token(),
                 guestReference: 'guest-browser',
@@ -682,7 +738,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         );
         $creator = $this->creator($configuration, $gateway);
         $creator->create(
-            checkout: new CheckoutPreparation($order),
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+            shipping: new ShippingContext('PT'),
             binding: $this->binding(),
             token: $this->token(),
             guestReference: 'guest-browser',
@@ -691,7 +748,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
 
         $this->expectException(CheckoutInputException::class);
         $creator->create(
-            checkout: new CheckoutPreparation($this->order(UiMode::Hosted, selectedOption: 'changed')),
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($this->order(UiMode::Hosted, selectedOption: 'changed')),
+            shipping: new ShippingContext('PT'),
             binding: $this->binding(selectedOption: 'changed'),
             token: $this->token(),
             guestReference: 'guest-browser',
@@ -708,7 +766,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
         $creator = $this->creator($configuration, new FakeCheckoutSessionGateway([$sessionRecord]));
         $creator->create(
-            checkout: new CheckoutPreparation($order),
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+            shipping: new ShippingContext('PT'),
             binding: $this->binding(),
             token: $this->token(),
             guestReference: 'guest-browser',
@@ -720,7 +779,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             configuration: $this->configuration(UiMode::Hosted, secretKey: 'sk_live_checkout'),
             gateway: new FakeCheckoutSessionGateway(),
         )->create(
-            checkout: new CheckoutPreparation($this->order(UiMode::Hosted)),
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($this->order(UiMode::Hosted)),
+            shipping: new ShippingContext('PT'),
             binding: $this->binding(),
             token: $this->token(),
             guestReference: 'guest-browser',
@@ -744,7 +804,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
 
         try {
             $this->creator($configuration, $firstGateway)->create(
-                checkout: new CheckoutPreparation($order),
+                checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+                shipping: new ShippingContext('PT'),
                 binding: $this->binding(),
                 token: $this->token(),
                 guestReference: 'guest-browser',
@@ -760,7 +821,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
                 configuration: $this->configuration(UiMode::Hosted, secretKey: 'sk_test_second'),
                 gateway: $retryGateway,
             )->create(
-                checkout: new CheckoutPreparation($this->order(UiMode::Hosted)),
+                checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($this->order(UiMode::Hosted)),
+                shipping: new ShippingContext('PT'),
                 binding: $this->binding(),
                 token: $this->token(),
                 guestReference: 'guest-browser',
@@ -790,7 +852,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         );
 
         $presentation = $this->creator($configuration, new FakeCheckoutSessionGateway([$sessionRecord]))->create(
-            checkout: new CheckoutPreparation($order),
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+            shipping: new ShippingContext('PT'),
             binding: $this->binding(),
             token: $this->token(),
             guestReference: 'guest-browser',
@@ -828,7 +891,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         };
 
         $presentation = $this->creator($configuration, $gateway)->create(
-            checkout: new CheckoutPreparation($order),
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+            shipping: new ShippingContext('PT'),
             binding: $this->binding(),
             token: $this->token(),
             guestReference: 'guest-browser',
@@ -868,7 +932,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         };
 
         $presentation = $this->creator($configuration, $gateway)->create(
-            checkout: new CheckoutPreparation($order),
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+            shipping: new ShippingContext('PT'),
             binding: $this->binding(),
             token: $this->token(),
             guestReference: 'guest-browser',
@@ -898,7 +963,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
 
         try {
             $this->creator($configuration, $firstGateway)->create(
-                checkout: new CheckoutPreparation($order),
+                checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+                shipping: new ShippingContext('PT'),
                 binding: $this->binding(),
                 token: $this->token(),
                 guestReference: 'guest-browser',
@@ -911,7 +977,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
 
         try {
             $this->creator($configuration, $retryGateway)->create(
-                checkout: new CheckoutPreparation($this->order(UiMode::Hosted)),
+                checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($this->order(UiMode::Hosted)),
+                shipping: new ShippingContext('PT'),
                 binding: $this->binding(),
                 token: $this->token(),
                 guestReference: 'guest-browser',
@@ -949,7 +1016,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
 
         try {
             $this->creator($configuration, $gateway)->create(
-                checkout: new CheckoutPreparation($order),
+                checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+                shipping: new ShippingContext('PT'),
                 binding: $this->binding(),
                 token: $this->token(),
                 guestReference: 'guest-browser',
@@ -992,7 +1060,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         );
 
         $presentation = $this->creator($configuration, new FakeCheckoutSessionGateway([$sessionRecord]))->create(
-            checkout: new CheckoutPreparation($order),
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+            shipping: new ShippingContext('PT'),
             binding: $this->binding(),
             token: $this->token(),
             guestReference: 'guest-browser',
@@ -1012,7 +1081,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $gateway = new FakeCheckoutSessionGateway([$sessionRecord]);
         $creator = $this->creator($configuration, $gateway);
         $creator->create(
-            checkout: new CheckoutPreparation($order),
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+            shipping: new ShippingContext('PT'),
             binding: $this->binding(),
             token: $this->token(),
             guestReference: 'guest-browser',
@@ -1028,7 +1098,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
 
         try {
             $creator->create(
-                checkout: new CheckoutPreparation($this->order(UiMode::Hosted)),
+                checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($this->order(UiMode::Hosted)),
+                shipping: new ShippingContext('PT'),
                 binding: $this->binding(),
                 token: $this->token(),
                 guestReference: 'guest-browser',
@@ -1064,7 +1135,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
 
         try {
             $this->creator($configuration, $gateway)->create(
-                checkout: new CheckoutPreparation($order),
+                checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+                shipping: new ShippingContext('PT'),
                 binding: $this->binding(),
                 token: $this->token(),
                 guestReference: 'guest-browser',
@@ -1100,7 +1172,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
 
         try {
             $this->creator($configuration, $gateway)->create(
-                checkout: new CheckoutPreparation($order),
+                checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+                shipping: new ShippingContext('PT'),
                 binding: $this->binding(),
                 token: $this->token(),
                 guestReference: 'guest-browser',
@@ -1119,23 +1192,25 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
     {
         $configuration = $this->configuration(UiMode::Hosted);
         $gateway = new FakeCheckoutSessionGateway();
-        $creator = $this->creator(
-            configuration: $configuration,
-            gateway: $gateway,
-            prepareSessionRequest: static fn(): never => throw new CheckoutInputException('checkout.request_invalid'),
-        );
+        $this->requestFilter = static function (array $parameters): array {
+            $parameters['mode'] = 'subscription';
+
+            return $parameters;
+        };
+        $creator = $this->creator($configuration, $gateway);
 
         try {
             $creator->create(
-                checkout: new CheckoutPreparation($this->order(UiMode::Hosted)),
+                checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($this->order(UiMode::Hosted)),
+                shipping: new ShippingContext('PT'),
                 binding: $this->binding(),
                 token: $this->token(),
                 guestReference: 'guest-browser',
                 now: new DateTimeImmutable('2026-09-11T12:00:00Z'),
             );
             $this->fail('Expected request validation to fail.');
-        } catch (CheckoutInputException $error) {
-            $this->assertSame('checkout.request_invalid', $error->errorCode());
+        } catch (InvalidSessionRequestException $error) {
+            $this->assertSame('session_request.invariant_violation', $error->errorCode());
         }
 
         $this->assertCount(0, (new OrderPageStore($this->kirby))->orders());
@@ -1156,14 +1231,16 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         ]);
         $creator = $this->creator($configuration, $gateway);
         $first = $creator->create(
-            checkout: new CheckoutPreparation($firstOrder),
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($firstOrder),
+            shipping: new ShippingContext('PT'),
             binding: $this->binding(),
             token: $this->token(),
             guestReference: 'guest-browser',
             now: $now,
         );
         $second = $creator->create(
-            checkout: new CheckoutPreparation($secondOrder),
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($secondOrder),
+            shipping: new ShippingContext('PT'),
             binding: $this->binding(),
             token: $this->token(orderUuid: self::SECOND_ORDER_UUID, nonceByte: 'b'),
             guestReference: 'guest-browser',
@@ -1175,13 +1252,228 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $this->assertCount(2, (new OrderPageStore($this->kirby))->orders());
     }
 
-    /** @return iterable<string, array{UiMode, bool}> */
+    #[DataProvider('changedSubmissionContexts')]
+    public function testChangedSubmissionContextCannotReuseAnAttempt(string $change): void
+    {
+        $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
+        $configuration = $this->configuration(UiMode::Hosted);
+        $order = $this->order(UiMode::Hosted);
+        $checkout = InitiatingShippingSnapshotFactory::checkoutFromOrder($order);
+        $request = $this->request(order: $order, configuration: $configuration, now: $now);
+        $gateway = new FakeCheckoutSessionGateway([
+            $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted),
+        ]);
+        $this->creator($configuration, $gateway)->create(
+            checkout: $checkout,
+            shipping: new ShippingContext('PT'),
+            binding: $this->binding(),
+            token: $this->token(),
+            guestReference: 'guest-browser',
+            now: $now,
+        );
+        $changedCheckout = new CheckoutContext(
+            items: $change === 'currency' ? [new CheckoutLineItem(new Product(
+                request: new ProductRequest('page://product'),
+                name: 'Product',
+                requiresShipping: true,
+                price: new Price(Money::of('16', 'USD')),
+            ))] : $checkout->items(),
+            languageCode: $checkout->languageCode(),
+            locale: $checkout->locale(),
+            userUuid: $change === 'actor' ? 'user://other' : null,
+            checkoutSource: $change === 'source' ? CheckoutSource::Cart : CheckoutSource::Direct,
+            uiMode: $change === 'uiMode' ? UiMode::Embedded : UiMode::Hosted,
+        );
+        $binding = $change === 'contextFingerprint'
+            ? AttemptBinding::direct(
+                items: [new ProductRequest('page://product', 2, ['size' => 'large'])],
+                contextFingerprint: hash('sha256', 'changed commerce facts'),
+                guestReference: 'guest-browser',
+            )
+            : $this->binding();
+
+        try {
+            $this->creator(
+                configuration: $configuration,
+                gateway: $gateway,
+                stripeApiVersion: $change === 'apiVersion' ? 'changed-api-version' : ApiVersion::CURRENT,
+            )->create(
+                checkout: $changedCheckout,
+                shipping: new ShippingContext('PT'),
+                binding: $binding,
+                token: $this->token(),
+                guestReference: 'guest-browser',
+                now: $now,
+            );
+            $this->fail('Changed context must not reuse the attempt.');
+        } catch (CheckoutInputException $error) {
+            $this->assertSame('checkout.attempt_conflict', $error->errorCode());
+        }
+
+        $this->assertSame([], $gateway->retrievals);
+        $this->assertCount(1, $gateway->requests);
+        $this->assertSame(1, $this->quoteCalls);
+        $this->assertSame(1, $this->numberCalls);
+        $this->assertSame(1, $this->requestCalls);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function changedSubmissionContexts(): iterable
+    {
+        $changes = ['currency', 'uiMode', 'actor', 'source', 'contextFingerprint', 'apiVersion'];
+
+        foreach ($changes as $change) {
+            yield $change => [$change];
+        }
+    }
+
+    #[DataProvider('raceTokens')]
+    public function testLockedRecheckAdoptsOnlyTheMatchingConcurrentAttempt(bool $sameToken): void
+    {
+        $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
+        $configuration = $this->configuration(UiMode::Hosted);
+        $order = $this->order(UiMode::Hosted);
+        $checkout = InitiatingShippingSnapshotFactory::checkoutFromOrder($order);
+        $shipping = new ShippingContext('PT');
+        $binding = $this->binding();
+        $token = $this->token();
+        $request = $this->request(order: $order, configuration: $configuration, now: $now);
+        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
+        $winnerGateway = new FakeCheckoutSessionGateway([$sessionRecord]);
+        $winner = $this->creator($configuration, $winnerGateway);
+        $loserGateway = new FakeCheckoutSessionGateway(retrievalResults: [$sessionRecord->id => $sessionRecord]);
+        $winnerToken = $sameToken ? $token : $this->token(nonceByte: 'b');
+        $loser = $this->creator(
+            configuration: $configuration,
+            gateway: $loserGateway,
+            numberFormatter: static function () use ($winner, $checkout, $shipping, $binding, $winnerToken, $now): string {
+                // Both callers have observed no order. Commit the winner before
+                // the outer caller reaches its authoritative locked recheck.
+                $winner->create(
+                    checkout: $checkout,
+                    shipping: $shipping,
+                    binding: $binding,
+                    token: $winnerToken,
+                    guestReference: 'guest-browser',
+                    now: $now,
+                );
+
+                return 'UNUSED-LOSER-NUMBER';
+            },
+        );
+
+        try {
+            $presentation = $loser->create(
+                checkout: $checkout,
+                shipping: $shipping,
+                binding: $binding,
+                token: $token,
+                guestReference: 'guest-browser',
+                now: $now,
+            );
+            $this->assertTrue($sameToken, 'A different nonce must not adopt the concurrent order.');
+            $this->assertTrue($presentation->isReused());
+        } catch (CheckoutInputException $error) {
+            $this->assertFalse($sameToken);
+            $this->assertSame('checkout.attempt_conflict', $error->errorCode());
+        }
+
+        $store = new OrderPageStore($this->kirby);
+        $page = $store->order($order->pageUuid()) ?? $this->fail('The winner must be persisted.');
+        $this->assertCount(1, $store->orders());
+        $this->assertSame($order->orderNumber(), $store->data($page)['orderNumber']);
+        $this->assertCount(1, $winnerGateway->requests);
+        $this->assertSame([], $loserGateway->requests);
+        $this->assertCount($sameToken ? 1 : 0, $loserGateway->retrievals);
+        $this->assertSame(1, $this->requestCalls);
+        $this->assertSame(2, $this->quoteCalls);
+        $this->assertSame(2, $this->numberCalls);
+    }
+
+    /** @return iterable<string, array{bool}> */
+    public static function raceTokens(): iterable
+    {
+        yield 'same attempt' => [true];
+        yield 'same UUID but different nonce' => [false];
+    }
+
+    public function testShippingProviderAndLifecycleWorkRunOutsideWriteLocks(): void
+    {
+        $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
+        $configuration = $this->configuration(UiMode::Hosted);
+        $order = $this->order(UiMode::Hosted);
+        $request = $this->request(order: $order, configuration: $configuration, now: $now);
+        $gateway = new FakeCheckoutSessionGateway([
+            $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted),
+        ]);
+        $kirby = $this->kirby;
+        // These locks reject reentrant acquisition, so a callback running inside
+        // either write boundary fails here instead of silently passing the check.
+        $checkLocks = static fn(): bool => OrderWriteLock::run(
+            $kirby,
+            'checkout-attempt:' . self::ORDER_UUID,
+            static fn(): bool => OrderWriteLock::run(
+                $kirby,
+                OrderSchema::ORDERS_PAGE_ID . '/' . self::ORDER_UUID,
+                static fn(): bool => true,
+            ),
+        );
+        $observations = [];
+        $this->quoteResolver = static function (CheckoutContext $checkout) use ($checkLocks, &$observations): ShippingQuote {
+            $observations['shipping'] = $checkLocks();
+
+            return ShippingQuote::available(InitiatingShippingSnapshotFactory::fromCheckout($checkout)->options());
+        };
+        $gateway->beforeCreate = static function () use ($checkLocks, &$observations): void {
+            $observations['provider'] = $checkLocks();
+        };
+        $this->kirby->extend(['hooks' => [
+            'programmatordev.stripe-checkout.order.created' => function () use ($checkLocks, &$observations): void {
+                $observations['order.created'] = $checkLocks();
+            },
+            'programmatordev.stripe-checkout.session.created' => function () use ($checkLocks, &$observations): void {
+                $observations['session.created'] = $checkLocks();
+            },
+        ]]);
+
+        $this->creator($configuration, $gateway)->create(
+            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+            shipping: new ShippingContext('PT'),
+            binding: $this->binding(),
+            token: $this->token(),
+            guestReference: 'guest-browser',
+            now: $now,
+        );
+
+        $this->assertSame([
+            'shipping' => true,
+            'order.created' => true,
+            'provider' => true,
+            'session.created' => true,
+        ], $observations);
+    }
+
+    /** @return iterable<string, array{UiMode, bool, CheckoutSource, bool, bool}> */
     public static function sessionModesAndPriceSources(): iterable
     {
-        yield 'hosted Kirby price' => [UiMode::Hosted, false];
-        yield 'embedded Kirby price' => [UiMode::Embedded, false];
-        yield 'hosted Stripe Price' => [UiMode::Hosted, true];
-        yield 'embedded Stripe Price' => [UiMode::Embedded, true];
+        $priceSources = ['Kirby' => false, 'Stripe' => true];
+        $shippingCases = [
+            'digital' => [false, false],
+            'physical' => [true, false],
+            'mixed' => [true, true],
+        ];
+
+        foreach (UiMode::cases() as $uiMode) {
+            foreach ($priceSources as $priceSource => $stripePrice) {
+                foreach (CheckoutSource::cases() as $checkoutSource) {
+                    foreach ($shippingCases as $shipping => [$requiresShipping, $mixed]) {
+                        yield "$uiMode->value $priceSource $checkoutSource->value $shipping" => [
+                            $uiMode, $stripePrice, $checkoutSource, $requiresShipping, $mixed,
+                        ];
+                    }
+                }
+            }
+        }
     }
 
     private function configuration(UiMode $uiMode, string $secretKey = 'sk_test_checkout'): Configuration
@@ -1205,6 +1497,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         string $selectedOption = 'large',
         string $uuid = self::ORDER_UUID,
         bool $requiresShipping = true,
+        CheckoutSource $checkoutSource = CheckoutSource::Direct,
+        bool $mixed = false,
     ): OrderCreationContext {
         $price = Money::of('16', 'EUR');
         $request = new ProductRequest(
@@ -1225,20 +1519,31 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             )],
             variantId: 'variant-' . $selectedOption,
         );
-        $lineItem = OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem($product, $stripePrice ? new StripePrice(
+        $resolvedStripePrice = $stripePrice ? new StripePrice(
             priceId: 'price_checkouttest',
             productId: 'prod_checkouttest',
             name: 'Provider product',
             unitPrice: (new StripeCurrencyRegistry())->fromMoney($price),
             taxBehavior: \Stripe\Price::TAX_BEHAVIOR_UNSPECIFIED,
-        ) : null));
+        ) : null;
+        $lineItems = [OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem($product, $resolvedStripePrice))];
+
+        if ($mixed) {
+            $lineItems[] = OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem(new Product(
+                request: new ProductRequest('page://digital'),
+                name: 'Digital product',
+                requiresShipping: false,
+                price: $product->price(),
+            ), $resolvedStripePrice));
+        }
+
         return new OrderCreationContext(
             uuid: $uuid,
             orderNumber: (new OrderNumberFormatter())->format($uuid),
-            lineItems: [$lineItem],
+            lineItems: $lineItems,
             currency: 'EUR',
-            checkoutSource: CheckoutSource::Direct,
-            cartRevision: null,
+            checkoutSource: $checkoutSource,
+            cartRevision: $checkoutSource === CheckoutSource::Cart ? 'revision' : null,
             userUuid: null,
             languageCode: null,
             uiMode: $uiMode,
@@ -1330,23 +1635,24 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         );
     }
 
-    /** @param (callable(SessionRequestContext, ?InitiatingShippingSnapshot): SessionRequest)|null $prepareSessionRequest */
+    /** @param Closure(string): string|null $numberFormatter */
     private function creator(
         Configuration $configuration,
         FakeCheckoutSessionGateway $gateway,
-        ?callable $prepareSessionRequest = null,
+        string $stripeApiVersion = ApiVersion::CURRENT,
+        ?Closure $numberFormatter = null,
     ): CheckoutSessionCreator {
-        $prepareSessionRequest ??= fn(
-            SessionRequestContext $context,
-            ?InitiatingShippingSnapshot $initiatingShipping,
-        ): SessionRequest => (new SessionRequestBuilder(
-            kirby: $this->kirby,
-            settings: $configuration->settings(),
-        ))->build(
-            $context,
-            $initiatingShipping ?? ($context->order()->requiresShipping()
-                ? InitiatingShippingSnapshotFactory::fromOrder($context->order())
-                : null),
+        $preparationFactory = new CheckoutPreparationFactory(
+            resolver: (new RuntimeFactory($this->kirby))->checkoutResolver(),
+            orderNumbers: new OrderNumberFormatter(function (string $uuid) use ($numberFormatter): string {
+                $this->numberCalls++;
+
+                return $numberFormatter !== null
+                    ? $numberFormatter($uuid)
+                    : (new OrderNumberFormatter())->format(OrderData::text((new \Kirby\Uuid\Uri($uuid))->host()));
+            }),
+            requestBuilder: new SessionRequestBuilder($this->kirby, $configuration->settings()),
+            requestCustomizer: new SessionRequestCustomizer($this->kirby),
         );
 
         return new CheckoutSessionCreator(
@@ -1354,8 +1660,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             requestContextFactory: new SessionRequestContextFactory($this->kirby),
             orderPageStore: new OrderPageStore($this->kirby),
             sessionGateway: $gateway,
-            prepareSessionRequest: $prepareSessionRequest(...),
-            stripeApiVersion: ApiVersion::CURRENT,
+            preparationFactory: $preparationFactory,
+            stripeApiVersion: $stripeApiVersion,
         );
     }
 
@@ -1369,14 +1675,24 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         );
     }
 
-    private function binding(string $selectedOption = 'large'): AttemptBinding
+    private function binding(string $selectedOption = 'large', CheckoutSource $checkoutSource = CheckoutSource::Direct): AttemptBinding
     {
+        $request = new ProductRequest(
+            reference: 'page://product',
+            quantity: 2,
+            selectedOptions: ['size' => $selectedOption],
+        );
+
+        if ($checkoutSource === CheckoutSource::Cart) {
+            return AttemptBinding::cart(
+                cart: new CartSnapshot('cart', 'revision', [new CartEntry('item', $request)], 1, 1),
+                contextFingerprint: hash('sha256', 'checkout-context'),
+                guestReference: 'guest-browser',
+            );
+        }
+
         return AttemptBinding::direct(
-            items: [new ProductRequest(
-                reference: 'page://product',
-                quantity: 2,
-                selectedOptions: ['size' => $selectedOption],
-            )],
+            items: [$request],
             contextFingerprint: hash('sha256', 'checkout-context'),
             guestReference: 'guest-browser',
         );

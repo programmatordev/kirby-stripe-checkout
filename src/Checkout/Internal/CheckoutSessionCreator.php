@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
-use Closure;
 use DateTimeImmutable;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSessionPresentation;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
@@ -24,6 +24,7 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\CheckoutSessionAssociation;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailure;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailureType;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionGatewayInterface;
@@ -33,41 +34,55 @@ use Throwable;
 /** Creates, resumes, and repairs one persisted idempotent Checkout Session attempt. */
 final class CheckoutSessionCreator
 {
-    /** @var Closure(SessionRequestContext, ?InitiatingShippingSnapshot): SessionRequest */
-    private readonly Closure $prepareSessionRequest;
-
-    /** @param Closure(SessionRequestContext, ?InitiatingShippingSnapshot): SessionRequest $prepareSessionRequest */
     public function __construct(
         private readonly Configuration $configuration,
         private readonly SessionRequestContextFactory $requestContextFactory,
         private readonly OrderPageStore $orderPageStore,
         private readonly CheckoutSessionGatewayInterface $sessionGateway,
-        Closure $prepareSessionRequest,
+        private readonly CheckoutPreparationFactory $preparationFactory,
         private readonly string $stripeApiVersion,
         private readonly CheckoutSessionFactory $sessionFactory = new CheckoutSessionFactory(),
-    ) {
-        $this->prepareSessionRequest = $prepareSessionRequest;
-    }
+    ) {}
 
     public function create(
-        CheckoutPreparation $checkout,
+        CheckoutContext $checkout,
+        ShippingContext $shipping,
         AttemptBinding $binding,
         AttemptToken $token,
         ?string $guestReference,
         DateTimeImmutable $now,
         ?string $initiatingUrl = null,
     ): CheckoutSessionPresentation {
-        $order = $checkout->order();
+        $binding->assertCompatibleCheckout($checkout, $guestReference);
+        $page = $this->orderPageStore->order('page://' . $token->orderUuid());
 
-        // The structured token reserves the only Order identity this request
-        // may create or reuse. Reject mismatches before configuration or writes.
-        if ($token->orderUuid() !== $order->uuid()) {
-            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
+        // This lookup only avoids unnecessary preparation. Reuse still verifies
+        // the full token and binding; the locked lookup below decides creation.
+        if ($page !== null) {
+            return $this->reuse(
+                page: $page,
+                checkout: $checkout,
+                binding: $binding,
+                token: $token,
+                guestReference: $guestReference,
+                now: $now,
+            );
         }
 
-        // The preparation callback runs only when this token has no persisted
-        // order. Null values therefore distinguish reuse without rebuilding the
-        // request from configuration that may have changed since the first POST.
+        // Product resolution is already complete. Shipping callbacks and order
+        // numbering run outside the write lock and only for a prospective attempt.
+        // Concurrent first submissions may both prepare; this is not an
+        // exactly-once boundary for preparation callbacks.
+        $preparation = $this->preparationFactory->create(
+            uuid: $token->orderUuid(),
+            checkout: $checkout,
+            shipping: $shipping,
+            cartRevision: $binding->cartRevision(),
+        );
+        $order = $preparation->order();
+
+        // A competitor can commit while preparation runs. Only the winner of
+        // the locked recheck customizes a request; nulls identify the reuse path.
         $requestContext = null;
         $sessionRequest = null;
         $checkoutAttempt = null;
@@ -80,7 +95,7 @@ final class CheckoutSessionCreator
                 $guestReference,
                 $now,
                 $initiatingUrl,
-                $checkout,
+                $preparation,
                 &$requestContext,
                 &$sessionRequest,
                 &$checkoutAttempt,
@@ -94,9 +109,9 @@ final class CheckoutSessionCreator
                 // Shipping remains transient only until it becomes part of the
                 // exact Session request persisted with this new attempt. Reuse
                 // reads that request instead of reconstructing mutable policy.
-                $sessionRequest = ($this->prepareSessionRequest)(
+                $sessionRequest = $this->preparationFactory->sessionRequest(
                     $requestContext,
-                    $checkout->shipping(),
+                    $preparation->shipping(),
                 );
                 $checkoutAttempt = new CheckoutAttempt(
                     order: $order,
@@ -118,7 +133,7 @@ final class CheckoutSessionCreator
         if ($requestContext === null || $sessionRequest === null || $checkoutAttempt === null) {
             return $this->reuse(
                 page: $page,
-                incomingOrder: $order,
+                checkout: $checkout,
                 binding: $binding,
                 token: $token,
                 guestReference: $guestReference,
@@ -138,7 +153,7 @@ final class CheckoutSessionCreator
 
     private function reuse(
         OrderPage $page,
-        OrderCreationContext $incomingOrder,
+        CheckoutContext $checkout,
         AttemptBinding $binding,
         AttemptToken $token,
         ?string $guestReference,
@@ -157,7 +172,7 @@ final class CheckoutSessionCreator
 
         $this->assertSameAttempt(
             persistedOrder: $persistedOrder,
-            incomingOrder: $incomingOrder,
+            checkout: $checkout,
             checkoutAttempt: $checkoutAttempt,
             binding: $binding,
             token: $token,
@@ -221,13 +236,13 @@ final class CheckoutSessionCreator
     /** @param array<string, mixed> $checkoutAttempt */
     private function assertSameAttempt(
         OrderCreationContext $persistedOrder,
-        OrderCreationContext $incomingOrder,
+        CheckoutContext $checkout,
         array $checkoutAttempt,
         AttemptBinding $binding,
         AttemptToken $token,
         ?string $guestReference,
     ): void {
-        $binding->assertCompatible($incomingOrder, $guestReference);
+        $binding->assertCompatibleOrder($persistedOrder, $guestReference);
         $binding->assertMatchesFingerprint(OrderData::text($checkoutAttempt['bindingFingerprint']));
 
         // The embedded UUID locates a candidate Page; the nonce-bearing full
@@ -235,8 +250,8 @@ final class CheckoutSessionCreator
         if (
             hash_equals(OrderData::text($checkoutAttempt['tokenHash']), $token->hash()) === false
             || $persistedOrder->uuid() !== $token->orderUuid()
-            || $persistedOrder->currency() !== $incomingOrder->currency()
-            || $persistedOrder->uiMode() !== $incomingOrder->uiMode()
+            || $persistedOrder->currency() !== $checkout->currency()->getCurrencyCode()
+            || $persistedOrder->uiMode() !== $checkout->uiMode()
             || $checkoutAttempt['stripeApiVersion'] !== $this->stripeApiVersion
             || $checkoutAttempt['credentialMode'] !== $this->configuration->stripe()->secretKeyMode()->value
             || hash_equals(

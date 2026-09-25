@@ -10,17 +10,14 @@ use Kirby\Cms\Page;
 use Kirby\Content\Field;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Cart\Exception\CartException;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptBinding;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptToken;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutPreparation;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\StripeConfiguration;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
-use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
-use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
-use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Price;
@@ -28,6 +25,7 @@ use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductVariant;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeCatalogue;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeListResult;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeRecord;
@@ -56,21 +54,19 @@ final class ProductTaxCodeTest extends KirbyTestCase
             taxCode: new TaxCode('txcd_unknown', providerName: 'Unknown', confirmed: true),
         );
         $token = AttemptToken::generate();
-        $order = new OrderCreationContext(
-            uuid: $token->orderUuid(),
-            orderNumber: (new OrderNumberFormatter())->format($token->orderUuid()),
-            lineItems: [OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem($product))],
-            currency: 'EUR',
+        $checkout = new CheckoutContext(
+            items: [new CheckoutLineItem($product)],
             checkoutSource: CheckoutSource::Direct,
-            cartRevision: null,
             userUuid: null,
             languageCode: null,
+            locale: 'en_US',
             uiMode: UiMode::Hosted,
         );
 
         try {
             (new RuntimeFactory($this->kirby))->checkoutSessionCreator()->create(
-                checkout: new CheckoutPreparation($order),
+                checkout: $checkout,
+                shipping: new ShippingContext(null),
                 binding: AttemptBinding::direct(
                     items: [$request],
                     contextFingerprint: hash('sha256', 'context'),

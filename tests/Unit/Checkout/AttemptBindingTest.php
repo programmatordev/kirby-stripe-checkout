@@ -73,6 +73,7 @@ final class AttemptBindingTest extends TestCase
         $retry = AttemptBinding::cart($cart, hash('sha256', 'request'), guestReference: 'guest');
         $first->assertMatches($retry);
         $this->assertSame(CheckoutSource::Cart, $first->checkoutSource());
+        $this->assertSame($cart->revision(), $first->cartRevision());
         $this->assertSame($first->fingerprint(), $retry->fingerprint());
         $this->assertNotSame(AttemptToken::generate()->hash(), AttemptToken::generate()->hash());
     }

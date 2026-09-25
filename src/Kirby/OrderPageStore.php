@@ -174,8 +174,9 @@ final class OrderPageStore
      * The structured attempt token reserves this Kirby UUID before submission.
      * Because Order slugs equal their UUID IDs, the persisted Page is also the
      * durable lookup for retries of that attempt.
-     * The callback prepares values only; post-commit lifecycle delivery and all
-     * network work happen after the coordination lock is released.
+     * Product/shipping resolution finishes before this call. Request customization
+     * stays in the callback so only the winning creator runs it; post-commit
+     * lifecycle delivery and provider Session calls run after the lock is released.
      *
      * @param Closure(): array{OrderCreationContext, CheckoutAttempt, DateTimeImmutable} $prepare
      */

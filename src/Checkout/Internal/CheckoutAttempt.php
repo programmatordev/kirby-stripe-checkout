@@ -60,7 +60,7 @@ final readonly class CheckoutAttempt
             throw new OrderDataException();
         }
 
-        $binding->assertCompatible($order, $guestReference);
+        $binding->assertCompatibleOrder($order, $guestReference);
 
         if ($guestReference !== null) {
             OrderData::text($guestReference, 128);

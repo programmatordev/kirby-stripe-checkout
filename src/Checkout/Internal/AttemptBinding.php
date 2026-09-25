@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
 use InvalidArgumentException;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartSnapshot;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
@@ -32,7 +33,7 @@ final readonly class AttemptBinding
         private ?string $guestReference,
         string $contextFingerprint,
         ?string $cartId,
-        ?string $cartRevision,
+        private ?string $cartRevision,
         array $selection,
     ) {
         if (($userUuid === null) === ($guestReference === null)) {
@@ -125,6 +126,11 @@ final readonly class AttemptBinding
         return $this->fingerprint;
     }
 
+    public function cartRevision(): ?string
+    {
+        return $this->cartRevision;
+    }
+
     public function assertMatches(self $binding): void
     {
         if (hash_equals($this->fingerprint, $binding->fingerprint) === false) {
@@ -139,11 +145,30 @@ final readonly class AttemptBinding
         }
     }
 
-    public function assertCompatible(OrderCreationContext $order, ?string $guestReference): void
+    public function assertCompatibleCheckout(CheckoutContext $checkout, ?string $guestReference): void
     {
+        $this->assertCompatibleActorAndSource($checkout->checkoutSource(), $checkout->userUuid(), $guestReference);
+    }
+
+    public function assertCompatibleOrder(OrderCreationContext $order, ?string $guestReference): void
+    {
+        $this->assertCompatibleActorAndSource($order->checkoutSource(), $order->userUuid(), $guestReference);
+
+        // CheckoutContext carries resolved purchase facts, not cart state. The
+        // Order also preserves the revision from which this attempt was prepared.
+        if ($this->cartRevision !== $order->cartRevision()) {
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
+        }
+    }
+
+    private function assertCompatibleActorAndSource(
+        CheckoutSource $checkoutSource,
+        ?string $userUuid,
+        ?string $guestReference,
+    ): void {
         if (
-            $this->checkoutSource !== $order->checkoutSource()
-            || $this->userUuid !== $order->userUuid()
+            $this->checkoutSource !== $checkoutSource
+            || $this->userUuid !== $userUuid
             || $this->guestReference !== $guestReference
         ) {
             throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
