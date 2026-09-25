@@ -270,6 +270,7 @@ final class OrderHookDispatcherTest extends KirbyTestCase
             ...$data,
             'checkoutStatus' => 'open',
             'stripeCheckoutSessionId' => 'cs_test',
+            'stripeShippingRateIds' => [],
             'checkoutOpenedAt' => $data['createdAt'],
         ]);
         $fail = false;
@@ -300,6 +301,7 @@ final class OrderHookDispatcherTest extends KirbyTestCase
             ...OrderData::map($data),
             'checkoutStatus' => 'open',
             'stripeCheckoutSessionId' => 'cs_test',
+            'stripeShippingRateIds' => [],
             'checkoutOpenedAt' => $data['createdAt'],
         ];
         $store->update($page->uuid()->toString(), $reduce, [LifecycleEventType::SessionCreated], 'checkout.session.completed', 'evt_test');
@@ -407,6 +409,7 @@ final class OrderHookDispatcherTest extends KirbyTestCase
             'checkoutStatus' => 'complete',
             'paymentStatus' => 'failed',
             'stripeCheckoutSessionId' => 'cs_test',
+            'stripeShippingRateIds' => [],
             'checkoutCompletedAt' => $data['createdAt'],
             'paymentFailedAt' => $data['createdAt'],
             'discountTotal' => '0',

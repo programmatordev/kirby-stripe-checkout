@@ -121,6 +121,8 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
             url: $this->nullableString($session->url),
             clientSecret: $this->nullableString($session->client_secret),
             orderSnapshotSource: $orderSnapshotSource,
+            // Keep this raw until it can be checked against the exact request.
+            shippingOptions: $sessionData['shipping_options'] ?? null,
         );
     }
 

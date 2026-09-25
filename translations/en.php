@@ -112,6 +112,7 @@ return [
     'programmatordev.stripe-checkout.orders.fields.stripePriceId' => 'Stripe Price ID',
     'programmatordev.stripe-checkout.orders.fields.stripeProductId' => 'Stripe Product ID',
     'programmatordev.stripe-checkout.orders.fields.stripeCheckoutSessionId' => 'Stripe Checkout Session ID',
+    'programmatordev.stripe-checkout.orders.fields.stripeShippingRateIds' => 'Generated Stripe Shipping Rate IDs',
     'programmatordev.stripe-checkout.orders.fields.stripePaymentIntentId' => 'Stripe PaymentIntent ID',
     'programmatordev.stripe-checkout.orders.fields.stripeChargeId' => 'Stripe Charge ID',
     'programmatordev.stripe-checkout.orders.fields.stripeCustomerId' => 'Stripe Customer ID',

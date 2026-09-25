@@ -38,7 +38,7 @@ final class OrderSchema
     public const TIMESTAMPS = ['createdAt', 'updatedAt', 'checkoutExpiresAt', 'checkoutOpenedAt', 'creationUncertainAt', 'creationFailedAt', 'checkoutCompletedAt', 'checkoutExpiredAt', 'paidAt', 'paymentFailedAt', 'refundUpdatedAt', 'disputeUpdatedAt', 'lastEventAt'];
 
     /** @var list<string> */
-    public const SNAPSHOTS = ['stripeCheckout', 'checkoutAttempt', 'initiatingLineItems', 'lineItems', 'customer', 'billingAddress', 'shippingAddress', 'customFields', 'consent', 'discounts', 'tax', 'shipping', 'payment', 'refunds', 'disputes', 'events', 'lifecycleDeliveries'];
+    public const SNAPSHOTS = ['stripeCheckout', 'checkoutAttempt', 'stripeShippingRateIds', 'initiatingLineItems', 'lineItems', 'customer', 'billingAddress', 'shippingAddress', 'customFields', 'consent', 'discounts', 'tax', 'shipping', 'payment', 'refunds', 'disputes', 'events', 'lifecycleDeliveries'];
 
     /** @return list<string> */
     public static function fields(): array

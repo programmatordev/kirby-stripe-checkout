@@ -530,6 +530,20 @@ final class OrderPageStore
             throw new OrderDataException();
         }
 
+        $writeOnceFields = ['stripeCheckoutSessionId', 'stripeShippingRateIds'];
+
+        foreach ($writeOnceFields as $field) {
+            if (
+                array_key_exists($field, $before)
+                && (
+                    array_key_exists($field, $after) === false
+                    || $after[$field] !== $before[$field]
+                )
+            ) {
+                throw new OrderDataException();
+            }
+        }
+
         // These record the first observation; repeated evidence must not move
         // their timestamps or erase the history of an earlier state.
         $observationFields = ['checkoutOpenedAt', 'creationUncertainAt', 'creationFailedAt', 'checkoutCompletedAt', 'checkoutExpiredAt', 'paidAt', 'paymentFailedAt'];
@@ -549,7 +563,6 @@ final class OrderPageStore
 
         if (
             in_array($after['checkoutStatus'], $allowedCheckoutStatuses, true) === false
-            || isset($before['stripeCheckoutSessionId']) && ($after['stripeCheckoutSessionId'] ?? null) !== $before['stripeCheckoutSessionId']
             || in_array($before['paymentStatus'], ['paid', 'no_payment_required'], true) && $after['paymentStatus'] !== $before['paymentStatus']
             || $before['paymentStatus'] === 'failed' && in_array($after['paymentStatus'], ['failed', 'paid'], true) === false
         ) {

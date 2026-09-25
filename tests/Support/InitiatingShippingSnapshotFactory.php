@@ -51,12 +51,14 @@ final class InitiatingShippingSnapshotFactory
         return self::fromCheckout($checkout, $shippingCountry);
     }
 
+    /** @param list<ShippingOption>|null $options */
     public static function fromCheckout(
         CheckoutContext $checkout,
         ?string $shippingCountry = 'PT',
+        ?array $options = null,
     ): InitiatingShippingSnapshot {
         $shipping = new ShippingContext($shippingCountry);
-        $quote = ShippingQuote::available([new ShippingOption(
+        $quote = ShippingQuote::available($options ?? [new ShippingOption(
             key: 'standard',
             label: 'Standard delivery',
             amount: Money::of('5', $checkout->currency()),
@@ -70,14 +72,17 @@ final class InitiatingShippingSnapshotFactory
         return InitiatingShippingSnapshot::fromQuote($checkout, $shipping, $quote);
     }
 
+    /** @param list<ShippingOption>|null $options */
     public static function fromOrder(
         OrderCreationContext $order,
         ?string $shippingCountry = 'PT',
         string $locale = 'en_US',
+        ?array $options = null,
     ): InitiatingShippingSnapshot {
         return self::fromCheckout(
             self::checkoutFromOrder($order, $locale),
             $shippingCountry,
+            $options,
         );
     }
 

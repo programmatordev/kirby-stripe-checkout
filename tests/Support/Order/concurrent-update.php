@@ -26,7 +26,7 @@ fgets(STDIN);
 
 try {
     (new OrderPageStore($kirby))->update($input['uuid'], static function (array $data): array {
-        unset($data['stripeCheckoutSessionId'], $data['checkoutOpenedAt']);
+        unset($data['stripeCheckoutSessionId'], $data['stripeShippingRateIds'], $data['checkoutOpenedAt']);
 
         return [
             ...$data,

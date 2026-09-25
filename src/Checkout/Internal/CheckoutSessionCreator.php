@@ -19,13 +19,14 @@ use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
+use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
+use ProgrammatorDev\StripeCheckout\Order\Internal\CheckoutSessionAssociation;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailure;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailureType;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionGatewayInterface;
-use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Exception\CheckoutSessionGatewayException;
 use Throwable;
 
@@ -43,20 +44,21 @@ final class CheckoutSessionCreator
         private readonly CheckoutSessionGatewayInterface $sessionGateway,
         Closure $prepareSessionRequest,
         private readonly string $stripeApiVersion,
-        private readonly CheckoutSessionRecordValidator $sessionRecordValidator = new CheckoutSessionRecordValidator(),
+        private readonly CheckoutSessionFactory $sessionFactory = new CheckoutSessionFactory(),
     ) {
         $this->prepareSessionRequest = $prepareSessionRequest;
     }
 
     public function create(
-        OrderCreationContext $order,
+        CheckoutPreparation $checkout,
         AttemptBinding $binding,
         AttemptToken $token,
         ?string $guestReference,
         DateTimeImmutable $now,
         ?string $initiatingUrl = null,
-        ?InitiatingShippingSnapshot $initiatingShipping = null,
     ): CheckoutSessionPresentation {
+        $order = $checkout->order();
+
         // The structured token reserves the only Order identity this request
         // may create or reuse. Reject mismatches before configuration or writes.
         if ($token->orderUuid() !== $order->uuid()) {
@@ -78,7 +80,7 @@ final class CheckoutSessionCreator
                 $guestReference,
                 $now,
                 $initiatingUrl,
-                $initiatingShipping,
+                $checkout,
                 &$requestContext,
                 &$sessionRequest,
                 &$checkoutAttempt,
@@ -94,7 +96,7 @@ final class CheckoutSessionCreator
                 // reads that request instead of reconstructing mutable policy.
                 $sessionRequest = ($this->prepareSessionRequest)(
                     $requestContext,
-                    $initiatingShipping,
+                    $checkout->shipping(),
                 );
                 $checkoutAttempt = new CheckoutAttempt(
                     order: $order,
@@ -308,8 +310,8 @@ final class CheckoutSessionCreator
         try {
             // Treat every SDK response as untrusted until its correlation and
             // presentation facts agree with the exact persisted request.
-            $this->sessionRecordValidator->validate(
-                sessionRecord: $sessionRecord,
+            $session = $this->sessionFactory->create(
+                record: $sessionRecord,
                 context: $requestContext,
                 request: $sessionRequest,
                 liveMode: $this->liveMode(),
@@ -340,7 +342,7 @@ final class CheckoutSessionCreator
         try {
             $page = $this->associate(
                 page: $page,
-                sessionRecord: $sessionRecord,
+                session: $session,
                 now: $now,
             );
         } catch (CheckoutSessionException $error) {
@@ -355,7 +357,17 @@ final class CheckoutSessionCreator
 
         $data = $this->orderPageStore->data($page);
 
-        if (($data['stripeCheckoutSessionId'] ?? null) !== $sessionRecord->id) {
+        try {
+            $persistedAssociation = CheckoutSessionAssociation::fromOrderData($data, $sessionRequest);
+        } catch (OrderDataException $error) {
+            throw new CheckoutSessionException(
+                errorCode: CheckoutErrorCode::SESSION_ATTACHMENT_FAILED,
+                retryable: true,
+                previous: $error,
+            );
+        }
+
+        if ($persistedAssociation->equals($session->association()) === false) {
             throw new CheckoutSessionException(
                 errorCode: CheckoutErrorCode::SESSION_ATTACHMENT_FAILED,
                 retryable: true,
@@ -378,7 +390,7 @@ final class CheckoutSessionCreator
         return $this->presentation(
             uiMode: $requestContext->uiMode(),
             page: $page,
-            sessionRecord: $sessionRecord,
+            session: $session,
             reused: $reused,
         );
     }
@@ -393,8 +405,8 @@ final class CheckoutSessionCreator
 
         try {
             $sessionRecord = $this->sessionGateway->retrieve(sessionId: $sessionId);
-            $this->sessionRecordValidator->validate(
-                sessionRecord: $sessionRecord,
+            $session = $this->sessionFactory->create(
+                record: $sessionRecord,
                 context: $requestContext,
                 request: $sessionRequest,
                 liveMode: $this->liveMode(),
@@ -403,39 +415,53 @@ final class CheckoutSessionCreator
             throw $this->sessionException($error);
         }
 
+        try {
+            $persistedAssociation = CheckoutSessionAssociation::fromOrderData($data, $sessionRequest);
+        } catch (OrderDataException $error) {
+            throw new CheckoutSessionException(
+                errorCode: CheckoutErrorCode::SESSION_INCOMPATIBLE,
+                previous: $error,
+            );
+        }
+
+        if ($persistedAssociation->equals($session->association()) === false) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+        }
+
         return $this->presentation(
             uiMode: $requestContext->uiMode(),
             page: $page,
-            sessionRecord: $sessionRecord,
+            session: $session,
             reused: true,
         );
     }
 
     private function associate(
         OrderPage $page,
-        CheckoutSessionRecord $sessionRecord,
+        CheckoutSession $session,
         DateTimeImmutable $now,
     ): OrderPage {
-        $sessionId = $sessionRecord->id;
-
-        if ($sessionId === null) {
-            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
-        }
+        $association = $session->association();
+        $sessionId = $association->sessionId();
+        $associationData = $association->toOrderData();
 
         return $this->orderPageStore->update(
             uuid: $page->uuid()->toString(),
-            reduce: static function (array $data) use ($sessionId, $now): array {
+            reduce: static function (array $data) use ($associationData, $sessionId, $now): array {
                 // A future webhook reconciler may associate the same Session
                 // before this POST response acquires the order write lock.
                 if (isset($data['stripeCheckoutSessionId'])) {
-                    if ($data['stripeCheckoutSessionId'] !== $sessionId) {
+                    if (
+                        $data['stripeCheckoutSessionId'] !== $sessionId
+                        || ($data['stripeShippingRateIds'] ?? null) !== $associationData['stripeShippingRateIds']
+                    ) {
                         throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
                     }
 
                     return $data;
                 }
 
-                $data['stripeCheckoutSessionId'] = $sessionId;
+                $data = [...$data, ...$associationData];
                 $data['checkoutStatus'] = CheckoutStatus::Open->value;
                 $data['checkoutOpenedAt'] = OrderData::timestamp($now);
                 $data['updatedAt'] = max($data['updatedAt'], OrderData::timestamp($now));
@@ -553,15 +579,15 @@ final class CheckoutSessionCreator
     private function presentation(
         UiMode $uiMode,
         OrderPage $page,
-        CheckoutSessionRecord $sessionRecord,
+        CheckoutSession $session,
         bool $reused,
     ): CheckoutSessionPresentation {
         return new CheckoutSessionPresentation(
             uiMode: $uiMode,
             orderPageUuid: $page->uuid()->toString(),
             reused: $reused,
-            redirectUrl: $uiMode === UiMode::Hosted ? $sessionRecord->url : null,
-            clientSecret: $uiMode === UiMode::Embedded ? $sessionRecord->clientSecret : null,
+            redirectUrl: $uiMode === UiMode::Hosted ? $session->url() : null,
+            clientSecret: $uiMode === UiMode::Embedded ? $session->clientSecret() : null,
         );
     }
 

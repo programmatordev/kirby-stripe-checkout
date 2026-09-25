@@ -11,7 +11,7 @@ The pipeline validates products, prices, configuration, and the complete request
 1. Creates one protected Kirby order in `creating` state.
 2. Saves the exact Session request, its fingerprint, the pinned Stripe API version, and a UUID-derived idempotency key.
 3. Releases local locks before sending the request to Stripe.
-4. Saves the returned Session ID and changes the order to `open`.
+4. Associates the returned Session ID and any provider-created Shipping Rate IDs with the order, then changes it to `open`.
 5. Returns either the hosted Checkout URL or the embedded client secret for the current response only.
 
 Before submission, the plugin generates an opaque attempt token containing a Kirby-generated future order UUID and an independent random nonce. The UUID lets a retry locate the Order Page directly; the nonce prevents the public order UUID from being the complete retry token. Only the hash of the complete token is stored. Repeating that exact token locates the order by its UUID, then verifies the complete token hash and initiating context before reusing it.
@@ -57,6 +57,8 @@ For a shippable order, the standard request converts the accepted Kirby shipping
 Prefer the typed `programmatordev.stripe-checkout.shipping.quote` filter or a custom shipping resolver when changing eligibility, options, prices, estimates, or tax classification. The Session-parameters filter remains a lower-level escape hatch and may change supported customer-facing Shipping Rate fields. It cannot add shipping to a digital order, remove shipping from a shippable order, change the accepted destination-country policy, change the option count/order, replace inline options with reusable Stripe Shipping Rate IDs, or alter private correlation metadata.
 
 The final customized shipping request is persisted exactly. If a filter changes an option's supported presentation or amount, that exact request—not mutable Settings or a newly resolved quote—is reused after an uncertain Stripe response.
+
+Stripe creates immutable provider-managed Shipping Rate objects for inline options as a side effect of Session creation. The plugin validates the returned Session as one association—its `cs_...` ID together with the ordered `shr_...` IDs—against the exact saved request before storing it. The frozen checkout attempt continues to contain only the initiating request and idempotency facts. The plugin does not reuse, list, update, archive, delete, or clean up the generated Stripe objects. A resumed open attempt must return the same association before its Checkout presentation is reused.
 
 ## Tax customization
 

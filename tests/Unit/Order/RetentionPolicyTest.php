@@ -117,6 +117,7 @@ final class RetentionPolicyTest extends TestCase
 
         if (in_array($checkout, ['open', 'complete', 'expired'], true)) {
             $data['stripeCheckoutSessionId'] = 'cs_test';
+            $data['stripeShippingRateIds'] = [];
         }
 
         if ($checkout === 'complete') {

@@ -69,6 +69,7 @@ final class OrderValuesTest extends TestCase
         $this->assertSame('false', $fields['refundHasActive']);
         $this->assertArrayNotHasKey('userUuid', $data);
         $this->assertArrayNotHasKey('initiatingShipping', $data);
+        $this->assertArrayNotHasKey('stripeShippingRateIds', $data);
         $this->assertArrayNotHasKey('total', $data);
         $this->assertArrayNotHasKey('locale', $data);
         $this->assertSame('2026-09-05T10:20:30Z', $data['createdAt']);
@@ -412,6 +413,30 @@ final class OrderValuesTest extends TestCase
         yield [OrderSchema::ORDER_PAGE_TEMPLATE, 'different'];
     }
 
+    #[DataProvider('invalidSessionAssociationPresence')]
+    public function testShippingRateIdsArePartOfTheSessionAssociation(
+        CheckoutStatus $status,
+        bool $present,
+    ): void {
+        $data = $this->dataWithCheckoutStatus($status);
+
+        if ($present) {
+            $data['stripeShippingRateIds'] = [];
+        } else {
+            unset($data['stripeShippingRateIds']);
+        }
+
+        $this->expectException(OrderDataException::class);
+        OrderSerializer::normalize($data);
+    }
+
+    /** @return iterable<string, array{CheckoutStatus, bool}> */
+    public static function invalidSessionAssociationPresence(): iterable
+    {
+        yield 'present before Session association' => [CheckoutStatus::Creating, true];
+        yield 'missing after Session association' => [CheckoutStatus::Open, false];
+    }
+
     #[DataProvider('checkoutStates')]
     public function testCheckoutStateRequiresItsOwnTimestamp(CheckoutStatus $state, string $timestamp, bool $session): void
     {
@@ -421,6 +446,7 @@ final class OrderValuesTest extends TestCase
 
         if ($session) {
             $data['stripeCheckoutSessionId'] = 'cs_test';
+            $data['stripeShippingRateIds'] = [];
         }
 
         $this->assertSame($state->value, OrderSerializer::normalize($data)['checkoutStatus']);
@@ -446,6 +472,7 @@ final class OrderValuesTest extends TestCase
         $data['checkoutStatus'] = 'complete';
         $data['checkoutCompletedAt'] = $data['createdAt'];
         $data['stripeCheckoutSessionId'] = 'cs_test';
+        $data['stripeShippingRateIds'] = [];
         $data['paymentStatus'] = $state->value;
 
         if (in_array($state, [PaymentStatus::Paid, PaymentStatus::NoPaymentRequired], true)) {
@@ -832,6 +859,7 @@ final class OrderValuesTest extends TestCase
 
         if (in_array($state, [CheckoutStatus::Open, CheckoutStatus::Complete, CheckoutStatus::Expired], true)) {
             $data['stripeCheckoutSessionId'] = 'cs_test';
+            $data['stripeShippingRateIds'] = [];
         }
 
         if ($state === CheckoutStatus::Complete) {

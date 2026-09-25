@@ -99,6 +99,7 @@ final class OrderPageStoreTest extends KirbyTestCase
             ...$data,
             'checkoutStatus' => 'open',
             'stripeCheckoutSessionId' => 'cs_test',
+            'stripeShippingRateIds' => [],
             'checkoutOpenedAt' => $data['createdAt'],
         ]);
         $this->assertSame('Keep me', $this->value($opened, 'internalNote'));
@@ -106,7 +107,7 @@ final class OrderPageStoreTest extends KirbyTestCase
         $this->expectException(OrderDataException::class);
         $store->update($opened->uuid()->toString(), static function (array $data): array {
             $data['checkoutStatus'] = 'creating';
-            unset($data['stripeCheckoutSessionId'], $data['checkoutOpenedAt']);
+            unset($data['stripeCheckoutSessionId'], $data['stripeShippingRateIds'], $data['checkoutOpenedAt']);
 
             return $data;
         });
@@ -121,6 +122,7 @@ final class OrderPageStoreTest extends KirbyTestCase
             'checkoutStatus' => 'complete',
             'paymentStatus' => 'paid',
             'stripeCheckoutSessionId' => 'cs_test',
+            'stripeShippingRateIds' => [],
             'stripeCustomerId' => 'cus_test',
             'checkoutCompletedAt' => $data['createdAt'],
             'paidAt' => $data['createdAt'],
@@ -217,6 +219,7 @@ final class OrderPageStoreTest extends KirbyTestCase
             ...$data,
             'checkoutStatus' => 'open',
             'stripeCheckoutSessionId' => 'cs_test',
+            'stripeShippingRateIds' => [],
             'checkoutOpenedAt' => $data['createdAt'],
         ]);
         $updated = $old->update(['note' => 'A later project edit']);
@@ -503,6 +506,7 @@ final class OrderPageStoreTest extends KirbyTestCase
                     ...$data,
                     'checkoutStatus' => 'open',
                     'stripeCheckoutSessionId' => 'cs_test',
+                    'stripeShippingRateIds' => [],
                     'checkoutOpenedAt' => $data['createdAt'],
                 ];
             });
@@ -569,6 +573,7 @@ final class OrderPageStoreTest extends KirbyTestCase
             ...$data,
             'checkoutStatus' => 'open',
             'stripeCheckoutSessionId' => 'cs_test',
+            'stripeShippingRateIds' => [],
             'checkoutOpenedAt' => $data['createdAt'],
         ]);
         $expected = $store->data($updated);
@@ -748,6 +753,7 @@ final class OrderPageStoreTest extends KirbyTestCase
             ...$data,
             'checkoutStatus' => 'open',
             'stripeCheckoutSessionId' => 'cs_test',
+            'stripeShippingRateIds' => [],
             'checkoutOpenedAt' => $now,
         ]);
         $this->assertSame($now, $this->value($updated, 'checkoutOpenedAt'));

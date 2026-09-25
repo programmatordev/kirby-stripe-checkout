@@ -13,6 +13,7 @@ use ProgrammatorDev\StripeCheckout\Cart\Exception\CartException;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptBinding;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptToken;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutPreparation;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\StripeConfiguration;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderCreationContextFactory;
@@ -66,7 +67,7 @@ final class ProductTaxCodeTest extends KirbyTestCase
 
         try {
             (new RuntimeFactory($this->kirby))->checkoutSessionCreator()->create(
-                order: $order,
+                checkout: new CheckoutPreparation($order),
                 binding: AttemptBinding::direct(
                     items: [$request],
                     contextFingerprint: hash('sha256', 'context'),

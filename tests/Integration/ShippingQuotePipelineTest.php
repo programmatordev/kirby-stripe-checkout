@@ -2,10 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ProgrammatorDev\StripeCheckout\Test\Unit\Shipping;
+namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Brick\Money\Money;
-use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
@@ -13,29 +12,31 @@ use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Shipping\Exception\InvalidShippingQuoteException;
 use ProgrammatorDev\StripeCheckout\Shipping\Exception\ShippingException;
 use ProgrammatorDev\StripeCheckout\Shipping\Internal\ClosureShippingResolver;
-use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingQuoteEngine;
+use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingQuotePipeline;
 use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingZoneResolver;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingOption;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuoteStatus;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingResolverInterface;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingZone;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingZoneScope;
+use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use RuntimeException;
 
-final class ShippingQuoteEngineTest extends TestCase
+final class ShippingQuotePipelineTest extends KirbyTestCase
 {
     public function testExplicitCountryWinsOverFallbackWithoutMergingOptions(): void
     {
         $explicit = self::option('iberia', 'Iberia');
         $fallback = self::option('world', 'Worldwide');
-        $engine = new ShippingQuoteEngine(new ShippingZoneResolver([
+        $pipeline = $this->pipeline(new ShippingZoneResolver([
             self::zone('Fallback', ShippingZoneScope::Fallback, [], [$fallback]),
             self::zone('Iberia', ShippingZoneScope::SelectedCountries, ['PT', 'ES'], [$explicit]),
         ]));
 
-        $quote = $engine->quote(self::checkout(), self::shipping(country: 'PT'));
+        $quote = $pipeline->resolve(self::checkout(), self::shipping(country: 'PT'));
 
         $this->assertNotNull($quote);
         $this->assertSame(ShippingQuoteStatus::Available, $quote->status());
@@ -45,16 +46,16 @@ final class ShippingQuoteEngineTest extends TestCase
     public function testKnownShippingCountryUsesFallbackOrReportsUnavailable(): void
     {
         $fallback = self::option('world', 'Worldwide');
-        $withFallback = new ShippingQuoteEngine(new ShippingZoneResolver([
+        $withFallback = $this->pipeline(new ShippingZoneResolver([
             self::zone('Iberia', ShippingZoneScope::SelectedCountries, ['PT'], [self::option()]),
             self::zone('Fallback', ShippingZoneScope::Fallback, [], [$fallback]),
         ]));
-        $withoutFallback = new ShippingQuoteEngine(new ShippingZoneResolver([
+        $withoutFallback = $this->pipeline(new ShippingZoneResolver([
             self::zone('Iberia', ShippingZoneScope::SelectedCountries, ['PT'], [self::option()]),
         ]));
 
-        $fallbackQuote = $withFallback->quote(self::checkout(), self::shipping(country: 'ES'));
-        $unavailableQuote = $withoutFallback->quote(self::checkout(), self::shipping(country: 'ES'));
+        $fallbackQuote = $withFallback->resolve(self::checkout(), self::shipping(country: 'ES'));
+        $unavailableQuote = $withoutFallback->resolve(self::checkout(), self::shipping(country: 'ES'));
 
         $this->assertNotNull($fallbackQuote);
         $this->assertSame([$fallback], $fallbackQuote->options());
@@ -65,17 +66,17 @@ final class ShippingQuoteEngineTest extends TestCase
     public function testUnknownShippingCountryOnlyUsesASoleFallbackZone(): void
     {
         $fallback = self::option('world', 'Worldwide');
-        $fallbackOnly = new ShippingQuoteEngine(new ShippingZoneResolver([
+        $fallbackOnly = $this->pipeline(new ShippingZoneResolver([
             self::zone('Fallback', ShippingZoneScope::Fallback, [], [$fallback]),
         ]));
-        $explicit = new ShippingQuoteEngine(new ShippingZoneResolver([
+        $explicit = $this->pipeline(new ShippingZoneResolver([
             self::zone('Iberia', ShippingZoneScope::SelectedCountries, ['PT'], [self::option()]),
         ]));
-        $unconfigured = new ShippingQuoteEngine(new ShippingZoneResolver([]));
+        $unconfigured = $this->pipeline(new ShippingZoneResolver([]));
 
-        $fallbackQuote = $fallbackOnly->quote(self::checkout(), self::shipping(country: null));
-        $requiredQuote = $explicit->quote(self::checkout(), self::shipping(country: null));
-        $unavailableQuote = $unconfigured->quote(self::checkout(), self::shipping(country: null));
+        $fallbackQuote = $fallbackOnly->resolve(self::checkout(), self::shipping(country: null));
+        $requiredQuote = $explicit->resolve(self::checkout(), self::shipping(country: null));
+        $unavailableQuote = $unconfigured->resolve(self::checkout(), self::shipping(country: null));
 
         $this->assertNotNull($fallbackQuote);
         $this->assertSame([$fallback], $fallbackQuote->options());
@@ -95,9 +96,9 @@ final class ShippingQuoteEngineTest extends TestCase
                 throw new RuntimeException('Should not run.');
             },
         );
-        $engine = new ShippingQuoteEngine($resolver);
+        $pipeline = $this->pipeline($resolver);
 
-        $quote = $engine->quote(self::checkout(requiresShipping: false), self::shipping());
+        $quote = $pipeline->resolve(self::checkout(requiresShipping: false), self::shipping());
 
         $this->assertNull($quote);
         $this->assertFalse($called);
@@ -122,7 +123,7 @@ final class ShippingQuoteEngineTest extends TestCase
         $checkout = self::checkout();
         $shipping = self::shipping();
 
-        $quote = (new ShippingQuoteEngine($resolver))->quote($checkout, $shipping);
+        $quote = $this->pipeline($resolver)->resolve($checkout, $shipping);
 
         $this->assertSame($checkout, $receivedCheckout);
         $this->assertSame($shipping, $receivedShipping);
@@ -132,26 +133,26 @@ final class ShippingQuoteEngineTest extends TestCase
 
     public function testResolverFailuresAreSanitizedAndCurrencyIsGuarded(): void
     {
-        $failed = new ShippingQuoteEngine(new ClosureShippingResolver(
+        $failed = $this->pipeline(new ClosureShippingResolver(
             static fn(): never => throw new RuntimeException('Private carrier response.'),
         ));
 
         try {
-            $failed->quote(self::checkout(), self::shipping());
+            $failed->resolve(self::checkout(), self::shipping());
             self::fail('The resolver failure should be normalized.');
         } catch (InvalidShippingQuoteException $error) {
             $this->assertSame(ShippingErrorCode::RESOLVER_FAILED, $error->errorCode());
             $this->assertStringNotContainsString('Private carrier response', $error->getMessage());
         }
 
-        $wrongCurrency = new ShippingQuoteEngine(new ClosureShippingResolver(
+        $wrongCurrency = $this->pipeline(new ClosureShippingResolver(
             static fn(): ShippingQuote => ShippingQuote::available([
                 new ShippingOption('standard', 'Standard', Money::of('5.00', 'USD')),
             ]),
         ));
 
         try {
-            $wrongCurrency->quote(self::checkout(), self::shipping());
+            $wrongCurrency->resolve(self::checkout(), self::shipping());
             self::fail('The resolver currency should match the checkout.');
         } catch (InvalidShippingQuoteException $error) {
             $this->assertSame(ShippingErrorCode::CURRENCY_MISMATCH, $error->errorCode());
@@ -160,12 +161,12 @@ final class ShippingQuoteEngineTest extends TestCase
 
     public function testResolverCannotBypassFailureSanitizationWithAShippingException(): void
     {
-        $engine = new ShippingQuoteEngine(new ClosureShippingResolver(
+        $pipeline = $this->pipeline(new ClosureShippingResolver(
             static fn(): never => throw new ShippingException('shipping.private_carrier_token_123'),
         ));
 
         try {
-            $engine->quote(self::checkout(), self::shipping());
+            $pipeline->resolve(self::checkout(), self::shipping());
             self::fail('The resolver failure should be normalized.');
         } catch (InvalidShippingQuoteException $error) {
             $this->assertSame(ShippingErrorCode::RESOLVER_FAILED, $error->errorCode());
@@ -192,6 +193,11 @@ final class ShippingQuoteEngineTest extends TestCase
             checkoutSource: CheckoutSource::Direct,
             uiMode: UiMode::Embedded,
         );
+    }
+
+    private function pipeline(ShippingResolverInterface $resolver): ShippingQuotePipeline
+    {
+        return new ShippingQuotePipeline($this->kirby, $resolver);
     }
 
     private static function shipping(?string $country = 'PT'): ShippingContext

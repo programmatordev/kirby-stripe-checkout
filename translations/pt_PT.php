@@ -112,6 +112,7 @@ return [
     'programmatordev.stripe-checkout.orders.fields.stripePriceId' => 'ID do preço no Stripe',
     'programmatordev.stripe-checkout.orders.fields.stripeProductId' => 'ID do produto no Stripe',
     'programmatordev.stripe-checkout.orders.fields.stripeCheckoutSessionId' => 'ID da sessão do Checkout',
+    'programmatordev.stripe-checkout.orders.fields.stripeShippingRateIds' => 'IDs das tarifas de envio do Stripe',
     'programmatordev.stripe-checkout.orders.fields.stripePaymentIntentId' => 'ID do PaymentIntent no Stripe',
     'programmatordev.stripe-checkout.orders.fields.stripeChargeId' => 'ID da cobrança no Stripe',
     'programmatordev.stripe-checkout.orders.fields.stripeCustomerId' => 'ID do cliente no Stripe',

@@ -53,8 +53,7 @@ use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Shipping\Internal\ClosureShippingResolver;
-use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingQuoteCustomizer;
-use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingQuoteEngine;
+use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingQuotePipeline;
 use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingZoneResolver;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
@@ -261,18 +260,10 @@ final class RuntimeFactory
         CheckoutContext $checkout,
         ShippingContext $shipping,
     ): ?ShippingQuote {
-        $quote = (new ShippingQuoteEngine($this->shippingResolver()))->quote(
-            $checkout,
-            $shipping,
-        );
-
-        if ($quote === null) {
-            // Digital-only Checkouts have no quote for project hooks to decorate.
-            return null;
-        }
-
-        return (new ShippingQuoteCustomizer($this->kirby))->customize(
-            $quote,
+        return (new ShippingQuotePipeline(
+            kirby: $this->kirby,
+            resolver: $this->shippingResolver(),
+        ))->resolve(
             $checkout,
             $shipping,
         );

@@ -40,6 +40,16 @@ final class StripeApiCheckoutSessionGatewayTest extends KirbyTestCase
                     'metadata' => ['kirby_stripe_checkout_order' => 'page://Abc123def456GHI7'],
                     'mode' => 'payment',
                     'payment_status' => 'unpaid',
+                    'shipping_options' => [
+                        [
+                            'shipping_amount' => 500,
+                            'shipping_rate' => 'shr_standard',
+                        ],
+                        [
+                            'shipping_amount' => 1_000,
+                            'shipping_rate' => 'shr_express',
+                        ],
+                    ],
                     'status' => 'open',
                     'ui_mode' => 'hosted_page',
                     'url' => 'https://checkout.stripe.com/c/pay/cs_test_session',
@@ -82,6 +92,16 @@ final class StripeApiCheckoutSessionGatewayTest extends KirbyTestCase
         $this->assertSame('kirby_stripe_checkout_abcdefgh', $record->integrationIdentifier);
         $this->assertSame(['kirby_stripe_checkout_order' => 'page://Abc123def456GHI7'], $record->metadata);
         $this->assertSame('req_checkout', $record->requestId);
+        $this->assertSame([
+            [
+                'shipping_amount' => 500,
+                'shipping_rate' => 'shr_standard',
+            ],
+            [
+                'shipping_amount' => 1_000,
+                'shipping_rate' => 'shr_express',
+            ],
+        ], $record->shippingOptions);
         $this->assertSame('https://checkout.stripe.com/c/pay/cs_test_session', $record->url);
         $this->assertNull($record->clientSecret);
     }
@@ -264,6 +284,7 @@ final class StripeApiCheckoutSessionGatewayTest extends KirbyTestCase
                 'metadata' => 'unexpected',
                 'mode' => false,
                 'payment_status' => false,
+                'shipping_options' => 'unexpected',
                 'status' => false,
                 'ui_mode' => false,
                 'url' => false,
@@ -288,6 +309,7 @@ final class StripeApiCheckoutSessionGatewayTest extends KirbyTestCase
         $this->assertNull($record->liveMode);
         $this->assertSame([], $record->metadata);
         $this->assertNull($record->requestId);
+        $this->assertSame('unexpected', $record->shippingOptions);
         $this->assertNull($record->url);
     }
 

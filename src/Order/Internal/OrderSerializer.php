@@ -226,6 +226,11 @@ final class OrderSerializer
             }
 
             $checkoutAttempt = self::validateCheckoutAttempt($data);
+            self::validateCheckoutSessionAssociation(
+                data: $data,
+                requestParameters: OrderData::map($checkoutAttempt['sessionRequest']),
+                checkoutStatus: $checkoutStatus,
+            );
 
             $context = self::contextFromData(
                 data: $data,
@@ -301,6 +306,7 @@ final class OrderSerializer
             $acceptedSnapshots = [
                 'stripeCheckout',
                 'checkoutAttempt',
+                'stripeShippingRateIds',
                 'initiatingLineItems',
                 'customer',
                 'billingAddress',
@@ -492,6 +498,33 @@ final class OrderSerializer
         return $checkoutAttempt;
     }
 
+    /**
+     * @param array<string, mixed> $data
+     * @param array<string, mixed> $requestParameters
+     */
+    private static function validateCheckoutSessionAssociation(
+        array $data,
+        array $requestParameters,
+        CheckoutStatus $checkoutStatus,
+    ): void {
+        $hasSession = in_array($checkoutStatus, [CheckoutStatus::Open, CheckoutStatus::Complete, CheckoutStatus::Expired], true);
+        $hasSessionId = array_key_exists('stripeCheckoutSessionId', $data);
+        $hasShippingRateIds = array_key_exists('stripeShippingRateIds', $data);
+
+        if ($hasSession !== $hasSessionId || $hasSession !== $hasShippingRateIds) {
+            throw new OrderDataException();
+        }
+
+        if ($hasSession === false) {
+            return;
+        }
+
+        CheckoutSessionAssociation::fromOrderData(
+            data: $data,
+            request: new SessionRequest($requestParameters),
+        );
+    }
+
     private static function validateProviderFailure(
         mixed $value,
         DateTimeImmutable $createdAt,
@@ -580,12 +613,6 @@ final class OrderSerializer
     /** @param array<string, mixed> $data */
     private static function validateState(array $data, CheckoutStatus $checkoutStatus, PaymentStatus $paymentStatus): void
     {
-        $hasSession = in_array($checkoutStatus, [CheckoutStatus::Open, CheckoutStatus::Complete, CheckoutStatus::Expired], true);
-
-        if ($hasSession !== isset($data['stripeCheckoutSessionId'])) {
-            throw new OrderDataException();
-        }
-
         if ($checkoutStatus !== CheckoutStatus::Complete && $paymentStatus !== PaymentStatus::Unpaid) {
             throw new OrderDataException();
         }
