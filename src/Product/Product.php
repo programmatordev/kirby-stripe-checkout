@@ -171,8 +171,9 @@ final readonly class Product
             throw new InvalidProductException(ProductErrorCode::VARIANT_INVALID);
         }
 
-        /** @var list<SelectedOption> $selectedOptions */
-        return $selectedOptions;
+        // Resolver-provided keys are not option identity. Expose a list so
+        // checkout lines and persisted snapshots share the same representation.
+        return array_values($selectedOptions);
     }
 
     /**

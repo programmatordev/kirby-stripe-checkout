@@ -39,11 +39,11 @@ final class CartViewFactory
      * The closure creates a fresh resolver for each presentation. Keeping one
      * resolver here would retain user/language context across Cart operations.
      *
-     * @param Closure(): CheckoutResolver $checkoutResolver
+     * @param Closure(): CheckoutResolver $checkoutResolverFactory
      */
     public function __construct(
         private readonly App $kirby,
-        private readonly Closure $checkoutResolver,
+        private readonly Closure $checkoutResolverFactory,
     ) {}
 
     public function create(CartSnapshot $snapshot, CartMutator $mutator, bool $resolve = true): Cart
@@ -73,7 +73,7 @@ final class CartViewFactory
         $checkoutItems = [];
 
         try {
-            $resolver = ($this->checkoutResolver)();
+            $resolver = ($this->checkoutResolverFactory)();
             $currency = Currency::of($resolver->currency());
             $subtotal = Money::zero($currency);
         } catch (Throwable $error) {
@@ -87,7 +87,7 @@ final class CartViewFactory
             $itemErrors = [];
 
             try {
-                $resolver ??= ($this->checkoutResolver)();
+                $resolver ??= ($this->checkoutResolverFactory)();
                 $product = $resolver->resolveProduct($entry->request());
 
                 // A saved selection may become unavailable, never a different product.

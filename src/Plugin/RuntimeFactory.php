@@ -212,7 +212,7 @@ final class RuntimeFactory
             kirby: $this->kirby,
             // A retained Cart can survive login/logout and language changes in
             // the same request. Capture current inputs for each new presentation.
-            checkoutResolver: fn(): CheckoutResolver => (new self($this->kirby))->checkoutResolver(),
+            checkoutResolverFactory: fn(): CheckoutResolver => (new self($this->kirby))->checkoutResolver(),
         );
     }
 
@@ -220,9 +220,9 @@ final class RuntimeFactory
     {
         return new CheckoutResolver(
             settings: $this->settings(),
-            productContext: $this->productContext(...),
+            productContextFactory: $this->productContext(...),
             productResolver: new GuardedProductResolver($this->productResolver()),
-            stripePriceResolver: $this->stripePriceResolver(...),
+            stripePriceResolverFactory: $this->stripePriceResolver(...),
             taxCodeValidator: $this->taxCodeValidator(),
             shippingQuotes: new ShippingQuotePipeline($this->kirby, $this->shippingResolver()),
             customShippingResolver: $this->shipping()->resolver() !== null,

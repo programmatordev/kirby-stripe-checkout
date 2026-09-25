@@ -52,7 +52,7 @@ final class CheckoutPreparationFactoryTest extends KirbyTestCase
                     name: $context->languageCode() === 'pt' ? 'Camisola' : 'Shirt',
                     requiresShipping: $request->reference() === 'shirt',
                     price: new Price(Money::of('16', 'EUR')),
-                    selectedOptions: $request->selectedOptions() === [] ? [] : [new SelectedOption('size', 'Tamanho', 'large', 'Grande')],
+                    selectedOptions: $request->selectedOptions() === [] ? [] : ['size' => new SelectedOption('size', 'Tamanho', 'large', 'Grande')],
                     description: 'Local description',
                     imageUrls: ['https://example.test/local.jpg'],
                     sku: 'SHIRT-L',

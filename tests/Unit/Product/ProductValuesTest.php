@@ -103,6 +103,37 @@ final class ProductValuesTest extends TestCase
         $this->assertNull($product->image());
     }
 
+    #[DataProvider('selectedOptionKeys')]
+    public function testProductNormalizesSelectedOptionsToAList(int|string $sizeKey, int|string $colourKey): void
+    {
+        $size = new SelectedOption('size', 'Size', 'large', 'Large');
+        $colour = new SelectedOption('colour', 'Colour', 'blue', 'Blue');
+        $product = new Product(
+            request: new ProductRequest('shirt', selectedOptions: [
+                'size' => 'large',
+                'colour' => 'blue',
+            ]),
+            name: 'Shirt',
+            requiresShipping: true,
+            price: new Price(Money::of('16', 'EUR')),
+            selectedOptions: [
+                $sizeKey => $size,
+                $colourKey => $colour,
+            ],
+            variantId: 'large-blue',
+        );
+
+        $this->assertSame([$size, $colour], $product->selectedOptions());
+    }
+
+    /** @return iterable<string, array{int|string, int|string}> */
+    public static function selectedOptionKeys(): iterable
+    {
+        yield 'list' => [0, 1];
+        yield 'named keys' => ['size', 'colour'];
+        yield 'sparse keys' => [2, 5];
+    }
+
     public function testProductRejectsAFileThatDoesNotMatchItsFirstImageUrl(): void
     {
         $image = $this->createStub(File::class);

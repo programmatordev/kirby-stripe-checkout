@@ -42,14 +42,14 @@ final class CheckoutResolver
      * no product context, and Kirby-priced lines need no Stripe Price resolver.
      * The product context is captured once per resolver operation, not per line.
      *
-     * @param Closure(): ProductResolutionContext $productContext
-     * @param Closure(): PriceResolver $stripePriceResolver
+     * @param Closure(): ProductResolutionContext $productContextFactory
+     * @param Closure(): PriceResolver $stripePriceResolverFactory
      */
     public function __construct(
         private readonly Settings $settings,
-        private readonly Closure $productContext,
+        private readonly Closure $productContextFactory,
         private readonly GuardedProductResolver $productResolver,
-        private readonly Closure $stripePriceResolver,
+        private readonly Closure $stripePriceResolverFactory,
         private readonly TaxCodeValidator $taxCodeValidator,
         private readonly ShippingQuotePipeline $shippingQuotes,
         private readonly bool $customShippingResolver,
@@ -102,7 +102,7 @@ final class CheckoutResolver
     {
         $productPrice = $product->price();
         $stripePrice = $productPrice instanceof StripePriceReference
-            ? ($this->stripePriceResolver)()->resolve($productPrice, $this->currency())
+            ? ($this->stripePriceResolverFactory)()->resolve($productPrice, $this->currency())
             : null;
 
         return new CheckoutLineItem($product, $stripePrice);
@@ -116,7 +116,7 @@ final class CheckoutResolver
         if ($product->price() instanceof StripePriceReference) {
             // Selection writes check eligibility, not presentation totals. A cart
             // must remain editable even when its resolved subtotal is unavailable.
-            ($this->stripePriceResolver)()->resolve($product->price(), $this->currency());
+            ($this->stripePriceResolverFactory)()->resolve($product->price(), $this->currency());
         }
 
         return $product;
@@ -225,6 +225,6 @@ final class CheckoutResolver
 
     private function productContext(): ProductResolutionContext
     {
-        return $this->context ??= ($this->productContext)();
+        return $this->context ??= ($this->productContextFactory)();
     }
 }
