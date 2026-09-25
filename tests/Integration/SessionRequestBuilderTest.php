@@ -8,6 +8,7 @@ use Brick\Money\Money;
 use DateTimeImmutable;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\InitiatingShippingSnapshot;
@@ -49,11 +50,8 @@ final class SessionRequestBuilderTest extends KirbyTestCase
                 ],
             ],
         ]);
-        $order = $this->inlineOrder(uiMode: $uiMode, taxCode: new TaxCode('txcd_33020002'));
-        $snapshot = $order->lineItems()[0];
-        $this->assertSame('txcd_33020002', $snapshot['taxCode']);
-        $this->assertSame($snapshot, OrderLineItemSnapshot::fromArray($snapshot)->toArray());
-        $parameters = $this->build($this->context($uiMode, $order))->parameters();
+        $checkout = $this->inlineCheckout(uiMode: $uiMode, taxCode: new TaxCode('txcd_33020002'));
+        $parameters = $this->build($checkout)->parameters();
         $this->assertIsArray($parameters['line_items']);
         $this->assertIsArray($parameters['line_items'][0]);
         $priceData = $parameters['line_items'][0]['price_data'];
@@ -98,7 +96,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
                 ],
             ],
         ]);
-        $parameters = $this->build($this->context(UiMode::Embedded, $this->stripePriceOrder()))->parameters();
+        $parameters = $this->build($this->stripeCheckout())->parameters();
         $this->assertSame(['enabled' => true], $parameters['automatic_tax']);
         $this->assertIsArray($parameters['line_items']);
         $this->assertIsArray($parameters['line_items'][0]);
@@ -113,7 +111,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
                 'settings' => ['automaticTax' => true],
             ],
         ]);
-        $parameters = $this->build($this->context(UiMode::Hosted, $this->inlineOrder()))->parameters();
+        $parameters = $this->build($this->inlineCheckout())->parameters();
         $this->assertIsArray($parameters['line_items']);
         $this->assertIsArray($parameters['line_items'][0]);
         $this->assertIsArray($parameters['line_items'][0]['price_data']);
@@ -132,8 +130,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
                 ],
             ],
         ]);
-        $order = $this->inlineOrder(uiMode: $uiMode);
-        $checkout = InitiatingShippingSnapshotFactory::checkoutFromOrder($order);
+        $checkout = $this->inlineCheckout(uiMode: $uiMode);
         $shipping = InitiatingShippingSnapshot::fromQuote(
             checkout: $checkout,
             shipping: new ShippingContext('PT'),
@@ -158,7 +155,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
             ]),
         );
         $parameters = $this->builder()
-            ->build($this->context($uiMode, $order), $shipping)
+            ->build($this->context($checkout), $shipping)
             ->parameters();
 
         $this->assertSame([
@@ -183,7 +180,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
                         'currency' => 'eur',
                     ],
                     'metadata' => [
-                        'kirby_stripe_checkout_order' => $order->pageUuid(),
+                        'kirby_stripe_checkout_order' => 'page://Abc123def456GHI7',
                         'kirby_stripe_checkout_owner' => 'programmatordev/stripe-checkout',
                         'kirby_stripe_checkout_shipping_option' => 'express',
                         'kirby_stripe_checkout_shipping_quote' => $shipping->quoteFingerprint(),
@@ -201,7 +198,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
                         'currency' => 'eur',
                     ],
                     'metadata' => [
-                        'kirby_stripe_checkout_order' => $order->pageUuid(),
+                        'kirby_stripe_checkout_order' => 'page://Abc123def456GHI7',
                         'kirby_stripe_checkout_owner' => 'programmatordev/stripe-checkout',
                         'kirby_stripe_checkout_shipping_option' => 'free',
                         'kirby_stripe_checkout_shipping_quote' => $shipping->quoteFingerprint(),
@@ -214,13 +211,13 @@ final class SessionRequestBuilderTest extends KirbyTestCase
 
     public function testMapsCountrylessQuotesToTheCompleteCheckoutCountryPolicy(): void
     {
-        $order = $this->inlineOrder();
-        $shipping = InitiatingShippingSnapshotFactory::fromOrder(
-            order: $order,
+        $checkout = $this->inlineCheckout();
+        $shipping = InitiatingShippingSnapshotFactory::fromCheckout(
+            checkout: $checkout,
             shippingCountry: null,
         );
         $parameters = $this->builder()
-            ->build($this->context(UiMode::Hosted, $order), $shipping)
+            ->build($this->context($checkout), $shipping)
             ->parameters();
         $collection = $parameters['shipping_address_collection'] ?? null;
         $this->assertIsArray($collection);
@@ -233,9 +230,9 @@ final class SessionRequestBuilderTest extends KirbyTestCase
 
     public function testOmitsShippingTaxPolicyWhenAutomaticTaxIsDisabled(): void
     {
-        $order = $this->inlineOrder();
+        $checkout = $this->inlineCheckout();
         $shipping = InitiatingShippingSnapshot::fromQuote(
-            checkout: InitiatingShippingSnapshotFactory::checkoutFromOrder($order),
+            checkout: $checkout,
             shipping: new ShippingContext('PT'),
             quote: ShippingQuote::available([new ShippingOption(
                 key: 'standard',
@@ -246,7 +243,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
             )]),
         );
         $parameters = $this->builder()
-            ->build($this->context(UiMode::Hosted, $order), $shipping)
+            ->build($this->context($checkout), $shipping)
             ->parameters();
         $options = $parameters['shipping_options'] ?? null;
         $this->assertIsArray($options);
@@ -261,22 +258,22 @@ final class SessionRequestBuilderTest extends KirbyTestCase
 
     public function testRejectsMissingInitiatingShippingForAShippableOrder(): void
     {
-        $order = $this->inlineOrder();
+        $checkout = $this->inlineCheckout();
 
         $this->expectException(LogicException::class);
-        $this->builder()->build($this->context(UiMode::Hosted, $order), null);
+        $this->builder()->build($this->context($checkout), null);
     }
 
     public function testRejectsInitiatingShippingFromAnotherPurchase(): void
     {
-        $order = $this->inlineOrder(amount: '16');
-        $shipping = InitiatingShippingSnapshotFactory::fromOrder(
-            $this->inlineOrder(amount: '17'),
+        $checkout = $this->inlineCheckout(amount: '16');
+        $shipping = InitiatingShippingSnapshotFactory::fromCheckout(
+            $this->inlineCheckout(amount: '17'),
         );
 
         $this->expectException(LogicException::class);
         $this->builder()->build(
-            $this->context(UiMode::Hosted, $order),
+            $this->context($checkout),
             $shipping,
         );
     }
@@ -291,8 +288,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
 
     public function testBuildsTheProtectedHostedInlineRequest(): void
     {
-        $context = $this->context(UiMode::Hosted, $this->inlineOrder());
-        $request = $this->build($context);
+        $request = $this->build($this->inlineCheckout());
         $parameters = $request->parameters();
 
         $this->assertSame('payment', $parameters['mode']);
@@ -358,9 +354,8 @@ final class SessionRequestBuilderTest extends KirbyTestCase
 
     public function testBuildsTheProtectedEmbeddedStripePriceRequest(): void
     {
-        $context = $this->context(UiMode::Embedded, $this->stripePriceOrder());
         $parameters = $this
-            ->build($context)
+            ->build($this->stripeCheckout())
             ->parameters();
 
         $this->assertSame('embedded_page', $parameters['ui_mode']);
@@ -383,8 +378,9 @@ final class SessionRequestBuilderTest extends KirbyTestCase
     public function testKeepsTheInstallationIdentifierStable(): void
     {
         $builder = $this->builder();
-        $context = $this->context(UiMode::Hosted, $this->inlineOrder());
-        $shipping = InitiatingShippingSnapshotFactory::fromOrder($context->order());
+        $checkout = $this->inlineCheckout();
+        $context = $this->context($checkout);
+        $shipping = InitiatingShippingSnapshotFactory::fromCheckout($checkout);
         $first = $builder->build($context, $shipping)->parameters()['integration_identifier'];
         $second = $this->builder()
             ->build($context, $shipping)
@@ -396,7 +392,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
     public function testAllowsAZeroAmountInlineOrderWithoutChangingThePaymentMode(): void
     {
         $parameters = $this
-            ->build($this->context(UiMode::Hosted, $this->inlineOrder(amount: '0')))
+            ->build($this->inlineCheckout(amount: '0'))
             ->parameters();
         $this->assertIsArray($parameters['line_items']);
         $lineItem = $parameters['line_items'][0] ?? null;
@@ -424,9 +420,9 @@ final class SessionRequestBuilderTest extends KirbyTestCase
                 'name' => 'Português',
             ],
         ]);
-        $order = $this->inlineOrder(languageCode: 'pt', uiMode: $mode);
+        $checkout = $this->inlineCheckout(languageCode: 'pt', uiMode: $mode);
         $parameters = $this
-            ->build($this->context($mode, $order))
+            ->build($checkout)
             ->parameters();
         $this->assertIsString($parameters[$routeKey]);
 
@@ -494,7 +490,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
         ]);
 
         $parameters = $this
-            ->build($this->context(UiMode::Hosted, $this->inlineOrder()))
+            ->build($this->inlineCheckout())
             ->parameters();
 
         $this->assertSame('required', $parameters['billing_address_collection']);
@@ -581,7 +577,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
         ]);
 
         $parameters = $this
-            ->build($this->context(UiMode::Embedded, $this->stripePriceOrder()))
+            ->build($this->stripeCheckout())
             ->parameters();
 
         $this->assertArrayNotHasKey('name_collection', $parameters);
@@ -628,7 +624,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
         $this->kirby->setCurrentLanguage('pt');
 
         $parameters = $this
-            ->build($this->context(UiMode::Hosted, $this->inlineOrder(languageCode: 'pt')))
+            ->build($this->inlineCheckout(languageCode: 'pt'))
             ->parameters();
         $customFields = $parameters['custom_fields'] ?? null;
 
@@ -656,22 +652,30 @@ final class SessionRequestBuilderTest extends KirbyTestCase
         );
     }
 
-    private function build(SessionRequestContext $context): SessionRequest
+    private function build(CheckoutContext $checkout): SessionRequest
     {
-        $order = $context->order();
-
         return $this->builder()->build(
-            $context,
-            $order->requiresShipping()
-                ? InitiatingShippingSnapshotFactory::fromOrder($order)
+            $this->context($checkout),
+            $checkout->shippableItems() !== []
+                ? InitiatingShippingSnapshotFactory::fromCheckout($checkout)
                 : null,
         );
     }
 
-    private function context(
-        UiMode $uiMode,
-        OrderCreationContext $order,
-    ): SessionRequestContext {
+    private function context(CheckoutContext $checkout): SessionRequestContext
+    {
+        $order = new OrderCreationContext(
+            uuid: 'Abc123def456GHI7',
+            orderNumber: 'ORD-ABC123DEF456GHI7',
+            checkoutSource: $checkout->checkoutSource(),
+            cartRevision: null,
+            userUuid: $checkout->userUuid(),
+            languageCode: $checkout->languageCode(),
+            uiMode: $checkout->uiMode(),
+            currency: 'EUR',
+            lineItems: array_map(OrderLineItemSnapshot::fromCheckoutLineItem(...), $checkout->items()),
+        );
+
         return new SessionRequestContext(
             order: $order,
             locale: 'pt',
@@ -683,12 +687,12 @@ final class SessionRequestBuilderTest extends KirbyTestCase
         );
     }
 
-    private function inlineOrder(
+    private function inlineCheckout(
         ?string $languageCode = null,
         UiMode $uiMode = UiMode::Hosted,
         string $amount = '16.00',
         ?TaxCode $taxCode = null,
-    ): OrderCreationContext {
+    ): CheckoutContext {
         $price = Money::of($amount, 'EUR');
         $product = new Product(
             new ProductRequest('canvas-bag', 2),
@@ -700,14 +704,14 @@ final class SessionRequestBuilderTest extends KirbyTestCase
             taxCode: $taxCode,
         );
 
-        return $this->order(
-            OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem($product)),
+        return $this->checkout(
+            new CheckoutLineItem($product),
             $languageCode,
             $uiMode,
         );
     }
 
-    private function stripePriceOrder(): OrderCreationContext
+    private function stripeCheckout(): CheckoutContext
     {
         $price = Money::of('25.00', 'EUR');
         $product = new Product(
@@ -717,33 +721,30 @@ final class SessionRequestBuilderTest extends KirbyTestCase
             new StripePriceReference('price_standard'),
         );
 
-        return $this->order(
-            OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem($product, new StripePrice(
+        return $this->checkout(
+            new CheckoutLineItem($product, new StripePrice(
                 priceId: 'price_standard',
                 productId: 'prod_standard',
                 name: 'Provider product',
                 unitPrice: (new StripeCurrencyRegistry())->fromMoney($price),
                 taxBehavior: \Stripe\Price::TAX_BEHAVIOR_UNSPECIFIED,
-            ))),
+            )),
             uiMode: UiMode::Embedded,
         );
     }
 
-    private function order(
-        OrderLineItemSnapshot $lineItem,
+    private function checkout(
+        CheckoutLineItem $lineItem,
         ?string $languageCode = null,
         UiMode $uiMode = UiMode::Hosted,
-    ): OrderCreationContext {
-        return new OrderCreationContext(
-            uuid: 'Abc123def456GHI7',
-            orderNumber: 'ORD-ABC123DEF456GHI7',
-            checkoutSource: CheckoutSource::Direct,
-            cartRevision: null,
-            userUuid: null,
+    ): CheckoutContext {
+        return new CheckoutContext(
+            items: [$lineItem],
             languageCode: $languageCode,
+            locale: 'pt_PT',
+            userUuid: null,
+            checkoutSource: CheckoutSource::Direct,
             uiMode: $uiMode,
-            currency: 'EUR',
-            lineItems: [$lineItem],
         );
     }
 

@@ -12,6 +12,7 @@ use Kirby\Filesystem\F;
 use Kirby\Http\Environment;
 use Kirby\Http\Request;
 use Kirby\Http\Response;
+use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Cart\CartOperation;
 use ProgrammatorDev\StripeCheckout\Cart\CartRenderContext;
@@ -310,32 +311,42 @@ final class CartRoutesTest extends KirbyTestCase
         $this->assertSame([], $state->calls);
     }
 
-    public function testPhpAndHttpAddValidationUseEquivalentErrorCategories(): void
-    {
-        $product = $this->product();
+    #[DataProvider('invalidAddRequests')]
+    public function testPhpAndHttpExposeEquivalentValidationFailures(
+        string $reference,
+        int $quantity,
+        string $phpCode,
+        string $httpCode,
+    ): void {
+        $this->product();
         $cart = $this->cart();
         $revision = $cart->revision();
 
-        foreach ([
-            [$product->id(), 0, [], 'quantity_invalid'],
-            [$product->id(), -1, [], 'quantity_invalid'],
-            ['', 1, [], 'invalid'],
-            [$product->id(), 1, ['size' => ''], 'invalid'],
-        ] as [$reference, $quantity, $options, $category]) {
-            try {
-                $cart->add($reference, $quantity, $options);
-                $this->fail('Expected invalid PHP input to be rejected.');
-            } catch (CartException $error) {
-                $this->assertSame($category === 'invalid' ? 'cart.selection_invalid' : 'cart.' . $category, $error->errorCode());
-            }
-
-            $response = $this->send('POST', '/items', [
-                'reference' => $reference, 'quantity' => $quantity, 'options' => (object) $options,
-            ]);
-            $this->assertSame(422, $response->code());
-            $this->assertSame('selection.' . $category, $this->data($response, 'error.code'));
-            $this->assertSame($revision, $this->cart()->revision());
+        try {
+            $cart->add($reference, $quantity);
+            $this->fail('Expected invalid PHP input to be rejected.');
+        } catch (CartException $error) {
+            $this->assertSame($phpCode, $error->errorCode());
         }
+
+        $response = $this->send('POST', '/items', [
+            'reference' => $reference,
+            'quantity' => $quantity,
+        ]);
+
+        $this->assertSame(422, $response->code());
+        $this->assertSame($httpCode, $this->data($response, 'error.code'));
+        $this->assertSame($revision, $this->cart()->revision());
+        $this->assertTrue($this->cart()->isEmpty());
+    }
+
+    /** @return iterable<string, array{string, int, string, string}> */
+    public static function invalidAddRequests(): iterable
+    {
+        // Parser edge cases live in ProductRequestDataTest; this boundary owns
+        // error translation and the guarantee that rejected writes change nothing.
+        yield 'quantity error' => ['shirt', 0, 'cart.quantity_invalid', 'selection.quantity_invalid'];
+        yield 'reference error' => ['', 1, 'cart.selection_invalid', 'selection.invalid'];
     }
 
     public function testRejectedMutationsKeepTheCartInHtmlAndJsonResponses(): void
@@ -389,19 +400,40 @@ final class CartRoutesTest extends KirbyTestCase
         $this->assertSame(415, $this->send('POST', '/items', '{}', ['Content-Type' => 'text/plain'])->code());
         $this->assertSame(422, $this->send('POST', '/items', '{"reference":"shirt"}', ['Content-Type' => 'application/x-www-form-urlencoded'])->code());
 
-        foreach ([
-            ['request' => ['reference' => $product->id()]],
-            ['reference' => $product->id(), 'options' => null],
-            ['reference' => $product->id(), 'options' => []],
-            ['reference' => $product->id(), 'price' => '0.01'],
-            ['reference' => $product->id(), 'userUuid' => 'foreign'],
-            ['reference' => $product->id(), 'options' => ['bad']],
-            ['reference' => $product->id(), 'quantity' => '2'],
-            ['reference' => $product->id(), 'quantity' => null],
-            ['reference' => $product->id(), 'quantity' => 0],
-            ['reference' => $product->id(), 'quantity' => 1.5],
-        ] as $body) {
-            $this->assertSame(422, $this->send('POST', '/items', $body)->code());
+        $invalidBodies = [
+            'nested instead of flat request' => ['request' => ['reference' => $product->id()]],
+            'null options instead of object' => [
+                'reference' => $product->id(),
+                'options' => null,
+            ],
+            'array options instead of object' => [
+                'reference' => $product->id(),
+                'options' => [],
+            ],
+            'forged price' => [
+                'reference' => $product->id(),
+                'price' => '0.01',
+            ],
+            'forged actor' => [
+                'reference' => $product->id(),
+                'userUuid' => 'foreign',
+            ],
+            'list options' => [
+                'reference' => $product->id(),
+                'options' => ['bad'],
+            ],
+            'JSON quantity is not coerced from text' => [
+                'reference' => $product->id(),
+                'quantity' => '2',
+            ],
+            'null quantity is not treated as omitted' => [
+                'reference' => $product->id(),
+                'quantity' => null,
+            ],
+        ];
+
+        foreach ($invalidBodies as $case => $body) {
+            $this->assertSame(422, $this->send('POST', '/items', $body)->code(), $case);
         }
 
         $this->assertSame(422, $this->send('DELETE', '', [])->code());

@@ -77,6 +77,10 @@ Tests cover plugin behavior and public contracts. Keep scenarios readable and fo
 
 The default suite is deterministic and offline. Its Stripe HTTP client rejects unexpected requests instead of contacting Stripe. Use explicit fakes and sanitized fixtures for Stripe behavior; Stripe CLI checks remain separate and opt-in.
 
+Keep exhaustive input-validation cases in the unit tests responsible for those rules. Route tests should cover transport differences, error translation, and persistence effects rather than repeat the same validation matrix. Build checkout inputs directly; do not reconstruct them from stored order output. Shared fixtures should provide simple, explicit facts, not a second implementation of the workflow.
+
+The JavaScript tests exercise plain component methods and computed properties without mounting Vue. Their shared component loader only makes those options importable in Node; these tests do not verify rendering or watcher scheduling. Use a real Panel browser check for those behaviors.
+
 CI keeps the committed lockfile matrix for PHP 8.2 through PHP 8.5 and adds two uncached dependency-range checks: Composer's lowest currently allowed resolution on PHP 8.2 and the latest allowed resolution on PHP 8.5. Composer's security-advisory blocking remains enabled. The package job also installs the built artifact as a mirrored Composer package in a disposable Kirby project and verifies Kirby discovers it from `site/plugins`. The files under `tests/Package` exist only for that package-install check and are not shipped with the plugin. Kirby's explicit plugin version is asserted once by the registration integration test; release validation compares it with the release tag.
 
 PHPStan analyzes at its maximum rule level. Do not add baselines for new production or test code. PHP-CS-Fixer checks the canonical bootstrap, runtime configuration and source, and tests.

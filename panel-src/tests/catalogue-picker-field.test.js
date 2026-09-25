@@ -1,11 +1,8 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { componentOptions } from "./support/component-options.js";
 
-// Exercise the component's plain options without introducing a Vue test runtime.
-const source = await readFile(new URL("../src/components/CataloguePickerField.vue", import.meta.url), "utf8");
-const script = source.split("<script>")[1].split("</script>")[0];
-const { default: component } = await import(`data:text/javascript;base64,${Buffer.from(script).toString("base64")}`);
+const component = await componentOptions("CataloguePickerField");
 
 test("selection warnings remain visible in read-only translations and hide for an inactive source", () => {
 	const field = {

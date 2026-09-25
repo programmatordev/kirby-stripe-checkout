@@ -1,15 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
-
-// Match the existing plain-component tests; no Vue runtime or network is needed.
-async function componentOptions(name) {
-	const url = new URL(`../src/components/${name}.vue`, import.meta.url);
-	const source = await readFile(url, "utf8");
-	const script = source.split("<script>")[1].split("</script>")[0]
-		.replace(/from "(\.\.\/[^\"]+)"/g, (_, path) => `from "${new URL(path, url).href}"`);
-	return (await import(`data:text/javascript;base64,${Buffer.from(script).toString("base64")}`)).default;
-}
+import { componentOptions } from "./support/component-options.js";
 
 const options = await componentOptions("OptionsField");
 const priceDialog = await componentOptions("StripePriceDialog");
