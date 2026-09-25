@@ -128,7 +128,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         );
         $order = $this->order($checkout);
         $request = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
-        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: $uiMode);
+        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now);
         $gateway = new FakeCheckoutSessionGateway([$sessionRecord]);
         $presentation = $this->creator($configuration, $gateway)->create(
             checkout: $checkout,
@@ -164,7 +164,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $checkout = $this->checkout(uiMode: $uiMode);
         $order = $this->order($checkout);
         $request = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
-        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: $uiMode);
+        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now);
         $gateway = new FakeCheckoutSessionGateway([$sessionRecord]);
 
         $this->creator($configuration, $gateway)->create(
@@ -217,7 +217,6 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             order: $order,
             request: $request,
             now: $now,
-            uiMode: UiMode::Hosted,
             overrides: ['shippingOptions' => $shippingOptions],
         );
 
@@ -274,7 +273,6 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             order: $order,
             request: $request,
             now: $now,
-            uiMode: UiMode::Hosted,
             overrides: ['shippingOptions' => [
                 ['shipping_rate' => 'shr_test_duplicate'],
                 ['shipping_rate' => 'shr_test_duplicate'],
@@ -314,7 +312,6 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             order: $otherOrder,
             request: $otherRequest,
             now: $now,
-            uiMode: UiMode::Hosted,
         );
         $shippingOptions = $createdRecord->shippingOptions;
 
@@ -326,7 +323,6 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             order: $otherOrder,
             request: $otherRequest,
             now: $now,
-            uiMode: UiMode::Hosted,
             overrides: ['shippingOptions' => array_reverse($shippingOptions)],
         );
         $gateway = new FakeCheckoutSessionGateway(
@@ -367,7 +363,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $checkout = $this->checkout();
         $order = $this->order($checkout);
         $request = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
-        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
+        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now);
         $store = new OrderPageStore($this->kirby);
         $this->creator($configuration, new FakeCheckoutSessionGateway([$sessionRecord]))->create(
             checkout: $checkout,
@@ -398,7 +394,6 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
                 order: $order,
                 request: $request,
                 now: $now,
-                uiMode: UiMode::Hosted,
             ),
         ]);
 
@@ -426,7 +421,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $checkout = $this->checkout(uiMode: $uiMode, checkoutSource: $checkoutSource);
         $order = $this->order($checkout);
         $request = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
-        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: $uiMode);
+        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now);
         $gateway = new FakeCheckoutSessionGateway(
             results: [$sessionRecord],
             retrievalResults: [$sessionRecord->id => $sessionRecord],
@@ -476,7 +471,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $checkout = $this->checkout();
         $order = $this->order($checkout);
         $request = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
-        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
+        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now);
         $gateway = new FakeCheckoutSessionGateway(
             results: [$sessionRecord],
             retrievalResults: [$sessionRecord->id => $sessionRecord],
@@ -581,7 +576,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $this->assertSame($firstGateway->idempotencyKeys[0], $checkoutAttempt['idempotencyKey']);
 
         $request = new SessionRequest(OrderData::map($checkoutAttempt['sessionRequest']));
-        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
+        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now);
         $retryGateway = new FakeCheckoutSessionGateway([$sessionRecord]);
         $this->requestFilter = static fn(): never => throw new RuntimeException('An existing request must not be rebuilt.');
         $this->quoteResolver = static fn(): never => throw new RuntimeException('An existing quote must not be resolved.');
@@ -602,7 +597,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $this->assertSame([$checkoutAttempt['idempotencyKey']], $retryGateway->idempotencyKeys);
     }
 
-    public function testRejectedAndIncompatibleResultsBecomeDurableCreationStates(): void
+    public function testRejectedProviderResultBecomesADurableCreationFailure(): void
     {
         $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
         $configuration = $this->configure(UiMode::Hosted);
@@ -637,27 +632,28 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $store = new OrderPageStore($this->kirby);
         $rejectedData = $store->data($store->order($rejectedOrder->pageUuid()) ?? $this->fail('Rejected order was not persisted.'));
         $this->assertSame(CheckoutStatus::CreationFailed->value, $rejectedData['checkoutStatus']);
+    }
 
-        $incompatibleCheckout = $this->checkout(selectedOption: 'other');
-        $incompatibleOrder = $this->order(
-            $incompatibleCheckout,
-            uuid: self::SECOND_ORDER_UUID,
-        );
-        $request = $this->request(checkout: $incompatibleCheckout, uuid: self::SECOND_ORDER_UUID, configuration: $configuration, now: $now);
+    public function testIncompatibleProviderResultBecomesADurableUncertainAttempt(): void
+    {
+        $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
+        $configuration = $this->configure(UiMode::Hosted);
+        $checkout = $this->checkout();
+        $order = $this->order($checkout);
+        $request = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
         $sessionRecord = $this->sessionRecord(
-            order: $incompatibleOrder,
+            order: $order,
             request: $request,
             now: $now,
-            uiMode: UiMode::Hosted,
             overrides: ['clientReferenceId' => 'page://wrong'],
         );
 
         try {
             $this->creator($configuration, new FakeCheckoutSessionGateway([$sessionRecord]))->create(
-                checkout: $incompatibleCheckout,
+                checkout: $checkout,
                 shipping: new ShippingContext('PT'),
-                binding: $this->binding(selectedOption: 'other'),
-                token: $this->token(orderUuid: self::SECOND_ORDER_UUID, nonceByte: 'b'),
+                binding: $this->binding(),
+                token: $this->token(),
                 guestReference: 'guest-browser',
                 now: $now,
             );
@@ -666,8 +662,9 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             $this->assertSame('checkout.session_incompatible', $error->errorCode());
         }
 
-        $incompatibleData = $store->data($store->order($incompatibleOrder->pageUuid()) ?? $this->fail('Incompatible order was not persisted.'));
-        $this->assertSame(CheckoutStatus::CreationUncertain->value, $incompatibleData['checkoutStatus']);
+        $store = new OrderPageStore($this->kirby);
+        $data = $store->data($store->order($order->pageUuid()) ?? $this->fail('Incompatible order was not persisted.'));
+        $this->assertSame(CheckoutStatus::CreationUncertain->value, $data['checkoutStatus']);
     }
 
     public function testRetryDeadlineClosesAnUncertainAttemptWithoutAnotherProviderCall(): void
@@ -676,26 +673,12 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $configuration = $this->configure(UiMode::Hosted);
         $checkout = $this->checkout();
         $order = $this->order($checkout);
-        $gateway = new FakeCheckoutSessionGateway();
-        $gateway->creationFailure = new CheckoutSessionGatewayException(
-            failure: new CheckoutSessionFailure(
-                type: CheckoutSessionFailureType::Uncertain,
-                retryable: true,
-            ),
-            error: new RuntimeException('private'),
+        $this->persistUncertainAttempt(
+            configuration: $configuration,
+            checkout: $checkout,
+            now: $now,
+            retryable: true,
         );
-
-        try {
-            $this->creator($configuration, $gateway)->create(
-                checkout: $checkout,
-                shipping: new ShippingContext('PT'),
-                binding: $this->binding(),
-                token: $this->token(),
-                guestReference: 'guest-browser',
-                now: $now,
-            );
-        } catch (CheckoutSessionException) {
-        }
 
         $retryGateway = new FakeCheckoutSessionGateway();
 
@@ -727,7 +710,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $checkout = $this->checkout();
         $order = $this->order($checkout);
         $request = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
-        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
+        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now);
         $gateway = new FakeCheckoutSessionGateway(
             results: [$sessionRecord],
             retrievalResults: [$sessionRecord->id => $sessionRecord],
@@ -760,7 +743,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $checkout = $this->checkout();
         $order = $this->order($checkout);
         $request = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
-        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
+        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now);
         $creator = $this->creator($configuration, new FakeCheckoutSessionGateway([$sessionRecord]));
         $creator->create(
             checkout: $checkout,
@@ -790,27 +773,12 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
         $configuration = $this->configure(UiMode::Hosted, secretKey: 'sk_test_first');
         $checkout = $this->checkout();
-        $order = $this->order($checkout);
-        $firstGateway = new FakeCheckoutSessionGateway();
-        $firstGateway->creationFailure = new CheckoutSessionGatewayException(
-            failure: new CheckoutSessionFailure(
-                type: CheckoutSessionFailureType::Uncertain,
-                retryable: true,
-            ),
-            error: new RuntimeException('private'),
+        $this->persistUncertainAttempt(
+            configuration: $configuration,
+            checkout: $checkout,
+            now: $now,
+            retryable: true,
         );
-
-        try {
-            $this->creator($configuration, $firstGateway)->create(
-                checkout: $checkout,
-                shipping: new ShippingContext('PT'),
-                binding: $this->binding(),
-                token: $this->token(),
-                guestReference: 'guest-browser',
-                now: $now,
-            );
-        } catch (CheckoutSessionException) {
-        }
 
         $retryGateway = new FakeCheckoutSessionGateway();
 
@@ -846,7 +814,6 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             order: $order,
             request: $request,
             now: $now,
-            uiMode: UiMode::Hosted,
             overrides: ['liveMode' => true],
         );
 
@@ -869,7 +836,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $checkout = $this->checkout();
         $order = $this->order($checkout);
         $request = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
-        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
+        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now);
         $gateway = new FakeCheckoutSessionGateway([$sessionRecord]);
         $store = new OrderPageStore($this->kirby);
         $gateway->beforeCreate = static function () use ($store, $order, $sessionRecord, $now): void {
@@ -910,7 +877,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $checkout = $this->checkout();
         $order = $this->order($checkout);
         $request = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
-        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
+        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now);
         $store = new OrderPageStore($this->kirby);
         $gateway = new FakeCheckoutSessionGateway(retrievalResults: [$sessionRecord->id => $sessionRecord]);
         $gateway->creationFailure = new CheckoutSessionGatewayException(
@@ -953,27 +920,12 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
         $configuration = $this->configure(UiMode::Hosted);
         $checkout = $this->checkout();
-        $order = $this->order($checkout);
-        $firstGateway = new FakeCheckoutSessionGateway();
-        $firstGateway->creationFailure = new CheckoutSessionGatewayException(
-            failure: new CheckoutSessionFailure(
-                type: CheckoutSessionFailureType::Uncertain,
-                retryable: false,
-            ),
-            error: new RuntimeException('private'),
+        $this->persistUncertainAttempt(
+            configuration: $configuration,
+            checkout: $checkout,
+            now: $now,
+            retryable: false,
         );
-
-        try {
-            $this->creator($configuration, $firstGateway)->create(
-                checkout: $checkout,
-                shipping: new ShippingContext('PT'),
-                binding: $this->binding(),
-                token: $this->token(),
-                guestReference: 'guest-browser',
-                now: $now,
-            );
-        } catch (CheckoutSessionException) {
-        }
 
         $retryGateway = new FakeCheckoutSessionGateway();
 
@@ -1002,7 +954,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $checkout = $this->checkout();
         $order = $this->order($checkout);
         $request = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
-        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
+        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now);
         $gateway = new FakeCheckoutSessionGateway([$sessionRecord]);
         $store = new OrderPageStore($this->kirby);
         $gateway->beforeCreate = static function () use ($store, $order, $sessionRecord, $now): void {
@@ -1059,7 +1011,6 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             order: $order,
             request: $request,
             now: $now,
-            uiMode: UiMode::Hosted,
             overrides: ['metadata' => $reorderedMetadata],
         );
 
@@ -1082,7 +1033,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $checkout = $this->checkout();
         $order = $this->order($checkout);
         $request = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
-        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
+        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now);
         $gateway = new FakeCheckoutSessionGateway([$sessionRecord]);
         $creator = $this->creator($configuration, $gateway);
         $creator->create(
@@ -1124,7 +1075,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $checkout = $this->checkout();
         $order = $this->order($checkout);
         $request = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
-        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
+        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now);
         $gateway = new FakeCheckoutSessionGateway([$sessionRecord]);
         $store = new OrderPageStore($this->kirby);
         $gateway->beforeCreate = static function () use ($store, $order, $now): void {
@@ -1164,7 +1115,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $checkout = $this->checkout();
         $order = $this->order($checkout);
         $request = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
-        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
+        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now);
         $store = new OrderPageStore($this->kirby);
         $gateway = new FakeCheckoutSessionGateway([$sessionRecord]);
         $gateway->beforeCreate = static function () use ($store, $order): void {
@@ -1234,8 +1185,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $firstRequest = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
         $secondRequest = $this->request(checkout: $checkout, uuid: self::SECOND_ORDER_UUID, configuration: $configuration, now: $now);
         $gateway = new FakeCheckoutSessionGateway(results: [
-            $this->sessionRecord(order: $firstOrder, request: $firstRequest, now: $now, uiMode: UiMode::Hosted),
-            $this->sessionRecord(order: $secondOrder, request: $secondRequest, now: $now, uiMode: UiMode::Hosted),
+            $this->sessionRecord(order: $firstOrder, request: $firstRequest, now: $now),
+            $this->sessionRecord(order: $secondOrder, request: $secondRequest, now: $now),
         ]);
         $creator = $this->creator($configuration, $gateway);
         $first = $creator->create(
@@ -1269,7 +1220,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $order = $this->order($checkout);
         $request = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
         $gateway = new FakeCheckoutSessionGateway([
-            $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted),
+            $this->sessionRecord(order: $order, request: $request, now: $now),
         ]);
         $this->creator($configuration, $gateway)->create(
             checkout: $checkout,
@@ -1346,7 +1297,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $binding = $this->binding();
         $token = $this->token();
         $request = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
-        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted);
+        $sessionRecord = $this->sessionRecord(order: $order, request: $request, now: $now);
         $winnerGateway = new FakeCheckoutSessionGateway([$sessionRecord]);
         $winner = $this->creator($configuration, $winnerGateway);
         $loserGateway = new FakeCheckoutSessionGateway(retrievalResults: [$sessionRecord->id => $sessionRecord]);
@@ -1413,7 +1364,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $order = $this->order($checkout);
         $request = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
         $gateway = new FakeCheckoutSessionGateway([
-            $this->sessionRecord(order: $order, request: $request, now: $now, uiMode: UiMode::Hosted),
+            $this->sessionRecord(order: $order, request: $request, now: $now),
         ]);
         $kirby = $this->kirby;
         // These locks reject reentrant acquisition, so a callback running inside
@@ -1501,6 +1452,44 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
                 }
             }
         }
+    }
+
+    private function persistUncertainAttempt(
+        Configuration $configuration,
+        CheckoutContext $checkout,
+        DateTimeImmutable $now,
+        bool $retryable,
+    ): void {
+        // Establish retry/reconciliation preconditions through the real creation
+        // path. Fail here if setup did not reach the state the scenario requires.
+        $gateway = new FakeCheckoutSessionGateway();
+        $gateway->creationFailure = new CheckoutSessionGatewayException(
+            failure: new CheckoutSessionFailure(
+                type: CheckoutSessionFailureType::Uncertain,
+                retryable: $retryable,
+            ),
+            error: new RuntimeException('private'),
+        );
+
+        try {
+            $this->creator($configuration, $gateway)->create(
+                checkout: $checkout,
+                shipping: new ShippingContext('PT'),
+                binding: $this->binding(),
+                token: $this->token(),
+                guestReference: 'guest-browser',
+                now: $now,
+            );
+            $this->fail('Expected an uncertain provider result during setup.');
+        } catch (CheckoutSessionException $error) {
+            $this->assertSame('checkout.session_uncertain', $error->errorCode());
+            $this->assertSame($retryable, $error->isRetryable());
+        }
+
+        $store = new OrderPageStore($this->kirby);
+        $page = $store->order('page://' . self::ORDER_UUID) ?? $this->fail('Uncertain order was not persisted.');
+        $this->assertSame(CheckoutStatus::CreationUncertain->value, $store->data($page)['checkoutStatus']);
+        $this->assertCount(1, $gateway->requests);
     }
 
     private function configure(
@@ -1631,10 +1620,10 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         OrderCreationContext $order,
         SessionRequest $request,
         DateTimeImmutable $now,
-        UiMode $uiMode,
         array $overrides = [],
     ): CheckoutSessionRecord {
         $parameters = $request->parameters();
+        $uiMode = $order->uiMode();
         $metadata = $parameters['metadata'] ?? null;
 
         if (is_array($metadata) === false || array_is_list($metadata)) {

@@ -389,79 +389,178 @@ final class CartRoutesTest extends KirbyTestCase
         $this->assertSame(2, $this->cart()->totalQuantity());
     }
 
-    public function testStrictBodiesAndProtectedFactsAreRejected(): void
+    #[DataProvider('malformedJsonBodies')]
+    public function testRejectsMalformedJsonWithoutChangingTheCart(string $body): void
     {
-        $product = $this->product();
+        $cart = $this->cart()->add($this->product()->id());
+        $revision = $cart->revision();
 
-        foreach (['', '{', '[]', 'null', '"test"', 'true', 'reference=shirt'] as $body) {
-            $this->assertSame(400, $this->send('POST', '/items', $body)->code(), $body);
-        }
+        $this->assertSame(400, $this->send('POST', '/items', $body)->code());
+        $this->assertSame($revision, $this->cart()->revision());
+        $this->assertSame(1, $this->cart()->totalQuantity());
+    }
 
-        $this->assertSame(415, $this->send('POST', '/items', '{}', ['Content-Type' => 'text/plain'])->code());
-        $this->assertSame(422, $this->send('POST', '/items', '{"reference":"shirt"}', ['Content-Type' => 'application/x-www-form-urlencoded'])->code());
+    /** @return iterable<string, array{string}> */
+    public static function malformedJsonBodies(): iterable
+    {
+        yield 'empty body' => [''];
+        yield 'incomplete object' => ['{'];
+        yield 'array instead of object' => ['[]'];
+        yield 'null instead of object' => ['null'];
+        yield 'string instead of object' => ['"test"'];
+        yield 'boolean instead of object' => ['true'];
+        yield 'form data declared as JSON' => ['reference=shirt'];
+    }
 
+    #[DataProvider('invalidBodyEncodings')]
+    public function testRejectsUnsupportedOrMismatchedBodyEncodings(
+        string $body,
+        string $contentType,
+        int $httpStatus,
+    ): void {
+        $this->product();
+
+        $response = $this->send('POST', '/items', $body, ['Content-Type' => $contentType]);
+
+        $this->assertSame($httpStatus, $response->code());
+        $this->assertTrue($this->cart()->isEmpty());
+    }
+
+    /** @return iterable<string, array{string, string, int}> */
+    public static function invalidBodyEncodings(): iterable
+    {
+        yield 'unsupported content type' => ['{}', 'text/plain', 415];
+        yield 'JSON declared as form data' => ['{"reference":"shirt"}', 'application/x-www-form-urlencoded', 422];
+    }
+
+    /** @param array<string, mixed> $body */
+    #[DataProvider('invalidItemBodies')]
+    public function testRejectsInvalidItemBodiesWithoutChangingTheCart(array $body): void
+    {
+        $cart = $this->cart()->add($this->product()->id());
+        $revision = $cart->revision();
+
+        $this->assertSame(422, $this->send('POST', '/items', $body)->code());
+        $this->assertSame($revision, $this->cart()->revision());
+        $this->assertSame(1, $this->cart()->totalQuantity());
+    }
+
+    /** @return iterable<string, array{array<string, mixed>}> */
+    public static function invalidItemBodies(): iterable
+    {
         $invalidBodies = [
-            'nested instead of flat request' => ['request' => ['reference' => $product->id()]],
+            'nested instead of flat request' => ['request' => ['reference' => 'shirt']],
             'null options instead of object' => [
-                'reference' => $product->id(),
+                'reference' => 'shirt',
                 'options' => null,
             ],
             'array options instead of object' => [
-                'reference' => $product->id(),
+                'reference' => 'shirt',
                 'options' => [],
             ],
             'forged price' => [
-                'reference' => $product->id(),
+                'reference' => 'shirt',
                 'price' => '0.01',
             ],
             'forged actor' => [
-                'reference' => $product->id(),
+                'reference' => 'shirt',
                 'userUuid' => 'foreign',
             ],
             'list options' => [
-                'reference' => $product->id(),
+                'reference' => 'shirt',
                 'options' => ['bad'],
             ],
             'JSON quantity is not coerced from text' => [
-                'reference' => $product->id(),
+                'reference' => 'shirt',
                 'quantity' => '2',
             ],
             'null quantity is not treated as omitted' => [
-                'reference' => $product->id(),
+                'reference' => 'shirt',
                 'quantity' => null,
             ],
         ];
 
         foreach ($invalidBodies as $case => $body) {
-            $this->assertSame(422, $this->send('POST', '/items', $body)->code(), $case);
-        }
-
-        $this->assertSame(422, $this->send('DELETE', '', [])->code());
-        $this->assertSame(422, $this->send('POST', '/items', http_build_query(['request' => ['reference' => $product->id()]]), ['Content-Type' => 'application/x-www-form-urlencoded'])->code());
-        $this->assertTrue($this->cart()->isEmpty());
-        $draft = $this->kirby->site()->createChild(['slug' => 'draft', 'template' => 'default', 'content' => ['title' => 'Hidden', 'price' => '10']]);
-
-        foreach (['unknown', $draft->id()] as $reference) {
-            $response = $this->send('POST', '/items', ['reference' => $reference]);
-            $this->assertSame(422, $response->code());
-            $this->assertSame('product.unavailable', $this->data($response, 'error.code'));
+            yield $case => [$body];
         }
     }
 
-    public function testFormQuantityNormalizationAndRequiredRevision(): void
+    public function testClearRequiresARevisionAndLeavesExistingItemsUntouched(): void
+    {
+        $cart = $this->cart()->add($this->product()->id());
+        $revision = $cart->revision();
+
+        $this->assertSame(422, $this->send('DELETE', '', [])->code());
+        $this->assertSame($revision, $this->cart()->revision());
+        $this->assertSame(1, $this->cart()->totalQuantity());
+    }
+
+    public function testFormInputCannotNestTheProductRequest(): void
+    {
+        $body = http_build_query(['request' => ['reference' => $this->product()->id()]]);
+        $response = $this->send('POST', '/items', $body, ['Content-Type' => 'application/x-www-form-urlencoded']);
+
+        $this->assertSame(422, $response->code());
+        $this->assertTrue($this->cart()->isEmpty());
+    }
+
+    public function testMissingAndDraftProductsAreUnavailable(): void
+    {
+        $draft = $this->kirby->site()->createChild([
+            'slug' => 'draft',
+            'template' => 'default',
+            'content' => [
+                'title' => 'Hidden',
+                'price' => '10',
+            ],
+        ]);
+        $references = [
+            'missing page' => 'unknown',
+            'draft page' => $draft->id(),
+        ];
+
+        foreach ($references as $case => $reference) {
+            $response = $this->send('POST', '/items', ['reference' => $reference]);
+            $this->assertSame(422, $response->code(), $case);
+            $this->assertSame('product.unavailable', $this->data($response, 'error.code'), $case);
+        }
+
+        $this->assertTrue($this->cart()->isEmpty());
+    }
+
+    public function testFormQuantityNormalizationRejectsInvalidNumericStrings(): void
     {
         $reference = $this->product()->id();
         $headers = ['Content-Type' => 'application/x-www-form-urlencoded; charset=UTF-8'];
         $response = $this->send('POST', '/items', http_build_query(['reference' => $reference, 'quantity' => '3']), $headers);
         $this->assertSame(200, $response->code());
         $itemId = $this->cart()->items()[0]->id();
-        $this->assertSame(422, $this->send('PATCH', '/items/' . $itemId, ['quantity' => 4])->code());
+        $quantities = [
+            'zero' => '0',
+            'negative' => '-1',
+            'fraction' => '1.2',
+            'scientific notation' => '2e1',
+            'integer overflow' => str_repeat('9', 30),
+        ];
 
-        foreach (['0', '-1', '1.2', '2e1', str_repeat('9', 30)] as $quantity) {
+        foreach ($quantities as $case => $quantity) {
             $body = http_build_query(['revision' => $this->cart()->revision(), 'quantity' => $quantity]);
-            $this->assertSame(422, $this->send('PATCH', '/items/' . $itemId, $body, $headers)->code());
+            $this->assertSame(422, $this->send('PATCH', '/items/' . $itemId, $body, $headers)->code(), $case);
         }
 
+        $this->assertSame(3, $this->cart()->totalQuantity());
+    }
+
+    public function testQuantityUpdateRequiresARevision(): void
+    {
+        $cart = $this->cart()->add($this->product()->id(), 3);
+        $revision = $cart->revision();
+        $itemId = $cart->items()[0]->id();
+
+        $response = $this->send('PATCH', '/items/' . $itemId, ['quantity' => 4]);
+
+        $this->assertSame(422, $response->code());
+        $this->assertSame($revision, $this->cart()->revision());
         $this->assertSame(3, $this->cart()->totalQuantity());
     }
 
@@ -518,12 +617,16 @@ final class CartRoutesTest extends KirbyTestCase
         $this->assertSame(406, $this->send('GET', headers: ['Accept' => 'application/json;q=0,text/html;q=0'])->code());
     }
 
-    public function testMissingRendererRejectsBeforeMutationAndRendererFailureDoesNotInviteRetry(): void
+    public function testMissingRendererRejectsBeforeMutation(): void
     {
         $product = $this->product();
         $this->assertSame(406, $this->send('POST', '/items', ['reference' => $product->id()], ['Accept' => 'text/html'])->code());
         $this->assertSame(406, $this->send('GET', headers: ['Accept' => 'image/png'])->code());
         $this->assertTrue($this->cart()->isEmpty());
+    }
+
+    public function testRendererFailureAfterAWriteDoesNotInviteRetry(): void
+    {
         $this->restart(['cart' => ['renderer' => static function (): never {
             throw new RuntimeException('SECRET');
         }]]);
@@ -537,14 +640,19 @@ final class CartRoutesTest extends KirbyTestCase
         $this->assertSame(200, $this->send('GET')->code());
     }
 
-    public function testUnsupportedMethodsAndDisabledRoutes(): void
+    public function testUnsupportedMethodsReportAllowedMethods(): void
     {
-        foreach ([['POST', ''], ['PUT', ''], ['GET', '/items'], ['POST', '/items/id'], ['OPTIONS', '']] as [$method, $path]) {
-            $response = $this->send($method, $path);
-            $this->assertSame(405, $response->code());
-            $this->assertArrayHasKey('Allow', $response->headers());
-        }
+        $requests = [['POST', ''], ['PUT', ''], ['GET', '/items'], ['POST', '/items/id'], ['OPTIONS', '']];
 
+        foreach ($requests as [$method, $path]) {
+            $response = $this->send($method, $path);
+            $this->assertSame(405, $response->code(), $method . ' ' . $path);
+            $this->assertArrayHasKey('Allow', $response->headers(), $method . ' ' . $path);
+        }
+    }
+
+    public function testDisabledCartDoesNotRegisterRoutesOrStartASession(): void
+    {
         $this->restart(['cart' => ['enabled' => false]]);
         $this->assertSame([], array_values(array_filter($this->kirby->extensions('routes'), static fn(mixed $route): bool => is_array($route) && is_string($route['pattern'] ?? null) && str_starts_with($route['pattern'], 'stripe-checkout/cart'))));
         $this->assertNull($this->kirby->session()->token());

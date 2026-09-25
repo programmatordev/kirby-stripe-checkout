@@ -44,24 +44,77 @@ final class ProductRequestDataTest extends TestCase
     /** @return iterable<string, array{mixed, string}> */
     public static function invalidSelections(): iterable
     {
-        foreach ([null, false, 'shirt', [], ['shirt'], new ProductRequest('shirt')] as $index => $input) {
-            yield 'shape-' . $index => [$input, 'selection.invalid'];
+        $shapes = [
+            'null body' => null,
+            'boolean body' => false,
+            'scalar reference instead of object' => 'shirt',
+            'empty body' => [],
+            'list instead of object' => ['shirt'],
+            'domain object instead of input data' => new ProductRequest('shirt'),
+        ];
+
+        foreach ($shapes as $case => $input) {
+            yield $case => [$input, 'selection.invalid'];
         }
 
-        foreach ([null, '', 123, ' shirt', "shirt\n", str_repeat('a', 2049)] as $index => $reference) {
-            yield 'reference-' . $index => [['reference' => $reference], 'selection.invalid'];
+        $references = [
+            'null reference' => null,
+            'empty reference' => '',
+            'numeric reference' => 123,
+            'leading whitespace in reference' => ' shirt',
+            'newline in reference' => "shirt\n",
+            'reference exceeds length limit' => str_repeat('a', 2049),
+        ];
+
+        foreach ($references as $case => $reference) {
+            yield $case => [['reference' => $reference], 'selection.invalid'];
         }
 
-        foreach ([null, 0, -1, '1', '01', 1.0, true, [], (float) PHP_INT_MAX] as $index => $quantity) {
-            yield 'quantity-' . $index => [['reference' => 'shirt', 'quantity' => $quantity], 'selection.quantity_invalid'];
+        $quantities = [
+            'null quantity' => null,
+            'zero quantity' => 0,
+            'negative quantity' => -1,
+            'numeric string quantity' => '1',
+            'zero-padded string quantity' => '01',
+            'whole float quantity' => 1.0,
+            'boolean quantity' => true,
+            'array quantity' => [],
+            'float at integer limit' => (float) PHP_INT_MAX,
+        ];
+
+        foreach ($quantities as $case => $quantity) {
+            yield $case => [[
+                'reference' => 'shirt',
+                'quantity' => $quantity,
+            ], 'selection.quantity_invalid'];
         }
 
-        foreach ([null, false, 'size', ['large'], ['size' => 1], ['size' => ''], ['' => 'large'], [str_repeat('a', 129) => 'large'], ['size' => str_repeat('a', 129)]] as $index => $options) {
-            yield 'options-' . $index => [['reference' => 'shirt', 'selectedOptions' => $options], 'selection.invalid'];
+        $options = [
+            'null options' => null,
+            'boolean options' => false,
+            'scalar options' => 'size',
+            'list instead of option map' => ['large'],
+            'numeric option value' => ['size' => 1],
+            'empty option value' => ['size' => ''],
+            'empty option identifier' => ['' => 'large'],
+            'option identifier exceeds length limit' => [str_repeat('a', 129) => 'large'],
+            'option value exceeds length limit' => ['size' => str_repeat('a', 129)],
+        ];
+
+        foreach ($options as $case => $selection) {
+            yield $case => [[
+                'reference' => 'shirt',
+                'selectedOptions' => $selection,
+            ], 'selection.invalid'];
         }
 
-        foreach (['id', 'variantId', 'price', 'unitPrice', 'currency', 'stripePriceId', 'stripeProductId', 'sku', 'images', 'description', 'name', 'requiresShipping', 'shipping', 'taxBehavior', 'discounts', 'metadata', 'product'] as $field) {
-            yield 'protected-' . $field => [['reference' => 'shirt', $field => 'forged'], 'selection.invalid'];
+        $protectedFields = ['id', 'variantId', 'price', 'unitPrice', 'currency', 'stripePriceId', 'stripeProductId', 'sku', 'images', 'description', 'name', 'requiresShipping', 'shipping', 'taxBehavior', 'discounts', 'metadata', 'product'];
+
+        foreach ($protectedFields as $field) {
+            yield 'forged ' . $field => [[
+                'reference' => 'shirt',
+                $field => 'forged',
+            ], 'selection.invalid'];
         }
     }
 
