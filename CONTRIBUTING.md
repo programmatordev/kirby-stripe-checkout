@@ -73,7 +73,7 @@ ddev php vendor/bin/phpunit --testsuite "Plugin Unit"
 ddev php vendor/bin/phpunit --testsuite "Plugin Integration"
 ```
 
-Tests cover plugin behavior and public contracts. `tests/Support` contains only the minimum infrastructure needed to exercise those contracts; support utilities are not treated as product behavior and are not tested independently. Unit tests do not boot Kirby. Plugin integration tests construct a fresh application with unique disposable content, site, account, cache, media, and session roots for every test. Test support must not be added to runtime code or the Composer package artifact.
+Tests cover plugin behavior and public contracts. Keep scenarios readable and focused on meaningful outcomes, with explicit expected values for the behavior being tested. `tests/Support` contains only the minimum infrastructure needed to exercise those contracts; its small safety checks protect disposable storage and prevent unintended Stripe requests, rather than testing every support utility independently. Unit tests do not boot Kirby. Plugin integration tests construct a fresh application with unique disposable content, site, account, cache, media, and session roots for every test. Test support must not be added to runtime code or the Composer package artifact.
 
 The default suite is deterministic and offline. Its Stripe HTTP client rejects unexpected requests instead of contacting Stripe. Use explicit fakes and sanitized fixtures for Stripe behavior; Stripe CLI checks remain separate and opt-in.
 

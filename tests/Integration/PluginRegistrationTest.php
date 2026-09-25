@@ -5,14 +5,9 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Kirby\Cms\App;
+use Kirby\Cms\Blueprint;
 use Kirby\Plugin\Plugin;
-use ProgrammatorDev\StripeCheckout\Kirby\OptionsField;
-use ProgrammatorDev\StripeCheckout\Kirby\ProductBlueprint;
-use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
-use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
-use ProgrammatorDev\StripeCheckout\Kirby\StripePriceField;
-use ProgrammatorDev\StripeCheckout\Kirby\TaxCodeField;
-use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
+use ProgrammatorDev\StripeCheckout\StripeCheckout;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ReflectionProperty;
@@ -31,110 +26,45 @@ final class PluginRegistrationTest extends KirbyTestCase
         $this->assertSame('0.7.0', $declaredVersion->getValue($plugin));
     }
 
-    public function testRegistersTheFoundationExtensions(): void
+    public function testProductBlueprintsCanBeLoadedByTheirPublicNames(): void
     {
-        $plugin = App::plugin('programmatordev/stripe-checkout');
-
-        $this->assertInstanceOf(Plugin::class, $plugin);
-        $extensions = $plugin->extends();
-        $blueprints = $extensions['blueprints'] ?? null;
-        $pageModels = $extensions['pageModels'] ?? null;
-        $fields = $extensions['fields'] ?? null;
-        $fieldMethods = $extensions['fieldMethods'] ?? null;
-        $siteMethods = $extensions['siteMethods'] ?? null;
-        $areas = $extensions['areas'] ?? null;
-        $translations = $extensions['translations'] ?? null;
-
-        $pluginOptions = ['cache' => [
-            'prices' => true,
-            'taxCodes' => true,
-        ]];
-
-        $this->assertSame($pluginOptions, $extensions['options']);
-        $this->assertIsArray($blueprints);
-        $this->assertSame(
-            [SettingsBlueprint::class, 'load'],
-            $blueprints['pages/stripe-checkout'],
-        );
-        $productBlueprints = [
-            'fields/stripe-checkout/name' => [ProductBlueprint::class, 'name'],
-            'fields/stripe-checkout/price' => [ProductBlueprint::class, 'price'],
-            'fields/stripe-checkout/stripe-price' => [ProductBlueprint::class, 'stripePrice'],
-            'fields/stripe-checkout/tax-code' => [ProductBlueprint::class, 'taxCode'],
-            'fields/stripe-checkout/description' => [ProductBlueprint::class, 'description'],
-            'fields/stripe-checkout/images' => [ProductBlueprint::class, 'images'],
-            'fields/stripe-checkout/sku' => [ProductBlueprint::class, 'sku'],
-            'fields/stripe-checkout/requires-shipping' => [ProductBlueprint::class, 'requiresShipping'],
-            'fields/stripe-checkout/options' => [ProductBlueprint::class, 'options'],
+        $this->kirby = $this->kirby->clone([
+            'options' => [
+                'programmatordev.stripe-checkout' => [
+                    'settings' => ['currency' => 'EUR'],
+                ],
+            ],
+        ]);
+        $blueprints = [
+            'name' => 'text',
+            'price' => 'text',
+            'stripe-price' => 'stripe-checkout-price',
+            'tax-code' => 'stripe-checkout-tax-code',
+            'description' => 'textarea',
+            'images' => 'files',
+            'sku' => 'text',
+            'requires-shipping' => 'select',
+            'options' => 'stripe-checkout-options',
         ];
 
-        foreach ($productBlueprints as $name => $definition) {
-            $this->assertSame($definition, $blueprints[$name] ?? null);
+        foreach ($blueprints as $name => $type) {
+            $blueprint = Blueprint::load('fields/stripe-checkout/' . $name);
+
+            $this->assertSame($type, $blueprint['type'], $name);
         }
-
-        $this->assertIsArray($pageModels);
-        $this->assertSame(StripeCheckoutPage::class, $pageModels['stripe-checkout']);
-        $this->assertIsArray($fields);
-        $this->assertSame(OptionsField::class, $fields['stripe-checkout-options']);
-        $this->assertSame(StripePriceField::class, $fields['stripe-checkout-price']);
-        $this->assertSame(TaxCodeField::class, $fields['stripe-checkout-tax-code']);
-        $this->assertIsArray($fieldMethods);
-        $this->assertSame(
-            ['toProductOptions', 'toProductStripePrice'],
-            array_keys($fieldMethods),
-        );
-        $this->assertIsCallable($fieldMethods['toProductOptions']);
-        $this->assertIsCallable($fieldMethods['toProductStripePrice']);
-        $this->assertIsArray($siteMethods);
-        $this->assertSame(['stripeCheckout'], array_keys($siteMethods));
-        $this->assertIsCallable($siteMethods['stripeCheckout']);
-        $this->assertIsArray($areas);
-        $this->assertSame(
-            [StripeCheckoutArea::class, 'definition'],
-            $areas['stripe-checkout'],
-        );
-        $this->assertSame([
-            'settings.read' => false,
-            'settings.update' => false,
-            'diagnostics.read' => false,
-            'prices.read' => false,
-            'taxCodes.read' => false,
-            'orders.read' => false,
-            'orders.update' => false,
-        ], $extensions['permissions']);
-        $this->assertIsArray($translations);
-        $this->assertSame(['en', 'pt_PT'], array_keys($translations));
-        $this->assertSame(
-            $pluginOptions,
-            $this->kirby->option('programmatordev.stripe-checkout'),
-        );
-    }
-
-    public function testDoesNotExposeTheLegacyGlobalHelpers(): void
-    {
-        $this->assertFalse(function_exists('cart'));
-        $this->assertFalse(function_exists('stripeCheckout'));
-    }
-
-    public function testShipsTheCompiledPanelFieldAssets(): void
-    {
-        $root = dirname(__DIR__, 2);
-
-        $this->assertFileExists($root . '/index.js');
-        $this->assertFileExists($root . '/index.css');
     }
 
     public function testPluginRemainsRegisteredAcrossFreshApplications(): void
     {
-        $firstPlugin = App::plugin('programmatordev/stripe-checkout');
+        // Kirby's dynamically registered Site methods are not visible to PHPStan.
+        /** @phpstan-ignore-next-line method.notFound */
+        $this->assertInstanceOf(StripeCheckout::class, $this->kirby->site()->stripeCheckout());
 
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start();
         $this->kirby = $this->environment->app();
 
-        $secondPlugin = App::plugin('programmatordev/stripe-checkout');
-
-        $this->assertInstanceOf(Plugin::class, $secondPlugin);
-        $this->assertNotSame($firstPlugin, $secondPlugin);
+        /** @phpstan-ignore-next-line method.notFound */
+        $this->assertInstanceOf(StripeCheckout::class, $this->kirby->site()->stripeCheckout());
     }
 }

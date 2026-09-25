@@ -13,7 +13,6 @@ use Kirby\Panel\View;
 use ProgrammatorDev\StripeCheckout\Kirby\PluginPermissions;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
-use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
@@ -637,7 +636,7 @@ final class PanelAreaTest extends KirbyTestCase
          *   views: array{0: array{pattern: string, action: callable(): array<string, mixed>}}
          * } $area
          */
-        $area = StripeCheckoutArea::definition($this->kirby);
+        $area = $this->kirby->load()->areas()['stripe-checkout'];
 
         return $area;
     }

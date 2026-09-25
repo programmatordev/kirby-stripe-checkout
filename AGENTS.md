@@ -61,6 +61,12 @@
 
 - Run project tooling through DDEV by default. Stripe CLI is an operating-system development tool, not a project dependency.
 - Test plugin behavior rather than test infrastructure or implementation details.
+- Each test should protect an identifiable behavior, public contract, or regression. Do not add tests merely because a class or method exists, or assert private wiring that can change without affecting behavior.
+- Keep scenarios readable: make the relevant inputs, action, and expected outcome visible. Share repetitive setup only when it simplifies the tests; avoid elaborate fixture builders and helpers that hide the scenario.
+- Keep expected mapping results independent of the production transformation under test. Use explicit expected values for the contract being verified.
+- Put exhaustive edge cases at the boundary responsible for the rule. Use representative integration cases to verify wiring, and retain combinations that exercise meaningful interactions rather than repeating unrelated assertions across a matrix.
+- Organize tests by behavior and responsibility, not a required test-per-class pattern. Consolidate duplicates without removing distinct payment, persistence, security, or concurrency guarantees.
+- Keep a small number of infrastructure safety tests for disposable storage and blocked network access; do not build a separate suite for incidental test helpers.
 - Use unit tests for isolated domain behavior and integration tests in a real, disposable Kirby application for Kirby contracts.
 - Keep the default suite deterministic and offline. Stripe interactions must use explicit fakes or sanitized fixtures unless an explicit Stripe-assisted check is being run.
 - Cover correctness-critical payment, order, webhook, and idempotency behavior even when a coverage percentage would not require it. Coverage is a diagnostic metric, not a goal of 100 percent.
