@@ -4,16 +4,25 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Test\Unit\Checkout;
 
+use Brick\Money\Money;
 use InvalidArgumentException;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartEntry;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartSnapshot;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptBinding;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptToken;
+use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
+use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
+use ProgrammatorDev\StripeCheckout\Product\Price;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 
 final class AttemptBindingTest extends TestCase
@@ -147,6 +156,123 @@ final class AttemptBindingTest extends TestCase
         yield 'both' => ['user://customer', 'guest'];
         yield 'email' => ['customer@example.com', null];
         yield 'bare scheme' => ['user://', null];
+    }
+
+    #[DataProvider('compatibleActorsAndSources')]
+    public function testCheckoutCompatibilityChecksActorAndSource(
+        bool $authenticated,
+        CheckoutSource $checkoutSource,
+        ?string $userUuid,
+        ?string $guestReference,
+        bool $compatible,
+    ): void {
+        $binding = $this->cartBinding($authenticated);
+        $checkout = $this->checkout($checkoutSource, $userUuid);
+
+        if ($compatible === false) {
+            $this->expectException(CheckoutInputException::class);
+            $this->expectExceptionMessage(CheckoutErrorCode::ATTEMPT_CONFLICT);
+        }
+
+        $binding->assertCompatibleCheckout($checkout, $guestReference);
+        $this->addToAssertionCount(1);
+    }
+
+    #[DataProvider('compatibleActorsAndSources')]
+    public function testOrderCompatibilityChecksActorAndSource(
+        bool $authenticated,
+        CheckoutSource $checkoutSource,
+        ?string $userUuid,
+        ?string $guestReference,
+        bool $compatible,
+    ): void {
+        $binding = $this->cartBinding($authenticated);
+        $order = $this->order($this->checkout($checkoutSource, $userUuid));
+
+        if ($compatible === false) {
+            $this->expectException(CheckoutInputException::class);
+            $this->expectExceptionMessage(CheckoutErrorCode::ATTEMPT_CONFLICT);
+        }
+
+        $binding->assertCompatibleOrder($order, $guestReference);
+        $this->addToAssertionCount(1);
+    }
+
+    /** @return iterable<string, array{bool, CheckoutSource, ?string, ?string, bool}> */
+    public static function compatibleActorsAndSources(): iterable
+    {
+        yield 'matching guest' => [false, CheckoutSource::Cart, null, 'guest', true];
+        yield 'matching user' => [true, CheckoutSource::Cart, 'user://customer', null, true];
+        yield 'different source' => [false, CheckoutSource::Direct, null, 'guest', false];
+        yield 'different guest' => [false, CheckoutSource::Cart, null, 'other', false];
+        yield 'missing guest' => [false, CheckoutSource::Cart, null, null, false];
+        yield 'different user' => [true, CheckoutSource::Cart, 'user://other', null, false];
+        yield 'user logged out' => [true, CheckoutSource::Cart, null, 'guest', false];
+        yield 'guest logged in' => [false, CheckoutSource::Cart, 'user://customer', null, false];
+    }
+
+    public function testOrderCompatibilityRejectsADifferentCartRevision(): void
+    {
+        $binding = $this->cartBinding();
+        $checkout = $this->checkout();
+        $binding->assertCompatibleCheckout($checkout, 'guest');
+        $binding->assertCompatibleOrder($this->order($checkout), 'guest');
+
+        $this->expectException(CheckoutInputException::class);
+        $this->expectExceptionMessage(CheckoutErrorCode::ATTEMPT_CONFLICT);
+        $binding->assertCompatibleOrder($this->order($checkout, revision: 'other'), 'guest');
+    }
+
+    public function testDirectOrderCompatibilityAcceptsNoCartRevision(): void
+    {
+        $binding = AttemptBinding::direct([new ProductRequest('shirt')], hash('sha256', 'request'), guestReference: 'guest');
+        $checkout = $this->checkout(CheckoutSource::Direct);
+
+        $binding->assertCompatibleCheckout($checkout, 'guest');
+        $binding->assertCompatibleOrder($this->order($checkout), 'guest');
+        $this->addToAssertionCount(2);
+    }
+
+    private function cartBinding(bool $authenticated = false): AttemptBinding
+    {
+        return AttemptBinding::cart(
+            cart: $this->cart(),
+            contextFingerprint: hash('sha256', 'request'),
+            userUuid: $authenticated ? 'user://customer' : null,
+            guestReference: $authenticated ? null : 'guest',
+        );
+    }
+
+    private function checkout(CheckoutSource $checkoutSource = CheckoutSource::Cart, ?string $userUuid = null): CheckoutContext
+    {
+        return new CheckoutContext(
+            items: [new CheckoutLineItem(new Product(
+                request: new ProductRequest('shirt'),
+                name: 'Shirt',
+                requiresShipping: false,
+                price: new Price(Money::of('16', 'EUR')),
+            ))],
+            languageCode: null,
+            locale: 'en_US',
+            userUuid: $userUuid,
+            checkoutSource: $checkoutSource,
+            uiMode: UiMode::Hosted,
+        );
+    }
+
+    private function order(CheckoutContext $checkout, string $revision = 'revision'): OrderCreationContext
+    {
+        return new OrderCreationContext(
+            uuid: 'checkoutorder001',
+            orderNumber: 'ORD-CHECKOUTORDER001',
+            checkoutSource: $checkout->checkoutSource(),
+            cartRevision: $checkout->checkoutSource() === CheckoutSource::Cart ? $revision : null,
+            userUuid: $checkout->userUuid(),
+            languageCode: $checkout->languageCode(),
+            uiMode: $checkout->uiMode(),
+            currency: $checkout->currency()->getCurrencyCode(),
+            lineItems: array_map(OrderLineItemSnapshot::fromCheckoutLineItem(...), $checkout->items()),
+        );
     }
 
     private function cart(string $id = 'cart', string $revision = 'revision'): CartSnapshot
