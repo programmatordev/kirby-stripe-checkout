@@ -313,6 +313,55 @@ final class StripeApiCheckoutSessionGatewayTest extends KirbyTestCase
         $this->assertNull($record->url);
     }
 
+    public function testNormalizesExpandedShippingReferencesWithoutDroppingMalformedOptions(): void
+    {
+        $client = $this->httpClient();
+        $client->method('request')->willReturn([
+            json_encode([
+                'object' => 'checkout.session',
+                'id' => 'cs_test_session',
+                'client_reference_id' => null,
+                'client_secret' => null,
+                'created' => null,
+                'currency' => null,
+                'expires_at' => null,
+                'integration_identifier' => null,
+                'livemode' => false,
+                'metadata' => [],
+                'mode' => null,
+                'payment_status' => null,
+                'status' => null,
+                'ui_mode' => null,
+                'url' => null,
+                'shipping_options' => [
+                    ['shipping_rate' => ['id' => 'shr_standard', 'object' => 'shipping_rate']],
+                    ['shipping_rate' => 'shr_express'],
+                    ['shipping_rate' => ['object' => 'shipping_rate']],
+                    ['shipping_rate' => ['id' => 123]],
+                    'unexpected',
+                ],
+            ], JSON_THROW_ON_ERROR),
+            200,
+            [],
+        ]);
+        ApiRequestor::setHttpClient($client);
+        $gateway = new StripeApiCheckoutSessionGateway(
+            (new StripeApiClientFactory())->create(
+                new StripeConfiguration('sk_test_gateway', null, null),
+            ),
+        );
+
+        $record = $gateway->retrieve('cs_test_session');
+
+        $this->assertSame([
+            ['shipping_rate' => 'shr_standard'],
+            ['shipping_rate' => 'shr_express'],
+            ['shipping_rate' => null],
+            ['shipping_rate' => 123],
+            'unexpected',
+        ], $record->shippingOptions);
+    }
+
     /** @return ClientInterface&MockObject */
     private function httpClient(): ClientInterface
     {

@@ -14,7 +14,7 @@ final readonly class CheckoutSessionRecord
     /**
      * @param array<string, mixed> $metadata
      * @param array<string, mixed> $orderSnapshotSource Selected raw Session fields for strict order-snapshot normalization.
-     * @param mixed $shippingOptions Raw provider value retained for request-bound validation.
+     * @param mixed $shippingOptions Untrusted provider options with expanded Rates reduced to IDs.
      */
     public function __construct(
         public ?string $id,

@@ -117,9 +117,8 @@ final class CheckoutSessionFactory
                 throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
             }
 
-            // The Session returns each generated Rate as a scalar reference when
-            // the gateway does not request expansion.
-            // https://docs.stripe.com/api/checkout/sessions/object#checkout_session_object-shipping_options-shipping_rate
+            // The gateway reduces expanded Rates to IDs; all references remain
+            // untrusted until the association validates them against the request.
             $ids[] = $shippingOption['shipping_rate'] ?? null;
         }
 

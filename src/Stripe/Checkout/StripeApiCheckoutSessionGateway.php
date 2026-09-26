@@ -121,9 +121,27 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
             url: $this->nullableString($session->url),
             clientSecret: $this->nullableString($session->client_secret),
             orderSnapshotSource: $orderSnapshotSource,
-            // Keep this raw until it can be checked against the exact request.
-            shippingOptions: $sessionData['shipping_options'] ?? null,
+            shippingOptions: $this->shippingOptions($sessionData['shipping_options'] ?? null),
         );
+    }
+
+    private function shippingOptions(mixed $shippingOptions): mixed
+    {
+        if (is_array($shippingOptions) === false) {
+            return $shippingOptions;
+        }
+
+        foreach ($shippingOptions as $key => $shippingOption) {
+            if (is_array($shippingOption) && is_array($shippingOption['shipping_rate'] ?? null)) {
+                // Request filters can expand Rates. Keep only their references,
+                // preserving keys and malformed values for request-bound validation.
+                // https://docs.stripe.com/api/checkout/sessions/object#checkout_session_object-shipping_options-shipping_rate
+                $shippingOption['shipping_rate'] = $shippingOption['shipping_rate']['id'] ?? null;
+                $shippingOptions[$key] = $shippingOption;
+            }
+        }
+
+        return $shippingOptions;
     }
 
     private function nullableBoolean(mixed $value): ?bool

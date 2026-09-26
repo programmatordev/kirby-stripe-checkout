@@ -53,13 +53,18 @@ use ProgrammatorDev\StripeCheckout\Shipping\ShippingOption;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailure;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailureType;
+use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionGatewayInterface;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Exception\CheckoutSessionGatewayException;
+use ProgrammatorDev\StripeCheckout\Stripe\Checkout\StripeApiCheckoutSessionGateway;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
+use ProgrammatorDev\StripeCheckout\Stripe\StripeApiClientFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\InitiatingShippingSnapshotFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\Stripe\FakeCheckoutSessionGateway;
 use RuntimeException;
+use Stripe\ApiRequestor;
+use Stripe\HttpClient\ClientInterface;
 use Stripe\Util\ApiVersion;
 
 final class CheckoutSessionCreatorTest extends KirbyTestCase
@@ -205,6 +210,90 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $this->assertSame(['order.created', 'session.created'], $types);
     }
 
+    public function testAssociatesExpandedShippingRatesAndResumesWithScalarReferences(): void
+    {
+        $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
+        $configuration = $this->configure(UiMode::Hosted);
+        $checkout = $this->checkout();
+        $order = $this->order($checkout);
+        $request = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
+        $parameters = $request->parameters();
+        $this->requestFilter = static function (array $parameters): array {
+            $parameters['expand'] = ['shipping_options.shipping_rate'];
+
+            return $parameters;
+        };
+        $session = [
+            'id' => 'cs_test_expanded_shipping',
+            'object' => 'checkout.session',
+            'client_reference_id' => $order->pageUuid(),
+            'client_secret' => null,
+            'created' => $now->getTimestamp(),
+            'currency' => 'eur',
+            'expires_at' => $parameters['expires_at'],
+            'integration_identifier' => $parameters['integration_identifier'],
+            'livemode' => false,
+            'metadata' => $parameters['metadata'],
+            'mode' => 'payment',
+            'payment_status' => 'unpaid',
+            'status' => 'open',
+            'ui_mode' => 'hosted_page',
+            'url' => 'https://checkout.stripe.com/c/pay/cs_test_expanded_shipping',
+        ];
+        $httpClient = $this->createMock(ClientInterface::class);
+        $httpClient->expects($this->exactly(2))->method('request')->willReturnCallback(
+            static function (string $method, string $url, array $headers, array $parameters) use ($session): array {
+                if ($method === 'post') {
+                    self::assertSame(['shipping_options.shipping_rate'], $parameters['expand'] ?? null);
+                    $shippingRate = [
+                        'id' => 'shr_standard',
+                        'object' => 'shipping_rate',
+                        'display_name' => 'Standard delivery',
+                    ];
+                } else {
+                    self::assertSame('get', $method);
+                    self::assertArrayNotHasKey('expand', $parameters);
+                    $shippingRate = 'shr_standard';
+                }
+
+                $session['shipping_options'] = [['shipping_rate' => $shippingRate]];
+
+                return [json_encode($session, JSON_THROW_ON_ERROR), 200, []];
+            },
+        );
+        ApiRequestor::setHttpClient($httpClient);
+        $gateway = new StripeApiCheckoutSessionGateway(
+            (new StripeApiClientFactory())->create($configuration->stripe()),
+        );
+        $creator = $this->creator($configuration, $gateway);
+        $token = $this->token();
+        $presentation = $creator->create(
+            checkout: $checkout,
+            shipping: new ShippingContext('PT'),
+            binding: $this->binding(),
+            token: $token,
+            guestReference: 'guest-browser',
+            now: $now,
+        );
+        $this->assertPresentation($presentation, UiMode::Hosted, reused: false);
+        $store = new OrderPageStore($this->kirby);
+        $page = $store->order($order->pageUuid()) ?? $this->fail('Order was not persisted.');
+        $data = $store->data($page);
+        $this->assertSame(CheckoutStatus::Open->value, $data['checkoutStatus']);
+        $this->assertSame('cs_test_expanded_shipping', $data['stripeCheckoutSessionId']);
+        $this->assertSame(['shr_standard'], $data['stripeShippingRateIds']);
+
+        $resumed = $creator->create(
+            checkout: $checkout,
+            shipping: new ShippingContext('PT'),
+            binding: $this->binding(),
+            token: $token,
+            guestReference: 'guest-browser',
+            now: $now->add(new DateInterval('PT1M')),
+        );
+        $this->assertPresentation($resumed, UiMode::Hosted, reused: true);
+    }
+
     #[DataProvider('invalidSessionShippingOptions')]
     public function testRejectsInvalidSessionShippingOptions(mixed $shippingOptions): void
     {
@@ -242,7 +331,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         yield 'empty' => [[]];
         yield 'non-list' => [['option' => ['shipping_rate' => 'shr_test_option_0']]];
         yield 'invalid reference' => [[['shipping_rate' => 'rate_invalid']]];
-        yield 'expanded reference' => [[['shipping_rate' => ['id' => 'shr_test_option_0']]]];
+        yield 'unnormalized reference' => [[['shipping_rate' => ['id' => 'shr_test_option_0']]]];
         yield 'unexpected extra option' => [[
             ['shipping_rate' => 'shr_test_option_0'],
             ['shipping_rate' => 'shr_test_option_1'],
@@ -1679,7 +1768,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
     /** @param Closure(string): string|null $numberFormatter */
     private function creator(
         Configuration $configuration,
-        FakeCheckoutSessionGateway $gateway,
+        CheckoutSessionGatewayInterface $gateway,
         string $stripeApiVersion = ApiVersion::CURRENT,
         ?Closure $numberFormatter = null,
     ): CheckoutSessionCreator {
