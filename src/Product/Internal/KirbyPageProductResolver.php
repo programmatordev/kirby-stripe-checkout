@@ -60,10 +60,14 @@ final class KirbyPageProductResolver implements ProductResolverInterface
             throw new InvalidProductException(ProductErrorCode::SELECTED_OPTIONS_INVALID);
         }
 
-        [$images, $image, $imagesTruncated] = $this->images(
+        $imageFiles = $this->images(
             $displayContent,
             $technicalContent,
             $fields->images(),
+        );
+        $imageUrls = array_map(
+            static fn(File $image): string => $image->url(),
+            array_slice($imageFiles, 0, 8),
         );
         $description = $fields->description() === null
             ? null
@@ -89,11 +93,11 @@ final class KirbyPageProductResolver implements ProductResolverInterface
             price: $price,
             selectedOptions: $selectedOptions,
             description: $description,
-            imageUrls: $images,
+            imageUrls: $imageUrls,
             sku: $sku,
-            metadata: $imagesTruncated ? ['imagesTruncated' => true] : [],
+            metadata: count($imageFiles) > 8 ? ['imagesTruncated' => true] : [],
             variantId: $variant?->id(),
-            image: $image,
+            image: $imageFiles[0] ?? null,
             taxCode: $this->commerce->taxCode($technicalContent, $fields, $variant, $context),
         );
     }
@@ -144,12 +148,11 @@ final class KirbyPageProductResolver implements ProductResolverInterface
 
     /**
      * @param list<string> $fields
-     * @return array{list<string>, ?File, bool}
+     * @return list<File>
      */
     private function images(Content $display, Content $technical, array $fields): array
     {
-        $urls = [];
-        $image = null;
+        $imagesByUrl = [];
 
         foreach ($fields as $field) {
             $files = $this->files($display, $field);
@@ -162,17 +165,14 @@ final class KirbyPageProductResolver implements ProductResolverInterface
                 $url = $file->url();
 
                 if (preg_match('#^https?://#', $url) === 1) {
-                    $urls[$url] = true;
                     // Keep the original File for templates; never reconstruct
                     // a local file from a URL supplied by a remote catalogue.
-                    $image ??= $file;
+                    $imagesByUrl[$url] ??= $file;
                 }
             }
         }
 
-        $all = array_keys($urls);
-
-        return [array_slice($all, 0, 8), $image, count($all) > 8];
+        return array_values($imagesByUrl);
     }
 
     /** @return Files<File> */

@@ -435,7 +435,7 @@ final class OrderPageStore
     {
         OrderData::uuid($uuid);
         $pageId = OrderSchema::ORDERS_PAGE_ID . '/' . (new Uri($uuid))->host();
-        $deletion = OrderWriteLock::run($this->kirby, $pageId, function () use ($pageId, $policy, $now): ?array {
+        $deletion = OrderWriteLock::run($this->kirby, $pageId, function () use ($pageId, $policy, $now): ?OrderDeletion {
             // An earlier cleanup candidate may since have been paid. Eligibility
             // must be checked again against the record protected by this lock.
             $page = $this->requirePage($pageId);
@@ -467,14 +467,14 @@ final class OrderPageStore
 
             $this->kirby->cache('pages')->flush();
 
-            return [$page, $event];
+            return new OrderDeletion($page, $event);
         });
 
         if ($deletion === null) {
             return false;
         }
 
-        (new OrderHookDispatcher($this->kirby))->dispatchDeletion($deletion[0], $deletion[1]);
+        (new OrderHookDispatcher($this->kirby))->dispatchDeletion($deletion->order(), $deletion->event());
 
         return true;
     }

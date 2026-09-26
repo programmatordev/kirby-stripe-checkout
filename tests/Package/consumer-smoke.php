@@ -129,7 +129,12 @@ try {
         ? ($blueprints['pages/stripe-checkout'] ?? null)
         : null;
 
-    if (($extensions['options'] ?? null) !== ['cache' => ['prices' => true]]) {
+    if (($extensions['options'] ?? null) !== [
+        'cache' => [
+            'prices' => true,
+            'taxCodes' => true,
+        ],
+    ]) {
         throw new RuntimeException('The package registered an unexpected runtime extension.');
     }
 
@@ -199,6 +204,7 @@ try {
             'settings.update' => false,
             'diagnostics.read' => false,
             'prices.read' => false,
+            'taxCodes.read' => false,
             'orders.read' => false,
             'orders.update' => false,
         ]
