@@ -13,6 +13,7 @@ use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Stripe\CataloguePagination;
+use ProgrammatorDev\StripeCheckout\Stripe\CatalogueState;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogue;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogueErrorCode;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
@@ -80,7 +81,7 @@ final class StripePriceField extends FieldClass
 
             $state = $runtime->stripePriceCatalogue()->cached($currency);
             $selected = $this->selected(
-                $state['items'],
+                $state->items(),
                 $value,
                 $this->sourceInactive === false,
             );
@@ -233,16 +234,16 @@ final class StripePriceField extends FieldClass
         );
 
         return [
-            'catalogue' => self::status($result),
+            'catalogue' => self::status($result->state()),
             'data' => array_map(
                 static fn(StripePrice $price): array => self::item($price),
-                $result['items'],
+                $result->items(),
             ),
             'pagination' => [
                 'limit' => CataloguePagination::LIMIT,
-                'page' => $result['page'],
-                'pages' => $result['pages'],
-                'total' => $result['total'],
+                'page' => $result->page(),
+                'pages' => $result->pages(),
+                'total' => $result->total(),
             ],
         ];
     }
@@ -267,7 +268,7 @@ final class StripePriceField extends FieldClass
         if ($view === 'prices') {
             $productId = is_string($productId) ? $productId : '';
             $prices = array_values(array_filter(
-                $state['items'],
+                $state->items(),
                 static fn(StripePrice $price): bool => $price->productId() === $productId
                     && self::priceMatches($price, $query),
             ));
@@ -278,7 +279,7 @@ final class StripePriceField extends FieldClass
         } else {
             $groups = [];
 
-            foreach ($state['items'] as $price) {
+            foreach ($state->items() as $price) {
                 $groups[$price->productId()] ??= [
                     'id' => $price->productId(),
                     'name' => $price->name(),
@@ -300,7 +301,7 @@ final class StripePriceField extends FieldClass
 
         return [
             'catalogue' => self::status($state),
-            ...self::paginate($data, $page),
+            ...self::paginate($data, $page, $state),
         ];
     }
 
@@ -322,7 +323,7 @@ final class StripePriceField extends FieldClass
         )), true);
         $data = [];
 
-        foreach ($state['items'] as $price) {
+        foreach ($state->items() as $price) {
             if (isset($priceIds[$price->priceId()])) {
                 $data[] = self::item($price);
             }
@@ -330,7 +331,7 @@ final class StripePriceField extends FieldClass
 
         return [
             'catalogue' => self::status($state),
-            ...self::paginate($data, 1),
+            ...self::paginate($data, 1, $state),
         ];
     }
 
@@ -482,19 +483,20 @@ final class StripePriceField extends FieldClass
 
     /**
      * @param list<array<string, mixed>> $data
+     * @param CatalogueState<StripePrice> $state
      * @return array{data: list<array<string, mixed>>, pagination: array{limit: int, page: int, pages: int, total: int}}
      */
-    private static function paginate(array $data, int $page): array
+    private static function paginate(array $data, int $page, CatalogueState $state): array
     {
-        $result = CataloguePagination::paginate($data, $page);
+        $result = CataloguePagination::paginate($data, $page, $state);
 
         return [
-            'data' => $result['items'],
+            'data' => $result->items(),
             'pagination' => [
                 'limit' => CataloguePagination::LIMIT,
-                'page' => $result['page'],
-                'pages' => $result['pages'],
-                'total' => $result['total'],
+                'page' => $result->page(),
+                'pages' => $result->pages(),
+                'total' => $result->total(),
             ],
         ];
     }
@@ -507,23 +509,17 @@ final class StripePriceField extends FieldClass
     }
 
     /**
-     * @param array{items: list<StripePrice>, refreshedAt: ?int, failedAt: ?int, error: ?string} $state
+     * @template T
+     * @param CatalogueState<T> $state
      * @return array{error: ?string, failedAt: ?int, refreshedAt: ?int, status: string}
      */
-    private static function status(array $state): array
+    private static function status(CatalogueState $state): array
     {
-        $status = match (true) {
-            $state['error'] !== null && $state['items'] !== [] => 'stale',
-            $state['error'] !== null => 'error',
-            $state['refreshedAt'] !== null => 'ready',
-            default => 'empty',
-        };
-
         return [
-            'error' => $state['error'],
-            'failedAt' => $state['failedAt'],
-            'refreshedAt' => $state['refreshedAt'],
-            'status' => $status,
+            'error' => $state->error(),
+            'failedAt' => $state->failedAt(),
+            'refreshedAt' => $state->refreshedAt(),
+            'status' => $state->status(),
         ];
     }
 }

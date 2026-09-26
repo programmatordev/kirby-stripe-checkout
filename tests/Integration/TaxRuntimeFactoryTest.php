@@ -33,7 +33,7 @@ final class TaxRuntimeFactoryTest extends KirbyTestCase
         (new TaxCodeCatalogue($codesCache, $provider, $foreignCredentials->secretKeyFingerprint('tax-codes')))->refresh();
         $runtime = new RuntimeFactory($this->kirby);
 
-        $this->assertSame('txcd_test', $runtime->taxCodeCatalogue()->cached()['items'][0]->id());
+        $this->assertSame('txcd_test', $runtime->taxCodeCatalogue()->cached()->items()[0]->id());
         $this->assertNull($runtime->taxCodeCatalogue()->find('txcd_foreign'));
         $this->assertNotNull($codesCache->retrieve($credentials->secretKeyFingerprint('tax-codes')));
     }
@@ -42,6 +42,6 @@ final class TaxRuntimeFactoryTest extends KirbyTestCase
     {
         $runtime = new RuntimeFactory($this->kirby);
 
-        $this->assertSame([], $runtime->taxCodeCatalogue()->cached()['items']);
+        $this->assertSame([], $runtime->taxCodeCatalogue()->cached()->items());
     }
 }

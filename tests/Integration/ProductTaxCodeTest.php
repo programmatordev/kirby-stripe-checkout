@@ -99,7 +99,7 @@ final class ProductTaxCodeTest extends KirbyTestCase
         $runtime = new RuntimeFactory($this->kirby);
 
         $this->assertNull($runtime->checkoutResolver()->resolveProduct(new ProductRequest($page->id()))->taxCode());
-        $this->assertSame([], $runtime->taxCodeCatalogue()->cached()['items']);
+        $this->assertSame([], $runtime->taxCodeCatalogue()->cached()->items());
     }
 
     /** @return iterable<string, array{?string}> */
@@ -131,7 +131,7 @@ final class ProductTaxCodeTest extends KirbyTestCase
 
         $this->assertSame('txcd_test', $product->taxCode()?->id());
         $this->assertSame([null, null], $provider->listCursors);
-        $this->assertSame('tax_codes.refresh_failed', $catalogue->cached()['error']);
+        $this->assertSame('tax_codes.refresh_failed', $catalogue->cached()->error());
     }
 
     public function testVariantsInheritTheProductClassification(): void

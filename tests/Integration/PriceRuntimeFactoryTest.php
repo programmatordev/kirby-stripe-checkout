@@ -43,7 +43,7 @@ final class PriceRuntimeFactoryTest extends KirbyTestCase
         }
 
         $catalogue = (new RuntimeFactory($this->kirby))->stripePriceCatalogue();
-        $items = $catalogue->cached('EUR')['items'];
+        $items = $catalogue->cached('EUR')->items();
 
         if ($secretKey === null) {
             $this->assertSame([], $items);
@@ -53,8 +53,8 @@ final class PriceRuntimeFactoryTest extends KirbyTestCase
 
         $this->assertCount(1, $items);
         $this->assertSame($secretKey, $items[0]->name());
-        $this->assertSame($secretKey, $catalogue->load('EUR')['items'][0]->name());
-        $this->assertSame([], $catalogue->cached('USD')['items']);
+        $this->assertSame($secretKey, $catalogue->load('EUR')->items()[0]->name());
+        $this->assertSame([], $catalogue->cached('USD')->items());
     }
 
     /** @return array<string, array{?string}> */

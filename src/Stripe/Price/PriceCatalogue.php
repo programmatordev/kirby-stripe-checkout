@@ -7,8 +7,10 @@ namespace ProgrammatorDev\StripeCheckout\Stripe\Price;
 use Kirby\Cache\Cache;
 use ProgrammatorDev\StripeCheckout\Money\MoneySnapshot;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
+use ProgrammatorDev\StripeCheckout\Stripe\CataloguePage;
 use ProgrammatorDev\StripeCheckout\Stripe\CataloguePagination;
 use ProgrammatorDev\StripeCheckout\Stripe\CatalogueRefreshPolicy;
+use ProgrammatorDev\StripeCheckout\Stripe\CatalogueState;
 use Throwable;
 
 /**
@@ -28,23 +30,19 @@ final class PriceCatalogue
         private readonly string $cacheKey,
     ) {}
 
-    /**
-     * @return array{items: list<StripePrice>, refreshedAt: ?int, failedAt: ?int, error: ?string}
-     */
-    public function cached(string $currency): array
+    /** @return CatalogueState<StripePrice> */
+    public function cached(string $currency): CatalogueState
     {
         return $this->decode($this->cache->get($this->key($currency)));
     }
 
-    /**
-     * @return array{items: list<StripePrice>, refreshedAt: ?int, failedAt: ?int, error: ?string}
-     */
-    public function load(string $currency): array
+    /** @return CatalogueState<StripePrice> */
+    public function load(string $currency): CatalogueState
     {
         $state = $this->cached($currency);
         $shouldRefresh = CatalogueRefreshPolicy::shouldRefresh(
-            refreshedAt: $state['refreshedAt'],
-            failedAt: $state['failedAt'],
+            refreshedAt: $state->refreshedAt(),
+            failedAt: $state->failedAt(),
             refreshAfterSeconds: self::REFRESH_AFTER_SECONDS,
             failureCooldownSeconds: self::FAILED_REFRESH_COOLDOWN_SECONDS,
         );
@@ -54,7 +52,7 @@ final class PriceCatalogue
 
     public function find(string $priceId, string $currency): ?StripePrice
     {
-        foreach ($this->load($currency)['items'] as $price) {
+        foreach ($this->load($currency)->items() as $price) {
             if ($price->priceId() === $priceId) {
                 return $price;
             }
@@ -63,10 +61,8 @@ final class PriceCatalogue
         return null;
     }
 
-    /**
-     * @return array{items: list<StripePrice>, refreshedAt: ?int, failedAt: ?int, error: ?string}
-     */
-    public function refresh(string $currency): array
+    /** @return CatalogueState<StripePrice> */
+    public function refresh(string $currency): CatalogueState
     {
         $previous = $this->cached($currency);
 
@@ -114,40 +110,34 @@ final class PriceCatalogue
                     <=> [$right->name(), $right->nickname() ?? '', $right->priceId()];
             });
 
-            $state = [
-                'items' => array_values($items),
-                'refreshedAt' => time(),
-                'failedAt' => null,
-                'error' => null,
-            ];
+            $state = new CatalogueState(
+                items: array_values($items),
+                refreshedAt: time(),
+                failedAt: null,
+                error: null,
+            );
             $this->cache->set($this->key($currency), $this->encode($state));
 
             return $state;
         } catch (Throwable) {
-            $state = [
-                ...$previous,
-                'failedAt' => time(),
-                'error' => PriceCatalogueErrorCode::REFRESH_FAILED,
-            ];
+            $state = $previous->withFailure(time(), PriceCatalogueErrorCode::REFRESH_FAILED);
             $this->cache->set($this->key($currency), $this->encode($state));
 
             return $state;
         }
     }
 
-    /**
-     * @return array{items: list<StripePrice>, page: int, pages: int, total: int, refreshedAt: ?int, failedAt: ?int, error: ?string}
-     */
+    /** @return CataloguePage<StripePrice, StripePrice> */
     public function search(
         string $currency,
         ?string $query = null,
         int $page = 1,
         bool $refresh = false,
-    ): array {
+    ): CataloguePage {
         $state = $refresh ? $this->refresh($currency) : $this->load($currency);
         $query = mb_strtolower(trim($query ?? ''));
-        $items = $query === '' ? $state['items'] : array_values(array_filter(
-            $state['items'],
+        $items = $query === '' ? $state->items() : array_values(array_filter(
+            $state->items(),
             static function (StripePrice $price) use ($query): bool {
                 $haystack = mb_strtolower(implode(' ', [
                     $price->priceId(),
@@ -160,10 +150,7 @@ final class PriceCatalogue
             },
         ));
 
-        return [
-            ...$state,
-            ...CataloguePagination::paginate($items, $page),
-        ];
+        return CataloguePagination::paginate($items, $page, $state);
     }
 
     private function key(string $currency): string
@@ -172,31 +159,26 @@ final class PriceCatalogue
     }
 
     /**
-     * @param array{items: list<StripePrice>, refreshedAt: ?int, failedAt: ?int, error: ?string} $state
+     * @param CatalogueState<StripePrice> $state
      * @return array<string, mixed>
      */
-    private function encode(array $state): array
+    private function encode(CatalogueState $state): array
     {
         return [
-            ...$state,
+            'refreshedAt' => $state->refreshedAt(),
+            'failedAt' => $state->failedAt(),
+            'error' => $state->error(),
             'items' => array_map(
                 static fn(StripePrice $price): array => $price->toArray(),
-                $state['items'],
+                $state->items(),
             ),
         ];
     }
 
-    /**
-     * @return array{items: list<StripePrice>, refreshedAt: ?int, failedAt: ?int, error: ?string}
-     */
-    private function decode(mixed $cached): array
+    /** @return CatalogueState<StripePrice> */
+    private function decode(mixed $cached): CatalogueState
     {
-        $empty = [
-            'items' => [],
-            'refreshedAt' => null,
-            'failedAt' => null,
-            'error' => null,
-        ];
+        $empty = $this->emptyState();
 
         if (is_array($cached) === false || is_array($cached['items'] ?? null) === false) {
             return $empty;
@@ -214,15 +196,26 @@ final class PriceCatalogue
                 $items[$price->priceId()] = $price;
             }
 
-            return [
-                'items' => array_values($items),
-                'refreshedAt' => is_int($cached['refreshedAt'] ?? null) ? $cached['refreshedAt'] : null,
-                'failedAt' => is_int($cached['failedAt'] ?? null) ? $cached['failedAt'] : null,
-                'error' => is_string($cached['error'] ?? null) ? $cached['error'] : null,
-            ];
+            return new CatalogueState(
+                items: array_values($items),
+                refreshedAt: is_int($cached['refreshedAt'] ?? null) ? $cached['refreshedAt'] : null,
+                failedAt: is_int($cached['failedAt'] ?? null) ? $cached['failedAt'] : null,
+                error: is_string($cached['error'] ?? null) ? $cached['error'] : null,
+            );
         } catch (Throwable) {
             return $empty;
         }
+    }
+
+    /** @return CatalogueState<StripePrice> */
+    private function emptyState(): CatalogueState
+    {
+        return new CatalogueState(
+            items: [],
+            refreshedAt: null,
+            failedAt: null,
+            error: null,
+        );
     }
 
     /** @param array<mixed, mixed> $item */

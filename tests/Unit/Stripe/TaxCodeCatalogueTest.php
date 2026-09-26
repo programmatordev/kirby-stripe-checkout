@@ -62,12 +62,12 @@ final class TaxCodeCatalogueTest extends TestCase
         $result = $catalogue->load();
 
         $this->assertSame([null, 'txcd_first'], $provider->listCursors);
-        $this->assertSame(['txcd_second', 'txcd_first'], array_map(static fn($code): string => $code->id(), $result['items']));
-        $this->assertTrue($result['items'][0]->isConfirmed());
-        $this->assertSame('Alpha description', $result['items'][0]->providerDescription());
-        $this->assertSame('Alpha', $result['items'][0]->label());
-        $this->assertNotNull($result['refreshedAt']);
-        $this->assertNull($result['error']);
+        $this->assertSame(['txcd_second', 'txcd_first'], array_map(static fn($code): string => $code->id(), $result->items()));
+        $this->assertTrue($result->items()[0]->isConfirmed());
+        $this->assertSame('Alpha description', $result->items()[0]->providerDescription());
+        $this->assertSame('Alpha', $result->items()[0]->label());
+        $this->assertNotNull($result->refreshedAt());
+        $this->assertNull($result->error());
         $this->assertSame('Alpha', $catalogue->find('txcd_second')?->providerName());
         $this->assertNull($catalogue->find('txcd_missing'));
         $catalogue->load();
@@ -87,12 +87,12 @@ final class TaxCodeCatalogueTest extends TestCase
         $page = $catalogue->search(page: 99);
         $match = $catalogue->search('CATEGORY 25 DESCRIPTION', page: 0);
 
-        $this->assertCount(5, $page['items']);
-        $this->assertSame(25, $page['total']);
-        $this->assertSame(2, $page['page']);
-        $this->assertSame(2, $page['pages']);
-        $this->assertSame('txcd_25', $match['items'][0]->id());
-        $this->assertSame(1, $match['page']);
+        $this->assertCount(5, $page->items());
+        $this->assertSame(25, $page->total());
+        $this->assertSame(2, $page->page());
+        $this->assertSame(2, $page->pages());
+        $this->assertSame('txcd_25', $match->items()[0]->id());
+        $this->assertSame(1, $match->page());
         $this->assertSame([null], $provider->listCursors);
     }
 
@@ -109,10 +109,10 @@ final class TaxCodeCatalogueTest extends TestCase
         $provider->failLists = true;
         $failed = $catalogue->load();
 
-        $this->assertSame('tax_codes.refresh_failed', $failed['error']);
-        $this->assertNotNull($failed['failedAt']);
-        $this->assertSame('txcd_test', $failed['items'][0]->id());
-        $this->assertSame($state['refreshedAt'], $failed['refreshedAt']);
+        $this->assertSame('tax_codes.refresh_failed', $failed->error());
+        $this->assertNotNull($failed->failedAt());
+        $this->assertSame('txcd_test', $failed->items()[0]->id());
+        $this->assertSame($state['refreshedAt'], $failed->refreshedAt());
         $catalogue->load();
         $this->assertSame([null, null], $provider->listCursors);
         $this->assertNotNull($catalogue->find('txcd_test'));
@@ -124,8 +124,8 @@ final class TaxCodeCatalogueTest extends TestCase
         $refreshed = $catalogue->load();
 
         $this->assertSame([null, null, null], $provider->listCursors);
-        $this->assertNull($refreshed['failedAt']);
-        $this->assertNull($refreshed['error']);
+        $this->assertNull($refreshed->failedAt());
+        $this->assertNull($refreshed->error());
     }
 
     public function testManualRefreshBypassesBothAgeAndFailureBackoff(): void
@@ -140,9 +140,9 @@ final class TaxCodeCatalogueTest extends TestCase
         $updated = $catalogue->refresh();
 
         $this->assertSame([null, null, null], $provider->listCursors);
-        $this->assertSame('Updated', $updated['items'][0]->providerName());
+        $this->assertSame('Updated', $updated->items()[0]->providerName());
         $this->assertNull($catalogue->find('txcd_test'));
-        $this->assertNull($updated['error']);
+        $this->assertNull($updated->error());
     }
 
     public function testCachedLookupsNeverStartAProviderReadEvenWhenTheCatalogueIsOld(): void
@@ -168,11 +168,11 @@ final class TaxCodeCatalogueTest extends TestCase
         $catalogue = new TaxCodeCatalogue(new MemoryCache(), $provider, 'test-account');
         $first = $catalogue->load();
 
-        $this->assertSame($first, $catalogue->load());
-        $this->assertSame([], $first['items']);
-        $this->assertSame('tax_codes.refresh_failed', $first['error']);
+        $this->assertEquals($first, $catalogue->load());
+        $this->assertSame([], $first->items());
+        $this->assertSame('tax_codes.refresh_failed', $first->error());
         $this->assertSame([null], $provider->listCursors);
-        $this->assertSame('tax_codes.refresh_failed', (new TaxCodeCatalogue(new MemoryCache(), null, 'missing'))->load()['error']);
+        $this->assertSame('tax_codes.refresh_failed', (new TaxCodeCatalogue(new MemoryCache(), null, 'missing'))->load()->error());
     }
 
     /** @param array<string, TaxCodeListResult> $pages */
@@ -185,9 +185,9 @@ final class TaxCodeCatalogueTest extends TestCase
         $provider->pages = $pages;
         $failed = $catalogue->refresh();
 
-        $this->assertSame('tax_codes.refresh_failed', $failed['error']);
-        $this->assertSame($original['refreshedAt'], $failed['refreshedAt']);
-        $this->assertSame('txcd_test', $failed['items'][0]->id());
+        $this->assertSame('tax_codes.refresh_failed', $failed->error());
+        $this->assertSame($original->refreshedAt(), $failed->refreshedAt());
+        $this->assertSame('txcd_test', $failed->items()[0]->id());
     }
 
     /** @return iterable<string, array{array<string, TaxCodeListResult>}> */
@@ -210,7 +210,7 @@ final class TaxCodeCatalogueTest extends TestCase
         $first = new TaxCodeCatalogue($cache, $provider, 'first-account');
         $first->load();
         $second = new TaxCodeCatalogue($cache, null, 'second-account');
-        $this->assertSame([], $second->cached()['items']);
+        $this->assertSame([], $second->cached()->items());
         /** @var array<string, mixed> $state */
         $state = $cache->get('first-account');
         $state['items'] = [[
@@ -220,8 +220,8 @@ final class TaxCodeCatalogueTest extends TestCase
             'requiresPerformanceLocation' => false,
         ]];
         $cache->set('first-account', $state);
-        $this->assertSame([], $first->cached()['items']);
-        $this->assertNull($first->cached()['refreshedAt']);
+        $this->assertSame([], $first->cached()->items());
+        $this->assertNull($first->cached()->refreshedAt());
         $first->load();
         $this->assertSame([null, null], $provider->listCursors);
     }

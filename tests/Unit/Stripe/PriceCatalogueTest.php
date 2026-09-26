@@ -37,10 +37,10 @@ final class PriceCatalogueTest extends TestCase
         $this->assertSame(['EUR', 'EUR'], $provider->listCurrencies);
         $this->assertSame(['price_first', 'price_second'], array_map(
             static fn($price): string => $price->priceId(),
-            $result['items'],
+            $result->items(),
         ));
-        $this->assertSame(2, $result['total']);
-        $this->assertNotNull($result['refreshedAt']);
+        $this->assertSame(2, $result->total());
+        $this->assertNotNull($result->state()->refreshedAt());
 
         $catalogue->search('EUR');
         $this->assertSame([null, 'price_first'], $provider->listCursors);
@@ -70,9 +70,9 @@ final class PriceCatalogueTest extends TestCase
         $secondPage = $catalogue->search('EUR', page: 2);
         $match = $catalogue->search('EUR', 'Product 25');
 
-        $this->assertCount(5, $secondPage['items']);
-        $this->assertSame(2, $secondPage['pages']);
-        $this->assertSame('price_25', $match['items'][0]->priceId());
+        $this->assertCount(5, $secondPage->items());
+        $this->assertSame(2, $secondPage->pages());
+        $this->assertSame('price_25', $match->items()[0]->priceId());
         $this->assertSame([null], $provider->listCursors);
     }
 
@@ -125,8 +125,8 @@ final class PriceCatalogueTest extends TestCase
 
         $state = $catalogue->cached('EUR');
 
-        $this->assertSame([], $state['items']);
-        $this->assertNull($state['refreshedAt']);
+        $this->assertSame([], $state->items());
+        $this->assertNull($state->refreshedAt());
     }
 
     public function testLoadingAnExpiredCatalogueRefreshesItOnDemand(): void
@@ -158,7 +158,7 @@ final class PriceCatalogueTest extends TestCase
         $result = $catalogue->load('EUR');
 
         $this->assertSame([null], $freshProvider->listCursors);
-        $this->assertSame('24.00', $result['items'][0]->price()->getAmount()->toString());
+        $this->assertSame('24.00', $result->items()[0]->price()->getAmount()->toString());
     }
 
     public function testLoadingAnExpiredCatalogueRespectsTheFailureCooldown(): void
@@ -185,8 +185,8 @@ final class PriceCatalogueTest extends TestCase
         $result = $catalogue->load('EUR');
 
         $this->assertSame([], $provider->listCursors);
-        $this->assertSame('price_cached', $result['items'][0]->priceId());
-        $this->assertSame('prices.refresh_failed', $result['error']);
+        $this->assertSame('price_cached', $result->items()[0]->priceId());
+        $this->assertSame('prices.refresh_failed', $result->error());
     }
 
     public function testLoadingAnEmptyFailedCatalogueRespectsTheFailureCooldown(): void
@@ -204,8 +204,8 @@ final class PriceCatalogueTest extends TestCase
         $second = $catalogue->load('EUR');
 
         $this->assertSame([null], $provider->listCursors);
-        $this->assertSame('prices.refresh_failed', $first['error']);
-        $this->assertSame($first, $second);
+        $this->assertSame('prices.refresh_failed', $first->error());
+        $this->assertEquals($first, $second);
     }
 
     public function testFailedRefreshPreservesAndMarksTheLastGoodCatalogue(): void
@@ -226,10 +226,10 @@ final class PriceCatalogueTest extends TestCase
         $failed = $catalogue->refresh('EUR');
         $cached = $catalogue->cached('EUR');
 
-        $this->assertSame('prices.refresh_failed', $failed['error']);
-        $this->assertNotNull($failed['failedAt']);
-        $this->assertSame('price_cached', $failed['items'][0]->priceId());
-        $this->assertSame('price_cached', $cached['items'][0]->priceId());
+        $this->assertSame('prices.refresh_failed', $failed->error());
+        $this->assertNotNull($failed->failedAt());
+        $this->assertSame('price_cached', $failed->items()[0]->priceId());
+        $this->assertSame('price_cached', $cached->items()[0]->priceId());
     }
 
     public function testFreshResolutionDoesNotTrustTheCachedAmount(): void
@@ -248,7 +248,7 @@ final class PriceCatalogueTest extends TestCase
             cacheKey: 'catalogue',
         );
 
-        $listed = $catalogue->search('EUR')['items'][0];
+        $listed = $catalogue->search('EUR')->items()[0];
         $stripePrice = $resolver->resolve('price_current', 'EUR');
 
         $this->assertSame('16.00', $listed->price()->getAmount()->toString());
@@ -284,10 +284,10 @@ final class PriceCatalogueTest extends TestCase
 
         $this->assertSame([null, null], $provider->listCursors);
         $this->assertSame([null], $freshProvider->listCursors);
-        $this->assertSame('Updated', $result['items'][0]->name());
-        $this->assertSame('24.00', $result['items'][0]->price()->getAmount()->toString());
-        $this->assertNull($result['failedAt']);
-        $this->assertNull($result['error']);
+        $this->assertSame('Updated', $result->items()[0]->name());
+        $this->assertSame('24.00', $result->items()[0]->price()->getAmount()->toString());
+        $this->assertNull($result->state()->failedAt());
+        $this->assertNull($result->state()->error());
     }
 
     public function testCredentialPartitionsKeepCataloguesAndRefreshFailuresSeparate(): void
@@ -313,20 +313,20 @@ final class PriceCatalogueTest extends TestCase
         );
         $first->refresh('EUR');
 
-        $this->assertSame([], $second->cached('EUR')['items']);
+        $this->assertSame([], $second->cached('EUR')->items());
         $secondProvider->failLists = true;
         $failed = $second->refresh('EUR');
 
-        $this->assertSame([], $failed['items']);
-        $this->assertSame('prices.refresh_failed', $failed['error']);
-        $this->assertNull($first->cached('EUR')['failedAt']);
+        $this->assertSame([], $failed->items());
+        $this->assertSame('prices.refresh_failed', $failed->error());
+        $this->assertNull($first->cached('EUR')->failedAt());
         $secondProvider->failLists = false;
         $refreshed = $second->refresh('EUR');
 
-        $this->assertSame('price_first', $first->cached('EUR')['items'][0]->priceId());
-        $this->assertSame('price_second', $refreshed['items'][0]->priceId());
-        $this->assertSame([], $first->cached('USD')['items']);
-        $this->assertSame('price_first', $first->cached('eur')['items'][0]->priceId());
+        $this->assertSame('price_first', $first->cached('EUR')->items()[0]->priceId());
+        $this->assertSame('price_second', $refreshed->items()[0]->priceId());
+        $this->assertSame([], $first->cached('USD')->items());
+        $this->assertSame('price_first', $first->cached('eur')->items()[0]->priceId());
     }
 
     private static function record(

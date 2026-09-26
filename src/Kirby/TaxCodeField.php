@@ -14,6 +14,7 @@ use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Stripe\CataloguePagination;
+use ProgrammatorDev\StripeCheckout\Stripe\CatalogueState;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeCatalogueErrorCode;
 use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
 
@@ -80,12 +81,7 @@ final class TaxCodeField extends FieldClass
         $props = parent::props();
         $value = $this->toFormValue();
         $inactive = $this->sourceInactive();
-        $state = [
-            'items' => [],
-            'refreshedAt' => null,
-            'failedAt' => null,
-            'error' => null,
-        ];
+        $state = self::emptyState();
 
         try {
             $runtime = new RuntimeFactory($this->kirby());
@@ -95,7 +91,12 @@ final class TaxCodeField extends FieldClass
                 $state = $inactive ? $runtime->taxCodeCatalogue()->cached() : $runtime->taxCodeCatalogue()->load();
             }
         } catch (\Throwable) {
-            $state['error'] = TaxCodeCatalogueErrorCode::REFRESH_FAILED;
+            $state = new CatalogueState(
+                items: [],
+                refreshedAt: null,
+                failedAt: null,
+                error: TaxCodeCatalogueErrorCode::REFRESH_FAILED,
+            );
         }
 
         $selected = $value === '' ? null : [
@@ -107,7 +108,7 @@ final class TaxCodeField extends FieldClass
             ...($inactive ? [] : ['theme' => 'warning']),
         ];
 
-        foreach ($state['items'] as $code) {
+        foreach ($state->items() as $code) {
             if ($code->id() === $value) {
                 $selected = self::item($code);
                 break;
@@ -183,21 +184,21 @@ final class TaxCodeField extends FieldClass
             // Saved-reference hydration never contacts Stripe.
             $state = $catalogue->cached();
             $ids = is_array($selected) ? $selected : (is_string($selected) ? explode(',', $selected) : []);
-            $items = array_values(array_filter($state['items'], static fn(TaxCode $code): bool => in_array($code->id(), $ids, true)));
-            $result = CataloguePagination::paginate($items, 1);
+            $items = array_values(array_filter($state->items(), static fn(TaxCode $code): bool => in_array($code->id(), $ids, true)));
+            $result = CataloguePagination::paginate($items, 1, $state);
         } else {
             $result = $catalogue->search(is_string($query) ? $query : null, is_numeric($page) ? (int) $page : 1, $refresh);
-            $state = $result;
+            $state = $result->state();
         }
 
         return [
             'catalogue' => self::status($state),
-            'data' => array_map(static fn(TaxCode $code): array => self::item($code), $result['items']),
+            'data' => array_map(static fn(TaxCode $code): array => self::item($code), $result->items()),
             'pagination' => [
                 'limit' => CataloguePagination::LIMIT,
-                'page' => $result['page'],
-                'pages' => $result['pages'],
-                'total' => $result['total'],
+                'page' => $result->page(),
+                'pages' => $result->pages(),
+                'total' => $result->total(),
             ],
         ];
     }
@@ -224,21 +225,28 @@ final class TaxCodeField extends FieldClass
     }
 
     /**
-     * @param array{items: list<TaxCode>, refreshedAt: ?int, failedAt: ?int, error: ?string} $state
+     * @template T
+     * @param CatalogueState<T> $state
      * @return array{error: ?string, failedAt: ?int, refreshedAt: ?int, status: string}
      */
-    private static function status(array $state): array
+    private static function status(CatalogueState $state): array
     {
         return [
-            'error' => $state['error'],
-            'failedAt' => $state['failedAt'],
-            'refreshedAt' => $state['refreshedAt'],
-            'status' => match (true) {
-                $state['error'] !== null && $state['items'] !== [] => 'stale',
-                $state['error'] !== null => 'error',
-                $state['refreshedAt'] !== null => 'ready',
-                default => 'empty',
-            },
+            'error' => $state->error(),
+            'failedAt' => $state->failedAt(),
+            'refreshedAt' => $state->refreshedAt(),
+            'status' => $state->status(),
         ];
+    }
+
+    /** @return CatalogueState<TaxCode> */
+    private static function emptyState(): CatalogueState
+    {
+        return new CatalogueState(
+            items: [],
+            refreshedAt: null,
+            failedAt: null,
+            error: null,
+        );
     }
 }

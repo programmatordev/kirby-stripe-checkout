@@ -11,10 +11,12 @@ final class CataloguePagination
 
     /**
      * @template T
+     * @template TState
      * @param list<T> $items
-     * @return array{items: list<T>, page: int, pages: int, total: int}
+     * @param CatalogueState<TState> $state
+     * @return CataloguePage<T, TState>
      */
-    public static function paginate(array $items, int $page): array
+    public static function paginate(array $items, int $page, CatalogueState $state): CataloguePage
     {
         $total = count($items);
         // Unlike Kirby's native Pagination, empty results retain page 1 and
@@ -22,11 +24,12 @@ final class CataloguePagination
         $pages = max(1, (int) ceil($total / self::LIMIT));
         $page = min(max(1, $page), $pages);
 
-        return [
-            'items' => array_slice($items, ($page - 1) * self::LIMIT, self::LIMIT),
-            'page' => $page,
-            'pages' => $pages,
-            'total' => $total,
-        ];
+        return new CataloguePage(
+            items: array_slice($items, ($page - 1) * self::LIMIT, self::LIMIT),
+            page: $page,
+            pages: $pages,
+            total: $total,
+            state: $state,
+        );
     }
 }

@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Unit\Stripe;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Stripe\CataloguePagination;
+use ProgrammatorDev\StripeCheckout\Stripe\CatalogueState;
 
 final class CataloguePaginationTest extends TestCase
 {
@@ -20,14 +21,21 @@ final class CataloguePaginationTest extends TestCase
         int $expectedCount,
     ): void {
         $items = $total === 0 ? [] : range(1, $total);
-        $result = CataloguePagination::paginate($items, $requestedPage);
+        $state = new CatalogueState(
+            items: $items,
+            refreshedAt: 1,
+            failedAt: null,
+            error: null,
+        );
+        $result = CataloguePagination::paginate($items, $requestedPage, $state);
 
-        $this->assertSame($expectedPage, $result['page']);
-        $this->assertSame($expectedPages, $result['pages']);
-        $this->assertSame($total, $result['total']);
+        $this->assertSame($expectedPage, $result->page());
+        $this->assertSame($expectedPages, $result->pages());
+        $this->assertSame($total, $result->total());
+        $this->assertSame($state, $result->state());
         $this->assertSame(
             $expectedCount === 0 ? [] : range($expectedFirst, $expectedFirst + $expectedCount - 1),
-            $result['items'],
+            $result->items(),
         );
     }
 

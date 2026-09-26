@@ -36,13 +36,13 @@ final class TaxCodeValidator
 
             // Empty successful snapshots mean unknown codes, not an outage.
             // Failed refreshes retain the last-good classification snapshot.
-            if ($state['refreshedAt'] === null) {
+            if ($state->refreshedAt() === null) {
                 throw new InvalidProductException(TaxErrorCode::CATALOGUE_UNAVAILABLE);
             }
 
             $this->catalogueIds = [];
 
-            foreach ($state['items'] as $taxCode) {
+            foreach ($state->items() as $taxCode) {
                 $this->catalogueIds[$taxCode->id()] = true;
             }
         }

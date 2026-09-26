@@ -173,15 +173,15 @@ final class LocalDiagnostics
         // These are cache facts, not Stripe Tax/account readiness checks.
         $state = (new RuntimeFactory($this->kirby))->taxCodeCatalogue()->cached();
         $values = [
-            'count' => (string) count($state['items']),
-            'refreshedAt' => $state['refreshedAt'] === null ? '—' : gmdate('Y-m-d H:i:s \U\T\C', $state['refreshedAt']),
-            'failedAt' => $state['failedAt'] === null ? '—' : gmdate('Y-m-d H:i:s \U\T\C', $state['failedAt']),
+            'count' => (string) count($state->items()),
+            'refreshedAt' => $state->refreshedAt() === null ? '—' : gmdate('Y-m-d H:i:s \U\T\C', $state->refreshedAt()),
+            'failedAt' => $state->failedAt() === null ? '—' : gmdate('Y-m-d H:i:s \U\T\C', $state->failedAt()),
         ];
 
         return $this->check(
             'taxCodes',
-            $state['refreshedAt'] !== null && $state['error'] === null ? self::PASS : self::WARNING,
-            $state['error'] !== null ? 'taxCodes.failed' : ($state['refreshedAt'] === null ? 'taxCodes.empty' : 'taxCodes.ready'),
+            $state->refreshedAt() !== null && $state->error() === null ? self::PASS : self::WARNING,
+            $state->error() !== null ? 'taxCodes.failed' : ($state->refreshedAt() === null ? 'taxCodes.empty' : 'taxCodes.ready'),
             $values,
         );
     }

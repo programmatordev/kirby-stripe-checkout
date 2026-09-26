@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Stripe\Tax;
 
 use Kirby\Cache\Cache;
+use ProgrammatorDev\StripeCheckout\Stripe\CataloguePage;
 use ProgrammatorDev\StripeCheckout\Stripe\CataloguePagination;
 use ProgrammatorDev\StripeCheckout\Stripe\CatalogueRefreshPolicy;
+use ProgrammatorDev\StripeCheckout\Stripe\CatalogueState;
 use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
 use RuntimeException;
 use Throwable;
@@ -16,7 +18,6 @@ use Throwable;
  * Automatic loads belong to authorized Panel access, never storefront traffic.
  *
  * @internal
- * @phpstan-type State array{items: list<TaxCode>, refreshedAt: ?int, failedAt: ?int, error: ?string}
  */
 final class TaxCodeCatalogue
 {
@@ -29,15 +30,10 @@ final class TaxCodeCatalogue
         private readonly string $cacheKey,
     ) {}
 
-    /** @return State */
-    public function cached(): array
+    /** @return CatalogueState<TaxCode> */
+    public function cached(): CatalogueState
     {
-        $empty = [
-            'items' => [],
-            'refreshedAt' => null,
-            'failedAt' => null,
-            'error' => null,
-        ];
+        $empty = $this->emptyState();
         $cached = $this->cache->get($this->cacheKey);
 
         if (
@@ -85,24 +81,24 @@ final class TaxCodeCatalogue
                 return $empty;
             }
 
-            return [
-                'items' => array_values($items),
-                'refreshedAt' => $refreshedAt,
-                'failedAt' => $failedAt,
-                'error' => $failedAt === null ? null : TaxCodeCatalogueErrorCode::REFRESH_FAILED,
-            ];
+            return new CatalogueState(
+                items: array_values($items),
+                refreshedAt: $refreshedAt,
+                failedAt: $failedAt,
+                error: $failedAt === null ? null : TaxCodeCatalogueErrorCode::REFRESH_FAILED,
+            );
         } catch (Throwable) {
             return $empty;
         }
     }
 
-    /** @return State */
-    public function load(): array
+    /** @return CatalogueState<TaxCode> */
+    public function load(): CatalogueState
     {
         $state = $this->cached();
         $shouldRefresh = CatalogueRefreshPolicy::shouldRefresh(
-            refreshedAt: $state['refreshedAt'],
-            failedAt: $state['failedAt'],
+            refreshedAt: $state->refreshedAt(),
+            failedAt: $state->failedAt(),
             refreshAfterSeconds: self::REFRESH_AFTER_SECONDS,
             failureCooldownSeconds: self::FAILED_REFRESH_COOLDOWN_SECONDS,
         );
@@ -113,7 +109,7 @@ final class TaxCodeCatalogue
     /** Cached lookup deliberately does not trigger monthly provider refresh. */
     public function find(string $id): ?TaxCode
     {
-        foreach ($this->cached()['items'] as $taxCode) {
+        foreach ($this->cached()->items() as $taxCode) {
             if ($taxCode->id() === $id) {
                 return $taxCode;
             }
@@ -122,8 +118,8 @@ final class TaxCodeCatalogue
         return null;
     }
 
-    /** @return State */
-    public function refresh(): array
+    /** @return CatalogueState<TaxCode> */
+    public function refresh(): CatalogueState
     {
         $previous = $this->cached();
 
@@ -169,60 +165,65 @@ final class TaxCodeCatalogue
 
             uasort($items, static fn(TaxCode $left, TaxCode $right): int =>
                 [$left->providerName(), $left->id()] <=> [$right->providerName(), $right->id()]);
-            $state = [
-                'items' => array_values($items),
-                'refreshedAt' => time(),
-                'failedAt' => null,
-                'error' => null,
-            ];
+            $state = new CatalogueState(
+                items: array_values($items),
+                refreshedAt: time(),
+                failedAt: null,
+                error: null,
+            );
             $this->store($state);
 
             return $state;
         } catch (Throwable) {
             // An incomplete refresh must not replace a known-good catalogue.
             // Keep failures value-safe; Stripe exception messages stay private.
-            $state = [
-                ...$previous,
-                'failedAt' => time(),
-                'error' => TaxCodeCatalogueErrorCode::REFRESH_FAILED,
-            ];
+            $state = $previous->withFailure(time(), TaxCodeCatalogueErrorCode::REFRESH_FAILED);
             $this->store($state);
 
             return $state;
         }
     }
 
-    /** @return array{items: list<TaxCode>, refreshedAt: ?int, failedAt: ?int, error: ?string, page: int, pages: int, total: int} */
-    public function search(?string $query = null, int $page = 1, bool $refresh = false): array
+    /** @return CataloguePage<TaxCode, TaxCode> */
+    public function search(?string $query = null, int $page = 1, bool $refresh = false): CataloguePage
     {
         $state = $refresh ? $this->refresh() : $this->load();
         $query = mb_strtolower(trim($query ?? ''));
         $items = array_values(array_filter(
-            $state['items'],
+            $state->items(),
             static fn(TaxCode $taxCode): bool => $query === '' || str_contains(
                 mb_strtolower(implode(' ', [$taxCode->id(), $taxCode->providerName(), $taxCode->providerDescription()])),
                 $query,
             ),
         ));
 
-        return [
-            ...$state,
-            ...CataloguePagination::paginate($items, $page),
-        ];
+        return CataloguePagination::paginate($items, $page, $state);
     }
 
-    /** @param State $state */
-    private function store(array $state): void
+    /** @param CatalogueState<TaxCode> $state */
+    private function store(CatalogueState $state): void
     {
         // No hard expiry: only provider facts are cached, never local labels.
         $this->cache->set($this->cacheKey, [
-            ...$state,
+            'refreshedAt' => $state->refreshedAt(),
+            'failedAt' => $state->failedAt(),
             'items' => array_map(static fn(TaxCode $taxCode): array => [
                 'id' => $taxCode->id(),
                 'name' => $taxCode->providerName(),
                 'description' => $taxCode->providerDescription(),
                 'requiresPerformanceLocation' => $taxCode->requiresPerformanceLocation(),
-            ], $state['items']),
+            ], $state->items()),
         ]);
+    }
+
+    /** @return CatalogueState<TaxCode> */
+    private function emptyState(): CatalogueState
+    {
+        return new CatalogueState(
+            items: [],
+            refreshedAt: null,
+            failedAt: null,
+            error: null,
+        );
     }
 }
