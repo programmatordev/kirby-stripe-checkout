@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Unit\Stripe;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
+use ProgrammatorDev\StripeCheckout\Order\Internal\CheckoutSessionSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\TaxSnapshot;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
@@ -19,15 +20,15 @@ final class CheckoutSessionTaxSnapshotTest extends TestCase
     public function testPreservesCalculationOutcomesIndependentlyOfPayment(bool $enabled, ?string $status, int $amount): void
     {
         $source = $this->source($enabled, $status, $amount);
-        $snapshots = $this->normalize($source);
-        $tax = $snapshots['tax'];
-        $this->assertIsArray($tax);
+        $snapshot = $this->normalize($source);
+        $tax = $snapshot->tax()?->toArray();
+        $this->assertNotNull($tax);
         $this->assertSame($enabled, $tax['automaticTaxEnabled']);
         $this->assertSame($status, $tax['calculationStatus']);
         $this->assertSame($amount, $tax['providerAmount']);
         $this->assertSame('EUR', $tax['currency']);
         $this->assertSame('stripe', $tax['provider']);
-        $this->assertSame($tax['amount'], $snapshots['taxTotal']);
+        $this->assertSame($tax['amount'], $snapshot->taxTotal());
         $this->assertNull($tax['breakdown']);
         $this->assertSame($tax, TaxSnapshot::fromArray(OrderData::map($tax))->toArray());
     }
@@ -46,11 +47,12 @@ final class CheckoutSessionTaxSnapshotTest extends TestCase
 
     public function testDoesNotInventAnAmountBeforeStripeReturnsOne(): void
     {
-        $snapshots = $this->normalize(['automatic_tax' => ['enabled' => true, 'status' => null]]);
-        $this->assertIsArray($snapshots['tax']);
-        $this->assertNull($snapshots['tax']['amount']);
-        $this->assertNull($snapshots['tax']['providerAmount']);
-        $this->assertNull($snapshots['taxTotal']);
+        $snapshot = $this->normalize(['automatic_tax' => ['enabled' => true, 'status' => null]]);
+        $tax = $snapshot->tax()?->toArray();
+        $this->assertNotNull($tax);
+        $this->assertNull($tax['amount']);
+        $this->assertNull($tax['providerAmount']);
+        $this->assertNull($snapshot->taxTotal());
     }
 
     public function testKeepsAggregateLineAndShippingAllocationsSeparateWithoutDoubleCounting(): void
@@ -85,10 +87,11 @@ final class CheckoutSessionTaxSnapshotTest extends TestCase
             ],
             'taxes' => [$taxEntry],
         ];
-        $snapshots = $this->normalize($source);
-        $this->assertSame('4.60', $snapshots['taxTotal']);
-        $this->assertIsArray($snapshots['tax']);
-        $breakdown = $snapshots['tax']['breakdown'];
+        $snapshot = $this->normalize($source);
+        $this->assertSame('4.60', $snapshot->taxTotal());
+        $tax = $snapshot->tax()?->toArray();
+        $this->assertNotNull($tax);
+        $breakdown = $tax['breakdown'];
         $this->assertIsArray($breakdown);
         $this->assertCount(3, $breakdown);
         $this->assertSame(['order', 'line_item', 'shipping'], array_column($breakdown, 'target'));
@@ -107,12 +110,13 @@ final class CheckoutSessionTaxSnapshotTest extends TestCase
     {
         $source = $this->source(true, 'complete', 0);
         $source['total_details']['breakdown'] = ['taxes' => [$this->taxEntry(0, $reason)]];
-        $snapshots = $this->normalize($source);
-        $this->assertIsArray($snapshots['tax']);
-        $this->assertTrue($snapshots['tax']['automaticTaxEnabled']);
-        $this->assertSame('0.00', $snapshots['taxTotal']);
-        $this->assertIsArray($snapshots['tax']['breakdown']);
-        $entry = OrderData::map($snapshots['tax']['breakdown'][0]);
+        $snapshot = $this->normalize($source);
+        $tax = $snapshot->tax()?->toArray();
+        $this->assertNotNull($tax);
+        $this->assertTrue($tax['automaticTaxEnabled']);
+        $this->assertSame('0.00', $snapshot->taxTotal());
+        $this->assertIsArray($tax['breakdown']);
+        $entry = OrderData::map($tax['breakdown'][0]);
         $this->assertSame($reason, $entry['taxabilityReason']);
     }
 
@@ -128,16 +132,16 @@ final class CheckoutSessionTaxSnapshotTest extends TestCase
 
     public function testUsesStripeProviderUnitsForNonIsoExponents(): void
     {
-        $snapshots = $this->normalize($this->source(true, 'complete', 500), 'isk');
-        $this->assertSame('5', $snapshots['taxTotal']);
+        $snapshot = $this->normalize($this->source(true, 'complete', 500), 'isk');
+        $this->assertSame('5', $snapshot->taxTotal());
     }
 
     public function testPersistedAggregateAllocationsCannotDisagreeWithTheTotal(): void
     {
         $source = $this->source(true, 'complete', 230);
         $source['total_details']['breakdown'] = ['taxes' => [$this->taxEntry(230, 'standard_rated')]];
-        $snapshots = $this->normalize($source);
-        $tax = OrderData::map($snapshots['tax']);
+        $snapshot = $this->normalize($source);
+        $tax = OrderData::map($snapshot->tax()?->toArray());
         $breakdown = OrderData::list($tax['breakdown']);
         $entry = OrderData::map($breakdown[0]);
         $entry['amount'] = '1.00';
@@ -215,9 +219,8 @@ final class CheckoutSessionTaxSnapshotTest extends TestCase
     }
 
     /** @param array<string, mixed> $source
-     * @return array<string, mixed>
      */
-    private function normalize(array $source, string $currency = 'eur'): array
+    private function normalize(array $source, string $currency = 'eur'): CheckoutSessionSnapshot
     {
         return (new CheckoutSessionSnapshotNormalizer())->normalize(new CheckoutSessionRecord(
             id: 'cs_test_one',

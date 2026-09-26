@@ -8,6 +8,9 @@ use Brick\Math\BigDecimal;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\AddressSnapshot;
+use ProgrammatorDev\StripeCheckout\Order\Internal\CheckoutDiscountsSnapshot;
+use ProgrammatorDev\StripeCheckout\Order\Internal\CheckoutSessionSnapshot;
+use ProgrammatorDev\StripeCheckout\Order\Internal\CheckoutShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\ConsentSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\CustomerSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\CustomFieldSnapshot;
@@ -31,24 +34,7 @@ use Throwable;
  */
 final class CheckoutSessionSnapshotNormalizer
 {
-    /**
-     * @return array{
-     *   stripeCustomerId: ?string,
-     *   customer: ?array<string, mixed>,
-     *   billingAddress: ?array<string, mixed>,
-     *   shippingAddress: ?array<string, mixed>,
-     *   stripeShippingRateId: ?string,
-     *   shipping: ?array<string, mixed>,
-     *   shippingTotal: ?string,
-     *   customFields: list<array<string, mixed>>,
-     *   consent: ?array<string, mixed>,
-     *   discounts: list<array<string, mixed>>,
-     *   discountTotal: ?string,
-     *   tax: ?array<string, mixed>,
-     *   taxTotal: ?string
-     * }
-     */
-    public function normalize(CheckoutSessionRecord $sessionRecord): array
+    public function normalize(CheckoutSessionRecord $sessionRecord): CheckoutSessionSnapshot
     {
         try {
             $sessionData = $sessionRecord->orderSnapshotSource;
@@ -59,37 +45,27 @@ final class CheckoutSessionSnapshotNormalizer
             $shippingAddress = $collectedInformation === null
                 ? null
                 : $this->shippingAddress($collectedInformation);
-            [$shippingRateId, $shippingSnapshot, $shippingTotal] = $this->shipping(
+            $checkoutShipping = $this->shipping(
                 sessionData: $sessionData,
                 currency: $sessionRecord->currency,
             );
-            [$discounts, $discountTotal] = $this->discounts(
+            $checkoutDiscounts = $this->discounts(
                 sessionData: $sessionData,
                 currency: $sessionRecord->currency,
             );
             $tax = $this->tax($sessionData, $sessionRecord->currency);
 
-            return [
-                'stripeCustomerId' => $this->referenceId($sessionData['customer'] ?? null, 'cus_'),
-                'customer' => $customer?->toArray(),
-                'billingAddress' => $billingAddress?->toArray(),
-                'shippingAddress' => $shippingAddress?->toArray(),
-                'stripeShippingRateId' => $shippingRateId,
-                'shipping' => $shippingSnapshot?->toArray(),
-                'shippingTotal' => $shippingTotal,
-                'customFields' => array_map(
-                    static fn(CustomFieldSnapshot $customField): array => $customField->toArray(),
-                    $this->customFields($sessionData['custom_fields'] ?? []),
-                ),
-                'consent' => $this->consent($sessionData['consent'] ?? null)?->toArray(),
-                'discounts' => array_map(
-                    static fn(DiscountSnapshot $discount): array => $discount->toArray(),
-                    $discounts,
-                ),
-                'discountTotal' => $discountTotal,
-                'tax' => $tax?->toArray(),
-                'taxTotal' => $tax?->amount(),
-            ];
+            return new CheckoutSessionSnapshot(
+                stripeCustomerId: $this->referenceId($sessionData['customer'] ?? null, 'cus_'),
+                customer: $customer,
+                billingAddress: $billingAddress,
+                shippingAddress: $shippingAddress,
+                checkoutShipping: $checkoutShipping,
+                customFields: $this->customFields($sessionData['custom_fields'] ?? []),
+                consent: $this->consent($sessionData['consent'] ?? null),
+                checkoutDiscounts: $checkoutDiscounts,
+                tax: $tax,
+            );
         } catch (Throwable) {
             throw new OrderDataException();
         }
@@ -97,9 +73,8 @@ final class CheckoutSessionSnapshotNormalizer
 
     /**
      * @param array<string, mixed> $sessionData
-     * @return array{?string, ?ShippingSnapshot, ?string}
      */
-    private function shipping(array $sessionData, ?string $currency): array
+    private function shipping(array $sessionData, ?string $currency): CheckoutShippingSnapshot
     {
         $totalDetails = $this->nullableMap($sessionData['total_details'] ?? null);
         $providerShippingTotal = $totalDetails['amount_shipping'] ?? null;
@@ -107,7 +82,7 @@ final class CheckoutSessionSnapshotNormalizer
 
         if ($shippingCost === null) {
             if ($providerShippingTotal === null) {
-                return [null, null, null];
+                return CheckoutShippingSnapshot::unavailable();
             }
 
             // An explicit zero is an authoritative no-shipping result. A missing
@@ -116,7 +91,7 @@ final class CheckoutSessionSnapshotNormalizer
                 throw new OrderDataException();
             }
 
-            return [null, null, $this->providerAmount(0, $currency)];
+            return CheckoutShippingSnapshot::none($this->providerAmount(0, $currency));
         }
 
         if (is_int($providerShippingTotal) === false || $currency === null) {
@@ -198,7 +173,7 @@ final class CheckoutSessionSnapshotNormalizer
             'taxCode' => $this->referenceId($shippingRateData['tax_code'] ?? null, 'txcd_'),
         ]);
 
-        return [$shippingRateId, $shippingSnapshot, $shippingSnapshot->total()];
+        return CheckoutShippingSnapshot::selected($shippingRateId, $shippingSnapshot);
     }
 
     private function shippingTaxTotal(mixed $value): int
@@ -514,12 +489,11 @@ final class CheckoutSessionSnapshotNormalizer
 
     /**
      * @param array<string, mixed> $sessionData
-     * @return array{list<DiscountSnapshot>, ?string}
      */
-    private function discounts(array $sessionData, ?string $currency): array
+    private function discounts(array $sessionData, ?string $currency): CheckoutDiscountsSnapshot
     {
         if (($sessionData['total_details'] ?? null) === null) {
-            return [[], null];
+            return CheckoutDiscountsSnapshot::unavailable();
         }
 
         $totalDetails = $this->map($sessionData['total_details']);
@@ -617,7 +591,7 @@ final class CheckoutSessionSnapshotNormalizer
             throw new OrderDataException();
         }
 
-        return [$discounts, (string) $total->getAmount()];
+        return CheckoutDiscountsSnapshot::available($discounts, (string) $total->getAmount());
     }
 
     /** @param array<string, mixed> $promotionCode */

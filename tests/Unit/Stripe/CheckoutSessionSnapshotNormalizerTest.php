@@ -20,7 +20,7 @@ final class CheckoutSessionSnapshotNormalizerTest extends TestCase
 {
     public function testNormalizesCurrentProviderFactsWithoutConfigurationInput(): void
     {
-        $snapshots = (new CheckoutSessionSnapshotNormalizer())->normalize(
+        $snapshot = (new CheckoutSessionSnapshotNormalizer())->normalize(
             $this->sessionRecord($this->completeSource()),
         );
 
@@ -109,12 +109,12 @@ final class CheckoutSessionSnapshotNormalizerTest extends TestCase
             'discountTotal' => '5.00',
             'tax' => null,
             'taxTotal' => null,
-        ], $snapshots);
+        ], $snapshot->toArray());
     }
 
     public function testPreservesAbsentAndOptionalUnansweredFacts(): void
     {
-        $snapshots = (new CheckoutSessionSnapshotNormalizer())->normalize($this->sessionRecord([]));
+        $snapshot = (new CheckoutSessionSnapshotNormalizer())->normalize($this->sessionRecord([]));
         $this->assertSame([
             'stripeCustomerId' => null,
             'customer' => null,
@@ -129,7 +129,7 @@ final class CheckoutSessionSnapshotNormalizerTest extends TestCase
             'discountTotal' => null,
             'tax' => null,
             'taxTotal' => null,
-        ], $snapshots);
+        ], $snapshot->toArray());
 
         $source = [
             'custom_fields' => [[
@@ -151,27 +151,34 @@ final class CheckoutSessionSnapshotNormalizerTest extends TestCase
                 'breakdown' => ['discounts' => []],
             ],
         ];
-        $snapshots = (new CheckoutSessionSnapshotNormalizer())->normalize($this->sessionRecord($source));
-        $this->assertTrue($snapshots['customFields'][0]['answered']);
-        $this->assertSame('', $snapshots['customFields'][0]['value']);
+        $snapshot = (new CheckoutSessionSnapshotNormalizer())->normalize($this->sessionRecord($source));
+        $customField = $snapshot->customFields()[0]->toArray();
+        $this->assertTrue($customField['answered']);
+        $this->assertSame('', $customField['value']);
         $this->assertSame([
             'termsOfService' => null,
             'promotions' => null,
-        ], $snapshots['consent']);
-        $this->assertSame('0.00', $snapshots['discountTotal']);
+        ], $snapshot->consent()?->toArray());
+        $this->assertSame('0.00', $snapshot->discountTotal());
     }
 
     public function testCanonicalSnapshotValuesRoundTrip(): void
     {
-        $snapshots = (new CheckoutSessionSnapshotNormalizer())->normalize(
+        $snapshot = (new CheckoutSessionSnapshotNormalizer())->normalize(
             $this->sessionRecord($this->completeSource()),
         );
 
-        $this->assertSame($snapshots['customer'], CustomerSnapshot::fromArray(OrderData::map($snapshots['customer']))->toArray());
-        $this->assertSame($snapshots['billingAddress'], AddressSnapshot::fromArray(OrderData::map($snapshots['billingAddress']))->toArray());
-        $this->assertSame($snapshots['customFields'][0], CustomFieldSnapshot::fromArray($snapshots['customFields'][0])->toArray());
-        $this->assertSame($snapshots['consent'], ConsentSnapshot::fromArray(OrderData::map($snapshots['consent']))->toArray());
-        $this->assertSame($snapshots['discounts'][0], DiscountSnapshot::fromArray($snapshots['discounts'][0])->toArray());
+        $customer = $snapshot->customer()?->toArray();
+        $billingAddress = $snapshot->billingAddress()?->toArray();
+        $customField = $snapshot->customFields()[0]->toArray();
+        $consent = $snapshot->consent()?->toArray();
+        $discount = $snapshot->discounts()[0]->toArray();
+
+        $this->assertSame($customer, CustomerSnapshot::fromArray(OrderData::map($customer))->toArray());
+        $this->assertSame($billingAddress, AddressSnapshot::fromArray(OrderData::map($billingAddress))->toArray());
+        $this->assertSame($customField, CustomFieldSnapshot::fromArray($customField)->toArray());
+        $this->assertSame($consent, ConsentSnapshot::fromArray(OrderData::map($consent))->toArray());
+        $this->assertSame($discount, DiscountSnapshot::fromArray($discount)->toArray());
     }
 
     /** @param array<string, mixed> $source */

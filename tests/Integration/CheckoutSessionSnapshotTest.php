@@ -54,11 +54,13 @@ final class CheckoutSessionSnapshotTest extends KirbyTestCase
             'cs_current' => $sessionRecord,
         ]);
         $currentSession = $gateway->retrieve('cs_current');
-        $snapshots = (new CheckoutSessionSnapshotNormalizer())->normalize($currentSession);
+        $snapshot = (new CheckoutSessionSnapshotNormalizer())->normalize($currentSession);
+        $customer = $snapshot->customer()?->toArray();
+        $customField = $snapshot->customFields()[0]->toArray();
 
         $this->assertSame(['cs_current'], $gateway->retrievals);
-        $this->assertSame('returned@example.test', $snapshots['customer']['email'] ?? null);
-        $this->assertSame('Returned label', $snapshots['customFields'][0]['label'] ?? null);
-        $this->assertSame('Returned value', $snapshots['customFields'][0]['value'] ?? null);
+        $this->assertSame('returned@example.test', $customer['email'] ?? null);
+        $this->assertSame('Returned label', $customField['label'] ?? null);
+        $this->assertSame('Returned value', $customField['value'] ?? null);
     }
 }

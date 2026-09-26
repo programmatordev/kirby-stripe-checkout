@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Unit\Stripe;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
+use ProgrammatorDev\StripeCheckout\Order\Internal\CheckoutSessionSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\ShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
@@ -17,9 +18,11 @@ final class CheckoutSessionShippingSnapshotTest extends TestCase
 {
     public function testNormalizesSelectedShippingAddressRateAmountsAndTax(): void
     {
-        $snapshots = $this->normalize($this->shippingSource());
+        $snapshot = $this->normalize($this->shippingSource());
+        $shipping = $snapshot->shipping();
+        $this->assertNotNull($shipping);
 
-        $this->assertSame('shr_standard', $snapshots['stripeShippingRateId']);
+        $this->assertSame('shr_standard', $snapshot->stripeShippingRateId());
         $this->assertSame([
             'name' => 'Ana Silva',
             'line1' => 'Rua Dois, 20',
@@ -28,7 +31,7 @@ final class CheckoutSessionShippingSnapshotTest extends TestCase
             'city' => 'Porto',
             'state' => null,
             'country' => 'PT',
-        ], $snapshots['shippingAddress']);
+        ], $snapshot->shippingAddress()?->toArray());
         $this->assertSame([
             'optionKey' => 'standard',
             'quoteFingerprint' => str_repeat('a', 64),
@@ -47,14 +50,14 @@ final class CheckoutSessionShippingSnapshotTest extends TestCase
             ],
             'taxBehavior' => 'exclusive',
             'taxCode' => 'txcd_92010001',
-        ], $snapshots['shipping']);
-        $this->assertSame('6.15', $snapshots['shippingTotal']);
+        ], $shipping->toArray());
+        $this->assertSame('6.15', $snapshot->shippingTotal());
         $this->assertSame(
-            $snapshots['shipping'],
-            ShippingSnapshot::fromArray(OrderData::map($snapshots['shipping']))->toArray(),
+            $shipping->toArray(),
+            ShippingSnapshot::fromArray(OrderData::map($shipping->toArray()))->toArray(),
         );
 
-        $tax = OrderData::map($snapshots['tax']);
+        $tax = OrderData::map($snapshot->tax()?->toArray());
         $breakdown = OrderData::list($tax['breakdown']);
         $shippingTax = OrderData::map($breakdown[1]);
         $this->assertSame('shipping', $shippingTax['target']);
@@ -64,16 +67,16 @@ final class CheckoutSessionShippingSnapshotTest extends TestCase
 
     public function testNormalizesAuthoritativeAbsenceAsZeroShipping(): void
     {
-        $snapshots = $this->normalize([
+        $snapshot = $this->normalize([
             'total_details' => [
                 'amount_discount' => 0,
                 'amount_shipping' => 0,
             ],
         ]);
 
-        $this->assertNull($snapshots['stripeShippingRateId']);
-        $this->assertNull($snapshots['shipping']);
-        $this->assertSame('0.00', $snapshots['shippingTotal']);
+        $this->assertNull($snapshot->stripeShippingRateId());
+        $this->assertNull($snapshot->shipping());
+        $this->assertSame('0.00', $snapshot->shippingTotal());
     }
 
     public function testKeepsASelectedFreeShippingRateDistinctFromNoShipping(): void
@@ -98,11 +101,11 @@ final class CheckoutSessionShippingSnapshotTest extends TestCase
         $totalDetails['breakdown'] = $totalBreakdown;
         $source['total_details'] = $totalDetails;
 
-        $snapshots = $this->normalize($source);
+        $snapshot = $this->normalize($source);
 
-        $this->assertSame('shr_standard', $snapshots['stripeShippingRateId']);
-        $this->assertIsArray($snapshots['shipping']);
-        $this->assertSame('0.00', $snapshots['shippingTotal']);
+        $this->assertSame('shr_standard', $snapshot->stripeShippingRateId());
+        $this->assertNotNull($snapshot->shipping());
+        $this->assertSame('0.00', $snapshot->shippingTotal());
     }
 
     public function testAcceptsTheProviderUnspecifiedTaxBehavior(): void
@@ -114,7 +117,7 @@ final class CheckoutSessionShippingSnapshotTest extends TestCase
         $shippingCost['shipping_rate'] = $shippingRate;
         $source['shipping_cost'] = $shippingCost;
 
-        $shipping = OrderData::map($this->normalize($source)['shipping']);
+        $shipping = OrderData::map($this->normalize($source)->shipping()?->toArray());
 
         $this->assertSame(ShippingRate::TAX_BEHAVIOR_UNSPECIFIED, $shipping['taxBehavior']);
     }
@@ -288,9 +291,8 @@ final class CheckoutSessionShippingSnapshotTest extends TestCase
 
     /**
      * @param array<string, mixed> $source
-     * @return array<string, mixed>
      */
-    private function normalize(array $source): array
+    private function normalize(array $source): CheckoutSessionSnapshot
     {
         return (new CheckoutSessionSnapshotNormalizer())->normalize(new CheckoutSessionRecord(
             id: 'cs_test_shipping',
