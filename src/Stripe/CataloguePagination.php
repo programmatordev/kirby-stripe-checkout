@@ -10,11 +10,11 @@ final class CataloguePagination
     public const LIMIT = 20;
 
     /**
-     * @template T
+     * @template TItem
      * @template TState
-     * @param list<T> $items
+     * @param list<TItem> $items
      * @param CatalogueState<TState> $state
-     * @return CataloguePage<T, TState>
+     * @return CataloguePage<TItem, TState>
      */
     public static function paginate(array $items, int $page, CatalogueState $state): CataloguePage
     {

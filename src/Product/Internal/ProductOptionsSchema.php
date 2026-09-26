@@ -20,7 +20,7 @@ final class ProductOptionsSchema
         $data = $this->decode($value);
 
         if (array_diff(array_keys($data), ['options', 'variants']) !== []) {
-            throw new InvalidArgumentException('Variant data contains an unknown root property.');
+            throw new InvalidArgumentException('Product option data contains an unknown root property.');
         }
 
         $options = $this->options($data['options'] ?? []);
@@ -142,7 +142,7 @@ final class ProductOptionsSchema
         }
 
         if (is_string($value) === false) {
-            throw new InvalidArgumentException('Variant data must be an array or YAML string.');
+            throw new InvalidArgumentException('Product option data must be an array or YAML string.');
         }
 
         return $this->stringKeyed(Yaml::decode($value));
@@ -154,7 +154,7 @@ final class ProductOptionsSchema
     private function options(mixed $options): array
     {
         if (is_array($options) === false || array_is_list($options) === false) {
-            throw new InvalidArgumentException('Variant options must be a list.');
+            throw new InvalidArgumentException('Options must be a list.');
         }
 
         $normalized = [];
@@ -162,7 +162,7 @@ final class ProductOptionsSchema
 
         foreach ($options as $option) {
             if (is_array($option) === false) {
-                throw new InvalidArgumentException('Each variant option must be an object.');
+                throw new InvalidArgumentException('Each option must be an object.');
             }
 
             $id = $this->requiredId($option['id'] ?? null, 'option');
@@ -170,7 +170,7 @@ final class ProductOptionsSchema
             $values = $option['values'] ?? null;
 
             if (is_array($values) === false || array_is_list($values) === false || $values === []) {
-                throw new InvalidArgumentException('Each variant option must contain at least one value.');
+                throw new InvalidArgumentException('Each option must contain at least one value.');
             }
 
             $normalizedValues = [];
@@ -178,7 +178,7 @@ final class ProductOptionsSchema
 
             foreach ($values as $value) {
                 if (is_array($value) === false) {
-                    throw new InvalidArgumentException('Each variant value must be an object.');
+                    throw new InvalidArgumentException('Each option value must be an object.');
                 }
 
                 $valueId = $this->requiredId($value['id'] ?? null, 'value');
@@ -375,7 +375,7 @@ final class ProductOptionsSchema
     {
         foreach (array_keys($data) as $key) {
             if (is_string($key) === false) {
-                throw new InvalidArgumentException('Variant data requires named root properties.');
+                throw new InvalidArgumentException('Product option data requires named root properties.');
             }
         }
 

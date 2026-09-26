@@ -7,14 +7,14 @@ namespace ProgrammatorDev\StripeCheckout\Stripe;
 /**
  * One clamped page of catalogue results with the state it came from.
  *
- * @template T
+ * @template TItem
  * @template TState
  * @internal
  */
 final readonly class CataloguePage
 {
     /**
-     * @param list<T> $items
+     * @param list<TItem> $items
      * @param CatalogueState<TState> $state
      */
     public function __construct(
@@ -25,7 +25,7 @@ final readonly class CataloguePage
         private CatalogueState $state,
     ) {}
 
-    /** @return list<T> */
+    /** @return list<TItem> */
     public function items(): array
     {
         return $this->items;
