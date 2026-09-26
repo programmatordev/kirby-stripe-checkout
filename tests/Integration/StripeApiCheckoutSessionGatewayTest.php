@@ -193,6 +193,15 @@ final class StripeApiCheckoutSessionGatewayTest extends KirbyTestCase
                     'address' => null,
                     'email' => 'buyer@example.test',
                 ],
+                'collected_information' => [
+                    'shipping_details' => [
+                        'address' => [
+                            'city' => 'Porto',
+                            'country' => 'PT',
+                        ],
+                        'name' => 'Buyer',
+                    ],
+                ],
                 'custom_fields' => [],
                 'expires_at' => 1_789_171_200,
                 'integration_identifier' => 'kirby_stripe_checkout_abcdefgh',
@@ -202,8 +211,18 @@ final class StripeApiCheckoutSessionGatewayTest extends KirbyTestCase
                 'payment_intent' => 'pi_must_not_be_copied_here',
                 'payment_status' => 'paid',
                 'status' => 'complete',
+                'shipping_cost' => [
+                    'amount_subtotal' => 500,
+                    'amount_tax' => 115,
+                    'amount_total' => 615,
+                    'shipping_rate' => [
+                        'id' => 'shr_standard',
+                        'display_name' => 'Standard delivery',
+                    ],
+                ],
                 'total_details' => [
                     'amount_discount' => 0,
+                    'amount_shipping' => 615,
                     'breakdown' => ['discounts' => []],
                 ],
                 'ui_mode' => 'hosted_page',
@@ -226,10 +245,29 @@ final class StripeApiCheckoutSessionGatewayTest extends KirbyTestCase
                 'address' => null,
                 'email' => 'buyer@example.test',
             ],
+            'collected_information' => [
+                'shipping_details' => [
+                    'address' => [
+                        'city' => 'Porto',
+                        'country' => 'PT',
+                    ],
+                    'name' => 'Buyer',
+                ],
+            ],
             'custom_fields' => [],
             'total_details' => [
                 'amount_discount' => 0,
+                'amount_shipping' => 615,
                 'breakdown' => ['discounts' => []],
+            ],
+            'shipping_cost' => [
+                'amount_subtotal' => 500,
+                'amount_tax' => 115,
+                'amount_total' => 615,
+                'shipping_rate' => [
+                    'id' => 'shr_standard',
+                    'display_name' => 'Standard delivery',
+                ],
             ],
         ], $record->orderSnapshotSource);
         $this->assertArrayNotHasKey('payment_intent', $record->orderSnapshotSource);

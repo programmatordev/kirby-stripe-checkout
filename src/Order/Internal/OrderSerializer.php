@@ -303,6 +303,23 @@ final class OrderSerializer
                 }
             }
 
+            if (isset($data['shipping'])) {
+                $data['shipping'] = ShippingSnapshot::fromArray(OrderData::map($data['shipping']))->toArray();
+
+                if ($data['shipping']['currency'] !== $currency) {
+                    throw new OrderDataException();
+                }
+
+                if (isset($data['shippingTotal'])) {
+                    $shippingTotal = $registry->toMoney($registry->fromDecimal(OrderData::text($data['shippingTotal']), $currency));
+                    $snapshotTotal = $registry->toMoney($registry->fromDecimal(OrderData::text($data['shipping']['total']), $currency));
+
+                    if ($shippingTotal->isEqualTo($snapshotTotal) === false) {
+                        throw new OrderDataException();
+                    }
+                }
+            }
+
             $acceptedSnapshots = [
                 'stripeCheckout',
                 'checkoutAttempt',
@@ -315,6 +332,7 @@ final class OrderSerializer
                 'consent',
                 'discounts',
                 'tax',
+                'shipping',
                 'lifecycleDeliveries',
             ];
             $deferredSnapshots = array_diff(OrderSchema::SNAPSHOTS, $acceptedSnapshots);

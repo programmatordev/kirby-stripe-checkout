@@ -54,6 +54,9 @@ final class CheckoutSessionSnapshotNormalizerTest extends TestCase
                 'state' => 'Porto',
                 'country' => 'PT',
             ],
+            'stripeShippingRateId' => null,
+            'shipping' => null,
+            'shippingTotal' => null,
             'customFields' => [
                 [
                     'key' => 'reference',
@@ -117,6 +120,9 @@ final class CheckoutSessionSnapshotNormalizerTest extends TestCase
             'customer' => null,
             'billingAddress' => null,
             'shippingAddress' => null,
+            'stripeShippingRateId' => null,
+            'shipping' => null,
+            'shippingTotal' => null,
             'customFields' => [],
             'consent' => null,
             'discounts' => [],

@@ -36,16 +36,6 @@ final class SessionRequestBuilder
 
     private const SESSION_ID_PLACEHOLDER = '{CHECKOUT_SESSION_ID}';
 
-    private const STRIPE_METADATA_OWNER = 'kirby_stripe_checkout_owner';
-
-    private const STRIPE_METADATA_ORDER = 'kirby_stripe_checkout_order';
-
-    private const STRIPE_METADATA_LINE = 'kirby_stripe_checkout_line';
-
-    private const STRIPE_METADATA_SHIPPING_OPTION = 'kirby_stripe_checkout_shipping_option';
-
-    private const STRIPE_METADATA_SHIPPING_QUOTE = 'kirby_stripe_checkout_shipping_quote';
-
     public function __construct(
         private readonly App $kirby,
         private readonly Settings $settings,
@@ -74,8 +64,8 @@ final class SessionRequestBuilder
         // Keep the same order correlation on both Stripe resources because
         // later lifecycle events may expose either the Session or PaymentIntent.
         $correlation = [
-            self::STRIPE_METADATA_OWNER => PluginMetadata::NAME,
-            self::STRIPE_METADATA_ORDER => $order->pageUuid(),
+            PluginMetadata::OWNER_KEY => PluginMetadata::NAME,
+            PluginMetadata::ORDER_KEY => $order->pageUuid(),
         ];
         $parameters = [
             ...$this->settingsParameters(),
@@ -284,9 +274,9 @@ final class SessionRequestBuilder
             // The immutable order UUID and snapshot position identify the line
             // without depending on product content that can change later.
             $metadata = [
-                self::STRIPE_METADATA_OWNER => PluginMetadata::NAME,
-                self::STRIPE_METADATA_ORDER => $order->pageUuid(),
-                self::STRIPE_METADATA_LINE => hash('sha256', $order->pageUuid() . "\0" . $index),
+                PluginMetadata::OWNER_KEY => PluginMetadata::NAME,
+                PluginMetadata::ORDER_KEY => $order->pageUuid(),
+                PluginMetadata::LINE_KEY => hash('sha256', $order->pageUuid() . "\0" . $index),
             ];
             $requestLine = [
                 'metadata' => $metadata,
@@ -401,10 +391,10 @@ final class SessionRequestBuilder
                 'currency' => strtolower($shipping->currency()),
             ],
             'metadata' => [
-                self::STRIPE_METADATA_OWNER => PluginMetadata::NAME,
-                self::STRIPE_METADATA_ORDER => $order->pageUuid(),
-                self::STRIPE_METADATA_SHIPPING_OPTION => $option->key(),
-                self::STRIPE_METADATA_SHIPPING_QUOTE => $shipping->quoteFingerprint(),
+                PluginMetadata::OWNER_KEY => PluginMetadata::NAME,
+                PluginMetadata::ORDER_KEY => $order->pageUuid(),
+                PluginMetadata::SHIPPING_OPTION_KEY => $option->key(),
+                PluginMetadata::SHIPPING_QUOTE_KEY => $shipping->quoteFingerprint(),
             ],
             'type' => ShippingRate::TYPE_FIXED_AMOUNT,
         ];

@@ -13,8 +13,13 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\CustomerSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\CustomFieldSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\DiscountSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Order\Internal\ShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\TaxSnapshot;
+use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
+use ProgrammatorDev\StripeCheckout\Shipping\DeliveryEstimate;
+use ProgrammatorDev\StripeCheckout\Shipping\DeliveryEstimateUnit;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
+use Stripe\ShippingRate;
 use Throwable;
 
 /**
@@ -34,6 +39,9 @@ final class CheckoutSessionSnapshotNormalizer
      *   customer: ?array<string, mixed>,
      *   billingAddress: ?array<string, mixed>,
      *   shippingAddress: ?array<string, mixed>,
+     *   stripeShippingRateId: ?string,
+     *   shipping: ?array<string, mixed>,
+     *   shippingTotal: ?string,
      *   customFields: list<array<string, mixed>>,
      *   consent: ?array<string, mixed>,
      *   discounts: list<array<string, mixed>>,
@@ -53,6 +61,10 @@ final class CheckoutSessionSnapshotNormalizer
             $shippingAddress = $collectedInformation === null
                 ? null
                 : $this->shippingAddress($collectedInformation);
+            [$shippingRateId, $shipping, $shippingTotal] = $this->shipping(
+                sessionData: $sessionData,
+                currency: $sessionRecord->currency,
+            );
             [$discounts, $discountTotal] = $this->discounts(
                 sessionData: $sessionData,
                 currency: $sessionRecord->currency,
@@ -64,6 +76,9 @@ final class CheckoutSessionSnapshotNormalizer
                 'customer' => $customer?->toArray(),
                 'billingAddress' => $billingAddress?->toArray(),
                 'shippingAddress' => $shippingAddress?->toArray(),
+                'stripeShippingRateId' => $shippingRateId,
+                'shipping' => $shipping?->toArray(),
+                'shippingTotal' => $shippingTotal,
                 'customFields' => array_map(
                     static fn(CustomFieldSnapshot $customField): array => $customField->toArray(),
                     $this->customFields($sessionData['custom_fields'] ?? []),
@@ -80,6 +95,135 @@ final class CheckoutSessionSnapshotNormalizer
         } catch (Throwable) {
             throw new OrderDataException();
         }
+    }
+
+    /**
+     * @param array<string, mixed> $sessionData
+     * @return array{?string, ?ShippingSnapshot, ?string}
+     */
+    private function shipping(array $sessionData, ?string $currency): array
+    {
+        $totalDetails = $this->nullableMap($sessionData['total_details'] ?? null);
+        $providerShippingTotal = $totalDetails['amount_shipping'] ?? null;
+        $shippingCost = $this->nullableMap($sessionData['shipping_cost'] ?? null);
+
+        if ($shippingCost === null) {
+            if ($providerShippingTotal === null) {
+                return [null, null, null];
+            }
+
+            // An explicit zero is an authoritative no-shipping result. A missing
+            // amount remains unknown and must not be converted into a zero fact.
+            if ($providerShippingTotal !== 0 || $currency === null) {
+                throw new OrderDataException();
+            }
+
+            return [null, null, $this->providerAmount(0, $currency)];
+        }
+
+        if (is_int($providerShippingTotal) === false || $currency === null) {
+            throw new OrderDataException();
+        }
+
+        $shippingRate = $shippingCost['shipping_rate'] ?? null;
+        $shippingRateId = $this->referenceId($shippingRate, 'shr_');
+        $shippingRateData = $this->referenceData($shippingRate);
+
+        // A selected ID alone proves the reference but cannot provide the
+        // immutable rate details required by the final order snapshot.
+        if ($shippingRateId === null || $shippingRateData === []) {
+            throw new OrderDataException();
+        }
+
+        if (($shippingRateData['type'] ?? null) !== ShippingRate::TYPE_FIXED_AMOUNT) {
+            throw new OrderDataException();
+        }
+
+        $providerSubtotal = $shippingCost['amount_subtotal'] ?? null;
+        $providerTax = $shippingCost['amount_tax'] ?? null;
+        $providerTotal = $shippingCost['amount_total'] ?? null;
+        $fixedAmount = $this->map($shippingRateData['fixed_amount'] ?? null);
+        $fixedProviderAmount = $fixedAmount['amount'] ?? null;
+        $fixedCurrency = $fixedAmount['currency'] ?? null;
+
+        // The Rate's fixed amount describes the pre-tax, pre-discount shipping
+        // subtotal. Stripe's returned shipping total may differ after both.
+        // https://docs.stripe.com/api/checkout/sessions/object#checkout_session_object-shipping_cost
+        if (
+            is_int($providerSubtotal) === false
+            || is_int($providerTax) === false
+            || is_int($providerTotal) === false
+            || $providerShippingTotal !== $providerTotal
+            || $fixedProviderAmount !== $providerSubtotal
+            || is_string($fixedCurrency) === false
+            || strtoupper($fixedCurrency) !== strtoupper($currency)
+        ) {
+            throw new OrderDataException();
+        }
+
+        $metadata = $this->map($shippingRateData['metadata'] ?? null);
+
+        if (($metadata[PluginMetadata::OWNER_KEY] ?? null) !== PluginMetadata::NAME) {
+            throw new OrderDataException();
+        }
+
+        OrderData::uuid(OrderData::text($metadata[PluginMetadata::ORDER_KEY] ?? null));
+
+        $shipping = ShippingSnapshot::fromArray([
+            'optionKey' => $metadata[PluginMetadata::SHIPPING_OPTION_KEY] ?? null,
+            'quoteFingerprint' => $metadata[PluginMetadata::SHIPPING_QUOTE_KEY] ?? null,
+            'label' => $shippingRateData['display_name'] ?? null,
+            'currency' => strtoupper($currency),
+            'subtotal' => $this->providerAmount($providerSubtotal, $currency),
+            'providerSubtotal' => $providerSubtotal,
+            'tax' => $this->providerAmount($providerTax, $currency),
+            'providerTax' => $providerTax,
+            'total' => $this->providerAmount($providerTotal, $currency),
+            'providerTotal' => $providerTotal,
+            'deliveryEstimate' => $this->deliveryEstimate($shippingRateData['delivery_estimate'] ?? null),
+            'taxBehavior' => $shippingRateData['tax_behavior'] ?? null,
+            'taxCode' => $this->referenceId($shippingRateData['tax_code'] ?? null, 'txcd_'),
+        ]);
+
+        return [$shippingRateId, $shipping, $shipping->total()];
+    }
+
+    /** @return array{minimum: ?int, maximum: ?int, unit: string}|null */
+    private function deliveryEstimate(mixed $value): ?array
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $estimate = $this->map($value);
+        $minimum = $this->nullableMap($estimate['minimum'] ?? null);
+        $maximum = $this->nullableMap($estimate['maximum'] ?? null);
+        $minimumValue = $minimum === null ? null : OrderData::integer($minimum['value'] ?? null);
+        $maximumValue = $maximum === null ? null : OrderData::integer($maximum['value'] ?? null);
+        $unitValue = $minimum['unit'] ?? $maximum['unit'] ?? null;
+
+        if (
+            is_string($unitValue) === false
+            || ($minimum !== null && ($minimum['unit'] ?? null) !== $unitValue)
+            || ($maximum !== null && ($maximum['unit'] ?? null) !== $unitValue)
+        ) {
+            throw new OrderDataException();
+        }
+
+        return (new DeliveryEstimate(
+            minimum: $minimumValue,
+            maximum: $maximumValue,
+            unit: DeliveryEstimateUnit::from($unitValue),
+        ))->toArray();
+    }
+
+    private function providerAmount(int $providerAmount, string $currency): string
+    {
+        $registry = new StripeCurrencyRegistry();
+
+        return (string) $registry
+            ->toMoney($registry->fromProviderAmount($providerAmount, strtoupper($currency)))
+            ->getAmount();
     }
 
     /** @param array<string, mixed> $sessionData */
@@ -201,9 +345,7 @@ final class CheckoutSessionSnapshotNormalizer
             throw new OrderDataException();
         }
 
-        $registry = new StripeCurrencyRegistry();
-
-        return (string) $registry->toMoney($registry->fromProviderAmount(OrderData::integer($value), strtoupper($currency)))->getAmount();
+        return $this->providerAmount(OrderData::integer($value), $currency);
     }
 
     /** @param array<string, mixed> $details */

@@ -61,7 +61,28 @@ final class CheckoutSessionTaxSnapshotTest extends TestCase
             'data' => [['id' => 'li_one', 'taxes' => [$taxEntry]]],
             'has_more' => false,
         ];
-        $source['shipping_cost'] = ['shipping_rate' => 'shr_one', 'taxes' => [$taxEntry]];
+        $source['total_details']['amount_shipping'] = 1230;
+        $source['shipping_cost'] = [
+            'amount_subtotal' => 1000,
+            'amount_tax' => 230,
+            'amount_total' => 1230,
+            'shipping_rate' => [
+                'id' => 'shr_one',
+                'display_name' => 'Standard delivery',
+                'fixed_amount' => [
+                    'amount' => 1000,
+                    'currency' => 'eur',
+                ],
+                'metadata' => [
+                    'kirby_stripe_checkout_order' => 'page://order',
+                    'kirby_stripe_checkout_owner' => 'programmatordev/stripe-checkout',
+                    'kirby_stripe_checkout_shipping_option' => 'standard',
+                    'kirby_stripe_checkout_shipping_quote' => str_repeat('a', 64),
+                ],
+                'type' => 'fixed_amount',
+            ],
+            'taxes' => [$taxEntry],
+        ];
         $snapshots = $this->normalize($source);
         $this->assertSame('4.60', $snapshots['taxTotal']);
         $this->assertIsArray($snapshots['tax']);

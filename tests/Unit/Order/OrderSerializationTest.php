@@ -110,6 +110,30 @@ final class OrderSerializationTest extends TestCase
         $this->assertSame(OrderData::map($data), OrderSerializer::normalize($data));
     }
 
+    public function testCompletedOrderRevalidatesTheAuthoritativeShippingSnapshot(): void
+    {
+        $data = $this->dataWithCheckoutStatus(CheckoutStatus::Complete);
+        $data['stripeShippingRateId'] = 'shr_standard';
+        $data['shippingTotal'] = '6.15';
+        $data['shipping'] = $this->shippingSnapshot();
+
+        $normalized = OrderSerializer::normalize($data);
+
+        $this->assertSame('shr_standard', $normalized['stripeShippingRateId']);
+        $this->assertSame('6.15', $normalized['shippingTotal']);
+        $this->assertSame($this->shippingSnapshot(), $normalized['shipping']);
+    }
+
+    public function testRejectsShippingSnapshotThatDisagreesWithTheOrderTotal(): void
+    {
+        $data = $this->dataWithCheckoutStatus(CheckoutStatus::Complete);
+        $data['shippingTotal'] = '6.14';
+        $data['shipping'] = $this->shippingSnapshot();
+
+        $this->expectException(OrderDataException::class);
+        OrderSerializer::normalize($data);
+    }
+
     public function testDefinitiveCreationFailureRetainsEarlierUncertainty(): void
     {
         $data = $this->dataWithCheckoutStatus(CheckoutStatus::CreationFailed);
@@ -407,6 +431,30 @@ final class OrderSerializationTest extends TestCase
             ),
             createdAt: $createdAt,
         );
+    }
+
+    /** @return array<string, mixed> */
+    private function shippingSnapshot(): array
+    {
+        return [
+            'optionKey' => 'standard',
+            'quoteFingerprint' => str_repeat('a', 64),
+            'label' => 'Standard delivery',
+            'currency' => 'EUR',
+            'subtotal' => '5.00',
+            'providerSubtotal' => 500,
+            'tax' => '1.15',
+            'providerTax' => 115,
+            'total' => '6.15',
+            'providerTotal' => 615,
+            'deliveryEstimate' => [
+                'minimum' => 2,
+                'maximum' => 4,
+                'unit' => 'business_day',
+            ],
+            'taxBehavior' => 'exclusive',
+            'taxCode' => 'txcd_92010001',
+        ];
     }
 
     #[DataProvider('requiredAttemptKeys')]
