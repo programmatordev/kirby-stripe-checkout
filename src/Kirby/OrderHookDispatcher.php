@@ -100,9 +100,10 @@ final class OrderHookDispatcher
         }
     }
 
-    public function dispatchDeletion(Page $order, LifecycleEvent $event): void
+    public function dispatchDeletion(OrderDeletion $deletion): void
     {
-        $delivered = $this->invoke($order, $event);
+        $event = $deletion->event();
+        $delivered = $this->invoke($deletion->order(), $event);
 
         try {
             // Keep only the last sanitized outcome, not a deleted customer's

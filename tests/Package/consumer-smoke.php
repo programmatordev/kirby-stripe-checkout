@@ -10,12 +10,17 @@ use Kirby\Filesystem\Dir;
 use Kirby\Plugin\Plugin;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
+use ProgrammatorDev\StripeCheckout\Kirby\CustomFieldsField;
 use ProgrammatorDev\StripeCheckout\Kirby\OptionsField;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
+use ProgrammatorDev\StripeCheckout\Kirby\OrdersPage;
 use ProgrammatorDev\StripeCheckout\Kirby\ProductBlueprint;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
+use ProgrammatorDev\StripeCheckout\Kirby\ShippingZonesField;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\StripePriceField;
+use ProgrammatorDev\StripeCheckout\Kirby\TaxCodeField;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
@@ -146,6 +151,7 @@ try {
         'fields/stripe-checkout/name' => [ProductBlueprint::class, 'name'],
         'fields/stripe-checkout/price' => [ProductBlueprint::class, 'price'],
         'fields/stripe-checkout/stripe-price' => [ProductBlueprint::class, 'stripePrice'],
+        'fields/stripe-checkout/tax-code' => [ProductBlueprint::class, 'taxCode'],
         'fields/stripe-checkout/description' => [ProductBlueprint::class, 'description'],
         'fields/stripe-checkout/images' => [ProductBlueprint::class, 'images'],
         'fields/stripe-checkout/sku' => [ProductBlueprint::class, 'sku'],
@@ -159,12 +165,16 @@ try {
         }
     }
 
-    if (
-        is_array($fields) === false
-        || ($fields['stripe-checkout-options'] ?? null) !== OptionsField::class
-        || ($fields['stripe-checkout-price'] ?? null) !== StripePriceField::class
-    ) {
-        throw new RuntimeException('The package did not register its variant field.');
+    $expectedFields = [
+        'stripe-checkout-custom-fields' => CustomFieldsField::class,
+        'stripe-checkout-options' => OptionsField::class,
+        'stripe-checkout-price' => StripePriceField::class,
+        'stripe-checkout-shipping-zones' => ShippingZonesField::class,
+        'stripe-checkout-tax-code' => TaxCodeField::class,
+    ];
+
+    if ($fields !== $expectedFields) {
+        throw new RuntimeException('The package registered an unexpected Panel field set.');
     }
 
     if (
@@ -176,11 +186,14 @@ try {
         throw new RuntimeException('The package did not register its product field converters.');
     }
 
-    if (
-        is_array($pageModels) === false
-        || ($pageModels['stripe-checkout'] ?? null) !== StripeCheckoutPage::class
-    ) {
-        throw new RuntimeException('The package did not register its Stripe Checkout Page model.');
+    $expectedPageModels = [
+        'stripe-checkout' => StripeCheckoutPage::class,
+        'stripe-checkout-order' => OrderPage::class,
+        'stripe-checkout-orders' => OrdersPage::class,
+    ];
+
+    if ($pageModels !== $expectedPageModels) {
+        throw new RuntimeException('The package registered an unexpected Page model set.');
     }
 
     if (

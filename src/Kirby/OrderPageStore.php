@@ -474,7 +474,7 @@ final class OrderPageStore
             return false;
         }
 
-        (new OrderHookDispatcher($this->kirby))->dispatchDeletion($deletion->order(), $deletion->event());
+        (new OrderHookDispatcher($this->kirby))->dispatchDeletion($deletion);
 
         return true;
     }

@@ -60,13 +60,13 @@ final class KirbyPageProductResolver implements ProductResolverInterface
             throw new InvalidProductException(ProductErrorCode::SELECTED_OPTIONS_INVALID);
         }
 
-        $imageFiles = $this->images(
+        $imageFiles = $this->imageFiles(
             $displayContent,
             $technicalContent,
             $fields->images(),
         );
         $imageUrls = array_map(
-            static fn(File $image): string => $image->url(),
+            static fn(File $imageFile): string => $imageFile->url(),
             array_slice($imageFiles, 0, 8),
         );
         $description = $fields->description() === null
@@ -150,7 +150,7 @@ final class KirbyPageProductResolver implements ProductResolverInterface
      * @param list<string> $fields
      * @return list<File>
      */
-    private function images(Content $display, Content $technical, array $fields): array
+    private function imageFiles(Content $display, Content $technical, array $fields): array
     {
         $imagesByUrl = [];
 
@@ -165,8 +165,8 @@ final class KirbyPageProductResolver implements ProductResolverInterface
                 $url = $file->url();
 
                 if (preg_match('#^https?://#', $url) === 1) {
-                    // Keep the original File for templates; never reconstruct
-                    // a local file from a URL supplied by a remote catalogue.
+                    // Preserve the Kirby File so templates retain operations
+                    // such as crop(); URLs are projected only by the caller.
                     $imagesByUrl[$url] ??= $file;
                 }
             }
