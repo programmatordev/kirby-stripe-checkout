@@ -23,9 +23,9 @@ final class VariantMatrix
     }
 
     /**
-     * @param list<array{id: string, label: string, values: list<array{id: string, label: string}>}> $options
-     * @param list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}> $variants
-     * @return list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}>
+     * @param list<OptionDefinition> $options
+     * @param list<VariantDefinition> $variants
+     * @return list<VariantDefinition>
      */
     public function reconcile(array $options, array $variants): array
     {
@@ -36,7 +36,7 @@ final class VariantMatrix
         $existing = [];
 
         foreach ($variants as $variant) {
-            $existing[self::optionCombinationKey($variant['selectedOptions'])] = $variant;
+            $existing[self::optionCombinationKey($variant->selectedOptions())] = $variant;
         }
 
         $reconciled = [];
@@ -45,16 +45,16 @@ final class VariantMatrix
             $key = self::optionCombinationKey($selectedOptions);
             $variant = $existing[$key] ?? null;
 
-            $reconciled[] = $variant ?? [
-                'id' => ($this->idGenerator)($selectedOptions),
-                'selectedOptions' => $selectedOptions,
-                'enabled' => true,
-                'sku' => null,
-                'price' => null,
-                'stripePriceId' => null,
-                'requiresShipping' => 'inherit',
-                'taxCode' => null,
-            ];
+            $reconciled[] = $variant ?? new VariantDefinition(
+                id: ($this->idGenerator)($selectedOptions),
+                selectedOptions: $selectedOptions,
+                enabled: true,
+                sku: null,
+                price: null,
+                stripePriceId: null,
+                shippingOverride: null,
+                taxCodeId: null,
+            );
         }
 
         return $reconciled;
@@ -81,7 +81,7 @@ final class VariantMatrix
     }
 
     /**
-     * @param list<array{id: string, label: string, values: list<array{id: string, label: string}>}> $options
+     * @param list<OptionDefinition> $options
      * @return list<array<string, string>>
      */
     private function combinations(array $options): array
@@ -92,8 +92,8 @@ final class VariantMatrix
             $next = [];
 
             foreach ($combinations as $combination) {
-                foreach ($option['values'] as $value) {
-                    $next[] = [...$combination, $option['id'] => $value['id']];
+                foreach ($option->values() as $value) {
+                    $next[] = [...$combination, $option->id() => $value->id()];
                 }
             }
 

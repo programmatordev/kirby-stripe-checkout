@@ -350,7 +350,20 @@ final class ConfigurationResolver
         }
 
         /** @var array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePrice: string, taxCode: string, requiresShipping: string, options: string} $fields */
-        return new ProductConfiguration($resolver, $fields);
+        return new ProductConfiguration(
+            resolver: $resolver,
+            fields: new ProductFields(
+                name: $fields['name'],
+                description: $fields['description'],
+                images: $fields['images'],
+                sku: $fields['sku'],
+                price: $fields['price'],
+                stripePrice: $fields['stripePrice'],
+                taxCode: $fields['taxCode'],
+                requiresShipping: $fields['requiresShipping'],
+                options: $fields['options'],
+            ),
+        );
     }
 
     /** @param array<string, mixed> $shipping */

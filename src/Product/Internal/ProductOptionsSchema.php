@@ -9,16 +9,13 @@ use Kirby\Data\Yaml;
 use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 
 /**
- * Normalizes canonical variant data and translated label overlays.
+ * Normalizes canonical product-option definitions and translated label overlays.
  *
  * @internal
  */
-final class VariantSchema
+final class ProductOptionsSchema
 {
-    /**
-     * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}>}
-     */
-    public function canonical(mixed $value): array
+    public function canonical(mixed $value): ProductOptionsDefinition
     {
         $data = $this->decode($value);
 
@@ -33,17 +30,16 @@ final class VariantSchema
             throw new InvalidArgumentException('Variants require at least one option.');
         }
 
-        return [
-            'options' => $options,
-            'variants' => (new VariantMatrix())->reconcile($options, $variants),
-        ];
+        return new ProductOptionsDefinition(
+            options: $options,
+            variants: (new VariantMatrix())->reconcile($options, $variants),
+        );
     }
 
     /**
-     * @param array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}>} $canonical
      * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>}
      */
-    public function overlay(array $canonical, mixed $value): array
+    public function overlay(ProductOptionsDefinition $canonical, mixed $value): array
     {
         $input = $this->decode($value);
         $submittedOptions = is_array($input['options'] ?? null) ? $input['options'] : [];
@@ -57,8 +53,8 @@ final class VariantSchema
 
         $options = [];
 
-        foreach ($canonical['options'] as $option) {
-            $submittedOption = $submittedById[$option['id']] ?? [];
+        foreach ($canonical->options() as $option) {
+            $submittedOption = $submittedById[$option->id()] ?? [];
             $submittedValues = is_array($submittedOption['values'] ?? null)
                 ? $submittedOption['values']
                 : [];
@@ -72,16 +68,16 @@ final class VariantSchema
 
             $values = [];
 
-            foreach ($option['values'] as $valueDefinition) {
-                $submittedValue = $submittedValuesById[$valueDefinition['id']] ?? [];
+            foreach ($option->values() as $valueDefinition) {
+                $submittedValue = $submittedValuesById[$valueDefinition->id()] ?? [];
                 $values[] = [
-                    'id' => $valueDefinition['id'],
+                    'id' => $valueDefinition->id(),
                     'label' => $this->optionalLabel($submittedValue['label'] ?? null),
                 ];
             }
 
             $options[] = [
-                'id' => $option['id'],
+                'id' => $option->id(),
                 'label' => $this->optionalLabel($submittedOption['label'] ?? null),
                 'values' => $values,
             ];
@@ -90,11 +86,7 @@ final class VariantSchema
         return ['options' => $options];
     }
 
-    /**
-     * @param array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}>} $canonical
-     * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}>}
-     */
-    public function localized(array $canonical, mixed $overlay): array
+    public function localized(ProductOptionsDefinition $canonical, mixed $overlay): ProductOptionsDefinition
     {
         $overlayData = $this->decode($overlay);
         $overlayOptions = is_array($overlayData['options'] ?? null) ? $overlayData['options'] : [];
@@ -108,8 +100,8 @@ final class VariantSchema
 
         $localizedOptions = [];
 
-        foreach ($canonical['options'] as $option) {
-            $overlayOption = $optionsById[$option['id']] ?? [];
+        foreach ($canonical->options() as $option) {
+            $overlayOption = $optionsById[$option->id()] ?? [];
             $valuesById = [];
 
             foreach (is_array($overlayOption['values'] ?? null) ? $overlayOption['values'] : [] as $value) {
@@ -120,20 +112,19 @@ final class VariantSchema
 
             $values = [];
 
-            foreach ($option['values'] as $value) {
-                $label = $this->optionalLabel($valuesById[$value['id']]['label'] ?? null);
-                $values[] = [...$value, 'label' => $label === '' ? $value['label'] : $label];
+            foreach ($option->values() as $value) {
+                $label = $this->optionalLabel($valuesById[$value->id()]['label'] ?? null);
+                $values[] = $value->withLabel($label === '' ? $value->label() : $label);
             }
 
             $label = $this->optionalLabel($overlayOption['label'] ?? null);
-            $localizedOptions[] = [
-                ...$option,
-                'label' => $label === '' ? $option['label'] : $label,
-                'values' => $values,
-            ];
+            $localizedOptions[] = $option->localized(
+                label: $label === '' ? $option->label() : $label,
+                values: $values,
+            );
         }
 
-        return [...$canonical, 'options' => $localizedOptions];
+        return $canonical->withLocalizedOptions($localizedOptions);
     }
 
     /** @return array<string, mixed> */
@@ -155,7 +146,7 @@ final class VariantSchema
     }
 
     /**
-     * @return list<array{id: string, label: string, values: list<array{id: string, label: string}>}>
+     * @return list<OptionDefinition>
      */
     private function options(mixed $options): array
     {
@@ -189,25 +180,25 @@ final class VariantSchema
 
                 $valueId = $this->requiredId($value['id'] ?? null, 'value');
                 $this->assertUnique($valueIds, $valueId, 'value');
-                $normalizedValues[] = [
-                    'id' => $valueId,
-                    'label' => $this->requiredLabel($value['label'] ?? null, 'value'),
-                ];
+                $normalizedValues[] = new OptionValueDefinition(
+                    id: $valueId,
+                    label: $this->requiredLabel($value['label'] ?? null, 'value'),
+                );
             }
 
-            $normalized[] = [
-                'id' => $id,
-                'label' => $this->requiredLabel($option['label'] ?? null, 'option'),
-                'values' => $normalizedValues,
-            ];
+            $normalized[] = new OptionDefinition(
+                id: $id,
+                label: $this->requiredLabel($option['label'] ?? null, 'option'),
+                values: $normalizedValues,
+            );
         }
 
         return $normalized;
     }
 
     /**
-     * @param list<array{id: string, label: string, values: list<array{id: string, label: string}>}> $options
-     * @return list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}>
+     * @param list<OptionDefinition> $options
+     * @return list<VariantDefinition>
      */
     private function variants(mixed $variants, array $options): array
     {
@@ -218,7 +209,10 @@ final class VariantSchema
         $knownValues = [];
 
         foreach ($options as $option) {
-            $knownValues[$option['id']] = array_column($option['values'], 'id');
+            $knownValues[$option->id()] = array_map(
+                static fn(OptionValueDefinition $value): string => $value->id(),
+                $option->values(),
+            );
         }
 
         $normalized = [];
@@ -267,19 +261,23 @@ final class VariantSchema
                 throw new InvalidArgumentException('A variant has an invalid availability value.');
             }
 
-            $normalized[] = [
-                'id' => $id,
-                'selectedOptions' => $normalizedOptions,
-                'enabled' => $enabled,
-                'sku' => $this->nullableString($variant['sku'] ?? null, 'sku'),
-                'price' => $this->nullableString($variant['price'] ?? null, 'price'),
-                'stripePriceId' => $this->nullableString(
+            $normalized[] = new VariantDefinition(
+                id: $id,
+                selectedOptions: $normalizedOptions,
+                enabled: $enabled,
+                sku: $this->nullableString($variant['sku'] ?? null, 'sku'),
+                price: $this->nullableString($variant['price'] ?? null, 'price'),
+                stripePriceId: $this->nullableString(
                     $variant['stripePriceId'] ?? null,
                     'stripePriceId',
                 ),
-                'requiresShipping' => $shipping,
-                'taxCode' => $this->nullableString($variant['taxCode'] ?? null, 'taxCode'),
-            ];
+                shippingOverride: match ($shipping) {
+                    'yes' => true,
+                    'no' => false,
+                    default => null,
+                },
+                taxCodeId: $this->nullableString($variant['taxCode'] ?? null, 'taxCode'),
+            );
         }
 
         return $normalized;
@@ -287,7 +285,13 @@ final class VariantSchema
 
     private function requiredId(mixed $value, string $kind): string
     {
-        if (is_string($value) === false || preg_match('/^[A-Za-z0-9_-]{4,64}$/', $value) !== 1) {
+        if (
+            is_string($value) === false
+            || preg_match('/^[A-Za-z0-9_-]{4,64}$/', $value) !== 1
+            // Option IDs become associative selection keys; PHP coerces an
+            // all-digit key to int and would break the string-key contract.
+            || $kind === 'option' && ctype_digit($value)
+        ) {
             throw new InvalidArgumentException(sprintf('Each %s requires a stable ID.', $kind));
         }
 

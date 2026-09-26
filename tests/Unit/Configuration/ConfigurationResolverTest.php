@@ -454,17 +454,16 @@ final class ConfigurationResolverTest extends TestCase
         ])->configurationOrFail()->products();
 
         $this->assertSame($resolver, $products->resolver());
-        $this->assertSame([
-            'name' => 'productName',
-            'description' => null,
-            'images' => ['thumbnail', 'gallery'],
-            'sku' => 'sku',
-            'price' => 'unitPrice',
-            'stripePrice' => 'paymentPrice',
-            'taxCode' => 'taxClass',
-            'requiresShipping' => 'requiresShipping',
-            'options' => 'options',
-        ], $products->fields());
+        $fields = $products->fields();
+        $this->assertSame('productName', $fields->name());
+        $this->assertNull($fields->description());
+        $this->assertSame(['thumbnail', 'gallery'], $fields->images());
+        $this->assertSame('sku', $fields->sku());
+        $this->assertSame('unitPrice', $fields->price());
+        $this->assertSame('paymentPrice', $fields->stripePrice());
+        $this->assertSame('taxClass', $fields->taxCode());
+        $this->assertSame('requiresShipping', $fields->requiresShipping());
+        $this->assertSame('options', $fields->options());
     }
 
     public function testResolvesObjectAndDottedClosureShippingResolvers(): void

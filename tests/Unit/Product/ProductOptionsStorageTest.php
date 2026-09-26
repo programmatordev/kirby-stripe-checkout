@@ -7,8 +7,9 @@ namespace ProgrammatorDev\StripeCheckout\Test\Unit\Product;
 use Brick\Money\Money;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
+use ProgrammatorDev\StripeCheckout\Product\Internal\ProductOptionsSchema;
+use ProgrammatorDev\StripeCheckout\Product\Internal\VariantDefinition;
 use ProgrammatorDev\StripeCheckout\Product\Internal\VariantMatrix;
-use ProgrammatorDev\StripeCheckout\Product\Internal\VariantSchema;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\ProductOption;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
@@ -19,7 +20,7 @@ final class ProductOptionsStorageTest extends TestCase
 {
     public function testReconcilesTheMatrixWithoutDiscardingExistingCommerceData(): void
     {
-        $schema = new VariantSchema();
+        $schema = new ProductOptionsSchema();
         $canonical = $schema->canonical([
             'options' => self::fixtureOptions(),
             'variants' => [[
@@ -34,26 +35,28 @@ final class ProductOptionsStorageTest extends TestCase
             ]],
         ]);
 
-        $this->assertCount(4, $canonical['variants']);
-        $this->assertSame('existingVariant', $canonical['variants'][0]['id']);
-        $this->assertSame('RED-S', $canonical['variants'][0]['sku']);
-        $this->assertFalse($canonical['variants'][0]['enabled']);
-        $this->assertSame('txcd_test', $canonical['variants'][0]['taxCode']);
-        $this->assertNull($canonical['variants'][1]['taxCode']);
-        $this->assertNotSame('', $canonical['variants'][1]['id']);
+        $variants = $canonical->variants();
+
+        $this->assertCount(4, $variants);
+        $this->assertSame('existingVariant', $variants[0]->id());
+        $this->assertSame('RED-S', $variants[0]->sku());
+        $this->assertFalse($variants[0]->enabled());
+        $this->assertSame('txcd_test', $variants[0]->taxCodeId());
+        $this->assertNull($variants[1]->taxCodeId());
+        $this->assertNotSame('', $variants[1]->id());
     }
 
     public function testGeneratedIdsRemainStableBeforeTheFieldIsSaved(): void
     {
-        $schema = new VariantSchema();
+        $schema = new ProductOptionsSchema();
         $value = ['options' => self::fixtureOptions(), 'variants' => []];
 
         $first = $schema->canonical($value);
         $second = $schema->canonical($value);
 
         $this->assertSame(
-            array_column($first['variants'], 'id'),
-            array_column($second['variants'], 'id'),
+            array_map(static fn(VariantDefinition $variant): string => $variant->id(), $first->variants()),
+            array_map(static fn(VariantDefinition $variant): string => $variant->id(), $second->variants()),
         );
     }
 
@@ -61,7 +64,7 @@ final class ProductOptionsStorageTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('A variant contains an unknown selected option.');
-        (new VariantSchema())->canonical([
+        (new ProductOptionsSchema())->canonical([
             'options' => self::fixtureOptions(),
             'variants' => [[
                 'id' => 'extraOptionVariant',
@@ -75,9 +78,24 @@ final class ProductOptionsStorageTest extends TestCase
         ]);
     }
 
+    public function testRejectsNumericOnlyOptionIdsThatCannotRemainStringSelectionKeys(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Each option requires a stable ID.');
+
+        (new ProductOptionsSchema())->canonical([
+            'options' => [[
+                'id' => '1234',
+                'label' => 'Size',
+                'values' => [['id' => '5678', 'label' => 'Small']],
+            ]],
+            'variants' => [],
+        ]);
+    }
+
     public function testPreservesStringZeroAsAVariantPrice(): void
     {
-        $canonical = (new VariantSchema())->canonical([
+        $canonical = (new ProductOptionsSchema())->canonical([
             'options' => self::fixtureOptions(),
             'variants' => [[
                 'id' => 'freeVariant',
@@ -90,7 +108,7 @@ final class ProductOptionsStorageTest extends TestCase
             ]],
         ]);
 
-        $this->assertSame('0', $canonical['variants'][0]['price']);
+        $this->assertSame('0', $canonical->variants()[0]->price());
     }
 
     public function testRejectsNumericVariantPricesAtTheCanonicalBoundary(): void
@@ -98,7 +116,7 @@ final class ProductOptionsStorageTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Variant commerce values must be strings.');
 
-        (new VariantSchema())->canonical([
+        (new ProductOptionsSchema())->canonical([
             'options' => self::fixtureOptions(),
             'variants' => [[
                 'id' => 'floatVariant',
@@ -117,7 +135,7 @@ final class ProductOptionsStorageTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Variants require at least one option.');
 
-        (new VariantSchema())->canonical([
+        (new ProductOptionsSchema())->canonical([
             'options' => [],
             'variants' => [[
                 'id' => 'orphanVariant001',
@@ -133,14 +151,15 @@ final class ProductOptionsStorageTest extends TestCase
 
     public function testLabelsAndOptionOrderDoNotReplaceVariantIdentity(): void
     {
-        $schema = new VariantSchema();
+        $schema = new ProductOptionsSchema();
         $canonical = $schema->canonical([
             'options' => self::fixtureOptions(),
             'variants' => [],
         ]);
-        $canonical['variants'] = array_map(
+        $canonicalData = $canonical->toArray();
+        $canonicalData['variants'] = array_map(
             static fn(array $variant): array => [...$variant, 'taxCode' => 'txcd_test'],
-            $canonical['variants'],
+            $canonicalData['variants'],
         );
         $reorderedOptions = array_reverse(self::fixtureOptions());
         $option = $reorderedOptions[1];
@@ -151,17 +170,17 @@ final class ProductOptionsStorageTest extends TestCase
         ];
         $reconciled = $schema->canonical([
             'options' => $reorderedOptions,
-            'variants' => $canonical['variants'],
+            'variants' => $canonicalData['variants'],
         ]);
         $before = [];
         $after = [];
 
-        foreach ($canonical['variants'] as $variant) {
-            $before[VariantMatrix::optionCombinationKey($variant['selectedOptions'])] = [$variant['id'], $variant['taxCode']];
+        foreach ($schema->canonical($canonicalData)->variants() as $variant) {
+            $before[VariantMatrix::optionCombinationKey($variant->selectedOptions())] = [$variant->id(), $variant->taxCodeId()];
         }
 
-        foreach ($reconciled['variants'] as $variant) {
-            $after[VariantMatrix::optionCombinationKey($variant['selectedOptions'])] = [$variant['id'], $variant['taxCode']];
+        foreach ($reconciled->variants() as $variant) {
+            $after[VariantMatrix::optionCombinationKey($variant->selectedOptions())] = [$variant->id(), $variant->taxCodeId()];
         }
 
         ksort($before);
@@ -187,13 +206,13 @@ final class ProductOptionsStorageTest extends TestCase
 
         $this->assertCount(
             50,
-            (new VariantSchema())->canonical(['options' => $options, 'variants' => []])['variants'],
+            (new ProductOptionsSchema())->canonical(['options' => $options, 'variants' => []])->variants(),
         );
     }
 
     public function testTranslatedOverlayCannotReplaceTechnicalData(): void
     {
-        $schema = new VariantSchema();
+        $schema = new ProductOptionsSchema();
         $canonical = $schema->canonical(['options' => self::fixtureOptions(), 'variants' => []]);
         $overlay = $schema->overlay($canonical, [
             'options' => [[
@@ -212,15 +231,17 @@ final class ProductOptionsStorageTest extends TestCase
         ]);
         $localized = $schema->localized($canonical, $overlay);
 
-        $this->assertSame('Cor', $localized['options'][0]['label']);
-        $this->assertSame('Vermelho', $localized['options'][0]['values'][0]['label']);
-        $this->assertSame('Blue', $localized['options'][0]['values'][1]['label']);
-        $this->assertSame($canonical['variants'], $localized['variants']);
+        $localizedOption = $localized->options()[0];
+
+        $this->assertSame('Cor', $localizedOption->label());
+        $this->assertSame('Vermelho', $localizedOption->value('redValue')?->label());
+        $this->assertSame('Blue', $localizedOption->value('blueValue')?->label());
+        $this->assertSame($canonical->variants(), $localized->variants());
     }
 
     public function testTranslatedNamesUseTheCanonicalValidationRules(): void
     {
-        $schema = new VariantSchema();
+        $schema = new ProductOptionsSchema();
         $canonical = $schema->canonical(['options' => self::fixtureOptions(), 'variants' => []]);
 
         foreach ([str_repeat('a', 501), "Invalid\nname", "Invalid\xff", 123] as $name) {

@@ -37,7 +37,7 @@ final class ProductOptionsFactory
     public function __construct(
         private readonly ProductConfiguration $configuration,
         private readonly ProductResolutionContext $context,
-        private readonly VariantSchema $schema = new VariantSchema(),
+        private readonly ProductOptionsSchema $schema = new ProductOptionsSchema(),
         private readonly ProductCommerceResolver $commerce = new ProductCommerceResolver(),
         private readonly ?Closure $stripePriceResolver = null,
         private readonly ?Closure $taxCodeValidator = null,
@@ -86,22 +86,22 @@ final class ProductOptionsFactory
         }
 
         $options = array_map(
-            static fn(array $option): ProductOption => new ProductOption(
-                $option['id'],
-                $option['label'],
+            static fn(OptionDefinition $option): ProductOption => new ProductOption(
+                $option->id(),
+                $option->label(),
                 array_map(
-                    static fn(array $value): ProductOptionValue => new ProductOptionValue(
-                        $value['id'],
-                        $value['label'],
+                    static fn(OptionValueDefinition $value): ProductOptionValue => new ProductOptionValue(
+                        $value->id(),
+                        $value->label(),
                     ),
-                    $option['values'],
+                    $option->values(),
                 ),
             ),
-            $localized['options'],
+            $localized->options(),
         );
         $stripePrices = [];
         $variants = array_map(
-            function (array $variant) use (&$stripePrices, $technicalContent, $fields): ProductVariant {
+            function (VariantDefinition $variant) use (&$stripePrices, $technicalContent, $fields): ProductVariant {
                 $price = $this->commerce->price(
                     $technicalContent,
                     $fields,
@@ -125,9 +125,9 @@ final class ProductOptionsFactory
                 }
 
                 return new ProductVariant(
-                    $variant['id'],
-                    $variant['selectedOptions'],
-                    $variant['enabled'],
+                    $variant->id(),
+                    $variant->selectedOptions(),
+                    $variant->enabled(),
                     $price,
                     $this->commerce->requiresShipping(
                         $technicalContent,
@@ -135,11 +135,11 @@ final class ProductOptionsFactory
                         $variant,
                         $this->context,
                     ),
-                    sku: $variant['sku'],
+                    sku: $variant->sku(),
                     taxCode: $taxCode,
                 );
             },
-            $localized['variants'],
+            $localized->variants(),
         );
 
         return new ProductOptions($options, $variants);

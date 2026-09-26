@@ -14,22 +14,9 @@ use ProgrammatorDev\StripeCheckout\Product\ProductResolverInterface;
  */
 final readonly class ProductConfiguration
 {
-    /**
-     * @param array{
-     *   name: string,
-     *   description: ?string,
-     *   images: list<string>,
-     *   sku: string,
-     *   price: string,
-     *   stripePrice: string,
-     *   taxCode: string,
-     *   requiresShipping: string,
-     *   options: string
-     * } $fields
-     */
     public function __construct(
         private ProductResolverInterface|Closure|null $resolver,
-        private array $fields,
+        private ProductFields $fields,
     ) {}
 
     public function resolver(): ProductResolverInterface|Closure|null
@@ -37,20 +24,7 @@ final readonly class ProductConfiguration
         return $this->resolver;
     }
 
-    /**
-     * @return array{
-     *   name: string,
-     *   description: ?string,
-     *   images: list<string>,
-     *   sku: string,
-     *   price: string,
-     *   stripePrice: string,
-     *   taxCode: string,
-     *   requiresShipping: string,
-     *   options: string
-     * }
-     */
-    public function fields(): array
+    public function fields(): ProductFields
     {
         return $this->fields;
     }

@@ -281,7 +281,13 @@ final class ProductTaxCodeTest extends KirbyTestCase
             reference: $page->id(),
             selectedOptions: ['sizeOption000001' => 'largeValue00001'],
         ))->taxCode());
-        $this->assertSame('retained_unknown_code', (new \ProgrammatorDev\StripeCheckout\Product\Internal\VariantSchema())->canonical($data)['variants'][0]['taxCode']);
+        $this->assertSame(
+            'retained_unknown_code',
+            (new \ProgrammatorDev\StripeCheckout\Product\Internal\ProductOptionsSchema())
+                ->canonical($data)
+                ->variants()[0]
+                ->taxCodeId(),
+        );
     }
 
     /** @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, taxCode: ?string}>} */

@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Product\Internal;
 use Kirby\Content\Content;
 use Kirby\Content\Field;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
+use ProgrammatorDev\StripeCheckout\Configuration\ProductFields;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Price;
@@ -28,19 +29,15 @@ final class ProductCommerceResolver
         private readonly StripeCurrencyRegistry $currencies = new StripeCurrencyRegistry(),
     ) {}
 
-    /**
-     * @param array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePrice: string, taxCode: string, requiresShipping: string, options: string} $fields
-     * @param array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}|null $variant
-     */
     public function price(
         Content $content,
-        array $fields,
-        ?array $variant,
+        ProductFields $fields,
+        ?VariantDefinition $variant,
         ProductResolutionContext $context,
     ): Price|StripePriceReference {
         if ($context->priceSource() === PriceSource::Stripe) {
-            $priceId = $variant['stripePriceId'] ?? null;
-            $priceId ??= $this->optionalString($this->field($content, $fields['stripePrice'])->value());
+            $priceId = $variant?->stripePriceId();
+            $priceId ??= $this->optionalString($this->field($content, $fields->stripePrice())->value());
 
             if ($priceId === null) {
                 throw new InvalidProductException(ProductErrorCode::PRICE_MISSING);
@@ -49,8 +46,8 @@ final class ProductCommerceResolver
             return new StripePriceReference($priceId);
         }
 
-        $amount = $variant['price'] ?? null;
-        $amount ??= $this->optionalString($this->field($content, $fields['price'])->value());
+        $amount = $variant?->price();
+        $amount ??= $this->optionalString($this->field($content, $fields->price())->value());
         $currency = $context->settings()->currency();
 
         if ($amount === null || $currency === null) {
@@ -66,18 +63,14 @@ final class ProductCommerceResolver
         }
     }
 
-    /**
-     * @param array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePrice: string, taxCode: string, requiresShipping: string, options: string} $fields
-     * @param array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}|null $variant
-     */
     public function requiresShipping(
         Content $content,
-        array $fields,
-        ?array $variant,
+        ProductFields $fields,
+        ?VariantDefinition $variant,
         ProductResolutionContext $context,
     ): bool {
-        $shipping = $this->shippingValue($variant['requiresShipping'] ?? null);
-        $shipping ??= $this->shippingValue($this->field($content, $fields['requiresShipping'])->value());
+        $shipping = $variant?->shippingOverride();
+        $shipping ??= $this->shippingValue($this->field($content, $fields->requiresShipping())->value());
         $shipping ??= $context->settings()->defaultRequiresShipping();
 
         if ($shipping === null) {
@@ -87,18 +80,18 @@ final class ProductCommerceResolver
         return $shipping;
     }
 
-    /**
-     * @param array{name: string, description: ?string, images: list<string>, sku: string, price: string, stripePrice: string, taxCode: string, requiresShipping: string, options: string} $fields
-     * @param array{taxCode?: ?string}|null $variant
-     */
-    public function taxCode(Content $content, array $fields, ?array $variant, ProductResolutionContext $context): ?TaxCode
-    {
+    public function taxCode(
+        Content $content,
+        ProductFields $fields,
+        ?VariantDefinition $variant,
+        ProductResolutionContext $context,
+    ): ?TaxCode {
         // Retained local classification is dormant when Stripe Prices own it.
         if ($context->settings()->automaticTax() === false || $context->priceSource() !== PriceSource::Kirby) {
             return null;
         }
 
-        $value = $variant['taxCode'] ?? $this->field($content, $fields['taxCode'])->value();
+        $value = $variant?->taxCodeId() ?? $this->field($content, $fields->taxCode())->value();
 
         // Omission delegates to Stripe's account preset; never invent a code.
         // https://docs.stripe.com/tax/products-prices-tax-codes-tax-behavior

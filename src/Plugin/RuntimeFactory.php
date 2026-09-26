@@ -116,7 +116,7 @@ final class RuntimeFactory
 
         return $this->productOptionsFactory()->forPage(
             $page,
-            $this->products()->fields()['options'],
+            $this->products()->fields()->options(),
         );
     }
 

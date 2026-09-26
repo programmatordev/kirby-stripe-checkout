@@ -11,10 +11,11 @@ use Kirby\Form\FieldClass;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
-use ProgrammatorDev\StripeCheckout\Product\Internal\VariantSchema;
+use ProgrammatorDev\StripeCheckout\Product\Internal\ProductOptionsDefinition;
+use ProgrammatorDev\StripeCheckout\Product\Internal\ProductOptionsSchema;
 
 /**
- * Adapts canonical variant storage to Kirby's custom Panel field API.
+ * Adapts canonical product-option storage to Kirby's custom Panel field API.
  *
  * @internal
  */
@@ -99,14 +100,14 @@ final class OptionsField extends FieldClass
     public function toFormValue(): array
     {
         try {
-            $schema = new VariantSchema();
+            $schema = new ProductOptionsSchema();
             $value = parent::toFormValue();
 
             if ($this->technicalLocked() === false) {
-                return $schema->canonical($value);
+                return $schema->canonical($value)->toArray();
             }
 
-            return $schema->localized($this->canonicalValue(), $value);
+            return $schema->localized($this->canonicalValue(), $value)->toArray();
         } catch (InvalidArgumentException $error) {
             // Keep the product schema framework-neutral and translate its
             // validation failure only at Kirby's Field boundary.
@@ -118,11 +119,11 @@ final class OptionsField extends FieldClass
     public function toStoredValue(): array
     {
         try {
-            $schema = new VariantSchema();
+            $schema = new ProductOptionsSchema();
             $value = parent::toStoredValue();
 
             if ($this->technicalLocked() === false) {
-                return $schema->canonical($value);
+                return $schema->canonical($value)->toArray();
             }
 
             return $schema->overlay($this->canonicalValue(), $value);
@@ -148,15 +149,12 @@ final class OptionsField extends FieldClass
         ];
     }
 
-    /**
-     * @return array{options: list<array{id: string, label: string, values: list<array{id: string, label: string}>}>, variants: list<array{id: string, selectedOptions: array<string, string>, enabled: bool, sku: ?string, price: ?string, stripePriceId: ?string, requiresShipping: string, taxCode: ?string}>}
-     */
-    private function canonicalValue(): array
+    private function canonicalValue(): ProductOptionsDefinition
     {
         $defaultLanguage = $this->kirby()->defaultLanguage();
 
         if ($defaultLanguage === null) {
-            return (new VariantSchema())->canonical(parent::toFormValue());
+            return (new ProductOptionsSchema())->canonical(parent::toFormValue());
         }
 
         // Commerce data has one authority; translations only overlay labels.
@@ -164,7 +162,7 @@ final class OptionsField extends FieldClass
             ->content($defaultLanguage->code())
             ->get($this->name());
 
-        return (new VariantSchema())->canonical(
+        return (new ProductOptionsSchema())->canonical(
             $contentField instanceof ContentField ? $contentField->value() : null,
         );
     }
