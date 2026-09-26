@@ -32,6 +32,8 @@
 
 - Read the surrounding implementation and public contracts before changing them. Keep each change small, cohesive, and independently testable.
 - Prefer explicit domain names and typed objects over ambiguous arrays. Public APIs should be predictable from their names and return types.
+- Validate each rule at the boundary that owns it. Transport adapters may coerce transport values, domain values enforce plugin invariants, provider adapters verify required response completeness and correlation, and persistence revalidates stored content. Do not repeat the same validation after a value has already crossed that boundary within one trusted operation.
+- Do not reproduce complete Kirby or Stripe schemas locally. Validate the subset the plugin models or depends on, and let the owning framework or provider reject other semantics. SDK object types alone do not prove that optional fields are present, expanded, or mutually consistent.
 - Give each business workflow a clear orchestration owner and keep its main flow easy to follow. Separate dependency assembly from executing business operations.
 - Distinguish editable inputs, resolved facts, persisted snapshots, and authoritative provider results, with clear ownership for each. Reuse already-resolved facts within an operation instead of independently reconstructing them in each subsystem; do not substitute initiating snapshots for authoritative results.
 - Keep runtime code independent from development-site fixtures and test support.
@@ -67,6 +69,7 @@
 - Keep scenarios readable: make the relevant inputs, action, and expected outcome visible. Share repetitive setup only when it simplifies the tests; avoid elaborate fixture builders and helpers that hide the scenario.
 - Keep expected mapping results independent of the production transformation under test. Use explicit expected values for the contract being verified.
 - Put exhaustive edge cases at the boundary responsible for the rule. Use representative integration cases to verify wiring, and retain combinations that exercise meaningful interactions rather than repeating unrelated assertions across a matrix.
+- Do not mirror a framework or provider's complete validation suite. Test plugin-owned invariants, boundary translations, safe handling of external rejection, and provider facts the plugin must correlate or persist.
 - Organize tests by behavior and responsibility, not a required test-per-class pattern. Consolidate duplicates without removing distinct payment, persistence, security, or concurrency guarantees.
 - Keep a small number of infrastructure safety tests for disposable storage and blocked network access; do not build a separate suite for incidental test helpers.
 - Use unit tests for isolated domain behavior and integration tests in a real, disposable Kirby application for Kirby contracts.
