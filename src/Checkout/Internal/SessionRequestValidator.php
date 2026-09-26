@@ -7,9 +7,12 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\InvalidSessionRequestException;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestErrorCode;
+use ProgrammatorDev\StripeCheckout\Collection\CustomFieldType;
+use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
+use Throwable;
 
-/** Validates supported parameters and the invariants required by the Checkout lifecycle. */
+/** Protects the final request invariants required by the Checkout lifecycle. */
 final class SessionRequestValidator
 {
     private const PROTECTED_TOP_LEVEL_FIELDS = [
@@ -67,10 +70,6 @@ final class SessionRequestValidator
         'setup_future_usage',
     ];
 
-    public function __construct(
-        private readonly SupportedSessionParametersValidator $supportedParametersValidator = new SupportedSessionParametersValidator(),
-    ) {}
-
     public function validate(SessionRequest $request, SessionRequest $customizedRequest): SessionRequest
     {
         $expected = $request->parameters();
@@ -85,8 +84,8 @@ final class SessionRequestValidator
         $this->validateMetadata($expected, $parameters);
         $this->validateLineItems($expected, $parameters);
         $this->validateShipping($expected, $parameters);
+        $this->validateCustomFieldTypes($parameters);
         $this->validatePrivateMetadataLocations($parameters);
-        $this->supportedParametersValidator->validate($parameters);
 
         return $customizedRequest;
     }
@@ -348,11 +347,93 @@ final class SessionRequestValidator
                 );
             }
 
+            /** @var array<string, mixed> $expectedData */
+            /** @var array<string, mixed> $data */
+            // The later Session association expects one inline fixed-amount
+            // Rate per protected option identity; other Rate leaves stay Stripe-owned.
+            $this->assertSame(
+                $expectedData,
+                $data,
+                'type',
+                $path . '.shipping_rate_data.type',
+            );
+            $this->validateShippingAmount(
+                data: $data,
+                expectedCurrency: $parameters['currency'] ?? null,
+                path: $path . '.shipping_rate_data.fixed_amount',
+            );
             $this->assertProtectedMetadata(
                 $expectedData['metadata'] ?? null,
                 $data['metadata'] ?? null,
                 $path . '.shipping_rate_data.metadata',
             );
+        }
+    }
+
+    /**
+     * Protects the single-currency Order boundary, not Stripe's complete amount schema.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function validateShippingAmount(
+        array $data,
+        mixed $expectedCurrency,
+        string $path,
+    ): void {
+        $amount = $data['fixed_amount'] ?? null;
+
+        if (is_array($amount) === false || array_is_list($amount)) {
+            $this->invalid($path);
+        }
+
+        $providerAmount = $amount['amount'] ?? null;
+        $currency = $amount['currency'] ?? null;
+
+        if (
+            is_int($providerAmount) === false
+            || $providerAmount < 0
+            || is_string($currency) === false
+            || strtolower($currency) !== $currency
+            || $currency !== $expectedCurrency
+            || array_key_exists('currency_options', $amount)
+        ) {
+            $this->invalid($path);
+        }
+
+        try {
+            (new StripeCurrencyRegistry())->fromProviderAmount(
+                $providerAmount,
+                strtoupper($currency),
+            );
+        } catch (Throwable $error) {
+            $this->invalid($path, $error);
+        }
+    }
+
+    /**
+     * Keep the request inside the types the canonical result snapshot can store.
+     * Stripe remains responsible for every other custom-field constraint.
+     *
+     * @param array<string, mixed> $parameters
+     */
+    private function validateCustomFieldTypes(array $parameters): void
+    {
+        $customFields = $parameters['custom_fields'] ?? null;
+
+        if (is_array($customFields) === false || array_is_list($customFields) === false) {
+            return;
+        }
+
+        foreach ($customFields as $index => $customField) {
+            if (is_array($customField) === false || array_is_list($customField)) {
+                continue;
+            }
+
+            $type = $customField['type'] ?? null;
+
+            if (is_string($type) && CustomFieldType::tryFrom($type) === null) {
+                $this->invalid('custom_fields.' . $index . '.type');
+            }
         }
     }
 
@@ -427,6 +508,15 @@ final class SessionRequestValidator
         if (array_key_exists($field, $values)) {
             throw new InvalidSessionRequestException(SessionRequestErrorCode::PARAMETER_PROTECTED, $path);
         }
+    }
+
+    private function invalid(string $path, ?Throwable $previous = null): never
+    {
+        throw new InvalidSessionRequestException(
+            SessionRequestErrorCode::PARAMETER_INVALID,
+            $path,
+            $previous,
+        );
     }
 
     /**

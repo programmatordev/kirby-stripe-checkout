@@ -80,11 +80,11 @@ This example assumes the first line is a Kirby-priced event, `$eventTaxCodeId` i
 
 ## Validation boundaries
 
-Every filter result passes final validation before an order or Stripe Session can be created. The validator has three responsibilities:
+Every filter result passes final validation before an order or Stripe Session can be created. Validation has three boundaries:
 
-1. Fields the plugin officially models through Settings and shipping quotes are validated when present. This currently covers billing-address, name, phone, tax-ID and consent collection, custom fields, promotion-code entry, Automatic Tax enablement, inline tax inclusion policy, shipping-address countries, and inline Shipping Rate data. Additional Stripe-owned fields inside those parameter maps remain Stripe's responsibility.
-2. Values required by the order and payment lifecycle are protected from changes.
-3. Other serializable Stripe parameters pass through without the plugin duplicating Stripe's semantic validation. A malformed or incompatible provider-owned value is rejected by Stripe and the Order records a safe `creation_failed` outcome.
+1. Settings, products, custom fields, tax classifications, and shipping quotes are validated while the plugin builds the standard request.
+2. The final request guard protects values required by the order and payment lifecycle. It also keeps customized shipping money in the order currency and limits custom fields to result types the Order snapshot can represent.
+3. Stripe validates the syntax and compatibility of provider-owned parameters after trusted filters run. This includes collection and consent values, promotion behavior, Automatic Tax values, custom-field details, tax behavior, and customer-facing Shipping Rate details. A malformed or incompatible value is rejected by Stripe and the Order records a safe `creation_failed` outcome.
 
 The protected lifecycle values are:
 
@@ -97,7 +97,7 @@ The protected lifecycle values are:
 
 The validator also rejects lifecycle shapes the current order model cannot represent: subscriptions and setup mode, Connect transfers or fees or invoice issuers, manual capture, saved/future payment methods, adjustable quantities, optional items, Adaptive Pricing, Managed Payments, recovery Sessions, and server-controlled dynamic shipping updates. Static `payment_method_types` is also rejected so that Stripe's [dynamic payment methods](https://docs.stripe.com/payments/payment-methods/dynamic-payment-methods) remain authoritative. Provider hints such as `origin_context`, explicit customer references, dynamic payment-method controls and configurations, discounts, invoice creation, and other Stripe-owned parameters are allowed when they do not change those guarantees.
 
-Stripe remains the authority for unsupported parameters and payment-method-specific combinations. A project can therefore use newly available Stripe values through the filter without waiting for a plugin release, but errors for those values surface only when Stripe receives the request. The plugin validates a parameter itself only when it officially supports that parameter or needs to protect an architectural invariant.
+Stripe remains the authority for provider parameters and payment-method-specific combinations after customization. A project can therefore use newly available Stripe values through the filter without waiting for a plugin release, but errors for those values surface only when Stripe receives the request. Passing the final local guard means the request is safe for this plugin's lifecycle; it does not mean Stripe will accept it.
 
 Setting `payment_intent_data.receipt_email` makes Stripe send a live-mode receipt regardless of the account's normal email setting. Add it only when that behavior is intentional.
 

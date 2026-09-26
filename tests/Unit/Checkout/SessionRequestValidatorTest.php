@@ -40,7 +40,7 @@ final class SessionRequestValidatorTest extends TestCase
         $this->assertSame($customizedRequest, $validator->validate($this->standardRequest(), $customizedRequest));
     }
 
-    public function testRejectsAnInvalidInlineTaxBehavior(): void
+    public function testLeavesInlineTaxBehaviorValidationToStripe(): void
     {
         $parameters = $this->standardRequest()->parameters();
         $lineItems = $this->valueList($parameters['line_items']);
@@ -50,7 +50,12 @@ final class SessionRequestValidatorTest extends TestCase
         $lineItem['price_data'] = $priceData;
         $lineItems[0] = $lineItem;
         $parameters['line_items'] = $lineItems;
-        $this->assertRejected($parameters, 'session_request.parameter_invalid', 'line_items.0.price_data.tax_behavior');
+        $customizedRequest = new SessionRequest($parameters);
+
+        $this->assertSame(
+            $customizedRequest,
+            (new SessionRequestValidator())->validate($this->standardRequest(), $customizedRequest),
+        );
     }
 
     public function testAllowsSupportedOverridesAndStripeOwnedParameters(): void
@@ -214,6 +219,18 @@ final class SessionRequestValidatorTest extends TestCase
             'session_request.parameter_protected',
             'shipping_options.0.shipping_rate',
         ];
+        yield 'different rate type' => [
+            static function (array &$parameters): void {
+                self::changeShippingRateData(
+                    $parameters,
+                    static function (array &$data): void {
+                        $data['type'] = 'calculated';
+                    },
+                );
+            },
+            'session_request.invariant_violation',
+            'shipping_options.0.shipping_rate_data.type',
+        ];
         yield 'missing option correlation' => [
             static function (array &$parameters): void {
                 $options = self::valueList($parameters['shipping_options']);
@@ -231,14 +248,18 @@ final class SessionRequestValidatorTest extends TestCase
         ];
     }
 
-    #[DataProvider('invalidSupportedShippingParameters')]
-    public function testRejectsInvalidSupportedShippingParameters(
-        callable $change,
-        string $path,
-    ): void {
+    /** @param array<string, mixed> $fixedAmount */
+    #[DataProvider('invalidShippingMoneyChanges')]
+    public function testRejectsShippingMoneyOutsideTheOrderCurrencyInvariant(array $fixedAmount): void
+    {
         $request = $this->standardShippingRequest();
         $parameters = $request->parameters();
-        $change($parameters);
+        self::changeShippingRateData(
+            $parameters,
+            static function (array &$data) use ($fixedAmount): void {
+                $data['fixed_amount'] = $fixedAmount;
+            },
+        );
 
         try {
             (new SessionRequestValidator())->validate(
@@ -248,85 +269,60 @@ final class SessionRequestValidatorTest extends TestCase
             $this->fail('Expected the customized shipping parameter to be rejected.');
         } catch (InvalidSessionRequestException $error) {
             $this->assertSame('session_request.parameter_invalid', $error->errorCode());
-            $this->assertSame($path, $error->path());
+            $this->assertSame('shipping_options.0.shipping_rate_data.fixed_amount', $error->path());
         }
     }
 
-    /** @return iterable<string, array{callable(array<string, mixed>&): void, string}> */
-    public static function invalidSupportedShippingParameters(): iterable
+    /** @return iterable<string, array{array<string, mixed>}> */
+    public static function invalidShippingMoneyChanges(): iterable
     {
-        yield 'display name' => [
-            static function (array &$parameters): void {
-                self::changeShippingRateData(
-                    $parameters,
-                    static function (array &$data): void {
-                        $data['display_name'] = str_repeat('x', 101);
-                    },
-                );
-            },
-            'shipping_options.0.shipping_rate_data.display_name',
+        yield 'negative amount' => [
+            [
+                'amount' => -1,
+                'currency' => 'eur',
+            ],
         ];
-        yield 'provider amount' => [
-            static function (array &$parameters): void {
-                self::changeShippingRateData(
-                    $parameters,
-                    static function (array &$data): void {
-                        $data['fixed_amount'] = [
-                            'amount' => -1,
-                            'currency' => 'eur',
-                        ];
-                    },
-                );
-            },
-            'shipping_options.0.shipping_rate_data.fixed_amount',
+        yield 'different currency' => [
+            [
+                'amount' => 500,
+                'currency' => 'usd',
+            ],
         ];
-        yield 'delivery estimate' => [
-            static function (array &$parameters): void {
-                self::changeShippingRateData(
-                    $parameters,
-                    static function (array &$data): void {
-                        $data['delivery_estimate'] = [
-                            'minimum' => [
-                                'unit' => 'business_day',
-                                'value' => 0,
-                            ],
-                        ];
-                    },
-                );
-            },
-            'shipping_options.0.shipping_rate_data.delivery_estimate.minimum',
+        yield 'currency options' => [
+            [
+                'amount' => 500,
+                'currency' => 'eur',
+                'currency_options' => [
+                    'usd' => ['amount' => 500],
+                ],
+            ],
         ];
-        yield 'reversed delivery estimate' => [
-            static function (array &$parameters): void {
-                self::changeShippingRateData(
-                    $parameters,
-                    static function (array &$data): void {
-                        $data['delivery_estimate'] = [
-                            'minimum' => [
-                                'unit' => 'business_day',
-                                'value' => 5,
-                            ],
-                            'maximum' => [
-                                'unit' => 'business_day',
-                                'value' => 3,
-                            ],
-                        ];
-                    },
-                );
+    }
+
+    public function testLeavesShippingPresentationSemanticsToStripe(): void
+    {
+        $request = $this->standardShippingRequest();
+        $parameters = $request->parameters();
+        self::changeShippingRateData(
+            $parameters,
+            static function (array &$data): void {
+                $data['display_name'] = str_repeat('x', 101);
+                $data['delivery_estimate'] = [
+                    'minimum' => [
+                        'unit' => 'business_day',
+                        'value' => 0,
+                    ],
+                ];
+                $data['tax_behavior'] = 'sometimes';
+                $data['tax_code'] = 'not-a-tax-code';
             },
-            'shipping_options.0.shipping_rate_data.delivery_estimate.maximum',
-        ];
-        yield 'tax behavior' => [
-            static function (array &$parameters): void {
-                self::changeShippingRateData(
-                    $parameters,
-                    static function (array &$data): void {
-                        $data['tax_behavior'] = 'sometimes';
-                    },
-                );
-            },
-            'shipping_options.0.shipping_rate_data.tax_behavior',
-        ];
+        );
+        $customizedRequest = new SessionRequest($parameters);
+
+        $this->assertSame(
+            $customizedRequest,
+            (new SessionRequestValidator())->validate($request, $customizedRequest),
+        );
     }
 
     public function testRejectsShippingParametersForADigitalOrder(): void
@@ -340,95 +336,47 @@ final class SessionRequestValidatorTest extends TestCase
         );
     }
 
-    #[DataProvider('invalidSupportedParameters')]
-    public function testRejectsInvalidSupportedParameters(callable $change, string $path): void
+    public function testLeavesProviderOwnedParameterSemanticsToStripe(): void
     {
         $parameters = $this->standardRequest()->parameters();
-        $change($parameters);
+        $parameters['automatic_tax'] = ['enabled' => 'true'];
+        $parameters['billing_address_collection'] = 'sometimes';
+        $parameters['name_collection'] = [
+            'individual' => ['enabled' => 'true'],
+        ];
+        $parameters['phone_number_collection'] = ['enabled' => 1];
+        $parameters['tax_id_collection'] = [
+            'enabled' => true,
+            'required' => 'always',
+        ];
+        $parameters['consent_collection'] = ['terms_of_service' => 'optional'];
+        $parameters['allow_promotion_codes'] = 1;
+        $parameters['custom_fields'] = array_fill(0, 4, [
+            'key' => 'VAT-number',
+            'type' => 'text',
+        ]);
+        $parameters['custom_fields'][0]['type'] = 123;
+        $customizedRequest = new SessionRequest($parameters);
+
+        $this->assertSame(
+            $customizedRequest,
+            (new SessionRequestValidator())->validate($this->standardRequest(), $customizedRequest),
+        );
+    }
+
+    public function testRejectsACustomFieldTypeTheOrderSnapshotCannotRepresent(): void
+    {
+        $parameters = $this->standardRequest()->parameters();
+        $parameters['custom_fields'] = [[
+            'key' => 'deliverydate',
+            'type' => 'date',
+        ]];
 
         $this->assertRejected(
             parameters: $parameters,
             errorCode: 'session_request.parameter_invalid',
-            path: $path,
+            path: 'custom_fields.0.type',
         );
-    }
-
-    /** @return iterable<string, array{callable(array<string, mixed>&): void, string}> */
-    public static function invalidSupportedParameters(): iterable
-    {
-        yield 'automatic tax enabled flag' => [
-            static function (array &$parameters): void {
-                $parameters['automatic_tax'] = ['enabled' => 'true'];
-            },
-            'automatic_tax.enabled',
-        ];
-        yield 'automatic tax required flag' => [
-            static function (array &$parameters): void {
-                $parameters['automatic_tax'] = ['unknown' => true];
-            },
-            'automatic_tax.enabled',
-        ];
-        yield 'billing address collection' => [
-            static function (array &$parameters): void {
-                $parameters['billing_address_collection'] = 'sometimes';
-            },
-            'billing_address_collection',
-        ];
-        yield 'name collection enabled flag' => [
-            static function (array &$parameters): void {
-                $parameters['name_collection'] = [
-                    'individual' => ['enabled' => 'true'],
-                ];
-            },
-            'name_collection.individual.enabled',
-        ];
-        yield 'phone collection enabled flag' => [
-            static function (array &$parameters): void {
-                $parameters['phone_number_collection'] = ['enabled' => 1];
-            },
-            'phone_number_collection.enabled',
-        ];
-        yield 'tax ID requirement' => [
-            static function (array &$parameters): void {
-                $parameters['tax_id_collection'] = [
-                    'enabled' => true,
-                    'required' => 'always',
-                ];
-            },
-            'tax_id_collection.required',
-        ];
-        yield 'consent value' => [
-            static function (array &$parameters): void {
-                $parameters['consent_collection'] = ['terms_of_service' => 'optional'];
-            },
-            'consent_collection.terms_of_service',
-        ];
-        yield 'promotion-code flag' => [
-            static function (array &$parameters): void {
-                $parameters['allow_promotion_codes'] = 1;
-            },
-            'allow_promotion_codes',
-        ];
-        yield 'custom-field key' => [
-            static function (array &$parameters): void {
-                $parameters['custom_fields'] = [[
-                    'key' => 'VAT-number',
-                    'label' => [
-                        'custom' => 'VAT number',
-                        'type' => 'custom',
-                    ],
-                    'optional' => true,
-                    'type' => 'text',
-                ]];
-            },
-            'custom_fields.0.key',
-        ];
-        yield 'too many custom fields' => [
-            static function (array &$parameters): void {
-                $parameters['custom_fields'] = [[], [], [], []];
-            },
-            'custom_fields',
-        ];
     }
 
     #[DataProvider('protectedParameters')]
