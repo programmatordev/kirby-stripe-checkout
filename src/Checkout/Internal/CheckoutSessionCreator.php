@@ -99,7 +99,7 @@ final class CheckoutSessionCreator
                 &$requestContext,
                 &$sessionRequest,
                 &$checkoutAttempt,
-            ): array {
+            ): CheckoutAttempt {
                 $requestContext = $this->requestContextFactory->create(
                     order: $order,
                     configuration: $this->configuration,
@@ -126,7 +126,7 @@ final class CheckoutSessionCreator
                     createdAt: $now,
                 );
 
-                return [$order, $checkoutAttempt, $now];
+                return $checkoutAttempt;
             },
         );
 

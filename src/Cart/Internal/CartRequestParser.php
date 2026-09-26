@@ -11,16 +11,65 @@ use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
 use ProgrammatorDev\StripeCheckout\Checkout\RequestErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
+use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
 use stdClass;
 
 /** @internal Validates HTTP transport only; product rules remain in the shared cart API. */
 final class CartRequestParser
 {
-    /**
-     * @return array{reference?: string, quantity?: int, options?: array<string, string>, revision?: string, shippingCountry?: string|null}
-     */
-    public static function parse(App $kirby, CartOperation $operation): array
+    public static function addItem(App $kirby): ProductRequest
+    {
+        $selection = self::body($kirby, CartOperation::AddItem);
+
+        // HTTP uses the concise Cart vocabulary; the shared selection parser
+        // and stored product requests keep their internal schema.
+        if (array_key_exists('options', $selection)) {
+            $selection['selectedOptions'] = $selection['options'];
+            unset($selection['options']);
+        }
+
+        return ProductRequestData::parse($selection);
+    }
+
+    public static function updateItem(App $kirby): CartItemUpdate
+    {
+        $body = self::body($kirby, CartOperation::UpdateItem);
+        $quantity = $body['quantity'] ?? null;
+
+        if (is_int($quantity) === false || $quantity < 1) {
+            throw new CheckoutInputException(SelectionErrorCode::QUANTITY_INVALID);
+        }
+
+        return new CartItemUpdate($quantity, self::revision($body));
+    }
+
+    public static function updateShippingCountry(App $kirby): ShippingCountryUpdate
+    {
+        $body = self::body($kirby, CartOperation::UpdateShippingCountry);
+
+        if (
+            array_key_exists('shippingCountry', $body) === false
+            || (is_string($body['shippingCountry']) === false && $body['shippingCountry'] !== null)
+        ) {
+            throw new CheckoutInputException(ShippingErrorCode::COUNTRY_INVALID);
+        }
+
+        return new ShippingCountryUpdate($body['shippingCountry'], self::revision($body));
+    }
+
+    public static function removeItem(App $kirby): string
+    {
+        return self::revision(self::body($kirby, CartOperation::RemoveItem));
+    }
+
+    public static function clear(App $kirby): string
+    {
+        return self::revision(self::body($kirby, CartOperation::Clear));
+    }
+
+    /** @return array<string, mixed> */
+    private static function body(App $kirby, CartOperation $operation): array
     {
         $request = $kirby->request();
         $header = $request->header('Content-Type', $_SERVER['CONTENT_TYPE'] ?? '');
@@ -89,47 +138,22 @@ final class CartRequestParser
             throw new CheckoutInputException(SelectionErrorCode::INVALID);
         }
 
-        if ($operation === CartOperation::AddItem) {
-            $selection = $body;
+        /** @var array<string, mixed> $body */
+        return $body;
+    }
 
-            // HTTP uses the concise Cart vocabulary; the shared selection
-            // parser and stored product requests keep their internal schema.
-            if (array_key_exists('options', $selection)) {
-                $selection['selectedOptions'] = $selection['options'];
-                unset($selection['options']);
-            }
-
-            $product = ProductRequestData::parse($selection);
-
-            return [
-                'reference' => $product->reference(),
-                'quantity' => $product->quantity(),
-                'options' => $product->selectedOptions(),
-            ];
-        }
+    /** @param array<string, mixed> $body */
+    private static function revision(array $body): string
+    {
+        $revision = $body['revision'] ?? null;
 
         // Require the version the browser saw; substituting the current server
         // revision would silently authorize writes from stale forms or tabs.
-        if (is_string($body['revision'] ?? null) === false || $body['revision'] === '' || strlen($body['revision']) > 128) {
+        if (is_string($revision) === false || $revision === '' || strlen($revision) > 128) {
             throw new CheckoutInputException(SelectionErrorCode::INVALID);
         }
 
-        if ($operation === CartOperation::UpdateItem && (is_int($body['quantity'] ?? null) === false || $body['quantity'] < 1)) {
-            throw new CheckoutInputException(SelectionErrorCode::QUANTITY_INVALID);
-        }
-
-        if (
-            $operation === CartOperation::UpdateShippingCountry
-            && (
-                array_key_exists('shippingCountry', $body) === false
-                || (is_string($body['shippingCountry']) === false && $body['shippingCountry'] !== null)
-            )
-        ) {
-            throw new CheckoutInputException(ShippingErrorCode::COUNTRY_INVALID);
-        }
-
-        /** @var array{revision: string, quantity?: int, shippingCountry?: string|null} $body */
-        return $body;
+        return $revision;
     }
 
     private static function csrf(App $kirby, Request $request, mixed $formToken): void

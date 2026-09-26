@@ -178,7 +178,7 @@ final class OrderPageStore
      * stays in the callback so only the winning creator runs it; post-commit
      * lifecycle delivery and provider Session calls run after the lock is released.
      *
-     * @param Closure(): array{OrderCreationContext, CheckoutAttempt, DateTimeImmutable} $prepare
+     * @param Closure(): CheckoutAttempt $prepare
      */
     public function createAttemptOnce(string $orderUuid, Closure $prepare): OrderPage
     {
@@ -195,7 +195,8 @@ final class OrderPageStore
                     return $existing;
                 }
 
-                [$context, $checkoutAttempt, $createdAt] = $prepare();
+                $checkoutAttempt = $prepare();
+                $context = $checkoutAttempt->order();
                 $created = true;
 
                 if ($context->uuid() !== $orderUuid) {
@@ -205,7 +206,7 @@ final class OrderPageStore
                 return $this->persistCreation(
                     context: $context,
                     checkoutAttempt: $checkoutAttempt,
-                    createdAt: $createdAt,
+                    createdAt: $checkoutAttempt->createdAt(),
                 );
             },
         );

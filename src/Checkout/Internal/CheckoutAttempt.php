@@ -38,7 +38,7 @@ final readonly class CheckoutAttempt
         private string $stripeApiVersion,
         private CredentialMode $credentialMode,
         private string $credentialFingerprint,
-        DateTimeImmutable $createdAt,
+        private DateTimeImmutable $createdAt,
     ) {
         if ($context->order() !== $order) {
             throw new OrderDataException();
@@ -77,6 +77,16 @@ final readonly class CheckoutAttempt
     public function idempotencyKey(): string
     {
         return $this->idempotencyKey;
+    }
+
+    public function order(): OrderCreationContext
+    {
+        return $this->order;
+    }
+
+    public function createdAt(): DateTimeImmutable
+    {
+        return $this->createdAt;
     }
 
     public function expiresAt(): DateTimeImmutable

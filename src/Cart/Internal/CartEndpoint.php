@@ -54,24 +54,44 @@ final class CartEndpoint
                 return new Response('', code: 406, headers: self::HEADERS);
             }
 
-            $input = $operation === CartOperation::Read ? [] : CartRequestParser::parse($this->kirby, $operation);
-            $cart = (new RuntimeFactory($this->kirby))->cart(resolve: $operation === CartOperation::Read);
+            $runtime = new RuntimeFactory($this->kirby);
+
+            switch ($operation) {
+                case CartOperation::Read:
+                    $cart = $runtime->cart(resolve: true);
+                    break;
+                case CartOperation::AddItem:
+                    $productRequest = CartRequestParser::addItem($this->kirby);
+                    $cart = $runtime->cart(resolve: false);
+                    $cart?->add($productRequest->reference(), $productRequest->quantity(), $productRequest->selectedOptions());
+                    break;
+                case CartOperation::UpdateItem:
+                    $itemUpdate = CartRequestParser::updateItem($this->kirby);
+                    $cart = $runtime->cart(resolve: false);
+                    $cart?->update($this->itemId($itemId), $itemUpdate->quantity(), $itemUpdate->revision());
+                    break;
+                case CartOperation::UpdateShippingCountry:
+                    $shippingCountryUpdate = CartRequestParser::updateShippingCountry($this->kirby);
+                    $cart = $runtime->cart(resolve: false);
+                    $cart?->updateShippingCountry($shippingCountryUpdate->shippingCountry(), $shippingCountryUpdate->revision());
+                    break;
+                case CartOperation::RemoveItem:
+                    $revision = CartRequestParser::removeItem($this->kirby);
+                    $cart = $runtime->cart(resolve: false);
+                    $cart?->remove($this->itemId($itemId), $revision);
+                    break;
+                case CartOperation::Clear:
+                    $revision = CartRequestParser::clear($this->kirby);
+                    $cart = $runtime->cart(resolve: false);
+                    $cart?->clear($revision);
+                    break;
+                default:
+                    throw new \LogicException();
+            }
 
             if ($cart === null) {
                 return new Response('', code: 404, headers: self::HEADERS);
             }
-
-            match ($operation) {
-                CartOperation::Read => $cart,
-                CartOperation::AddItem => $cart->add($input['reference'] ?? '', $input['quantity'] ?? 1, $input['options'] ?? []),
-                CartOperation::UpdateItem => $cart->update($itemId ?? '', $input['quantity'] ?? 0, $input['revision'] ?? ''),
-                CartOperation::UpdateShippingCountry => $cart->updateShippingCountry(
-                    $input['shippingCountry'] ?? null,
-                    $input['revision'] ?? '',
-                ),
-                CartOperation::RemoveItem => $cart->remove($itemId ?? '', $input['revision'] ?? ''),
-                CartOperation::Clear => $cart->clear($input['revision'] ?? ''),
-            };
         } catch (CartException $failure) {
             $error = $this->httpError($failure->error());
             // Conflicts supply newer state; other rejections retain the cart
@@ -129,6 +149,15 @@ final class CartEndpoint
         };
 
         return new CartError($code, $error->message(), $error->itemId(), $code === CartErrorCode::REVISION_CONFLICT ? 'revision' : $error->field());
+    }
+
+    private function itemId(?string $itemId): string
+    {
+        if ($itemId === null || $itemId === '') {
+            throw new CheckoutInputException(SelectionErrorCode::INVALID);
+        }
+
+        return $itemId;
     }
 
     private function html(?Closure $renderer, ?Cart $cart, CartRenderContext $context): Response
