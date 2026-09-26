@@ -32,8 +32,10 @@
 
 - Read the surrounding implementation and public contracts before changing them. Keep each change small, cohesive, and independently testable.
 - Prefer explicit domain names and typed objects over ambiguous arrays. Public APIs should be predictable from their names and return types.
+- Give each business workflow a clear orchestration owner and keep its main flow easy to follow. Separate dependency assembly from executing business operations.
+- Distinguish editable inputs, resolved facts, persisted snapshots, and authoritative provider results, with clear ownership for each. Reuse already-resolved facts within an operation instead of independently reconstructing them in each subsystem; do not substitute initiating snapshots for authoritative results.
 - Keep runtime code independent from development-site fixtures and test support.
-- Do not add a new abstraction, adapter, dependency, or configuration option without a concrete use case.
+- Do not add a new abstraction, adapter, dependency, or configuration option without a concrete use case. Introduce a class or wrapper only when it gives a meaningful responsibility a clear home or removes current complexity, not merely to move code elsewhere.
 - Add concise class documentation when a class's responsibility is not immediately clear. Add inline comments only for non-obvious constraints, decisions, or edge cases.
 - When code enforces or depends on a non-obvious Stripe-owned limit or behavior, document the reason beside that code with a direct link to the relevant official Stripe reference. Avoid links for routine SDK mappings and avoid repeating the same reference without additional value.
 - In templates and snippets, add PHPDoc types for implicit Kirby or passed variables only when those variables are used.
