@@ -11,6 +11,7 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\ShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Internal\CheckoutSessionSnapshotNormalizer;
+use Stripe\ShippingRate;
 
 final class CheckoutSessionShippingSnapshotTest extends TestCase
 {
@@ -104,6 +105,20 @@ final class CheckoutSessionShippingSnapshotTest extends TestCase
         $this->assertSame('0.00', $snapshots['shippingTotal']);
     }
 
+    public function testAcceptsTheProviderUnspecifiedTaxBehavior(): void
+    {
+        $source = $this->shippingSource();
+        $shippingCost = self::map($source['shipping_cost']);
+        $shippingRate = self::map($shippingCost['shipping_rate']);
+        $shippingRate['tax_behavior'] = ShippingRate::TAX_BEHAVIOR_UNSPECIFIED;
+        $shippingCost['shipping_rate'] = $shippingRate;
+        $source['shipping_cost'] = $shippingCost;
+
+        $shipping = OrderData::map($this->normalize($source)['shipping']);
+
+        $this->assertSame(ShippingRate::TAX_BEHAVIOR_UNSPECIFIED, $shipping['taxBehavior']);
+    }
+
     /** @param callable(array<string, mixed>&): void $change */
     #[DataProvider('invalidShippingSources')]
     public function testRejectsIncompleteOrInconsistentShippingFacts(callable $change): void
@@ -131,6 +146,20 @@ final class CheckoutSessionShippingSnapshotTest extends TestCase
             $shippingCost['shipping_rate'] = $shippingRate;
             $source['shipping_cost'] = $shippingCost;
         }];
+        yield 'rate object type' => [static function (array &$source): void {
+            $shippingCost = self::map($source['shipping_cost']);
+            $shippingRate = self::map($shippingCost['shipping_rate']);
+            $shippingRate['object'] = 'price';
+            $shippingCost['shipping_rate'] = $shippingRate;
+            $source['shipping_cost'] = $shippingCost;
+        }];
+        yield 'rate tax behavior' => [static function (array &$source): void {
+            $shippingCost = self::map($source['shipping_cost']);
+            $shippingRate = self::map($shippingCost['shipping_rate']);
+            $shippingRate['tax_behavior'] = 'automatic';
+            $shippingCost['shipping_rate'] = $shippingRate;
+            $source['shipping_cost'] = $shippingCost;
+        }];
         yield 'Session shipping total' => [static function (array &$source): void {
             $totalDetails = self::map($source['total_details']);
             $totalDetails['amount_shipping'] = 614;
@@ -143,6 +172,14 @@ final class CheckoutSessionShippingSnapshotTest extends TestCase
             $fixedAmount['amount'] = 499;
             $shippingRate['fixed_amount'] = $fixedAmount;
             $shippingCost['shipping_rate'] = $shippingRate;
+            $source['shipping_cost'] = $shippingCost;
+        }];
+        yield 'shipping tax allocation' => [static function (array &$source): void {
+            $shippingCost = self::map($source['shipping_cost']);
+            $taxes = OrderData::list($shippingCost['taxes']);
+            $tax = self::map($taxes[0]);
+            $tax['amount'] = 114;
+            $shippingCost['taxes'] = [$tax];
             $source['shipping_cost'] = $shippingCost;
         }];
         yield 'private metadata' => [static function (array &$source): void {
@@ -230,10 +267,10 @@ final class CheckoutSessionShippingSnapshotTest extends TestCase
                         'kirby_stripe_checkout_shipping_option' => 'standard',
                         'kirby_stripe_checkout_shipping_quote' => str_repeat('a', 64),
                     ],
-                    'object' => 'shipping_rate',
-                    'tax_behavior' => 'exclusive',
+                    'object' => ShippingRate::OBJECT_NAME,
+                    'tax_behavior' => ShippingRate::TAX_BEHAVIOR_EXCLUSIVE,
                     'tax_code' => ['id' => 'txcd_92010001'],
-                    'type' => 'fixed_amount',
+                    'type' => ShippingRate::TYPE_FIXED_AMOUNT,
                 ],
                 'taxes' => [$tax],
             ],

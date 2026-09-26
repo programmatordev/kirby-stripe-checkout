@@ -11,14 +11,13 @@ use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\CheckoutSessionAssociation;
+use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
 use Stripe\Checkout\Session;
 
 /** Converts one untrusted provider record into a validated Checkout Session. */
 final class CheckoutSessionFactory
 {
-    private const PRIVATE_METADATA_PREFIX = 'kirby_stripe_checkout_';
-
     public function create(
         CheckoutSessionRecord $record,
         SessionRequestContext $context,
@@ -29,7 +28,7 @@ final class CheckoutSessionFactory
         $expectedMetadata = array_filter(
             is_array($parameters['metadata'] ?? null) ? $parameters['metadata'] : [],
             static fn(mixed $value, mixed $key): bool => is_string($key)
-                && str_starts_with($key, self::PRIVATE_METADATA_PREFIX),
+                && str_starts_with($key, PluginMetadata::KEY_PREFIX),
             ARRAY_FILTER_USE_BOTH,
         );
         $uiMode = match ($context->uiMode()) {

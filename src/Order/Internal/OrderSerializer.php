@@ -284,6 +284,12 @@ final class OrderSerializer
 
             self::validateDiscountSnapshots($data, $currency, $registry);
 
+            // The reference preserves Stripe identity while the snapshot freezes
+            // the selected rate facts; either one alone is incomplete evidence.
+            if (isset($data['stripeShippingRateId']) !== isset($data['shipping'])) {
+                throw new OrderDataException();
+            }
+
             if (isset($data['tax'])) {
                 $data['tax'] = TaxSnapshot::fromArray(OrderData::map($data['tax']))->toArray();
 

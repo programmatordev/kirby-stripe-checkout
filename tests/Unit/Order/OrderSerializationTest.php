@@ -24,6 +24,7 @@ use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\OrderFixture;
+use Stripe\ShippingRate;
 
 final class OrderSerializationTest extends TestCase
 {
@@ -129,6 +130,46 @@ final class OrderSerializationTest extends TestCase
         $data = $this->dataWithCheckoutStatus(CheckoutStatus::Complete);
         $data['shippingTotal'] = '6.14';
         $data['shipping'] = $this->shippingSnapshot();
+
+        $this->expectException(OrderDataException::class);
+        OrderSerializer::normalize($data);
+    }
+
+    #[DataProvider('incompleteSelectedShippingSnapshots')]
+    public function testSelectedShippingRateAndSnapshotMustBeStoredTogether(
+        bool $withShippingRateId,
+        bool $withShippingSnapshot,
+    ): void {
+        $data = $this->dataWithCheckoutStatus(CheckoutStatus::Complete);
+
+        if ($withShippingRateId) {
+            $data['stripeShippingRateId'] = 'shr_standard';
+        }
+
+        if ($withShippingSnapshot) {
+            $data['shipping'] = $this->shippingSnapshot();
+        }
+
+        $this->expectException(OrderDataException::class);
+        OrderSerializer::normalize($data);
+    }
+
+    /** @return iterable<string, array{bool, bool}> */
+    public static function incompleteSelectedShippingSnapshots(): iterable
+    {
+        yield 'Rate ID without snapshot' => [true, false];
+        yield 'snapshot without Rate ID' => [false, true];
+    }
+
+    public function testRejectsPersistedShippingSnapshotWithUnknownTaxBehavior(): void
+    {
+        $data = $this->dataWithCheckoutStatus(CheckoutStatus::Complete);
+        $data['stripeShippingRateId'] = 'shr_standard';
+        $data['shippingTotal'] = '6.15';
+        $data['shipping'] = [
+            ...$this->shippingSnapshot(),
+            'taxBehavior' => 'automatic',
+        ];
 
         $this->expectException(OrderDataException::class);
         OrderSerializer::normalize($data);
@@ -452,7 +493,7 @@ final class OrderSerializationTest extends TestCase
                 'maximum' => 4,
                 'unit' => 'business_day',
             ],
-            'taxBehavior' => 'exclusive',
+            'taxBehavior' => ShippingRate::TAX_BEHAVIOR_EXCLUSIVE,
             'taxCode' => 'txcd_92010001',
         ];
     }

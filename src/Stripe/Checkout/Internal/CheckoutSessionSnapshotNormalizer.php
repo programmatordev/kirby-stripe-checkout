@@ -61,7 +61,7 @@ final class CheckoutSessionSnapshotNormalizer
             $shippingAddress = $collectedInformation === null
                 ? null
                 : $this->shippingAddress($collectedInformation);
-            [$shippingRateId, $shipping, $shippingTotal] = $this->shipping(
+            [$shippingRateId, $shippingSnapshot, $shippingTotal] = $this->shipping(
                 sessionData: $sessionData,
                 currency: $sessionRecord->currency,
             );
@@ -77,7 +77,7 @@ final class CheckoutSessionSnapshotNormalizer
                 'billingAddress' => $billingAddress?->toArray(),
                 'shippingAddress' => $shippingAddress?->toArray(),
                 'stripeShippingRateId' => $shippingRateId,
-                'shipping' => $shipping?->toArray(),
+                'shipping' => $shippingSnapshot?->toArray(),
                 'shippingTotal' => $shippingTotal,
                 'customFields' => array_map(
                     static fn(CustomFieldSnapshot $customField): array => $customField->toArray(),
@@ -135,7 +135,17 @@ final class CheckoutSessionSnapshotNormalizer
             throw new OrderDataException();
         }
 
-        if (($shippingRateData['type'] ?? null) !== ShippingRate::TYPE_FIXED_AMOUNT) {
+        $taxBehavior = $shippingRateData['tax_behavior'] ?? null;
+
+        if (
+            ($shippingRateData['object'] ?? null) !== ShippingRate::OBJECT_NAME
+            || ($shippingRateData['type'] ?? null) !== ShippingRate::TYPE_FIXED_AMOUNT
+            || ($taxBehavior !== null && in_array($taxBehavior, [
+                ShippingRate::TAX_BEHAVIOR_EXCLUSIVE,
+                ShippingRate::TAX_BEHAVIOR_INCLUSIVE,
+                ShippingRate::TAX_BEHAVIOR_UNSPECIFIED,
+            ], true) === false)
+        ) {
             throw new OrderDataException();
         }
 
@@ -161,6 +171,16 @@ final class CheckoutSessionSnapshotNormalizer
             throw new OrderDataException();
         }
 
+        // Stripe only returns this allocation when `shipping_cost.taxes` is
+        // expanded. When present, it must agree with the aggregate tax amount.
+        // https://docs.stripe.com/api/checkout/sessions/object#checkout_session_object-shipping_cost-taxes
+        if (
+            ($shippingCost['taxes'] ?? null) !== null
+            && $this->shippingTaxTotal($shippingCost['taxes']) !== $providerTax
+        ) {
+            throw new OrderDataException();
+        }
+
         $metadata = $this->map($shippingRateData['metadata'] ?? null);
 
         if (($metadata[PluginMetadata::OWNER_KEY] ?? null) !== PluginMetadata::NAME) {
@@ -169,7 +189,7 @@ final class CheckoutSessionSnapshotNormalizer
 
         OrderData::uuid(OrderData::text($metadata[PluginMetadata::ORDER_KEY] ?? null));
 
-        $shipping = ShippingSnapshot::fromArray([
+        $shippingSnapshot = ShippingSnapshot::fromArray([
             'optionKey' => $metadata[PluginMetadata::SHIPPING_OPTION_KEY] ?? null,
             'quoteFingerprint' => $metadata[PluginMetadata::SHIPPING_QUOTE_KEY] ?? null,
             'label' => $shippingRateData['display_name'] ?? null,
@@ -181,11 +201,28 @@ final class CheckoutSessionSnapshotNormalizer
             'total' => $this->providerAmount($providerTotal, $currency),
             'providerTotal' => $providerTotal,
             'deliveryEstimate' => $this->deliveryEstimate($shippingRateData['delivery_estimate'] ?? null),
-            'taxBehavior' => $shippingRateData['tax_behavior'] ?? null,
+            'taxBehavior' => $taxBehavior,
             'taxCode' => $this->referenceId($shippingRateData['tax_code'] ?? null, 'txcd_'),
         ]);
 
-        return [$shippingRateId, $shipping, $shipping->total()];
+        return [$shippingRateId, $shippingSnapshot, $shippingSnapshot->total()];
+    }
+
+    private function shippingTaxTotal(mixed $value): int
+    {
+        $total = 0;
+
+        foreach ($this->list($value) as $tax) {
+            $amount = OrderData::integer($this->map($tax)['amount'] ?? null);
+
+            if ($amount < 0 || $total > PHP_INT_MAX - $amount) {
+                throw new OrderDataException();
+            }
+
+            $total += $amount;
+        }
+
+        return $total;
     }
 
     /** @return array{minimum: ?int, maximum: ?int, unit: string}|null */

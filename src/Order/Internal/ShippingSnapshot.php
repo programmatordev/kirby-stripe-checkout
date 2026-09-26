@@ -8,6 +8,7 @@ use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Shipping\DeliveryEstimate;
 use ProgrammatorDev\StripeCheckout\Shipping\DeliveryEstimateUnit;
+use Stripe\ShippingRate;
 use Throwable;
 
 /** @internal Selected shipping facts and exact amounts returned by the provider. */
@@ -42,11 +43,17 @@ final readonly class ShippingSnapshot
             $quoteFingerprint = OrderData::text($data['quoteFingerprint'], 64);
             $label = OrderData::text($data['label'], 100);
             $currency = OrderData::text($data['currency'], 3);
+            $taxBehavior = OrderData::nullableSingleLine($data['taxBehavior'], 255);
 
             if (
                 preg_match('/\A[a-z0-9_-]{1,64}\z/D', $optionKey) !== 1
                 || preg_match('/\A[a-f0-9]{64}\z/D', $quoteFingerprint) !== 1
                 || strtoupper($currency) !== $currency
+                || ($taxBehavior !== null && in_array($taxBehavior, [
+                    ShippingRate::TAX_BEHAVIOR_EXCLUSIVE,
+                    ShippingRate::TAX_BEHAVIOR_INCLUSIVE,
+                    ShippingRate::TAX_BEHAVIOR_UNSPECIFIED,
+                ], true) === false)
             ) {
                 throw new OrderDataException();
             }
@@ -59,7 +66,7 @@ final readonly class ShippingSnapshot
                 'currency' => $currency,
                 ...self::amounts($data, $currency),
                 'deliveryEstimate' => self::deliveryEstimate($data['deliveryEstimate']),
-                'taxBehavior' => OrderData::nullableSingleLine($data['taxBehavior'], 255),
+                'taxBehavior' => $taxBehavior,
                 'taxCode' => self::taxCode($data['taxCode']),
             ];
 

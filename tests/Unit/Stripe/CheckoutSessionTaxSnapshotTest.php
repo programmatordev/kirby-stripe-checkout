@@ -11,6 +11,7 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\TaxSnapshot;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Internal\CheckoutSessionSnapshotNormalizer;
+use Stripe\ShippingRate;
 
 final class CheckoutSessionTaxSnapshotTest extends TestCase
 {
@@ -79,7 +80,8 @@ final class CheckoutSessionTaxSnapshotTest extends TestCase
                     'kirby_stripe_checkout_shipping_option' => 'standard',
                     'kirby_stripe_checkout_shipping_quote' => str_repeat('a', 64),
                 ],
-                'type' => 'fixed_amount',
+                'object' => ShippingRate::OBJECT_NAME,
+                'type' => ShippingRate::TYPE_FIXED_AMOUNT,
             ],
             'taxes' => [$taxEntry],
         ];

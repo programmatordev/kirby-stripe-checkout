@@ -7,12 +7,11 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\InvalidSessionRequestException;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestErrorCode;
+use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 
 /** Validates supported parameters and the invariants required by the Checkout lifecycle. */
 final class SessionRequestValidator
 {
-    private const PRIVATE_METADATA_PREFIX = 'kirby_stripe_checkout_';
-
     private const PROTECTED_TOP_LEVEL_FIELDS = [
         'client_reference_id',
         'currency',
@@ -371,7 +370,7 @@ final class SessionRequestValidator
         foreach ($expected as $key => $value) {
             if (
                 is_string($key)
-                && str_starts_with($key, self::PRIVATE_METADATA_PREFIX)
+                && str_starts_with($key, PluginMetadata::KEY_PREFIX)
                 && ($actual[$key] ?? null) !== $value
             ) {
                 throw new InvalidSessionRequestException(
@@ -384,7 +383,7 @@ final class SessionRequestValidator
         foreach ($actual as $key => $value) {
             if (
                 is_string($key)
-                && str_starts_with($key, self::PRIVATE_METADATA_PREFIX)
+                && str_starts_with($key, PluginMetadata::KEY_PREFIX)
                 && array_key_exists($key, $expected) === false
             ) {
                 throw new InvalidSessionRequestException(
@@ -402,7 +401,7 @@ final class SessionRequestValidator
             $key = (string) $key;
             $fieldPath = $path === '' ? $key : $path . '.' . $key;
 
-            if (str_starts_with($key, self::PRIVATE_METADATA_PREFIX)) {
+            if (str_starts_with($key, PluginMetadata::KEY_PREFIX)) {
                 $allowed = $path === 'metadata'
                     || $path === 'payment_intent_data.metadata'
                     || preg_match('/\Aline_items\.\d+\.metadata\z/D', $path) === 1
