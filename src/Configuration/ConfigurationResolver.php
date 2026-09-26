@@ -57,8 +57,8 @@ final class ConfigurationResolver
     ): ConfigurationReport {
         try {
             $root = $this->resolveRoot($this->extractor->extract($options));
-            $this->orderNumberFormatter($options);
-            $housekeeping = $this->housekeeping($options);
+            $this->resolveOrderNumberFormatter($root['orders']);
+            $housekeeping = $this->resolveHousekeeping($root['housekeeping']);
             $cartEnabled = $this->resolveCart($root['cart']);
             $products = $this->resolveProducts($root['products']);
             $shipping = $this->resolveShipping($root['shipping']);
@@ -146,21 +146,8 @@ final class ConfigurationResolver
             throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'housekeeping');
         }
 
-        $this->assertKnownKeys($values, ['intervalHours', 'batchSize'], 'housekeeping');
-        $values = [...Defaults::HOUSEKEEPING, ...$values];
-
-        foreach ($values as $name => $value) {
-            if (is_int($value) === false) {
-                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'housekeeping.' . $name);
-            }
-
-            if ($value < 1 || $name === 'batchSize' && $value > 100) {
-                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'housekeeping.' . $name);
-            }
-        }
-
-        /** @var array{intervalHours: positive-int, batchSize: positive-int} $values */
-        return $values;
+        /** @var array<string, mixed> $values */
+        return $this->resolveHousekeeping($values);
     }
 
     /** @param array<string, mixed> $options */
@@ -173,14 +160,8 @@ final class ConfigurationResolver
             throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'orders');
         }
 
-        $this->assertKnownKeys($orders, ['numberFormatter'], 'orders');
-        $formatter = $orders['numberFormatter'] ?? null;
-
-        if ($formatter !== null && $formatter instanceof Closure === false) {
-            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'orders.numberFormatter');
-        }
-
-        return $formatter;
+        /** @var array<string, mixed> $orders */
+        return $this->resolveOrderNumberFormatter($orders);
     }
 
     /** @param array<string, mixed> $options */
@@ -224,6 +205,42 @@ final class ConfigurationResolver
 
         /** @var array<string, mixed> $cart */
         return $cart;
+    }
+
+    /**
+     * @param array<string, mixed> $values
+     * @return array{intervalHours: int, batchSize: int}
+     */
+    private function resolveHousekeeping(array $values): array
+    {
+        $this->assertKnownKeys($values, ['intervalHours', 'batchSize'], 'housekeeping');
+        $values = [...Defaults::HOUSEKEEPING, ...$values];
+
+        foreach ($values as $name => $value) {
+            if (is_int($value) === false) {
+                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'housekeeping.' . $name);
+            }
+
+            if ($value < 1 || $name === 'batchSize' && $value > 100) {
+                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'housekeeping.' . $name);
+            }
+        }
+
+        /** @var array{intervalHours: positive-int, batchSize: positive-int} $values */
+        return $values;
+    }
+
+    /** @param array<string, mixed> $orders */
+    private function resolveOrderNumberFormatter(array $orders): ?Closure
+    {
+        $this->assertKnownKeys($orders, ['numberFormatter'], 'orders');
+        $formatter = $orders['numberFormatter'] ?? null;
+
+        if ($formatter !== null && $formatter instanceof Closure === false) {
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'orders.numberFormatter');
+        }
+
+        return $formatter;
     }
 
     /**
