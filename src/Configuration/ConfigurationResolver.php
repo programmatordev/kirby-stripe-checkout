@@ -18,7 +18,6 @@ use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 use SensitiveParameter;
-use Symfony\Component\OptionsResolver\OptionsResolver;
 
 /**
  * Validates operation inputs and resolves the initial immutable configuration.
@@ -241,8 +240,8 @@ final class ConfigurationResolver
             }
         }
 
-        $resolver = new OptionsResolver();
-        $resolver->setDefaults([
+        /** @var array{cart: array<string, mixed>, housekeeping: array<string, mixed>, orders: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, shipping: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>} $resolved */
+        $resolved = [
             'cart' => [],
             'housekeeping' => [],
             'orders' => [],
@@ -251,18 +250,10 @@ final class ConfigurationResolver
             'shipping' => [],
             'stripe' => [],
             'translations' => [],
-        ]);
-        $resolver->setAllowedTypes('products', 'array');
-        $resolver->setAllowedTypes('cart', 'array');
-        $resolver->setAllowedTypes('housekeeping', 'array');
-        $resolver->setAllowedTypes('orders', 'array');
-        $resolver->setAllowedTypes('settings', 'array');
-        $resolver->setAllowedTypes('shipping', 'array');
-        $resolver->setAllowedTypes('stripe', 'array');
-        $resolver->setAllowedTypes('translations', 'array');
+            ...$root,
+        ];
 
-        /** @var array{cart: array<string, mixed>, housekeeping: array<string, mixed>, orders: array<string, mixed>, products: array<string, mixed>, settings: array<string, mixed>, shipping: array<string, mixed>, stripe: array<string, mixed>, translations: array<mixed, mixed>} */
-        return $resolver->resolve($root);
+        return $resolved;
     }
 
     /** @param array<string, mixed> $cart */
@@ -409,19 +400,14 @@ final class ConfigurationResolver
             }
         }
 
-        $resolver = new OptionsResolver();
-        $resolver->setDefaults([
+        $credentials = [
             'publishableKey' => null,
             'secretKey' => null,
             'webhookSecret' => null,
-        ]);
-        $resolver->setAllowedTypes('publishableKey', ['null', 'string']);
-        $resolver->setAllowedTypes('secretKey', ['null', 'string']);
-        $resolver->setAllowedTypes('webhookSecret', ['null', 'string']);
+            ...$stripe,
+        ];
 
         /** @var array{publishableKey: string|null, secretKey: string|null, webhookSecret: string|null} $credentials */
-        $credentials = $resolver->resolve($stripe);
-
         return new StripeConfiguration(
             secretKey: $credentials['secretKey'],
             publishableKey: $credentials['publishableKey'],
@@ -547,9 +533,6 @@ final class ConfigurationResolver
             if (is_array($settings['customFields']) === false) {
                 throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.customFields');
             }
-
-            $settings['customFields'] = (new CustomFieldFactory($this->languageCode))
-                ->normalize($settings['customFields']);
         }
 
         if (
@@ -558,66 +541,6 @@ final class ConfigurationResolver
             && is_array($settings['shippingZones']) === false
         ) {
             throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.shippingZones');
-        }
-
-        $resolver = new OptionsResolver();
-        $resolver->setDefaults([
-            'priceSource' => null,
-            'currency' => null,
-            'defaultRequiresShipping' => null,
-            'uiMode' => null,
-            'successDestination' => null,
-            'cancelDestination' => null,
-            'returnDestination' => null,
-            'billingAddressCollection' => null,
-            'individualNameCollection' => null,
-            'businessNameCollection' => null,
-            'phoneNumberCollection' => null,
-            'taxIdCollection' => null,
-            'termsOfServiceConsent' => null,
-            'promotionsConsent' => null,
-            'customFields' => null,
-            'allowPromotionCodes' => null,
-            'automaticTax' => null,
-            'taxBehavior' => null,
-            'shippingZones' => null,
-            'shippingTaxBehavior' => null,
-            'shippingTaxCode' => null,
-        ]);
-        $resolver->setAllowedTypes('priceSource', ['null', 'string']);
-        $resolver->setAllowedTypes('currency', ['null', 'string']);
-        $resolver->setAllowedTypes('defaultRequiresShipping', ['null', 'bool']);
-        $resolver->setAllowedTypes('uiMode', ['null', 'string']);
-        $resolver->setAllowedTypes('successDestination', ['null', 'string']);
-        $resolver->setAllowedTypes('cancelDestination', ['null', 'string']);
-        $resolver->setAllowedTypes('returnDestination', ['null', 'string']);
-        $resolver->setAllowedTypes('billingAddressCollection', ['null', 'string']);
-        $resolver->setAllowedTypes('individualNameCollection', ['null', 'string']);
-        $resolver->setAllowedTypes('businessNameCollection', ['null', 'string']);
-        $resolver->setAllowedTypes('phoneNumberCollection', ['null', 'bool']);
-        $resolver->setAllowedTypes('taxIdCollection', ['null', 'string']);
-        $resolver->setAllowedTypes('termsOfServiceConsent', ['null', 'bool']);
-        $resolver->setAllowedTypes('promotionsConsent', ['null', 'bool']);
-        $resolver->setAllowedTypes('customFields', ['null', 'array']);
-        $resolver->setAllowedTypes('allowPromotionCodes', ['null', 'bool']);
-        $resolver->setAllowedTypes('automaticTax', ['null', 'bool']);
-        $resolver->setAllowedTypes('taxBehavior', ['null', 'string']);
-        $resolver->setAllowedTypes('shippingZones', ['null', 'array']);
-        $resolver->setAllowedTypes('shippingTaxBehavior', ['null', 'string']);
-        $resolver->setAllowedTypes('shippingTaxCode', ['null', 'string']);
-        $resolver->setAllowedValues('priceSource', [
-            null,
-            PriceSource::Kirby->value,
-            PriceSource::Stripe->value,
-        ]);
-        $resolver->setAllowedValues('uiMode', [
-            null,
-            UiMode::Hosted->value,
-            UiMode::Embedded->value,
-        ]);
-
-        foreach ($choiceSettings as $name => $allowedValues) {
-            $resolver->setAllowedValues($name, [null, ...$allowedValues]);
         }
 
         foreach (Defaults::RETENTION as $name => $default) {
@@ -630,13 +553,13 @@ final class ConfigurationResolver
             if (is_int($value) && $value < 1) {
                 throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'settings.' . $name);
             }
-
-            $resolver->setDefault($name, null);
-            $resolver->setAllowedTypes($name, ['null', is_bool($default) ? 'bool' : 'int']);
         }
 
         /** @var array<string, mixed> $phpSettings */
-        $phpSettings = $resolver->resolve($settings);
+        $phpSettings = [
+            ...array_fill_keys(array_keys(Defaults::SETTINGS), null),
+            ...$settings,
+        ];
 
         /** @var array<string, Setting> $effective */
         $effective = [];
@@ -669,10 +592,10 @@ final class ConfigurationResolver
             defaultTaxCode: ShippingTaxCode::from($shippingTaxCode)->taxCode(),
             languageCode: $this->languageCode,
         );
-        $normalizedShippingZones = $shippingZoneFactory->normalize($rawShippingZones);
+        $shippingZoneResolution = $shippingZoneFactory->resolve($rawShippingZones);
         $shippingZonesSetting = $effective['shippingZones'];
         $effective['shippingZones'] = new Setting(
-            settingValue: $normalizedShippingZones,
+            settingValue: $shippingZoneResolution['normalized'],
             settingSource: $shippingZonesSetting->source(),
             shadowed: $shippingZonesSetting->hasShadowedValue(),
             pageShadow: $shippingZonesSetting->shadowedValue(),
@@ -685,11 +608,19 @@ final class ConfigurationResolver
         }
 
         $customFieldFactory = new CustomFieldFactory($this->languageCode);
+        $customFieldResolution = $customFieldFactory->resolve($customFields);
+        $customFieldsSetting = $effective['customFields'];
+        $effective['customFields'] = new Setting(
+            settingValue: $customFieldResolution['normalized'],
+            settingSource: $customFieldsSetting->source(),
+            shadowed: $customFieldsSetting->hasShadowedValue(),
+            pageShadow: $customFieldsSetting->shadowedValue(),
+        );
 
         return new Settings(
             settings: $effective,
-            customFields: $customFieldFactory->createAll($customFields),
-            shippingZones: $shippingZoneFactory->createAll($normalizedShippingZones),
+            customFields: $customFieldResolution['values'],
+            shippingZones: $shippingZoneResolution['values'],
         );
     }
 

@@ -41,6 +41,17 @@ final class CustomFieldFactory
      */
     public function normalize(array $fields): array
     {
+        return $this->resolve($fields)['normalized'];
+    }
+
+    /**
+     * Produces the persisted representation and localized domain values in one validation pass.
+     *
+     * @param array<mixed, mixed> $fields
+     * @return array{normalized: list<array<string, mixed>>, values: list<CustomField>}
+     */
+    public function resolve(array $fields): array
+    {
         // Stripe Checkout accepts at most three custom fields per Session.
         // https://docs.stripe.com/api/checkout/sessions/create?query=custom_fields
         if (array_is_list($fields) === false || count($fields) > 3) {
@@ -48,6 +59,7 @@ final class CustomFieldFactory
         }
 
         $normalized = [];
+        $values = [];
         $keys = [];
 
         foreach ($fields as $index => $field) {
@@ -123,27 +135,14 @@ final class CustomFieldFactory
 
             // The domain constructor owns constraints that depend on several
             // fields, such as dropdown defaults and compatible length bounds.
-            $this->create($normalizedField, $path);
+            $values[] = $this->create($normalizedField, $path);
             $normalized[] = $normalizedField;
         }
 
-        return $normalized;
-    }
-
-    /**
-     * @param array<mixed, mixed> $fields
-     * @return list<CustomField>
-     */
-    public function createAll(array $fields): array
-    {
-        $customFields = [];
-        $fields = $this->normalize($fields);
-
-        foreach ($fields as $index => $field) {
-            $customFields[] = $this->create($field, 'settings.customFields.' . $index);
-        }
-
-        return $customFields;
+        return [
+            'normalized' => $normalized,
+            'values' => $values,
+        ];
     }
 
     /**

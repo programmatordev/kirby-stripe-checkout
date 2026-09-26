@@ -52,11 +52,23 @@ final class ShippingZoneFactory
      */
     public function normalize(array $zones): array
     {
+        return $this->resolve($zones)['normalized'];
+    }
+
+    /**
+     * Produces the persisted representation and localized domain values in one validation pass.
+     *
+     * @param array<mixed, mixed> $zones
+     * @return array{normalized: list<array<string, mixed>>, values: list<ShippingZone>}
+     */
+    public function resolve(array $zones): array
+    {
         if (array_is_list($zones) === false) {
             throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.shippingZones');
         }
 
         $normalized = [];
+        $values = [];
         $countryOwners = [];
         $optionKeys = [];
         $hasFallback = false;
@@ -134,26 +146,14 @@ final class ShippingZoneFactory
                 'options' => $options,
             ];
 
-            $this->create($normalizedZone, $path);
+            $values[] = $this->create($normalizedZone, $path);
             $normalized[] = $normalizedZone;
         }
 
-        return $normalized;
-    }
-
-    /**
-     * @param array<mixed, mixed> $zones
-     * @return list<ShippingZone>
-     */
-    public function createAll(array $zones): array
-    {
-        $shippingZones = [];
-
-        foreach ($this->normalize($zones) as $index => $zone) {
-            $shippingZones[] = $this->create($zone, 'settings.shippingZones.' . $index);
-        }
-
-        return $shippingZones;
+        return [
+            'normalized' => $normalized,
+            'values' => $values,
+        ];
     }
 
     /**

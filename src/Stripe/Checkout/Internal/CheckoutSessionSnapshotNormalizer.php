@@ -16,8 +16,6 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\ShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\TaxSnapshot;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
-use ProgrammatorDev\StripeCheckout\Shipping\DeliveryEstimate;
-use ProgrammatorDev\StripeCheckout\Shipping\DeliveryEstimateUnit;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
 use Stripe\ShippingRate;
 use Throwable;
@@ -140,11 +138,6 @@ final class CheckoutSessionSnapshotNormalizer
         if (
             ($shippingRateData['object'] ?? null) !== ShippingRate::OBJECT_NAME
             || ($shippingRateData['type'] ?? null) !== ShippingRate::TYPE_FIXED_AMOUNT
-            || ($taxBehavior !== null && in_array($taxBehavior, [
-                ShippingRate::TAX_BEHAVIOR_EXCLUSIVE,
-                ShippingRate::TAX_BEHAVIOR_INCLUSIVE,
-                ShippingRate::TAX_BEHAVIOR_UNSPECIFIED,
-            ], true) === false)
         ) {
             throw new OrderDataException();
         }
@@ -247,11 +240,11 @@ final class CheckoutSessionSnapshotNormalizer
             throw new OrderDataException();
         }
 
-        return (new DeliveryEstimate(
-            minimum: $minimumValue,
-            maximum: $maximumValue,
-            unit: DeliveryEstimateUnit::from($unitValue),
-        ))->toArray();
+        return [
+            'minimum' => $minimumValue,
+            'maximum' => $maximumValue,
+            'unit' => $unitValue,
+        ];
     }
 
     private function providerAmount(int $providerAmount, string $currency): string

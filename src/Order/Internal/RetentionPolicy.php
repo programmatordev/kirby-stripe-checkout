@@ -15,8 +15,6 @@ final readonly class RetentionPolicy
     /** @param array<string, mixed> $data Validated, freshly loaded canonical facts. */
     public function isEligible(array $data, DateTimeImmutable $now): bool
     {
-        $data = OrderSerializer::normalize($data);
-
         if (in_array($data['paymentStatus'], ['unpaid', 'failed'], true) === false) {
             return false;
         }
