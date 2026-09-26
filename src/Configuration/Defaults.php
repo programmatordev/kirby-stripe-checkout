@@ -50,8 +50,6 @@ final class Defaults
         ...self::RETENTION,
     ];
 
-    public const HOUSEKEEPING = [
-        'intervalHours' => 24,
-        'batchSize' => 25,
-    ];
+    public const HOUSEKEEPING_INTERVAL_HOURS = 24;
+    public const HOUSEKEEPING_BATCH_SIZE = 25;
 }

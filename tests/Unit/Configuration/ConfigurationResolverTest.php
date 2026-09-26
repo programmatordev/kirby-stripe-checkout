@@ -54,17 +54,15 @@ final class ConfigurationResolverTest extends TestCase
     public function testHousekeepingIsPhpOnlyAndValidatesIntegerBounds(): void
     {
         $resolver = new ConfigurationResolver();
-        $this->assertSame([
-            'intervalHours' => 24,
-            'batchSize' => 25,
-        ], $resolver->housekeeping([]));
-        $this->assertSame([
-            'intervalHours' => 12,
-            'batchSize' => 100,
-        ], $resolver->resolve([
+        $defaults = $resolver->housekeeping([]);
+        $this->assertSame(24, $defaults->intervalHours());
+        $this->assertSame(25, $defaults->batchSize());
+        $configured = $resolver->resolve([
             self::PREFIX . '.housekeeping.intervalHours' => 12,
             self::PREFIX . '.housekeeping.batchSize' => 100,
-        ])->configurationOrFail()->housekeeping());
+        ])->configurationOrFail()->housekeeping();
+        $this->assertSame(12, $configured->intervalHours());
+        $this->assertSame(100, $configured->batchSize());
         $invalid = [
             ['intervalHours' => '24'],
             ['intervalHours' => null],

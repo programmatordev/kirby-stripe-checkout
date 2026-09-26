@@ -52,16 +52,16 @@ final class ShippingZoneFactory
      */
     public function normalize(array $zones): array
     {
-        return $this->resolve($zones)['normalized'];
+        return $this->resolve($zones)->definitions();
     }
 
     /**
      * Produces the persisted representation and localized domain values in one validation pass.
      *
      * @param array<mixed, mixed> $zones
-     * @return array{normalized: list<array<string, mixed>>, values: list<ShippingZone>}
+     * @return ConfigurationCollection<ShippingZone>
      */
-    public function resolve(array $zones): array
+    public function resolve(array $zones): ConfigurationCollection
     {
         if (array_is_list($zones) === false) {
             throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.shippingZones');
@@ -150,10 +150,10 @@ final class ShippingZoneFactory
             $normalized[] = $normalizedZone;
         }
 
-        return [
-            'normalized' => $normalized,
-            'values' => $values,
-        ];
+        return new ConfigurationCollection(
+            definitions: $normalized,
+            items: $values,
+        );
     }
 
     /**

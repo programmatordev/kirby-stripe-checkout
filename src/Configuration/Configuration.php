@@ -13,7 +13,6 @@ final class Configuration
 {
     /**
      * @param array<string, array<string, string>> $translations
-     * @param array{intervalHours: int, batchSize: int} $housekeeping
      */
     public function __construct(
         private readonly Settings $settings,
@@ -22,7 +21,7 @@ final class Configuration
         private readonly ProductConfiguration $products,
         private readonly ShippingConfiguration $shipping,
         private readonly bool $cartEnabled,
-        private readonly array $housekeeping,
+        private readonly HousekeepingConfiguration $housekeeping,
     ) {}
 
     public function settings(): Settings
@@ -35,8 +34,7 @@ final class Configuration
         return $this->cartEnabled;
     }
 
-    /** @return array{intervalHours: int, batchSize: int} */
-    public function housekeeping(): array
+    public function housekeeping(): HousekeepingConfiguration
     {
         return $this->housekeeping;
     }

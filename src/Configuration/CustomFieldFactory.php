@@ -41,16 +41,16 @@ final class CustomFieldFactory
      */
     public function normalize(array $fields): array
     {
-        return $this->resolve($fields)['normalized'];
+        return $this->resolve($fields)->definitions();
     }
 
     /**
      * Produces the persisted representation and localized domain values in one validation pass.
      *
      * @param array<mixed, mixed> $fields
-     * @return array{normalized: list<array<string, mixed>>, values: list<CustomField>}
+     * @return ConfigurationCollection<CustomField>
      */
-    public function resolve(array $fields): array
+    public function resolve(array $fields): ConfigurationCollection
     {
         // Stripe Checkout accepts at most three custom fields per Session.
         // https://docs.stripe.com/api/checkout/sessions/create?query=custom_fields
@@ -139,10 +139,10 @@ final class CustomFieldFactory
             $normalized[] = $normalizedField;
         }
 
-        return [
-            'normalized' => $normalized,
-            'values' => $values,
-        ];
+        return new ConfigurationCollection(
+            definitions: $normalized,
+            items: $values,
+        );
     }
 
     /**

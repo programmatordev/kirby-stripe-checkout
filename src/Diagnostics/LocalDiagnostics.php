@@ -91,8 +91,8 @@ final class LocalDiagnostics
             $checks[] = $this->credential('webhookSecret', $stripe->hasWebhookSecret(), CredentialMode::Unknown);
             $housekeeping = $configuration->housekeeping();
             $checks[] = $this->check('housekeeping', self::PASS, 'housekeeping.configured', [
-                'intervalHours' => (string) $housekeeping['intervalHours'],
-                'batchSize' => (string) $housekeeping['batchSize'],
+                'intervalHours' => (string) $housekeeping->intervalHours(),
+                'batchSize' => (string) $housekeeping->batchSize(),
             ]);
             $checks[] = $this->check('retention', self::PASS, 'retention.configured', [
                 'creationDays' => (string) $settings->creationFailureRetentionDays(),

@@ -14,7 +14,6 @@ use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Stripe\CataloguePagination;
 use ProgrammatorDev\StripeCheckout\Stripe\CatalogueState;
-use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogue;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogueErrorCode;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
 
@@ -225,7 +224,9 @@ final class StripePriceField extends FieldClass
         mixed $page,
         bool $refresh,
     ): array {
-        [$catalogue, $currency] = self::catalogue($kirby);
+        $runtime = self::runtime($kirby);
+        $catalogue = $runtime->stripePriceCatalogue();
+        $currency = self::currency($runtime);
         $result = $catalogue->search(
             $currency,
             is_string($query) ? $query : null,
@@ -260,7 +261,9 @@ final class StripePriceField extends FieldClass
         mixed $query,
         mixed $page,
     ): array {
-        [$catalogue, $currency] = self::catalogue($kirby);
+        $runtime = self::runtime($kirby);
+        $catalogue = $runtime->stripePriceCatalogue();
+        $currency = self::currency($runtime);
         $state = $catalogue->load($currency);
         $query = is_string($query) ? mb_strtolower(trim($query)) : '';
         $page = is_numeric($page) ? (int) $page : 1;
@@ -312,7 +315,9 @@ final class StripePriceField extends FieldClass
      */
     public static function selectedResponse(App $kirby, mixed $priceIds): array
     {
-        [$catalogue, $currency] = self::catalogue($kirby);
+        $runtime = self::runtime($kirby);
+        $catalogue = $runtime->stripePriceCatalogue();
+        $currency = self::currency($runtime);
         $state = $catalogue->cached($currency);
         $priceIds = is_array($priceIds)
             ? $priceIds
@@ -388,18 +393,22 @@ final class StripePriceField extends FieldClass
         ];
     }
 
-    /** @return array{PriceCatalogue, string} */
-    private static function catalogue(App $kirby): array
+    private static function runtime(App $kirby): RuntimeFactory
     {
         PluginPermissions::require($kirby, 'prices.read');
-        $runtime = new RuntimeFactory($kirby);
+
+        return new RuntimeFactory($kirby);
+    }
+
+    private static function currency(RuntimeFactory $runtime): string
+    {
         $currency = $runtime->settings()->currency();
 
         if ($currency === null) {
             throw new InvalidArgumentException('Store currency is missing.');
         }
 
-        return [$runtime->stripePriceCatalogue(), $currency];
+        return $currency;
     }
 
     /**

@@ -330,21 +330,25 @@ final class StripeCheckoutPage extends Page
 
         foreach (self::SETTING_FIELDS as $field => $name) {
             if ($name === 'customFields') {
-                [$storedValues[$name], $candidateValues[$name]] = $this->customFieldUpdateValues(
+                $update = $this->customFieldUpdate(
                     input: $input,
                     field: $field,
                     languageCode: $languageCode,
                 );
+                $storedValues[$name] = $update->storedValue();
+                $candidateValues[$name] = $update->candidateValue();
 
                 continue;
             }
 
             if ($name === 'shippingZones') {
-                [$storedValues[$name], $candidateValues[$name]] = $this->shippingZoneUpdateValues(
+                $update = $this->shippingZoneUpdate(
                     input: $input,
                     field: $field,
                     languageCode: $languageCode,
                 );
+                $storedValues[$name] = $update->storedValue();
+                $candidateValues[$name] = $update->candidateValue();
 
                 continue;
             }
@@ -452,13 +456,13 @@ final class StripeCheckoutPage extends Page
 
     /**
      * @param array<string, mixed> $input
-     * @return array{list<array<string, mixed>>, list<array<string, mixed>>}
+     * @return SettingUpdate<list<array<string, mixed>>>
      */
-    private function customFieldUpdateValues(
+    private function customFieldUpdate(
         array $input,
         string $field,
         ?string $languageCode,
-    ): array {
+    ): SettingUpdate {
         $adapter = new CustomFieldStructureAdapter();
         $canonical = $adapter->canonical($this->fieldValue('customFields'));
         $defaultLanguageCode = $this->kirby()->defaultLanguage()?->code();
@@ -475,31 +479,31 @@ final class StripeCheckoutPage extends Page
                 ? $input[$field]
                 : $storedOverlay;
 
-            return [
-                $adapter->definitions($adapter->localized($canonical, $storedOverlay)),
-                $adapter->definitions($adapter->localized($canonical, $candidateOverlay)),
-            ];
+            return new SettingUpdate(
+                storedValue: $adapter->definitions($adapter->localized($canonical, $storedOverlay)),
+                candidateValue: $adapter->definitions($adapter->localized($canonical, $candidateOverlay)),
+            );
         }
 
-        return [
-            $adapter->definitions($canonical),
-            $adapter->definitions(
+        return new SettingUpdate(
+            storedValue: $adapter->definitions($canonical),
+            candidateValue: $adapter->definitions(
                 array_key_exists($field, $input)
                     ? $adapter->canonical($input[$field])
                     : $canonical,
             ),
-        ];
+        );
     }
 
     /**
      * @param array<string, mixed> $input
-     * @return array{list<array<string, mixed>>, list<array<string, mixed>>}
+     * @return SettingUpdate<list<array<string, mixed>>>
      */
-    private function shippingZoneUpdateValues(
+    private function shippingZoneUpdate(
         array $input,
         string $field,
         ?string $languageCode,
-    ): array {
+    ): SettingUpdate {
         $adapter = new ShippingZoneStructureAdapter();
         $canonical = $adapter->canonical($this->fieldValue('shippingZones'));
         $defaultLanguageCode = $this->kirby()->defaultLanguage()?->code();
@@ -516,20 +520,20 @@ final class StripeCheckoutPage extends Page
                 ? $input[$field]
                 : $storedOverlay;
 
-            return [
-                $adapter->definitions($adapter->localized($canonical, $storedOverlay)),
-                $adapter->definitions($adapter->localized($canonical, $candidateOverlay)),
-            ];
+            return new SettingUpdate(
+                storedValue: $adapter->definitions($adapter->localized($canonical, $storedOverlay)),
+                candidateValue: $adapter->definitions($adapter->localized($canonical, $candidateOverlay)),
+            );
         }
 
-        return [
-            $adapter->definitions($canonical),
-            $adapter->definitions(
+        return new SettingUpdate(
+            storedValue: $adapter->definitions($canonical),
+            candidateValue: $adapter->definitions(
                 array_key_exists($field, $input)
                     ? $adapter->canonical($input[$field])
                     : $canonical,
             ),
-        ];
+        );
     }
 
     /** @return list<array<string, mixed>> */

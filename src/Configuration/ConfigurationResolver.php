@@ -133,11 +133,8 @@ final class ConfigurationResolver
         return $this->resolveSettings($settings, $pageSettings);
     }
 
-    /**
-     * @param array<string, mixed> $options
-     * @return array{intervalHours: int, batchSize: int}
-     */
-    public function housekeeping(#[SensitiveParameter] array $options): array
+    /** @param array<string, mixed> $options */
+    public function housekeeping(#[SensitiveParameter] array $options): HousekeepingConfiguration
     {
         $root = $this->extractor->extract($options);
         $values = array_key_exists('housekeeping', $root) ? $root['housekeeping'] : [];
@@ -209,25 +206,37 @@ final class ConfigurationResolver
 
     /**
      * @param array<string, mixed> $values
-     * @return array{intervalHours: int, batchSize: int}
      */
-    private function resolveHousekeeping(array $values): array
+    private function resolveHousekeeping(array $values): HousekeepingConfiguration
     {
         $this->assertKnownKeys($values, ['intervalHours', 'batchSize'], 'housekeeping');
-        $values = [...Defaults::HOUSEKEEPING, ...$values];
+        $intervalHours = array_key_exists('intervalHours', $values)
+            ? $values['intervalHours']
+            : Defaults::HOUSEKEEPING_INTERVAL_HOURS;
+        $batchSize = array_key_exists('batchSize', $values)
+            ? $values['batchSize']
+            : Defaults::HOUSEKEEPING_BATCH_SIZE;
 
-        foreach ($values as $name => $value) {
-            if (is_int($value) === false) {
-                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'housekeeping.' . $name);
-            }
-
-            if ($value < 1 || $name === 'batchSize' && $value > 100) {
-                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'housekeeping.' . $name);
-            }
+        if (is_int($intervalHours) === false) {
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'housekeeping.intervalHours');
         }
 
-        /** @var array{intervalHours: positive-int, batchSize: positive-int} $values */
-        return $values;
+        if ($intervalHours < 1) {
+            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'housekeeping.intervalHours');
+        }
+
+        if (is_int($batchSize) === false) {
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'housekeeping.batchSize');
+        }
+
+        if ($batchSize < 1 || $batchSize > 100) {
+            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'housekeeping.batchSize');
+        }
+
+        return new HousekeepingConfiguration(
+            intervalHours: $intervalHours,
+            batchSize: $batchSize,
+        );
     }
 
     /** @param array<string, mixed> $orders */
@@ -612,7 +621,7 @@ final class ConfigurationResolver
         $shippingZoneResolution = $shippingZoneFactory->resolve($rawShippingZones);
         $shippingZonesSetting = $effective['shippingZones'];
         $effective['shippingZones'] = new Setting(
-            settingValue: $shippingZoneResolution['normalized'],
+            settingValue: $shippingZoneResolution->definitions(),
             settingSource: $shippingZonesSetting->source(),
             shadowed: $shippingZonesSetting->hasShadowedValue(),
             pageShadow: $shippingZonesSetting->shadowedValue(),
@@ -628,7 +637,7 @@ final class ConfigurationResolver
         $customFieldResolution = $customFieldFactory->resolve($customFields);
         $customFieldsSetting = $effective['customFields'];
         $effective['customFields'] = new Setting(
-            settingValue: $customFieldResolution['normalized'],
+            settingValue: $customFieldResolution->definitions(),
             settingSource: $customFieldsSetting->source(),
             shadowed: $customFieldsSetting->hasShadowedValue(),
             pageShadow: $customFieldsSetting->shadowedValue(),
@@ -636,8 +645,8 @@ final class ConfigurationResolver
 
         return new Settings(
             settings: $effective,
-            customFields: $customFieldResolution['values'],
-            shippingZones: $shippingZoneResolution['values'],
+            customFields: $customFieldResolution->items(),
+            shippingZones: $shippingZoneResolution->items(),
         );
     }
 
