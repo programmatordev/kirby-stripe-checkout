@@ -56,6 +56,7 @@ final readonly class VariantDefinition
 
     public function shippingOverride(): ?bool
     {
+        // null deliberately inherits the product-level shipping requirement.
         return $this->shippingOverride;
     }
 

@@ -37,6 +37,8 @@ final readonly class ProductOptionsDefinition
     /** @param list<OptionDefinition> $options */
     public function withLocalizedOptions(array $options): self
     {
+        // Translations replace labels only; the canonical variant matrix owns
+        // availability, pricing and all other technical values.
         return new self($options, $this->variants);
     }
 
@@ -45,6 +47,8 @@ final readonly class ProductOptionsDefinition
     {
         ksort($selectedOptions);
 
+        // Disabled variants still match here so the caller can distinguish an
+        // unavailable combination from malformed or incomplete selections.
         foreach ($this->variants as $variant) {
             $variantOptions = $variant->selectedOptions();
             ksort($variantOptions);

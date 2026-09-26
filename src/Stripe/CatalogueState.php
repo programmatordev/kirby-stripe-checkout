@@ -54,6 +54,7 @@ final readonly class CatalogueState
     /** @return self<T> */
     public function withFailure(int $failedAt, string $error): self
     {
+        // A failed refresh must not discard the last usable provider snapshot.
         return new self(
             items: $this->items,
             refreshedAt: $this->refreshedAt,

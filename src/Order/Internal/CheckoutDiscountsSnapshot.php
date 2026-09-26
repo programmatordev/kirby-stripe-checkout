@@ -15,6 +15,8 @@ final readonly class CheckoutDiscountsSnapshot
 
     public static function unavailable(): self
     {
+        // null preserves that Stripe did not return an authoritative total;
+        // available([], '0') instead records that no discount was applied.
         return new self([], null);
     }
 

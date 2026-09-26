@@ -41,6 +41,9 @@ final class ProductOptionsSchema
      */
     public function overlay(ProductOptionsDefinition $canonical, mixed $value): array
     {
+        // Secondary languages may submit labels only. Rebuilding from canonical
+        // IDs ignores unknown entries and prevents translated content from
+        // changing the technical option or variant schema.
         $input = $this->decode($value);
         $submittedOptions = is_array($input['options'] ?? null) ? $input['options'] : [];
         $submittedById = [];
