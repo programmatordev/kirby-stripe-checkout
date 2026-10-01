@@ -375,6 +375,8 @@ final class PaymentMethodDxTest extends KirbyTestCase
                 'programmatordev.stripe-checkout.payment.pending' => function (Page $order, LifecycleEvent $lifecycleEvent) use (&$message): void {
                     // This conversion exercises the candidate API only. Neither a
                     // lifecycle accessor nor this instruction schema is approved yet.
+                    // Read event-time payment facts, not the live Order Page: a
+                    // retried hook can run after that Page's payment state changes.
                     $payment = Payment::fromArray(OrderData::map($lifecycleEvent->orderSnapshot()['payment']));
                     $instructions = $payment->instructions();
 

@@ -9,7 +9,7 @@ use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 
-/** Candidate frozen hook value; not registered or supported by the production plugin. */
+/** Frozen payment observation for the API comparison; not a production plugin API. */
 final readonly class Payment
 {
     public function __construct(
@@ -70,6 +70,7 @@ final readonly class Payment
         return $this->failureCode;
     }
 
+    /** Captured details for this observation, not a guarantee that the instructions are still valid. */
     public function instructions(): ?PaymentInstructions
     {
         return $this->instructions;

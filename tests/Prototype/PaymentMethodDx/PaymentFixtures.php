@@ -127,6 +127,34 @@ final class PaymentFixtures
         );
     }
 
+    public static function konbini(): PaymentIntent
+    {
+        // One voucher can contain different payment codes for several stores.
+        // A single reference accessor cannot faithfully describe this structure.
+        // https://docs.stripe.com/api/payment_intents/object?query=next_action.konbini_display_details
+        return self::intent(
+            methodType: PaymentMethod::TYPE_KONBINI,
+            status: PaymentIntent::STATUS_REQUIRES_ACTION,
+            nextAction: [
+                'type' => 'konbini_display_details',
+                'konbini_display_details' => [
+                    'expires_at' => 1790899200,
+                    'hosted_voucher_url' => 'https://payments.example.test/konbini',
+                    'stores' => [
+                        'familymart' => [
+                            'payment_code' => '123456789',
+                            'confirmation_number' => '11111111110',
+                        ],
+                        'lawson' => ['payment_code' => '987654321'],
+                        'ministop' => null,
+                        'seicomart' => null,
+                    ],
+                ],
+            ],
+            currency: 'jpy',
+        );
+    }
+
     public static function sepaDebit(): PaymentIntent
     {
         return self::intent(

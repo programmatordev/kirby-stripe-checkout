@@ -9,7 +9,8 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 
 /**
  * Limited voucher/QR projection for the API comparison, not universal instruction support.
- * Preserving Stripe-shaped instruction data remains an alternative to evaluate.
+ * Kept as the comparison baseline: it loses provider-specific and nested details
+ * that the separate Stripe-shaped payload experiment preserves.
  */
 final readonly class PaymentInstructions
 {
