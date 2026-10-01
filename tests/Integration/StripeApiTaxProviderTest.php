@@ -56,6 +56,41 @@ final class StripeApiTaxProviderTest extends KirbyTestCase
         ], $requests[1][3]);
     }
 
+    public function testTaxCodesWithoutRequirementsDoNotRequireAPerformanceLocation(): void
+    {
+        $client = $this->createMock(ClientInterface::class);
+        $client->method('request')->willReturn([
+            json_encode([
+                'object' => 'list',
+                'has_more' => false,
+                'data' => [
+                    [
+                        'object' => 'tax_code',
+                        'id' => 'txcd_null_requirements',
+                        'name' => 'Null requirements',
+                        'description' => 'Provider description',
+                        'requirements' => null,
+                    ],
+                    [
+                        'object' => 'tax_code',
+                        'id' => 'txcd_missing_requirements',
+                        'name' => 'Missing requirements',
+                        'description' => 'Provider description',
+                    ],
+                ],
+            ], JSON_THROW_ON_ERROR),
+            200,
+            [],
+        ]);
+        ApiRequestor::setHttpClient($client);
+
+        $taxCodes = $this->provider()->listTaxCodes()->taxCodes();
+
+        $this->assertCount(2, $taxCodes);
+        $this->assertFalse($taxCodes[0]->requiresPerformanceLocation);
+        $this->assertFalse($taxCodes[1]->requiresPerformanceLocation);
+    }
+
     private function provider(): StripeApiTaxProvider
     {
         return new StripeApiTaxProvider((new StripeApiClientFactory())->create(new StripeConfiguration(

@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\InvalidSessionRequestException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestValidator;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
+use Stripe\PaymentMethod;
 
 final class SessionRequestValidatorTest extends TestCase
 {
@@ -118,6 +119,26 @@ final class SessionRequestValidatorTest extends TestCase
         $this->assertSame(
             $customizedRequest,
             (new SessionRequestValidator())->validate($this->standardRequest(), $customizedRequest),
+        );
+    }
+
+    public function testAllowsStripeOwnedPaymentMethodFiltering(): void
+    {
+        $request = $this->standardRequest();
+        $parameters = $request->parameters();
+        // Endive filters compatible methods instead of requiring every listed
+        // method to work. Stripe also owns validation of the supplied values.
+        // https://docs.stripe.com/changelog/endive/2026-09-30/remove-payment-method-types-checkout-sessions
+        $parameters['allowed_payment_method_types'] = [
+            PaymentMethod::TYPE_CARD,
+            PaymentMethod::TYPE_MULTIBANCO,
+            'future_method',
+        ];
+        $customizedRequest = new SessionRequest($parameters);
+
+        $this->assertSame(
+            $customizedRequest,
+            (new SessionRequestValidator())->validate($request, $customizedRequest),
         );
     }
 

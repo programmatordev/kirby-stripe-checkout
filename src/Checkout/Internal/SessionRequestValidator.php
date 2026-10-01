@@ -32,8 +32,8 @@ final class SessionRequestValidator
      * Session; optional items can change saved lines; server-only shipping needs
      * a Session update flow; and saved methods need an explicit customer/consent
      * contract. Managed Payments changes the merchant-of-record model entirely.
-     * A static payment-method list bypasses Stripe's Dashboard-managed dynamic
-     * selection.
+     * The removed static payment-method parameter is rejected; compatible
+     * payment-method filters remain Stripe-owned.
      *
      * @see https://docs.stripe.com/payments/currencies/localize-prices/adaptive-pricing
      * @see https://docs.stripe.com/payments/checkout/abandoned-carts
@@ -42,6 +42,7 @@ final class SessionRequestValidator
      * @see https://docs.stripe.com/payments/checkout/save-during-payment
      * @see https://docs.stripe.com/payments/managed-payments
      * @see https://docs.stripe.com/payments/payment-methods/dynamic-payment-methods
+     * @see https://docs.stripe.com/changelog/endive/2026-09-30/remove-payment-method-types-checkout-sessions
      */
     private const PROHIBITED_TOP_LEVEL_FIELDS = [
         'adaptive_pricing',
