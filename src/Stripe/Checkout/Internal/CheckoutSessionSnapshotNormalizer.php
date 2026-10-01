@@ -77,24 +77,24 @@ final class CheckoutSessionSnapshotNormalizer
     private function shipping(array $sessionData, ?string $currency): CheckoutShippingSnapshot
     {
         $totalDetails = $this->nullableMap($sessionData['total_details'] ?? null);
-        $providerShippingTotal = $totalDetails['amount_shipping'] ?? null;
+        $providerShippingAmount = $totalDetails['amount_shipping'] ?? null;
         $shippingCost = $this->nullableMap($sessionData['shipping_cost'] ?? null);
 
         if ($shippingCost === null) {
-            if ($providerShippingTotal === null) {
+            if ($providerShippingAmount === null) {
                 return CheckoutShippingSnapshot::unavailable();
             }
 
             // An explicit zero is an authoritative no-shipping result. A missing
             // amount remains unknown and must not be converted into a zero fact.
-            if ($providerShippingTotal !== 0 || $currency === null) {
+            if ($providerShippingAmount !== 0 || $currency === null) {
                 throw new OrderDataException();
             }
 
             return CheckoutShippingSnapshot::none($this->providerAmount(0, $currency));
         }
 
-        if (is_int($providerShippingTotal) === false || $currency === null) {
+        if (is_int($providerShippingAmount) === false || $currency === null) {
             throw new OrderDataException();
         }
 
@@ -124,14 +124,16 @@ final class CheckoutSessionSnapshotNormalizer
         $fixedProviderAmount = $fixedAmount['amount'] ?? null;
         $fixedCurrency = $fixedAmount['currency'] ?? null;
 
-        // The Rate's fixed amount describes the pre-tax, pre-discount shipping
-        // subtotal. Stripe's returned shipping total may differ after both.
+        // The Session's shipping amount and the fixed Rate describe the quoted
+        // subtotal, not the final shipping total after exclusive tax. Inclusive
+        // tax remains inside that subtotal; preserve Stripe's returned amounts
+        // rather than reconstructing the tax equation locally.
         // https://docs.stripe.com/api/checkout/sessions/object#checkout_session_object-shipping_cost
         if (
             is_int($providerSubtotal) === false
             || is_int($providerTax) === false
             || is_int($providerTotal) === false
-            || $providerShippingTotal !== $providerTotal
+            || $providerShippingAmount !== $providerSubtotal
             || $fixedProviderAmount !== $providerSubtotal
             || is_string($fixedCurrency) === false
             || strtoupper($fixedCurrency) !== strtoupper($currency)

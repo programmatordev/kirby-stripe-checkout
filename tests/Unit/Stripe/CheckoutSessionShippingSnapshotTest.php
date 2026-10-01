@@ -79,6 +79,43 @@ final class CheckoutSessionShippingSnapshotTest extends TestCase
         $this->assertSame('0.00', $snapshot->shippingTotal());
     }
 
+    public function testPreservesInclusiveShippingTaxWithoutAddingItToTheProviderTotal(): void
+    {
+        // Mirrors an expanded Stripe test-mode response: the subtotal retains
+        // the gross quote even though the tax allocation's taxable_amount is net.
+        $source = $this->shippingSource();
+        $shippingCost = self::map($source['shipping_cost']);
+        $shippingCost['amount_subtotal'] = 615;
+        $shippingRate = self::map($shippingCost['shipping_rate']);
+        $shippingRate['fixed_amount'] = [
+            'amount' => 615,
+            'currency' => 'eur',
+        ];
+        $shippingRate['tax_behavior'] = ShippingRate::TAX_BEHAVIOR_INCLUSIVE;
+        $shippingCost['shipping_rate'] = $shippingRate;
+        $taxes = OrderData::list($shippingCost['taxes']);
+        $tax = self::map($taxes[0]);
+        $taxRate = self::map($tax['rate']);
+        $taxRate['inclusive'] = true;
+        $tax['rate'] = $taxRate;
+        $shippingCost['taxes'] = [$tax];
+        $source['shipping_cost'] = $shippingCost;
+        $totalDetails = self::map($source['total_details']);
+        $totalDetails['amount_shipping'] = 615;
+        $totalDetails['breakdown'] = [
+            'discounts' => [],
+            'taxes' => [$tax],
+        ];
+        $source['total_details'] = $totalDetails;
+
+        $snapshot = $this->normalize($source);
+        $shipping = $snapshot->shipping();
+        $this->assertNotNull($shipping);
+        $this->assertSame('6.15', $shipping->toArray()['subtotal']);
+        $this->assertSame('1.15', $shipping->toArray()['tax']);
+        $this->assertSame('6.15', $snapshot->shippingTotal());
+    }
+
     public function testKeepsASelectedFreeShippingRateDistinctFromNoShipping(): void
     {
         $source = $this->shippingSource();
@@ -163,9 +200,9 @@ final class CheckoutSessionShippingSnapshotTest extends TestCase
             $shippingCost['shipping_rate'] = $shippingRate;
             $source['shipping_cost'] = $shippingCost;
         }];
-        yield 'Session shipping total' => [static function (array &$source): void {
+        yield 'Session shipping amount' => [static function (array &$source): void {
             $totalDetails = self::map($source['total_details']);
-            $totalDetails['amount_shipping'] = 614;
+            $totalDetails['amount_shipping'] = 499;
             $source['total_details'] = $totalDetails;
         }];
         yield 'rate fixed amount' => [static function (array &$source): void {
@@ -279,7 +316,7 @@ final class CheckoutSessionShippingSnapshotTest extends TestCase
             ],
             'total_details' => [
                 'amount_discount' => 0,
-                'amount_shipping' => 615,
+                'amount_shipping' => 500,
                 'amount_tax' => 115,
                 'breakdown' => [
                     'discounts' => [],

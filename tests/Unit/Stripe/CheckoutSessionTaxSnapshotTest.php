@@ -64,7 +64,7 @@ final class CheckoutSessionTaxSnapshotTest extends TestCase
             'data' => [['id' => 'li_one', 'taxes' => [$taxEntry]]],
             'has_more' => false,
         ];
-        $source['total_details']['amount_shipping'] = 1230;
+        $source['total_details']['amount_shipping'] = 1000;
         $source['shipping_cost'] = [
             'amount_subtotal' => 1000,
             'amount_tax' => 230,

@@ -222,7 +222,7 @@ final class StripeApiCheckoutSessionGatewayTest extends KirbyTestCase
                 ],
                 'total_details' => [
                     'amount_discount' => 0,
-                    'amount_shipping' => 615,
+                    'amount_shipping' => 500,
                     'breakdown' => ['discounts' => []],
                 ],
                 'ui_mode' => 'hosted_page',
@@ -257,7 +257,7 @@ final class StripeApiCheckoutSessionGatewayTest extends KirbyTestCase
             'custom_fields' => [],
             'total_details' => [
                 'amount_discount' => 0,
-                'amount_shipping' => 615,
+                'amount_shipping' => 500,
                 'breakdown' => ['discounts' => []],
             ],
             'shipping_cost' => [

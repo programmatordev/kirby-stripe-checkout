@@ -2,7 +2,7 @@
 
 Shipping is Kirby-owned. The built-in resolver uses the ordered zones and fixed whole-order options configured in the Stripe Checkout Settings Page. A project can replace that calculation with one PHP resolver for product-specific rules, free-shipping thresholds, pickup labels, carrier APIs, or other store policy.
 
-The quote engine and resolver contract power the [PHP Cart shipping preview](cart.md#preview-shipping), JSON Cart responses, and project-owned HTML Cart renderers. A shipping country can be retained through the [PHP Cart API](cart.md#set-the-shipping-country) or the revision-safe [Cart HTTP route](cart-http.md#preview-shipping-for-a-country). Checkout Session shipping mapping is not implemented yet.
+The quote engine and resolver contract power the [PHP Cart shipping preview](cart.md#preview-shipping), JSON Cart responses, and project-owned HTML Cart renderers. A shipping country can be retained through the [PHP Cart API](cart.md#set-the-shipping-country) or the revision-safe [Cart HTTP route](cart-http.md#preview-shipping-for-a-country). The Checkout creation service maps an accepted quote into both hosted and embedded Sessions.
 
 ## Built-in resolution
 
@@ -143,7 +143,7 @@ ShippingQuote::unavailable();
 ShippingQuote::unavailable('shipping.carrier_unavailable');
 ```
 
-Available quotes require one through five ordered options. Keys and labels must be unique inside the quote, amounts must be exact and non-negative, and every option must use the Checkout currency. The first option remains first for Stripe's later preselection.
+Available quotes require one through five ordered options. Keys and labels must be unique inside the quote, amounts must be exact and non-negative, and every option must use the Checkout currency. The first option remains first for Stripe's preselection.
 
 Reason codes are safe, language-neutral strings in the `shipping.*` namespace. Return a specific code when the storefront needs to distinguish a known unavailable condition. Do not put carrier messages, addresses, credentials, or other private data in a reason code.
 
@@ -154,3 +154,15 @@ The available options are preview information rather than Cart selection state. 
 Resolver exceptions are normalized to `shipping.resolver_failed`. Hook failures use `shipping.filter_failed`, while an invalid hook return uses `shipping.filter_invalid`. Original exception details are retained only as the previous cause for developer debugging; they are not copied into the safe public error code or message. Neither extension point receives a Stripe client, mutable Cart, order storage, or raw browser request. They must not trust browser-supplied amounts or create Stripe resources.
 
 See [Configuration](configuration.md#shipping-configuration) for fixed zones, delivery estimates, translations, and shipping tax defaults.
+
+## Mapping to Checkout
+
+The Checkout creation service uses a fresh quote for each new attempt. A known shipping country restricts Checkout's address collection to that country so its shipping options remain valid. Without a country, only a quote that applies to every supported country can proceed. Digital-only orders omit address collection and shipping options.
+
+Options are sent as inline shipping data, including their amount, label, optional delivery estimate, and shipping tax policy when Automatic Tax is enabled. Stripe creates backing Shipping Rates for that Session. They are historical references, not reusable store configuration; the plugin does not list, edit, or delete them.
+
+The order retains the exact Session request and the generated Rate IDs. A permitted retry reuses that request instead of recalculating shipping from changed settings or products. In hosted and embedded Checkout, Stripe owns the buyer's final shipping-option selection. Address-dependent updates inside embedded Checkout are not currently supported; choose the country before starting Checkout when your rates depend on it.
+
+The provider snapshot normalizer preserves the selected Rate, shipping address, and Stripe's shipping subtotal, tax, and final total, including free shipping. With inclusive tax, the quoted amount already includes tax; with exclusive tax, the final shipping total can be higher. These amounts are kept as returned by Stripe, not recalculated locally.
+
+Selected-shipping normalization is implemented, but automatic retrieval and commitment of those results to orders through webhooks is not yet available. A browser return is never proof of payment.
