@@ -77,7 +77,7 @@ final class PaymentFixtures
 
     public static function multibanco(): PaymentIntent
     {
-        return self::intent(
+        $paymentIntent = self::intent(
             methodType: PaymentMethod::TYPE_MULTIBANCO,
             status: PaymentIntent::STATUS_REQUIRES_ACTION,
             nextAction: [
@@ -90,6 +90,12 @@ final class PaymentFixtures
                 ],
             ],
         );
+
+        // The pending test-mode voucher observation had instructions before a
+        // Charge existed. Keep that shape instead of inventing Charge evidence.
+        $paymentIntent->latest_charge = null;
+
+        return $paymentIntent;
     }
 
     public static function oxxo(): PaymentIntent

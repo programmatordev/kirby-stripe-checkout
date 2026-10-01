@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Prototype\PaymentMethodDx;
 
 use Brick\Money\Money;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
+use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 
@@ -23,7 +24,13 @@ final readonly class Payment
         private ?string $nextActionType = null,
         private ?string $failureCode = null,
         private ?PaymentInstructions $instructions = null,
-    ) {}
+    ) {
+        // Both amounts share one serialized currency; restoration must not
+        // silently reinterpret a received amount from a different currency.
+        if ($amountReceived !== null && $amount->getCurrency()->isEqualTo($amountReceived->getCurrency()) === false) {
+            throw new OrderDataException();
+        }
+    }
 
     public function status(): PaymentStatus
     {

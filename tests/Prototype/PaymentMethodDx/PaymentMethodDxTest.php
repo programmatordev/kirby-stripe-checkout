@@ -15,6 +15,7 @@ use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEvent;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\DisputeStatus;
+use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 use ProgrammatorDev\StripeCheckout\Order\RefundStatus;
@@ -29,6 +30,30 @@ use Stripe\PaymentMethod;
 /** Explicitly run prototype scenarios; never discovered by the production PHPUnit suites. */
 final class PaymentMethodDxTest extends KirbyTestCase
 {
+    public function testPaymentRejectsMixedAmountCurrenciesBeforeSerialization(): void
+    {
+        $this->expectException(OrderDataException::class);
+
+        new Payment(
+            status: PaymentStatus::Paid,
+            amount: Money::of('25.00', 'EUR'),
+            amountReceived: Money::of('25.00', 'USD'),
+        );
+    }
+
+    public function testVoucherInstructionsDoNotRequireACharge(): void
+    {
+        $payment = (new PaymentNormalizer())->normalize(
+            status: PaymentStatus::Pending,
+            amount: Money::of('25.00', 'EUR'),
+            paymentIntent: PaymentFixtures::multibanco(),
+        );
+
+        $this->assertNull($payment->stripeChargeId());
+        $this->assertSame(PaymentMethod::TYPE_MULTIBANCO, $payment->methodType());
+        $this->assertSame('123456789', $payment->instructions()?->reference());
+    }
+
     public function testImmediateCardPaymentExposesExactMoneyWithoutCardDetails(): void
     {
         $payment = (new PaymentNormalizer())->normalize(
@@ -352,7 +377,7 @@ final class PaymentMethodDxTest extends KirbyTestCase
         $this->assertSame('ch_unexpanded', $payment->stripeChargeId());
     }
 
-    public function testNativeHookCanReadFrozenInstructionsAfterKirbyContentPersistence(): void
+    public function testNativeHookReadsRestoredInstructionsAfterTheLiveOrderChanges(): void
     {
         $payment = (new PaymentNormalizer())->normalize(
             status: PaymentStatus::Pending,
@@ -360,15 +385,6 @@ final class PaymentMethodDxTest extends KirbyTestCase
             paymentIntent: PaymentFixtures::multibanco(),
         );
         $message = null;
-        $snapshot = [
-            'uuid' => 'prototype-order',
-            'languageCode' => 'en',
-            'checkoutStatus' => CheckoutStatus::Complete->value,
-            'paymentStatus' => PaymentStatus::Pending->value,
-            'refundStatus' => RefundStatus::None->value,
-            'disputeStatus' => DisputeStatus::None->value,
-            'payment' => $payment->toArray(),
-        ];
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start(
             hooks: [
@@ -407,6 +423,15 @@ final class PaymentMethodDxTest extends KirbyTestCase
         $this->assertInstanceOf(Field::class, $paymentField);
         $restoredPayment = Payment::fromArray(OrderData::map(Yaml::decode($paymentField->toString())));
         $this->assertSame($payment->toArray(), $restoredPayment->toArray());
+        $snapshot = [
+            'uuid' => 'prototype-order',
+            'languageCode' => 'en',
+            'checkoutStatus' => CheckoutStatus::Complete->value,
+            'paymentStatus' => PaymentStatus::Pending->value,
+            'refundStatus' => RefundStatus::None->value,
+            'disputeStatus' => DisputeStatus::None->value,
+            'payment' => $restoredPayment->toArray(),
+        ];
         $event = new LifecycleEvent(
             deliveryId: 'prototype-delivery',
             type: LifecycleEventType::PaymentPending,
@@ -422,6 +447,25 @@ final class PaymentMethodDxTest extends KirbyTestCase
             triggerId: 'evt_prototype',
             orderSnapshot: $snapshot,
         );
+
+        // Simulate later saved payment facts independently of the frozen event.
+        // This exercises hook inputs, not a production reconciliation operation.
+        $currentPayment = new Payment(
+            status: PaymentStatus::Paid,
+            amount: Money::of('25.00', 'EUR'),
+            amountReceived: Money::of('25.00', 'EUR'),
+            methodType: PaymentMethod::TYPE_MULTIBANCO,
+        );
+        $order = $order->update([
+            'paymentStatus' => PaymentStatus::Paid->value,
+            'payment' => Yaml::encode($currentPayment->toArray()),
+        ]);
+        $currentPaymentField = $order->content()->get('payment');
+        $this->assertInstanceOf(Field::class, $currentPaymentField);
+        $livePayment = Payment::fromArray(OrderData::map(Yaml::decode($currentPaymentField->toString())));
+        $this->assertSame(PaymentStatus::Paid, $livePayment->status());
+        $this->assertNull($livePayment->instructions());
+
         // Native Events exercises named hook arguments, not a production reducer,
         // payment commit, delivery ledger or lifecycle retry implementation.
         (new Events($this->kirby))->trigger('programmatordev.stripe-checkout.payment.pending', [
