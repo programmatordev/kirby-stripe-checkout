@@ -8,9 +8,12 @@ use Brick\Money\Money;
 use Closure;
 use DateTimeImmutable;
 use Kirby\Cms\App;
+use Kirby\Cms\Language;
 use Kirby\Cms\ModelWithContent;
 use Kirby\Cms\Page;
+use Kirby\Content\PlainTextStorage;
 use Kirby\Content\Storage;
+use Kirby\Content\VersionId;
 use Kirby\Data\Data;
 use Kirby\Data\Yaml;
 use Kirby\Exception\PermissionException;
@@ -24,6 +27,7 @@ use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderHookDispatcher;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
+use ProgrammatorDev\StripeCheckout\Kirby\PersistenceErrorCode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\LifecycleNotification;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEvent;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
@@ -46,6 +50,140 @@ use RuntimeException;
 
 final class OrderHookDispatcherTest extends KirbyTestCase
 {
+    public function testPayloadCleanupPreservesOrderTimeCacheAndSanitizedDeliveryHistory(): void
+    {
+        $calls = 0;
+        $this->restart([
+            'programmatordev.stripe-checkout.order.fields' => fn(): array => ['note' => 'PRIVATE_SNAPSHOT_CANARY'],
+            'programmatordev.stripe-checkout.order.created' => function () use (&$calls): void {
+                $calls++;
+            },
+        ], options: ['cache' => ['pages' => ['active' => true]]]);
+        $page = $this->createOrder();
+        $store = new OrderPageStore($this->kirby);
+        $before = $store->data($page);
+        $entry = $this->entries($page)[0];
+        $cache = $this->kirby->cache('pages');
+        $cache->set('order-summary', 'unchanged');
+        $now = OrderData::date($entry['expiresAt']);
+        $page = $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $now->modify('-1 second'));
+        $this->assertSame($before, $store->data($page));
+        $this->assertSame('unchanged', $cache->get('order-summary'));
+        $deliveryId = OrderData::string(OrderData::map($entry['event'])['deliveryId']);
+        (new OrderHookDispatcher($this->kirby))->dispatch($page->uuid()->toString(), $deliveryId);
+        $page = $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $now);
+        $after = $store->data($page);
+        $pruned = $this->entries($page)[0];
+        unset($before['lifecycleDeliveries'], $after['lifecycleDeliveries']);
+        $this->assertSame($before, $after);
+        $this->assertSame('unchanged', $cache->get('order-summary'));
+        $this->assertSame(OrderData::timestamp($now), $pruned['payloadPrunedAt']);
+        $this->assertSame('delivered', $pruned['status']);
+        $this->assertSame($entry['attempts'], $pruned['attempts']);
+        $this->assertSame($entry['expiresAt'], $pruned['expiresAt']);
+        $this->assertStringNotContainsString('PRIVATE_SNAPSHOT_CANARY', OrderData::json($pruned));
+        $deliveryId = OrderData::string(OrderData::map($pruned['event'])['deliveryId']);
+        (new OrderHookDispatcher($this->kirby))->dispatch($page->uuid()->toString(), $deliveryId);
+        $page = $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $now->modify('+1 day'));
+        $this->assertSame($pruned, $this->entries($page)[0]);
+        $this->assertSame(1, $calls);
+    }
+
+    public function testExpiredFailedPayloadCanBePrunedWithoutReenablingReplay(): void
+    {
+        $calls = 0;
+        $this->restart([
+            'programmatordev.stripe-checkout.order.created' => function () use (&$calls): void {
+                $calls++;
+                throw new RuntimeException('Intentional listener failure');
+            },
+        ]);
+        $page = $this->createOrder();
+        $store = new OrderPageStore($this->kirby);
+        $before = $this->entries($page)[0];
+        $deadline = OrderData::date($before['expiresAt']);
+        $page = $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $deadline->modify('-1 second'));
+        $this->assertSame($before, $this->entries($page)[0]);
+        $page = $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $deadline);
+        $pruned = $this->entries($page)[0];
+        $this->assertSame('failed', $pruned['status']);
+        $this->assertSame($before['errorCode'], $pruned['errorCode']);
+        $this->assertArrayNotHasKey('orderSnapshot', OrderData::map($pruned['event']));
+        $deliveryId = OrderData::string(OrderData::map($pruned['event'])['deliveryId']);
+        // Even an earlier injected retry clock cannot reconstruct a removed payload.
+        (new OrderHookDispatcher($this->kirby))->dispatch($page->uuid()->toString(), $deliveryId, $deadline->modify('-1 second'));
+        $this->assertSame($pruned, $this->entries($store->requirePage($page->id()))[0]);
+        $this->assertSame(1, $calls);
+    }
+
+    public function testFailedPayloadCleanupPreservesTheOriginalRecordForRetry(): void
+    {
+        $page = $this->createOrder();
+        $store = new OrderPageStore($this->kirby);
+        $before = $store->data($page);
+        $deadline = OrderData::date($this->entries($page)[0]['expiresAt']);
+        /** @var Closure(App, ModelWithContent): Storage $nativeStorage */
+        $nativeStorage = $this->kirby->component('storage');
+        $this->kirby->extend(['components' => ['storage' => static function (App $kirby, ModelWithContent $model) use ($nativeStorage): Storage {
+            if ($model instanceof OrderPage === false) {
+                return $nativeStorage($kirby, $model);
+            }
+
+            return new class ($model) extends PlainTextStorage {
+                protected function write(VersionId $versionId, Language $language, array $fields): void
+                {
+                    throw new RuntimeException('PRIVATE_FAILURE_CANARY');
+                }
+            };
+        }]]);
+
+        try {
+            $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $deadline);
+            $this->fail('A failed cleanup write must remain retryable.');
+        } catch (OrderStorageException $error) {
+            $this->assertSame(PersistenceErrorCode::WRITE_FAILED, $error->errorCode());
+        } finally {
+            $this->kirby->extend(['components' => ['storage' => $nativeStorage]]);
+        }
+
+        $this->assertSame($before, $store->data($store->requirePage($page->id())));
+        $page = $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $deadline);
+        $this->assertNotNull($this->entries($page)[0]['payloadPrunedAt']);
+    }
+
+    public function testInFlightDeliveryCanRecordSuccessAfterItsExpiredPayloadWasPruned(): void
+    {
+        $calls = 0;
+        $this->restart([
+            'programmatordev.stripe-checkout.order.created' => function (OrderPage $order) use (&$calls): void {
+                $calls++;
+
+                if ($calls === 1) {
+                    throw new RuntimeException('Intentional listener failure');
+                }
+
+                $store = new OrderPageStore($order->kirby());
+                $entry = OrderData::map(OrderData::list($store->data($order)['lifecycleDeliveries'])[0]);
+                // Cleanup can commit while an already admitted listener runs outside the lock.
+                $store->pruneLifecycleDeliveryPayloads($order->uuid()->toString(), OrderData::date($entry['expiresAt']));
+            },
+        ]);
+        $page = $this->createOrder();
+        $entry = $this->entries($page)[0];
+        $deliveryId = OrderData::string(OrderData::map($entry['event'])['deliveryId']);
+        $dispatcher = new OrderHookDispatcher($this->kirby);
+        $dispatcher->dispatch($page->uuid()->toString(), $deliveryId);
+        $page = (new OrderPageStore($this->kirby))->requirePage($page->id());
+        $pruned = $this->entries($page)[0];
+        $this->assertSame('delivered', $pruned['status']);
+        $this->assertSame(2, $pruned['attempts']);
+        $this->assertNull($pruned['errorCode']);
+        $this->assertArrayNotHasKey('orderSnapshot', OrderData::map($pruned['event']));
+        $this->assertNotNull($pruned['payloadPrunedAt']);
+        $dispatcher->dispatch($page->uuid()->toString(), $deliveryId);
+        $this->assertSame(2, $calls);
+    }
+
     public function testExpiredDeliveryCannotInvokeHooksOrExtendItsRetryWindow(): void
     {
         $attempts = 0;

@@ -263,9 +263,11 @@ Request-load controls are separate, PHP-only values:
 
 `intervalHours` is a positive integer; `batchSize` is an integer from 1 to 100. `lifecycleDeliveryPayloadRetentionDays` is a positive integer, defaulting to 30. These values are shown read-only in Diagnostics, not exposed as merchant Settings or editable Page fields. They do not start a scheduler or cleanup process.
 
-Every saved lifecycle delivery receives a fixed deadline when it is created locally, regardless of hook type. Pending and failed deliveries cannot be retried at or after that deadline, even before physical cleanup runs. Retries do not extend the deadline, and changing the PHP option affects new deliveries only. The one-shot order-deletion notification remains non-retryable. Payload deletion is not implemented yet.
+Developers can retain payloads longer by setting `lifecycleDeliveryPayloadRetentionDays` to a larger value, such as `90`. The configured period applies to every new delivery regardless of whether its hook succeeds or fails; existing deliveries keep their original deadlines.
 
-The option limits retention of the full lifecycle snapshot, not the delivery record or the order. Cleanup will remove successful delivery payloads without waiting for the deadline, and pending/failed payloads when they expire. Sanitized delivery metadata remains for diagnostics and deduplication; a delivery without its payload cannot be retried.
+Every saved lifecycle delivery receives a fixed deadline when it is created locally, regardless of hook type. Pending and failed deliveries cannot be retried at or after that deadline, even before physical cleanup runs. Retries do not extend the deadline, and changing the PHP option affects new deliveries only. The one-shot order-deletion notification remains non-retryable. Payload deletion is implemented as an internal single-order operation; the automatic housekeeping runner is not implemented yet.
+
+The option limits retention of the full lifecycle snapshot, not the delivery record or the order. When invoked, cleanup preserves every saved payload until its original retention deadline, defaulting to 30 days from local delivery creation, and removes expired payloads regardless of pending, delivered or failed status. Successful delivery does not shorten retention or make the hook retryable. Order-deletion switches do not disable lifecycle payload pruning, including on paid orders. Sanitized delivery metadata remains for diagnostics and deduplication; a delivery without its payload cannot be retried.
 
 ## Built-in cart
 

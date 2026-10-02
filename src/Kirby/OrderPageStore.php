@@ -456,6 +456,21 @@ final class OrderPageStore
         return $deliveryIds === [] ? $updated : $this->requirePage($pageId);
     }
 
+    /** Internal single-order cleanup; eligibility is rechecked under the existing lock, without scans or hook dispatch. */
+    public function pruneLifecycleDeliveryPayloads(string $uuid, DateTimeImmutable $now): OrderPage
+    {
+        return $this->update($uuid, static function (array $data) use ($now): array {
+            /** @var list<array<string, mixed>> $entries */
+            $entries = $data['lifecycleDeliveries'] ?? [];
+
+            if ($entries !== []) {
+                $data['lifecycleDeliveries'] = HookDeliveryLedger::prunePayloads($entries, $now);
+            }
+
+            return $data;
+        });
+    }
+
     /** Internal single-order primitive; no scan, route or automatic execution. */
     public function deleteEligible(string $uuid, RetentionPolicy $policy, DateTimeImmutable $now): bool
     {

@@ -42,9 +42,10 @@ final class OrderHookDispatcher
                 $entries = $data['lifecycleDeliveries'] ?? [];
 
                 foreach ($entries as &$entry) {
-                    $candidate = HookDeliveryLedger::restoreEvent(OrderData::map($entry['event']));
+                    $eventData = OrderData::map($entry['event']);
 
-                    if ($candidate->deliveryId() !== $deliveryId || $entry['status'] === 'delivered') {
+                    // Pruned entries retain identity metadata but cannot restore a replayable event.
+                    if ($eventData['deliveryId'] !== $deliveryId || $entry['status'] === 'delivered' || $entry['payloadPrunedAt'] !== null) {
                         continue;
                     }
 
@@ -53,6 +54,7 @@ final class OrderHookDispatcher
 
                     // Check the persisted deadline under the order lock, independently of whether physical cleanup has run.
                     if (HookDeliveryLedger::isExpired($entry, $attemptedAt) === false) {
+                        $candidate = HookDeliveryLedger::restoreEvent($eventData);
                         // Record the attempt before invoking listeners.
                         // A process exit leaves the original event available for another try within its saved window.
                         $event = $candidate;

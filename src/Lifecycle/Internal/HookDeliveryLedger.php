@@ -24,6 +24,8 @@ use ProgrammatorDev\StripeCheckout\Order\RefundStatus;
 /** @internal Persisted event-time facts and hook outcomes, separate from Stripe's event ledger. */
 final class HookDeliveryLedger
 {
+    private const EVENT_METADATA_KEYS = ['deliveryId', 'type', 'pageUuid', 'occurredAt', 'revision', 'triggerType', 'triggerId'];
+
     /**
      * @param array<string, mixed> $data
      * @param array<string, mixed> $customFields
@@ -69,11 +71,32 @@ final class HookDeliveryLedger
             'actionFingerprint' => self::actionFingerprint($event->payment()?->nextAction()),
             'createdAt' => OrderData::timestamp($createdAt),
             'expiresAt' => OrderData::timestamp($createdAt->add(new DateInterval('P' . $lifecycleDeliveryPayloadRetentionDays . 'D'))),
+            'payloadPrunedAt' => null,
             'status' => 'pending',
             'attempts' => 0,
             'lastAttemptAt' => null,
             'errorCode' => null,
         ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $entries Validated persistence entries, selected under the order lock.
+     * @return list<array<string, mixed>>
+     */
+    public static function prunePayloads(array $entries, DateTimeImmutable $now): array
+    {
+        foreach ($entries as &$entry) {
+            // Successful delivery ends retry eligibility, not the shared payload retention period.
+            if ($entry['payloadPrunedAt'] !== null || self::isExpired($entry, $now) === false) {
+                continue;
+            }
+
+            // Keep identity, ordering and trigger evidence; remove customer snapshots and private action data together.
+            $entry['event'] = self::eventMetadata(OrderData::map($entry['event']));
+            $entry['payloadPrunedAt'] = OrderData::timestamp($now);
+        }
+
+        return $entries;
     }
 
     /** @param array<string, mixed> $entry Persisted delivery metadata. */
@@ -124,34 +147,62 @@ final class HookDeliveryLedger
         foreach (OrderData::list($value) as $entry) {
             $entry = OrderData::map($entry);
             $keys = ['event', 'actionFingerprint', 'createdAt', 'expiresAt', 'status', 'attempts', 'lastAttemptAt', 'errorCode'];
-            OrderData::validateAllowedKeys($entry, $keys);
+            OrderData::validateAllowedKeys($entry, [...$keys, 'payloadPrunedAt']);
             OrderData::validateRequiredKeys($entry, $keys);
-            $event = self::restoreEvent(OrderData::map($entry['event']));
+            // Entries written before pruning support still carry their complete payload.
+            $entry['payloadPrunedAt'] ??= null;
+            $eventData = OrderData::map($entry['event']);
+
+            if ($entry['payloadPrunedAt'] === null) {
+                $event = self::restoreEvent($eventData);
+                $eventData = $event->toArray();
+
+                if ($entry['actionFingerprint'] !== self::actionFingerprint($event->payment()?->nextAction())) {
+                    throw new OrderDataException();
+                }
+            } else {
+                self::validatePrunedEvent($eventData);
+                $prunedAt = OrderData::date($entry['payloadPrunedAt']);
+                $requiresAction = $eventData['type'] === LifecycleEventType::PaymentRequiresAction->value;
+
+                // The removed action cannot be hashed again; validate the retained fingerprint's shape here.
+                // Transition validation preserves its original value across cleanup.
+                if (
+                    $prunedAt < OrderData::date($entry['createdAt'])
+                    || $prunedAt < OrderData::date($entry['expiresAt'])
+                    || $requiresAction && (is_string($entry['actionFingerprint']) === false || preg_match('/\A[a-f0-9]{64}\z/', $entry['actionFingerprint']) !== 1)
+                    || $requiresAction === false && $entry['actionFingerprint'] !== null
+                ) {
+                    throw new OrderDataException();
+                }
+            }
+
+            $deliveryId = OrderData::string($eventData['deliveryId']);
+            $eventRevision = OrderData::integer($eventData['revision']);
             $attempts = OrderData::integer($entry['attempts']);
 
             if (
-                $event->orderSnapshot()['uuid'] !== $uuid
-                || isset($ids[$event->deliveryId()])
-                || $event->revision() < $revision
-                || $event->type() === LifecycleEventType::OrderDeleted
+                $eventData['pageUuid'] !== 'page://' . $uuid
+                || isset($ids[$deliveryId])
+                || $eventRevision < $revision
+                || $eventData['type'] === LifecycleEventType::OrderDeleted->value
                 || in_array($entry['status'], ['pending', 'delivered', 'failed'], true) === false
                 || $attempts < 0
                 || OrderData::date($entry['expiresAt']) <= OrderData::date($entry['createdAt'])
                 || ($attempts === 0) !== ($entry['lastAttemptAt'] === null)
                 || $entry['status'] !== 'pending' && $attempts === 0
                 || $entry['errorCode'] !== ($entry['status'] === 'failed' ? LifecycleErrorCode::LISTENER_FAILED : null)
-                || $entry['actionFingerprint'] !== self::actionFingerprint($event->payment()?->nextAction())
             ) {
                 throw new OrderDataException();
             }
 
-            if ($entry['lastAttemptAt'] !== null && OrderData::date($entry['lastAttemptAt']) < $event->occurredAt()) {
+            if ($entry['lastAttemptAt'] !== null && OrderData::date($entry['lastAttemptAt']) < OrderData::date($eventData['occurredAt'])) {
                 throw new OrderDataException();
             }
 
-            $ids[$event->deliveryId()] = true;
-            $revision = $event->revision();
-            $entry['event'] = $event->toArray();
+            $ids[$deliveryId] = true;
+            $revision = $eventRevision;
+            $entry['event'] = $eventData;
             $entries[] = $entry;
         }
 
@@ -163,9 +214,42 @@ final class HookDeliveryLedger
     {
         // Only event-bearing commits advance this sequence.
         // Events appended by one commit share a revision; retry outcomes do not consume one.
+        // Read retained metadata so pruning the last payload cannot reset the sequence.
         $last = $entries === [] ? null : $entries[array_key_last($entries)];
 
-        return $last === null ? 1 : self::restoreEvent(OrderData::map($last['event']))->revision() + 1;
+        return $last === null ? 1 : OrderData::integer(OrderData::map($last['event'])['revision']) + 1;
+    }
+
+    /** @param array<string, mixed> $event */
+    private static function validatePrunedEvent(array $event): void
+    {
+        OrderData::validateAllowedKeys($event, self::EVENT_METADATA_KEYS);
+        OrderData::validateRequiredKeys($event, self::EVENT_METADATA_KEYS);
+        OrderData::text($event['deliveryId'], 255);
+        LifecycleEventType::from(OrderData::text($event['type']));
+        OrderData::uuid(OrderData::text($event['pageUuid']));
+        OrderData::date($event['occurredAt']);
+
+        if (OrderData::integer($event['revision']) < 1 || ($event['triggerType'] === null) !== ($event['triggerId'] === null)) {
+            throw new OrderDataException();
+        }
+
+        $triggerKeys = ['triggerType', 'triggerId'];
+
+        foreach ($triggerKeys as $key) {
+            if ($event[$key] !== null) {
+                OrderData::text($event[$key], 255);
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $event
+     * @return array<string, mixed> Sanitized persistence metadata, not a replayable lifecycle envelope.
+     */
+    private static function eventMetadata(array $event): array
+    {
+        return array_intersect_key($event, array_flip(self::EVENT_METADATA_KEYS));
     }
 
     private static function actionFingerprint(?PaymentAction $nextAction): ?string
@@ -195,15 +279,24 @@ final class HookDeliveryLedger
      */
     public static function validateTransition(array $before, array $after): void
     {
-        // Existing event facts are append-only.
-        // Only their delivery bookkeeping may advance, so retries retain the original identity and snapshot.
+        // Event identity is append-only. A payload may be removed once, but never replaced or restored.
         // Keep the original replay window immutable as well; editing a deadline must not reactivate an expired delivery.
         foreach ($before as $index => $entry) {
             $updated = $after[$index] ?? null;
 
+            if ($updated === null) {
+                throw new OrderDataException();
+            }
+
+            $payloadRemoved = $entry['payloadPrunedAt'] === null && $updated['payloadPrunedAt'] !== null;
+            $expectedEvent = $payloadRemoved ? self::eventMetadata(OrderData::map($entry['event'])) : $entry['event'];
+
+            // An attempt admitted before cleanup may still finish afterward, so its outcome can advance.
+            // Once pruned, the attempt count and time stay fixed to prevent another dispatch.
             if (
-                $updated === null
-                || OrderData::normalize($updated['event']) !== OrderData::normalize($entry['event'])
+                OrderData::normalize($updated['event']) !== OrderData::normalize($expectedEvent)
+                || $entry['payloadPrunedAt'] !== null && $updated['payloadPrunedAt'] !== $entry['payloadPrunedAt']
+                || $entry['payloadPrunedAt'] !== null && ($updated['attempts'] !== $entry['attempts'] || $updated['lastAttemptAt'] !== $entry['lastAttemptAt'])
                 || $updated['createdAt'] !== $entry['createdAt']
                 || $updated['expiresAt'] !== $entry['expiresAt']
                 || $updated['actionFingerprint'] !== $entry['actionFingerprint']

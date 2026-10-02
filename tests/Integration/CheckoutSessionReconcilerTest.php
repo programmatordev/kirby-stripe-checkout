@@ -324,6 +324,46 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
         $this->assertCount(4, $this->deliveries());
     }
 
+    public function testPrunedActionEvidenceStillSuppressesDuplicatesAndAllowsADifferentAction(): void
+    {
+        $gateway = $this->gateway($this->record());
+        $reconciler = $this->reconciler($gateway);
+        $event = $this->actionEvent();
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_current', $event);
+        $before = $this->data();
+        $actionDelivery = OrderData::map($this->entries('lifecycleDeliveries')[3]);
+        $this->store->pruneLifecycleDeliveryPayloads($this->order->pageUuid(), OrderData::date($actionDelivery['expiresAt']));
+        $after = $this->data();
+        unset($before['lifecycleDeliveries'], $after['lifecycleDeliveries']);
+        $this->assertSame($before, $after);
+        $this->assertStringNotContainsString('123456789', OrderData::json($this->data()));
+        $this->assertCount(3, $this->deliveries());
+
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_current', $event);
+        $this->assertCount(1, $gateway->reconciliationRetrievals);
+        $raw = $event->toArray();
+        $raw['id'] = 'evt_identical_after_pruning';
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_current', Event::constructFrom($raw));
+        $this->assertCount(3, $this->deliveries());
+        $raw['id'] = 'evt_changed_after_pruning';
+        $object = OrderData::map(OrderData::map($raw['data'])['object']);
+        $object['next_action'] = [
+            'type' => 'multibanco_display_details',
+            'multibanco_display_details' => ['reference' => 'CHANGED'],
+        ];
+        $raw['data'] = ['object' => $object];
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_current', Event::constructFrom($raw));
+        $this->assertCount(4, $this->delivered);
+        $this->assertSame(3, $this->deliveries()[3]->revision());
+        $this->assertSame('CHANGED', $this->deliveries()[3]->payment()?->nextAction()?->details()['reference']);
+        $changedDelivery = OrderData::map($this->entries('lifecycleDeliveries')[4]);
+        $this->store->pruneLifecycleDeliveryPayloads($this->order->pageUuid(), OrderData::date($changedDelivery['expiresAt']));
+        $raw = $event->toArray();
+        $raw['id'] = 'evt_old_evidence_after_second_pruning';
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_current', Event::constructFrom($raw));
+        $this->assertCount(4, $this->deliveries());
+    }
+
     public function testFailedActionDeliveryReplaysItsOwnEvidenceAfterTheOrderIsPaid(): void
     {
         $observed = [];
