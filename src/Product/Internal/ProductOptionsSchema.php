@@ -41,9 +41,8 @@ final class ProductOptionsSchema
      */
     public function overlay(ProductOptionsDefinition $canonical, mixed $value): array
     {
-        // Secondary languages may submit labels only. Rebuilding from canonical
-        // IDs ignores unknown entries and prevents translated content from
-        // changing the technical option or variant schema.
+        // Secondary languages may submit labels only.
+        // Rebuilding from canonical IDs ignores unknown entries and prevents translated content from changing the technical option or variant schema.
         $input = $this->decode($value);
         $submittedOptions = is_array($input['options'] ?? null) ? $input['options'] : [];
         $submittedById = [];
@@ -291,8 +290,7 @@ final class ProductOptionsSchema
         if (
             is_string($value) === false
             || preg_match('/^[A-Za-z0-9_-]{4,64}$/', $value) !== 1
-            // Option IDs become associative selection keys; PHP coerces an
-            // all-digit key to int and would break the string-key contract.
+            // Option IDs become associative selection keys; PHP coerces an all-digit key to int and would break the string-key contract.
             || $kind === 'option' && ctype_digit($value)
         ) {
             throw new InvalidArgumentException(sprintf('Each %s requires a stable ID.', $kind));

@@ -1,7 +1,6 @@
 <script>
 /**
- * Keeps a nested Structure list fixed while allowing its translated fields to
- * use Kirby's native editor and drawer behavior.
+ * Keeps a nested Structure list fixed while allowing its translated fields to use Kirby's native editor and drawer behavior.
  */
 export default {
 	extends: "k-structure-field",

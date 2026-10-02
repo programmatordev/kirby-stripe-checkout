@@ -31,8 +31,8 @@ final readonly class CartSnapshot
         ProductData::identifier($id);
         ProductData::identifier($revision);
 
-        // Persisted cart state stays provider-independent. Public input
-        // boundaries apply Stripe's narrower supported-country policy.
+        // Persisted cart state stays provider-independent.
+        // Public input boundaries apply Stripe's narrower supported-country policy.
         if (
             array_is_list($entries) === false
             || count($entries) > ProductRequestNormalizer::MAX_ENTRIES

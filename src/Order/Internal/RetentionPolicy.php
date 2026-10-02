@@ -28,8 +28,8 @@ final readonly class RetentionPolicy
             return false;
         }
 
-        // A delayed payment can fail after Checkout completes. Start retention
-        // only once both facts are terminal, not while payment was still pending.
+        // A delayed payment can fail after Checkout completes.
+        // Start retention only once both facts are terminal, not while payment was still pending.
         $terminalAt = match (true) {
             $data['checkoutStatus'] === 'expired' => $data['checkoutExpiredAt'],
             $data['checkoutStatus'] === 'complete' && $data['paymentStatus'] === 'failed'
@@ -42,8 +42,7 @@ final readonly class RetentionPolicy
 
     private function oldEnough(mixed $timestamp, int $days, DateTimeImmutable $now): bool
     {
-        // Compare whole elapsed UTC days; timezone/DST changes must not shorten
-        // a retention period, and large configured periods must not overflow.
+        // Compare whole elapsed UTC days; timezone/DST changes must not shorten a retention period, and large configured periods must not overflow.
         $age = $now->getTimestamp() - OrderData::date($timestamp)->getTimestamp();
 
         return $age >= 0 && intdiv($age, 86400) >= $days;

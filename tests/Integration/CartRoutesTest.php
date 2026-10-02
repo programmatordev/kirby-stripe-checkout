@@ -287,8 +287,7 @@ final class CartRoutesTest extends KirbyTestCase
 
         $state->calls = [];
         $response = $this->send('POST', '/items', ['reference' => 'a']);
-        // Incoming and merged quantities still pass the resolver before the
-        // resulting line is resolved for presentation; no old view is built.
+        // Incoming and merged quantities still pass the resolver before the resulting line is resolved for presentation; no old view is built.
         $this->assertSame(['a:1', 'a:2', 'a:2'], $state->calls);
         $this->assertSame(2, $this->data($response, 'data.cart.totalQuantity'));
         $itemId = $this->data($response, 'data.cart.items.0.id');
@@ -343,8 +342,8 @@ final class CartRoutesTest extends KirbyTestCase
     /** @return iterable<string, array{string, int, string, string}> */
     public static function invalidAddRequests(): iterable
     {
-        // Parser edge cases live in ProductRequestDataTest; this boundary owns
-        // error translation and the guarantee that rejected writes change nothing.
+        // Parser edge cases live in ProductRequestDataTest;
+        // this boundary owns error translation and the guarantee that rejected writes change nothing.
         yield 'quantity error' => ['shirt', 0, 'cart.quantity_invalid', 'selection.quantity_invalid'];
         yield 'reference error' => ['', 1, 'cart.selection_invalid', 'selection.invalid'];
     }
@@ -895,8 +894,7 @@ final class CartRoutesTest extends KirbyTestCase
                 $_SERVER['HTTP_' . strtoupper(str_replace('-', '_', $key))] = $value;
             }
 
-            // Kirby caches environment headers; refresh that snapshot as well as
-            // the Request when simulating several HTTP requests in one PHP process.
+            // Kirby caches environment headers; refresh that snapshot as well as the Request when simulating several HTTP requests in one PHP process.
             $environmentInfo->setValue($this->kirby->environment(), $_SERVER);
             // Dispatch through Kirby's real router, retaining one browser session.
             (new ReflectionProperty(App::class, 'request'))->setValue($this->kirby, new Request([

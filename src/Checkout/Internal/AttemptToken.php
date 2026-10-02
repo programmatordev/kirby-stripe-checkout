@@ -17,9 +17,9 @@ use Throwable;
 /**
  * Carries the future Kirby Order UUID and an independent random nonce.
  *
- * The UUID addresses the not-yet-created Order directly on retries. The nonce
- * keeps the public Order UUID from being the complete retry token. Only a hash
- * of the complete transport value is persisted; this token is not authorization.
+ * The UUID addresses the not-yet-created Order directly on retries.
+ * The nonce keeps the public Order UUID from being the complete retry token.
+ * Only a hash of the complete transport value is persisted; this token is not authorization.
  *
  * @internal
  */
@@ -74,8 +74,8 @@ final readonly class AttemptToken
     ): self {
         $orderUuid = ($uuidGenerator ?? static fn(): string => Uuid::generate())();
 
-        // Page::create() normalizes every slug. Validate before exposing a token
-        // whose embedded UUID could not address its eventual Order unchanged.
+        // Page::create() normalizes every slug.
+        // Validate before exposing a token whose embedded UUID could not address its eventual Order unchanged.
         OrderUuidValidator::validate($orderUuid);
 
         return self::forOrder($orderUuid, $randomBytes);

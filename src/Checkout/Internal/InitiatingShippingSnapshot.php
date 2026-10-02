@@ -18,8 +18,7 @@ use ProgrammatorDev\StripeCheckout\Shipping\StripeShippingCountryRegistry;
 /**
  * @internal Frozen shipping quote used only while creating one Checkout Session request.
  *
- * The checkout fingerprint binds the quote to its inputs; the quote fingerprint
- * identifies the exact offered shipping policy and options.
+ * The checkout fingerprint binds the quote to its inputs; the quote fingerprint identifies the exact offered shipping policy and options.
  */
 final readonly class InitiatingShippingSnapshot
 {
@@ -56,8 +55,7 @@ final readonly class InitiatingShippingSnapshot
         }
 
         $shippingCountry = $shipping->shippingCountry();
-        // A countryless quote comes from a resolver/fallback that is valid for
-        // every destination, so Checkout may expose Stripe's complete allowlist.
+        // A countryless quote comes from a resolver/fallback that is valid for every destination, so Checkout may expose Stripe's complete allowlist.
         $allowedCountries = $shippingCountry === null
             ? (new StripeShippingCountryRegistry())->codes()
             : [$shippingCountry];
@@ -109,9 +107,8 @@ final readonly class InitiatingShippingSnapshot
     }
 
     /**
-     * Locale participates only in quote correlation because a resolver may use
-     * it to localize or calculate options. SessionRequestContext remains the
-     * sole source for the effective Stripe locale sent to Checkout.
+     * Locale participates only in quote correlation because a resolver may use it to localize or calculate options.
+     * SessionRequestContext remains the sole source for the effective Stripe locale sent to Checkout.
      *
      * @param list<string> $allowedCountries
      * @param list<ShippingOption> $options

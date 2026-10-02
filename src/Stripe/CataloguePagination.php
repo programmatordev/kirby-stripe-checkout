@@ -19,8 +19,7 @@ final class CataloguePagination
     public static function paginate(array $items, int $page, CatalogueState $state): CataloguePage
     {
         $total = count($items);
-        // Unlike Kirby's native Pagination, empty results retain page 1 and
-        // out-of-range requests clamp instead of throwing a route error.
+        // Unlike Kirby's native Pagination, empty results retain page 1 and out-of-range requests clamp instead of throwing a route error.
         $pages = max(1, (int) ceil($total / self::LIMIT));
         $page = min(max(1, $page), $pages);
 

@@ -81,8 +81,7 @@ final class CheckoutSessionShippingSnapshotTest extends TestCase
 
     public function testPreservesInclusiveShippingTaxWithoutAddingItToTheProviderTotal(): void
     {
-        // Mirrors an expanded Stripe test-mode response: the subtotal retains
-        // the gross quote even though the tax allocation's taxable_amount is net.
+        // Mirrors an expanded Stripe test-mode response: the subtotal retains the gross quote even though the tax allocation's taxable_amount is net.
         $source = $this->shippingSource();
         $shippingCost = self::map($source['shipping_cost']);
         $shippingCost['amount_subtotal'] = 615;

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 
-// Loads plain component options for logic tests only. This does not mount Vue
-// or exercise Kirby's rendering, lifecycle, or watcher scheduling.
+// Loads plain component options for logic tests only.
+// This does not mount Vue or exercise Kirby's rendering, lifecycle, or watcher scheduling.
 export async function componentOptions(name) {
 	const url = new URL(`../../src/components/${name}.vue`, import.meta.url);
 	const source = await readFile(url, "utf8");

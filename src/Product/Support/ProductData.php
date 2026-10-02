@@ -40,8 +40,8 @@ final class ProductData
 
     public static function requiredString(mixed $value, int $maximum): string
     {
-        // Reject unsafe Unicode at resolution, not only when the product is later
-        // frozen into an order. Keep the existing byte-based product limits.
+        // Reject unsafe Unicode at resolution, not only when the product is later frozen into an order.
+        // Keep the existing byte-based product limits.
         if (
             is_string($value) === false
             || $value === ''

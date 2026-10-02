@@ -282,8 +282,8 @@ export default {
 
 						if (submitted?.id) {
 							try {
-								// Native Models dialogs can return ID-only or previously
-								// selected items. Hydrate current cache facts before display.
+								// Native Models dialogs can return ID-only or previously selected items.
+								// Hydrate current cache facts before display.
 								const response = await this.$api.get(this.apiEndpoint, {
 									[this.queryParameter]: submitted.id,
 									view: "selected"
@@ -308,8 +308,7 @@ export default {
 				this.localCatalogue = response.catalogue;
 			}
 
-			// The refresh response is paginated and therefore cannot authoritatively
-			// hydrate a saved selection that may be on another result page.
+			// The refresh response is paginated and therefore cannot authoritatively hydrate a saved selection that may be on another result page.
 			await this.hydrate(this.value);
 		}
 	}

@@ -84,8 +84,7 @@ final class CheckoutSessionRetriever
                 },
             );
 
-            // A read can precede local association, but an existing association's
-            // Session and generated Rate references must never be replaced.
+            // A read can precede local association, but an existing association's Session and generated Rate references must never be replaced.
             if ($association !== null && $association->equals($currentAssociation) === false) {
                 throw new OrderDataException();
             }
@@ -147,8 +146,7 @@ final class CheckoutSessionRetriever
             throw new OrderDataException();
         }
 
-        // Metadata identifies the initiating position even when provider pages
-        // arrive in another order or several lines reference the same product.
+        // Metadata identifies the initiating position even when provider pages arrive in another order or several lines reference the same product.
         $expectedByIdentity = [];
 
         foreach ($expectedLines as $index => $expectedLine) {
@@ -186,8 +184,8 @@ final class CheckoutSessionRetriever
             $initiatingLine = $initiatingLines[$index];
             $providerAmounts = $this->map($initiatingLine['providerAmounts']);
 
-            // Price/Product active flags describe today's catalogue, not whether
-            // the fixed purchase was valid. Never re-resolve or require active resources.
+            // Price/Product active flags describe today's catalogue, not whether the fixed purchase was valid.
+            // Never re-resolve or require active resources.
             if (
                 ($price['object'] ?? null) !== Price::OBJECT_NAME
                 || ($price['type'] ?? null) !== Price::TYPE_ONE_TIME
@@ -245,8 +243,8 @@ final class CheckoutSessionRetriever
         $selectedId = $snapshot->stripeShippingRateId();
 
         if ($selectedId === null) {
-            // Open/expired Sessions need not have a selected rate. A completed
-            // shipping checkout must have its authoritative selection available.
+            // Open/expired Sessions need not have a selected rate.
+            // A completed shipping checkout must have its authoritative selection available.
             if ($record->status === Session::STATUS_COMPLETE && $association->shippingRateIds() !== []) {
                 throw new OrderDataException();
             }
@@ -260,8 +258,7 @@ final class CheckoutSessionRetriever
             throw new OrderDataException();
         }
 
-        // Association preserves request option order, linking a generated Rate
-        // to the exact saved quote without consulting current shipping settings.
+        // Association preserves request option order, linking a generated Rate to the exact saved quote without consulting current shipping settings.
         $options = OrderData::list($parameters['shipping_options'] ?? null);
         $expectedRate = $this->map($this->map($options[$index])['shipping_rate_data'] ?? null);
         $returnedRate = $this->map($this->map($record->orderSnapshotSource['shipping_cost'] ?? null)['shipping_rate'] ?? null);
@@ -293,15 +290,13 @@ final class CheckoutSessionRetriever
         $source = $record->paymentSource;
 
         if ($source === null) {
-            // A completed, non-zero payment-mode Session must have a payment
-            // observation even while an asynchronous payment remains unpaid.
+            // A completed, non-zero payment-mode Session must have a payment observation even while an asynchronous payment remains unpaid.
             // https://docs.stripe.com/api/checkout/sessions/object#checkout_session_object-payment_intent
             if ($record->session->status === Session::STATUS_COMPLETE && $total->isZero() === false) {
                 throw new OrderDataException();
             }
 
-            // The Session total is known, but it is not evidence that a
-            // PaymentIntent exists or has an amount of its own.
+            // The Session total is known, but it is not evidence that a PaymentIntent exists or has an amount of its own.
             return new PaymentSnapshot();
         }
 
@@ -333,8 +328,8 @@ final class CheckoutSessionRetriever
             throw new OrderDataException();
         }
 
-        // No Charge is not evidence of failure. Leave charge-specific facts
-        // absent instead of inferring them from PaymentIntent status or amounts.
+        // No Charge is not evidence of failure.
+        // Leave charge-specific facts absent instead of inferring them from PaymentIntent status or amounts.
         $charge = isset($payment['latest_charge']) ? $this->map($payment['latest_charge']) : null;
         $chargeId = null;
         $chargeStatus = null;
@@ -363,8 +358,7 @@ final class CheckoutSessionRetriever
                 throw new OrderDataException();
             }
 
-            // The latest Charge can describe a previous failed attempt while
-            // the PaymentIntent already has a different method for its next try.
+            // The latest Charge can describe a previous failed attempt while the PaymentIntent already has a different method for its next try.
             // Prefer the current method; use Charge details only when it is absent.
             // https://docs.stripe.com/api/payment_intents/object#payment_intent_object-latest_charge
             if ($method === null) {
@@ -374,8 +368,8 @@ final class CheckoutSessionRetriever
 
             $chargeCreatedAt = $this->timestamp($charge['created'] ?? null);
             $chargePaid = OrderData::boolean($charge['paid'] ?? null);
-            // Automatic asynchronous capture can leave capture facts incomplete
-            // after payment succeeds. Preserve them; do not infer capture from paid.
+            // Automatic asynchronous capture can leave capture facts incomplete after payment succeeds.
+            // Preserve them; do not infer capture from paid.
             // https://docs.stripe.com/payments/payment-intents/asynchronous-capture
             $chargeCaptured = OrderData::boolean($charge['captured'] ?? null);
             $amountCaptured = $this->amount($charge['amount_captured'] ?? null, $currency);

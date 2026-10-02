@@ -12,8 +12,7 @@ namespace ProgrammatorDev\StripeCheckout\Shipping;
 final class StripeShippingCountryRegistry
 {
     /**
-     * Stripe documents this as the enum for
-     * `shipping_address_collection.allowed_countries`.
+     * Stripe documents this as the enum for `shipping_address_collection.allowed_countries`.
      * https://docs.stripe.com/api/checkout/sessions/create#checkout_session_create-shipping_address_collection-allowed_countries
      *
      * @var list<string>

@@ -31,8 +31,8 @@ final class OrderCustomFieldsValidator
 
                 OrderData::text($key);
 
-                // Kirby accepts/slugs loose handles. An extension must not silently
-                // rename one or collapse distinct keys when it reaches a text file.
+                // Kirby accepts/slugs loose handles.
+                // An extension must not silently rename one or collapse distinct keys when it reaches a text file.
                 $normalized = array_key_first(Txt::decode(Txt::encode([$key => 'test'])));
 
                 if ($normalized !== strtolower($key) || array_key_exists($normalized, $result)) {

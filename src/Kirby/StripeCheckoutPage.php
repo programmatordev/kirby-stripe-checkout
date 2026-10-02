@@ -22,9 +22,8 @@ use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 /**
  * Provides the plugin-owned hub Page and stores editable settings natively.
  *
- * Kirby uses the same Page class for content edited in the Panel and content
- * rendered on the frontend. This model retains Kirby's native content and
- * editing behavior while preventing the record from becoming a public page.
+ * Kirby uses the same Page class for content edited in the Panel and content rendered on the frontend.
+ * This model retains Kirby's native content and editing behavior while preventing the record from becoming a public page.
  *
  * @internal
  */
@@ -103,8 +102,7 @@ final class StripeCheckoutPage extends Page
 
     public function blueprint(): PageBlueprint
     {
-        // Kirby caches a Page blueprint on the model, but the same model can be
-        // reused after impersonation or a locale change during one request.
+        // Kirby caches a Page blueprint on the model, but the same model can be reused after impersonation or a locale change during one request.
         $context = implode(':', [
             $this->kirby()->user()?->id() ?? 'guest',
             I18n::locale(),
@@ -142,8 +140,7 @@ final class StripeCheckoutPage extends Page
         /** @var array<string, mixed> $input */
         $input = array_change_key_case($input ?? [], CASE_LOWER);
 
-        // Kirby includes its changes-version lock when publishing through the
-        // Panel, but removes it again before writing the latest version.
+        // Kirby includes its changes-version lock when publishing through the Panel, but removes it again before writing the latest version.
         unset($input['lock']);
 
         $defaultLanguageCode = $this->kirby()->defaultLanguage()?->code();
@@ -190,8 +187,7 @@ final class StripeCheckoutPage extends Page
             && $targetLanguageCode !== null
             && $targetLanguageCode !== $defaultLanguageCode
         ) {
-            // Non-translatable settings belong to Kirby's default language even
-            // when the Panel submits them while another language is active.
+            // Non-translatable settings belong to Kirby's default language even when the Panel submits them while another language is active.
             $normalizedDefaultLanguageInput = [];
 
             foreach ($defaultLanguageInput as $field => $value) {
@@ -311,8 +307,8 @@ final class StripeCheckoutPage extends Page
             if (
                 isset($allowed[$field]) === false
                 && in_array($field, self::STRUCTURAL_FIELDS, true) === false
-                // Kirby publishes the complete changes version. Preserve
-                // unknown legacy fields only when the save does not alter them.
+                // Kirby publishes the complete changes version.
+                // Preserve unknown legacy fields only when the save does not alter them.
                 && (array_key_exists($field, $stored) === false || $stored[$field] !== $value)
             ) {
                 throw new PermissionException(

@@ -109,8 +109,7 @@ final class OptionsField extends FieldClass
 
             return $schema->localized($this->canonicalValue(), $value)->toArray();
         } catch (InvalidArgumentException $error) {
-            // Keep the product schema framework-neutral and translate its
-            // validation failure only at Kirby's Field boundary.
+            // Keep the product schema framework-neutral and translate its validation failure only at Kirby's Field boundary.
             throw new KirbyInvalidArgumentException(message: $error->getMessage());
         }
     }
@@ -195,8 +194,7 @@ final class OptionsField extends FieldClass
 
     private function technicalLocked(): bool
     {
-        // Secondary languages may translate labels but cannot change identity,
-        // combinations, availability or other commerce data.
+        // Secondary languages may translate labels but cannot change identity, combinations, availability or other commerce data.
         return $this->siblings->language()->isDefault() === false;
     }
 }

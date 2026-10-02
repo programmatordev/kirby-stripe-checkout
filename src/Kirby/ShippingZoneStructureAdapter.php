@@ -270,8 +270,8 @@ final class ShippingZoneStructureAdapter implements SynchronizedStructureAdapter
     /** @param array<string, mixed> $row */
     private function submittedId(array $row): ?string
     {
-        // Stored plugin rows use `id`; Kirby's native Structure transport uses
-        // `_id`. Accept either form, but never guess between two identities.
+        // Stored plugin rows use `id`; Kirby's native Structure transport uses `_id`.
+        // Accept either form, but never guess between two identities.
         $id = $row['id'] ?? null;
         $kirbyId = $row['_id'] ?? null;
 
@@ -303,8 +303,8 @@ final class ShippingZoneStructureAdapter implements SynchronizedStructureAdapter
     }
 
     /**
-     * Unknown and malformed IDs are ignored because a translation overlay
-     * cannot create canonical membership. Duplicate known IDs are ambiguous.
+     * Unknown and malformed IDs are ignored because a translation overlay cannot create canonical membership.
+     * Duplicate known IDs are ambiguous.
      *
      * @param list<array<string, mixed>> $rows
      * @return array<string, array<string, mixed>>

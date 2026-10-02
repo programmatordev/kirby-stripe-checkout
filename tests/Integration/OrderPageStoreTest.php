@@ -329,8 +329,8 @@ final class OrderPageStoreTest extends KirbyTestCase
         $this->assertSame('Português', $page->version('latest')->read('pt')['note'] ?? null);
         $this->assertSame('English', $this->value($page, 'note'));
         $this->assertSame('creation_uncertain', $this->value($page, 'checkoutStatus'));
-        // Native writes already strip untranslatable fields. Simulate corrupt
-        // imported content to verify queries cannot expose a translated state.
+        // Native writes already strip untranslatable fields.
+        // Simulate corrupt imported content to verify queries cannot expose a translated state.
         F::write($page->root() . '/stripe-checkout-order.pt.txt', \Kirby\Data\Txt::encode([
             'note' => 'Português',
             'paymentstatus' => 'paid',
@@ -580,8 +580,7 @@ final class OrderPageStoreTest extends KirbyTestCase
         ]);
         $expected = $store->data($updated);
 
-        // Cover both a later Panel request and native publication through a
-        // retained Page whose latest-version cache predates the canonical write.
+        // Cover both a later Panel request and native publication through a retained Page whose latest-version cache predates the canonical write.
         $editingPage = $reload ? $store->requirePage($page->id()) : $page;
         Changes::publish($editingPage, $input);
         $saved = $store->requirePage($page->id());

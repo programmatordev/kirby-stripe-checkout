@@ -56,8 +56,8 @@ final class CheckoutSessionCreator
         $binding->assertCompatibleCheckout($checkout, $guestReference);
         $page = $this->orderPageStore->order('page://' . $token->orderUuid());
 
-        // This lookup only avoids unnecessary preparation. Reuse still verifies
-        // the full token and binding; the locked lookup below decides creation.
+        // This lookup only avoids unnecessary preparation.
+        // Reuse still verifies the full token and binding; the locked lookup below decides creation.
         if ($page !== null) {
             return $this->reuse(
                 page: $page,
@@ -69,10 +69,9 @@ final class CheckoutSessionCreator
             );
         }
 
-        // Product resolution is already complete. Shipping callbacks and order
-        // numbering run outside the write lock and only for a prospective attempt.
-        // Concurrent first submissions may both prepare; this is not an
-        // exactly-once boundary for preparation callbacks.
+        // Product resolution is already complete.
+        // Shipping callbacks and order numbering run outside the write lock and only for a prospective attempt.
+        // Concurrent first submissions may both prepare; this is not an exactly-once boundary for preparation callbacks.
         $preparation = $this->preparationFactory->create(
             uuid: $token->orderUuid(),
             checkout: $checkout,
@@ -81,8 +80,8 @@ final class CheckoutSessionCreator
         );
         $order = $preparation->order();
 
-        // A competitor can commit while preparation runs. Only the winner of
-        // the locked recheck customizes a request; nulls identify the reuse path.
+        // A competitor can commit while preparation runs.
+        // Only the winner of the locked recheck customizes a request; nulls identify the reuse path.
         $requestContext = null;
         $sessionRequest = null;
         $checkoutAttempt = null;
@@ -106,9 +105,8 @@ final class CheckoutSessionCreator
                     createdAt: $now,
                     initiatingUrl: $initiatingUrl,
                 );
-                // Shipping remains transient only until it becomes part of the
-                // exact Session request persisted with this new attempt. Reuse
-                // reads that request instead of reconstructing mutable policy.
+                // Shipping remains transient only until it becomes part of the exact Session request persisted with this new attempt.
+                // Reuse reads that request instead of reconstructing mutable policy.
                 $sessionRequest = $this->preparationFactory->sessionRequest(
                     $requestContext,
                     $preparation->shipping(),
@@ -220,9 +218,8 @@ final class CheckoutSessionCreator
             throw new CheckoutSessionException(CheckoutErrorCode::ATTEMPT_RETRY_EXPIRED);
         }
 
-        // This is recovery in a later PHP request after stripe-php has already
-        // exhausted its own retries. Reusing the saved request and key is what
-        // prevents the recovery call from creating a second Session.
+        // This is recovery in a later PHP request after stripe-php has already exhausted its own retries.
+        // Reusing the saved request and key is what prevents the recovery call from creating a second Session.
         return $this->createSession(
             page: $page,
             requestContext: $requestContext,
@@ -245,8 +242,7 @@ final class CheckoutSessionCreator
         $binding->assertCompatibleOrder($persistedOrder, $guestReference);
         $binding->assertMatchesFingerprint(OrderData::text($checkoutAttempt['bindingFingerprint']));
 
-        // The embedded UUID locates a candidate Page; the nonce-bearing full
-        // token hash proves that candidate belongs to this exact attempt.
+        // The embedded UUID locates a candidate Page; the nonce-bearing full token hash proves that candidate belongs to this exact attempt.
         if (
             hash_equals(OrderData::text($checkoutAttempt['tokenHash']), $token->hash()) === false
             || $persistedOrder->uuid() !== $token->orderUuid()
@@ -265,8 +261,7 @@ final class CheckoutSessionCreator
     }
 
     /**
-     * Rebuilds the context from saved evidence so retries never re-run mutable
-     * configuration or request customization with an existing idempotency key.
+     * Rebuilds the context from saved evidence so retries never re-run mutable configuration or request customization with an existing idempotency key.
      *
      * @param array<string, mixed> $checkoutAttempt
      * @param array<string, mixed> $data
@@ -323,8 +318,7 @@ final class CheckoutSessionCreator
         }
 
         try {
-            // Treat every SDK response as untrusted until its correlation and
-            // presentation facts agree with the exact persisted request.
+            // Treat every SDK response as untrusted until its correlation and presentation facts agree with the exact persisted request.
             $session = $this->sessionFactory->create(
                 record: $sessionRecord,
                 context: $requestContext,
@@ -463,8 +457,7 @@ final class CheckoutSessionCreator
         return $this->orderPageStore->update(
             uuid: $page->uuid()->toString(),
             reduce: static function (array $data) use ($associationData, $sessionId, $now): array {
-                // A future webhook reconciler may associate the same Session
-                // before this POST response acquires the order write lock.
+                // A future webhook reconciler may associate the same Session before this POST response acquires the order write lock.
                 if (isset($data['stripeCheckoutSessionId'])) {
                     if (
                         $data['stripeCheckoutSessionId'] !== $sessionId
@@ -513,8 +506,7 @@ final class CheckoutSessionCreator
                 $data['checkoutAttempt'] = $checkoutAttempt;
                 $data['updatedAt'] = max($data['updatedAt'], OrderData::timestamp($now));
 
-                // Outcome certainty controls state; retry permission remains a
-                // separate persisted decision consulted by attempt reuse.
+                // Outcome certainty controls state; retry permission remains a separate persisted decision consulted by attempt reuse.
                 if ($failure->type() === CheckoutSessionFailureType::Uncertain || $failure->type() === CheckoutSessionFailureType::Incompatible) {
                     $data['checkoutStatus'] = CheckoutStatus::CreationUncertain->value;
                     $data['creationUncertainAt'] ??= OrderData::timestamp($now);

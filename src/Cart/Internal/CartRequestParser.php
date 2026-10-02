@@ -22,8 +22,7 @@ final class CartRequestParser
     {
         $selection = self::body($kirby, CartOperation::AddItem);
 
-        // HTTP uses the concise Cart vocabulary; the shared selection parser
-        // and stored product requests keep their internal schema.
+        // HTTP uses the concise Cart vocabulary; the shared selection parser and stored product requests keep their internal schema.
         if (array_key_exists('options', $selection)) {
             $selection['selectedOptions'] = $selection['options'];
             unset($selection['options']);
@@ -147,8 +146,7 @@ final class CartRequestParser
     {
         $revision = $body['revision'] ?? null;
 
-        // Require the version the browser saw; substituting the current server
-        // revision would silently authorize writes from stale forms or tabs.
+        // Require the version the browser saw; substituting the current server revision would silently authorize writes from stale forms or tabs.
         if (is_string($revision) === false || $revision === '' || strlen($revision) > 128) {
             throw new CheckoutInputException(SelectionErrorCode::INVALID);
         }

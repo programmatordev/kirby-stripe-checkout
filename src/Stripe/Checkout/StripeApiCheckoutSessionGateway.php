@@ -36,12 +36,10 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
 
         try {
             $session = $this->client->checkout->sessions->create(
-                // SessionRequest deliberately supports the SDK's complete scalar/map
-                // vocabulary, which is wider than its generated array shape.
+                // SessionRequest deliberately supports the SDK's complete scalar/map vocabulary, which is wider than its generated array shape.
                 // @phpstan-ignore-next-line argument.type
                 $request->parameters(),
-                // Supplying our persisted key lets both SDK retries and a later
-                // PHP request address the same Stripe mutation.
+                // Supplying our persisted key lets both SDK retries and a later PHP request address the same Stripe mutation.
                 ['idempotency_key' => $idempotencyKey],
             );
         } catch (Throwable $error) {
@@ -119,8 +117,8 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
         $ids = [];
         $startingAfter = null;
 
-        // Expanded Session lines are only a preview. Read the dedicated endpoint
-        // to completion, rejecting repeated cursors rather than returning a prefix.
+        // Expanded Session lines are only a preview.
+        // Read the dedicated endpoint to completion, rejecting repeated cursors rather than returning a prefix.
         // https://docs.stripe.com/api/checkout/sessions/line_items
         for ($page = 0; $page < ProductRequestNormalizer::MAX_ENTRIES; $page++) {
             $parameters = [
@@ -213,14 +211,14 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
         ];
 
         // Keep only the provider fields owned by the accepted order snapshots.
-        // The strict normalizer deliberately sees malformed nested values instead
-        // of silently treating them as absent, while SDK objects stop at this edge.
+        // The strict normalizer deliberately sees malformed nested values instead of silently treating them as absent,
+        // while SDK objects stop at this edge.
         foreach ($snapshotFields as $field) {
             if (array_key_exists($field, $sessionData)) {
                 $value = $sessionData[$field];
 
-                // An expanded Customer can contain far more than the one stable
-                // reference owned by the order. Keep only that ID at this edge.
+                // An expanded Customer can contain far more than the one stable reference owned by the order.
+                // Keep only that ID at this edge.
                 if ($field === 'customer' && is_array($value)) {
                     $value = ['id' => $value['id'] ?? null];
                 }
@@ -261,8 +259,8 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
             return null;
         }
 
-        // These expansions are required by this read contract. An ID alone is
-        // not a partial payment observation that can be silently accepted.
+        // These expansions are required by this read contract.
+        // An ID alone is not a partial payment observation that can be silently accepted.
         if ($paymentIntent instanceof PaymentIntent === false) {
             throw new OrderDataException();
         }
@@ -303,8 +301,8 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
             return null;
         }
 
-        // Unlike selected payment facts, this branch can contain authentication
-        // directives. Keep it separate from the canonical order snapshot source.
+        // Unlike selected payment facts, this branch can contain authentication directives.
+        // Keep it separate from the canonical order snapshot source.
         $nextAction = $paymentIntent->toArray()['next_action'] ?? null;
 
         if ($nextAction !== null && is_array($nextAction) === false) {
@@ -330,8 +328,8 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
 
         foreach ($shippingOptions as $key => $shippingOption) {
             if (is_array($shippingOption) && is_array($shippingOption['shipping_rate'] ?? null)) {
-                // Request filters can expand Rates. Keep only their references,
-                // preserving keys and malformed values for request-bound validation.
+                // Request filters can expand Rates.
+                // Keep only their references, preserving keys and malformed values for request-bound validation.
                 // https://docs.stripe.com/api/checkout/sessions/object#checkout_session_object-shipping_options-shipping_rate
                 $shippingOption['shipping_rate'] = $shippingOption['shipping_rate']['id'] ?? null;
                 $shippingOptions[$key] = $shippingOption;

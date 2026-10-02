@@ -50,10 +50,9 @@ final class InstructionPayloadComparisonTest extends KirbyTestCase
         $this->assertInstanceOf(StripeObject::class, $details);
         $this->assertSame($expectedValue, $details[$field]);
 
-        // A captured action remains replayable even when current provider data no
-        // longer has next_action. This is not a production lifecycle retry test.
-        // Replay means restoring hook inputs, not retrying a payment or asserting
-        // that the original voucher/QR instructions remain usable.
+        // A captured action remains replayable even when current provider data no longer has next_action.
+        // This is not a production lifecycle retry test.
+        // Replay means restoring hook inputs, not retrying a payment or asserting that the original voucher/QR instructions remain usable.
         $paymentIntent->next_action = null;
         $replayed = PaymentIntent::constructFrom(['next_action' => $stored]);
         $this->assertSame($snapshot, $replayed->next_action?->toArray());
@@ -104,8 +103,8 @@ final class InstructionPayloadComparisonTest extends KirbyTestCase
         ]);
         $snapshot = $paymentIntent->next_action?->toArray();
 
-        // Native serialization deliberately preserves everything supplied. The
-        // safety boundary must select appropriate data before writing content.
+        // Native serialization deliberately preserves everything supplied.
+        // The safety boundary must select appropriate data before writing content.
         $this->assertSame($snapshot, Yaml::decode(Yaml::encode($snapshot)));
         $this->assertStringContainsString('EXCLUDED_AUTHENTICATION_TOKEN', Yaml::encode($snapshot));
     }

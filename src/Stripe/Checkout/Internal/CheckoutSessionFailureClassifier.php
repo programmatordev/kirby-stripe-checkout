@@ -21,8 +21,8 @@ final class CheckoutSessionFailureClassifier
             ? $this->retryDirective($error)
             : null;
 
-        // A failed read can be repeated safely. A transport or server failure
-        // during creation is uncertain because Stripe may have accepted the POST.
+        // A failed read can be repeated safely.
+        // A transport or server failure during creation is uncertain because Stripe may have accepted the POST.
         $type = match (true) {
             $error instanceof RateLimitException => CheckoutSessionFailureType::Unavailable,
             $error instanceof ApiConnectionException => $mutation
@@ -77,8 +77,7 @@ final class CheckoutSessionFailureClassifier
 
     /**
      * Stripe's explicit response directive overrides status-based retry policy.
-     * stripe-php already honors it for in-process retries; the plugin also needs
-     * it for a later request that resumes the persisted attempt.
+     * stripe-php already honors it for in-process retries; the plugin also needs it for a later request that resumes the persisted attempt.
      */
     private function retryDirective(ApiErrorException $error): ?bool
     {

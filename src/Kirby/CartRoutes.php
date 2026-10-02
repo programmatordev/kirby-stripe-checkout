@@ -25,8 +25,7 @@ final class CartRoutes
                 return [];
             }
         } catch (ConfigurationException) {
-            // Keep the site/Panel recoverable; the endpoint reports invalid
-            // configuration safely instead of failing the entire plugin boot.
+            // Keep the site/Panel recoverable; the endpoint reports invalid configuration safely instead of failing the entire plugin boot.
         }
 
         $resources = [
@@ -56,8 +55,7 @@ final class CartRoutes
                         ]);
                     }
 
-                    // Multi-language routing prepends a Language; the path's
-                    // item ID (when present) is always the last string argument.
+                    // Multi-language routing prepends a Language; the path's item ID (when present) is always the last string argument.
                     $last = $arguments === [] ? null : $arguments[array_key_last($arguments)];
 
                     return (new CartEndpoint($kirby))->respond($operation, is_string($last) ? $last : null);

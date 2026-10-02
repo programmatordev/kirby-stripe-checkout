@@ -18,8 +18,8 @@ final readonly class CheckoutAttempt
 {
     public const OPERATION = 'checkout.sessions.create';
 
-    // Stripe may prune idempotency results after 24 hours. Stop automatic
-    // mutation retries one hour earlier rather than risk creating a new Session.
+    // Stripe may prune idempotency results after 24 hours.
+    // Stop automatic mutation retries one hour earlier rather than risk creating a new Session.
     public const RETRY_WINDOW = 'PT23H';
 
     public const SESSION_LIFETIME = 'PT24H';
@@ -107,8 +107,8 @@ final readonly class CheckoutAttempt
             'idempotencyKey' => $this->idempotencyKey,
             // An exact retry must retain the API semantics used for the first POST.
             'stripeApiVersion' => $this->stripeApiVersion,
-            // Mode drives transport/presentation policy. The opaque fingerprint
-            // separately prevents reuse with another credential in the same mode.
+            // Mode drives transport/presentation policy.
+            // The opaque fingerprint separately prevents reuse with another credential in the same mode.
             'credentialMode' => $this->credentialMode->value,
             'credentialFingerprint' => $this->credentialFingerprint,
             'operation' => self::OPERATION,

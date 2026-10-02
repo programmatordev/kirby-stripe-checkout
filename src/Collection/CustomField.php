@@ -10,8 +10,8 @@ use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 /**
  * Exposes one validated, localized Stripe Checkout custom field.
  *
- * Provider-facing labels, input bounds and dropdown sizes follow Stripe's
- * Checkout Session schema. Stable identifiers use its lowercase subset.
+ * Provider-facing labels, input bounds and dropdown sizes follow Stripe's Checkout Session schema.
+ * Stable identifiers use its lowercase subset.
  *
  * @see https://docs.stripe.com/api/checkout/sessions/create?query=custom_fields
  */

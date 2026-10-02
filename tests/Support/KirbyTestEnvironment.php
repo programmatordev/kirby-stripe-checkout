@@ -58,8 +58,7 @@ final class KirbyTestEnvironment
 
         try {
             App::destroy();
-            // App::destroy() does not reset blueprint definitions shared across
-            // applications; each disposable site must load its own overrides.
+            // App::destroy() does not reset blueprint definitions shared across applications; each disposable site must load its own overrides.
             Blueprint::$loaded = [];
             App::$enableWhoops = false;
 
@@ -139,8 +138,7 @@ final class KirbyTestEnvironment
         }
 
         try {
-            // Destroy the session before removing its root because Kirby can
-            // still write session state while the session object is closing.
+            // Destroy the session before removing its root because Kirby can still write session state while the session object is closing.
             $this->app->session()->destroy();
         } finally {
             ApiRequestor::setHttpClient($this->previousStripeClient);

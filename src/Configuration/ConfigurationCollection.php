@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Configuration;
 
 /**
- * Keeps canonical stored definitions with domain items built from the same
- * validation pass, so persistence and runtime configuration cannot diverge.
+ * Keeps canonical stored definitions with domain items built from the same validation pass,
+ * so persistence and runtime configuration cannot diverge.
  *
  * @template T
  * @internal

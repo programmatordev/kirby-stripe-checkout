@@ -28,8 +28,7 @@ final class SessionRequestValidatorTest extends TestCase
         ];
         $priceData['product_data'] = $productData;
         $lineItem['price_data'] = $priceData;
-        // Even incompatible provider-owned combinations reach Stripe rather
-        // than becoming a second local manual-rate/tax-location validator.
+        // Even incompatible provider-owned combinations reach Stripe rather than becoming a second local manual-rate/tax-location validator.
         $lineItem['tax_rates'] = ['txr_manual'];
         $lineItems[0] = $lineItem;
         $parameters['line_items'] = $lineItems;
@@ -126,8 +125,8 @@ final class SessionRequestValidatorTest extends TestCase
     {
         $request = $this->standardRequest();
         $parameters = $request->parameters();
-        // Endive filters compatible methods instead of requiring every listed
-        // method to work. Stripe also owns validation of the supplied values.
+        // Endive filters compatible methods instead of requiring every listed method to work.
+        // Stripe also owns validation of the supplied values.
         // https://docs.stripe.com/changelog/endive/2026-09-30/remove-payment-method-types-checkout-sessions
         $parameters['allowed_payment_method_types'] = [
             PaymentMethod::TYPE_CARD,

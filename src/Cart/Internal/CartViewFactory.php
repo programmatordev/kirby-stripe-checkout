@@ -36,8 +36,8 @@ use Throwable;
 final class CartViewFactory
 {
     /**
-     * The closure creates a fresh resolver for each presentation. Keeping one
-     * resolver here would retain user/language context across Cart operations.
+     * The closure creates a fresh resolver for each presentation.
+     * Keeping one resolver here would retain user/language context across Cart operations.
      *
      * @param Closure(): CheckoutResolver $checkoutResolverFactory
      */
@@ -129,8 +129,7 @@ final class CartViewFactory
 
         if ($snapshot->entries() !== []) {
             if ($checkoutContext === null || $resolver === null) {
-                // Without one complete valid Checkout context, neither the need
-                // for shipping nor its available options can be trusted.
+                // Without one complete valid Checkout context, neither the need for shipping nor its available options can be trusted.
                 $shippingQuote = ShippingQuote::unavailable();
             } else {
                 if ($checkoutContext->shippableItems() !== []) {
@@ -198,8 +197,8 @@ final class CartViewFactory
     /** Only call with plugin-owned codes, never raw exception/provider messages. */
     public function translatedError(string $code, ?string $field = null, ?string $itemId = null): CartError
     {
-        // Only plugin-owned codes cross this edge. Even a custom resolver's
-        // exception code/message can contain arbitrary, sensitive provider data.
+        // Only plugin-owned codes cross this edge.
+        // Even a custom resolver's exception code/message can contain arbitrary, sensitive provider data.
         $key = Catalogue::PREFIX . $code;
         $locale = 'en';
 

@@ -75,8 +75,7 @@ final class VariantMatrix
     /** @param array<string, string> $selectedOptions */
     private static function generatedId(array $selectedOptions): string
     {
-        // Keep server-projected variants stable until the Panel persists the
-        // random identifier created during an interactive edit.
+        // Keep server-projected variants stable until the Panel persists the random identifier created during an interactive edit.
         return substr(hash('sha256', self::optionCombinationKey($selectedOptions)), 0, 16);
     }
 

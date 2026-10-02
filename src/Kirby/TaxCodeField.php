@@ -49,8 +49,8 @@ final class TaxCodeField extends FieldClass
     {
         $value = $this->toFormValue();
 
-        // Kirby still converts disabled fields when saving the form. Dormant
-        // classification must survive unrelated edits without active validation.
+        // Kirby still converts disabled fields when saving the form.
+        // Dormant classification must survive unrelated edits without active validation.
         if ($value === '' || $this->sourceInactive()) {
             return $value;
         }
@@ -206,8 +206,7 @@ final class TaxCodeField extends FieldClass
     /** @return array<string, mixed> */
     private static function item(TaxCode $code): array
     {
-        // Warn without making the code invalid: a trusted Session request
-        // filter may supply the location even though the Panel cannot configure it.
+        // Warn without making the code invalid: a trusted Session request filter may supply the location even though the Panel cannot configure it.
         $warning = $code->requiresPerformanceLocation() === true
             ? I18n::translate('programmatordev.stripe-checkout.taxCodes.performanceLocationUnsupported')
             : null;

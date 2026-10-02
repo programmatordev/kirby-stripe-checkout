@@ -49,8 +49,7 @@ final readonly class ShippingCountryOptions
             }
 
             if ($name === $countryCode) {
-                // Symfony Intl does not label every special country code that
-                // Stripe accepts, so bundled translations cover those gaps.
+                // Symfony Intl does not label every special country code that Stripe accepts, so bundled translations cover those gaps.
                 $translatedName = I18n::translate(
                     'programmatordev.stripe-checkout.settings.shippingZones.countries.' . strtolower($countryCode),
                     $countryCode,

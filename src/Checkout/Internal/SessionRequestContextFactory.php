@@ -199,8 +199,7 @@ final class SessionRequestContextFactory
             return $siteUrl;
         }
 
-        // Unlike a configured destination, this optional request context can be
-        // discarded safely when it is malformed or does not belong to this site.
+        // Unlike a configured destination, this optional request context can be discarded safely when it is malformed or does not belong to this site.
         try {
             $initiatingUrl = $this->normalizeUrl(
                 value: $value,

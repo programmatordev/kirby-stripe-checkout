@@ -39,8 +39,8 @@ final readonly class TaxSnapshot
             if ($data['breakdown'] !== null) {
                 $breakdown = [];
                 $orderAllocated = 0;
-                // An explicitly empty breakdown asserts no allocations. A list
-                // containing only line/shipping entries does not cover the order total.
+                // An explicitly empty breakdown asserts no allocations.
+                // A list containing only line/shipping entries does not cover the order total.
                 $hasOrderAllocations = $data['breakdown'] === [];
 
                 foreach (OrderData::list($data['breakdown']) as $entry) {
@@ -100,8 +100,8 @@ final readonly class TaxSnapshot
 
                 $data['breakdown'] = $breakdown;
 
-                // Check aggregate allocations only. Line/shipping targets overlap
-                // them and must not be counted again or used to calculate tax.
+                // Check aggregate allocations only.
+                // Line/shipping targets overlap them and must not be counted again or used to calculate tax.
                 if ($hasOrderAllocations && $data['providerAmount'] !== null && $orderAllocated !== $data['providerAmount']) {
                     throw new OrderDataException();
                 }

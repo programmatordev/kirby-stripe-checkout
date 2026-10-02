@@ -46,8 +46,8 @@ final readonly class ShippingContext
             return;
         }
 
-        // Provider support is a structural constraint. Store-specific zone or
-        // resolver eligibility is evaluated later when the quote is resolved.
+        // Provider support is a structural constraint.
+        // Store-specific zone or resolver eligibility is evaluated later when the quote is resolved.
         if ((new StripeShippingCountryRegistry())->supports($country) === false) {
             throw new InvalidArgumentException('The shipping country is not supported by Stripe Checkout.');
         }

@@ -17,10 +17,10 @@ use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
 use Throwable;
 
 /**
- * Reads and changes the current browser's cart. Successful mutations refresh
- * this object's presentation; previously returned CartItems remain immutable.
- * Revision-bound mutations default to this view's revision. HTTP callers must
- * pass the revision submitted by the visitor, not one freshly read on the server.
+ * Reads and changes the current browser's cart.
+ * Successful mutations refresh this object's presentation; previously returned CartItems remain immutable.
+ * Revision-bound mutations default to this view's revision.
+ * HTTP callers must pass the revision submitted by the visitor, not one freshly read on the server.
  */
 final class Cart
 {
@@ -171,8 +171,7 @@ final class Cart
         } catch (Throwable $error) {
             $current = $error instanceof CartMutationException ? $error->current() : null;
 
-            // Keep the caller's stale view unchanged; conflict recovery gets
-            // a separate current Cart rather than silently retrying the write.
+            // Keep the caller's stale view unchanged; conflict recovery gets a separate current Cart rather than silently retrying the write.
             throw new CartException(
                 $this->views->error($error),
                 $current === null ? null : $this->views->create($current, $this->mutator),
@@ -186,8 +185,8 @@ final class Cart
 
     private function resolvePresentation(): void
     {
-        // HTTP mutations start with selection state only. Resolve on a read or
-        // after the write, so clearing never needs the discarded products first.
+        // HTTP mutations start with selection state only.
+        // Resolve on a read or after the write, so clearing never needs the discarded products first.
         if ($this->presentationResolved === false) {
             $this->applyView($this->views->create($this->snapshot, $this->mutator));
         }

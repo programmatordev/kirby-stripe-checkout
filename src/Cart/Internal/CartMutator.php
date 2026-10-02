@@ -48,8 +48,7 @@ final class CartMutator
     {
         // Add is relative to the latest quantity, so it needs no caller revision.
         return $this->store->mutate(function (CartSnapshot $current) use ($request): CartSnapshot {
-            // Resolve aliases before comparing so page IDs and UUIDs can merge
-            // into the same line when they identify the same product/options.
+            // Resolve aliases before comparing so page IDs and UUIDs can merge into the same line when they identify the same product/options.
             $request = $this->requestNormalizer->normalize($request);
             $entries = $current->entries();
 
@@ -113,8 +112,7 @@ final class CartMutator
         return $this->store->mutate(function (CartSnapshot $current) use ($shippingCountry, $revision): CartSnapshot {
             $this->requireRevision($current, $revision);
 
-            // Zone membership belongs to quote resolution: a supported country
-            // with no matching zone is valid input that resolves as unavailable.
+            // Zone membership belongs to quote resolution: a supported country with no matching zone is valid input that resolves as unavailable.
             if ($shippingCountry !== null && (new StripeShippingCountryRegistry())->supports($shippingCountry) === false) {
                 throw new CheckoutInputException(ShippingErrorCode::COUNTRY_INVALID);
             }

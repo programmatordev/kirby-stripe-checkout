@@ -102,8 +102,8 @@ jobs:
         if: matrix.php != '8.2'
         run: vendor/bin/phpunit
 
-  # The locked matrix proves reproducibility; these jobs prove the declared
-  # dependency constraints resolve at both ends of the current PHP matrix.
+  # The locked matrix proves reproducibility;
+  # these jobs prove the declared dependency constraints resolve at both ends of the current PHP matrix.
   dependencies:
     name: PHP ${{ matrix.php }} / ${{ matrix.dependencies }}
     runs-on: ubuntu-latest
@@ -132,8 +132,7 @@ jobs:
           coverage: none
 
       - name: Resolve dependency range
-        # Keep Composer's security-advisory blocking enabled, including for
-        # the lowest resolution.
+        # Keep Composer's security-advisory blocking enabled, including for the lowest resolution.
         run: composer update --prefer-dist --no-interaction --no-progress ${{ matrix.composer_arguments }}
 
       - name: Execute tests
@@ -173,8 +172,7 @@ jobs:
 
           mkdir -p "$smoke_root/package" "$smoke_root/consumer"
           tar -xzf /tmp/kirby-stripe-checkout.tar.gz -C "$smoke_root/package"
-          # This fixture forces a mirrored path install and supplies the
-          # archive's test-only version without changing the package manifest.
+          # This fixture forces a mirrored path install and supplies the archive's test-only version without changing the package manifest.
           cp tests/Package/composer.json "$smoke_root/consumer/composer.json"
 
           composer install \

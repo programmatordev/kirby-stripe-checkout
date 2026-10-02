@@ -53,8 +53,7 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
         $this->assertSame('false', $this->fieldValue($page, 'automaticTax'));
         $this->assertSame('stripe_default', $this->fieldValue($page, 'taxBehavior'));
 
-        // Kirby creates empty Field objects for required settings without a
-        // safe deterministic default; their values must remain unconfigured.
+        // Kirby creates empty Field objects for required settings without a safe deterministic default; their values must remain unconfigured.
         foreach (['currency', 'defaultRequiresShipping'] as $field) {
             $this->assertTrue(in_array(
                 $this->fieldValue($page, $field),
@@ -373,8 +372,7 @@ final class StripeCheckoutPageStoreTest extends KirbyTestCase
 
         $this->assertFalse($input['automatictax']);
         $this->assertSame('exclusive', $input['taxbehavior']);
-        // Native forms include disabled effective values; publishing them must
-        // keep the merchant's stored shadows rather than copy PHP into content.
+        // Native forms include disabled effective values; publishing them must keep the merchant's stored shadows rather than copy PHP into content.
         Changes::publish($page, [...$input, 'currency' => 'EUR']);
 
         $page = $store->page();

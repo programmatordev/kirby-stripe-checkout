@@ -45,8 +45,8 @@ final class OrderHookDispatcher
                     $candidate = HookDeliveryLedger::restoreEvent(OrderData::map($entry['event']));
 
                     if ($candidate->deliveryId() === $deliveryId && $entry['status'] !== 'delivered') {
-                        // Record the attempt before invoking listeners. A process
-                        // exit leaves the original event available for another try.
+                        // Record the attempt before invoking listeners.
+                        // A process exit leaves the original event available for another try.
                         $event = $candidate;
                         $entry['attempts'] = OrderData::integer($entry['attempts']) + 1;
                         $entry['lastAttemptAt'] = max(OrderData::timestamp(new DateTimeImmutable()), OrderData::timestamp($event->occurredAt()));
@@ -76,8 +76,8 @@ final class OrderHookDispatcher
                     $eventData = OrderData::map($entry['event']);
 
                     if ($eventData['deliveryId'] === $deliveryId) {
-                        // A successful concurrent attempt wins over a later
-                        // failure. Native hook consumers still deduplicate effects.
+                        // A successful concurrent attempt wins over a later failure.
+                        // Native hook consumers still deduplicate effects.
                         if ($entry['status'] !== 'delivered') {
                             $entry['status'] = $delivered ? 'delivered' : 'failed';
                             $entry['errorCode'] = $delivered ? null : LifecycleErrorCode::LISTENER_FAILED;
@@ -92,8 +92,8 @@ final class OrderHookDispatcher
                 return $data;
             });
         } catch (Throwable) {
-            // Even a failure to record the outcome must not turn a committed
-            // payment into an apparent failure. Pending intent remains replayable.
+            // Even a failure to record the outcome must not turn a committed payment into an apparent failure.
+            // Pending intent remains replayable.
             error_log('Stripe Checkout: ' . LifecycleErrorCode::DELIVERY_RECORD_FAILED);
         } finally {
             unset(self::$active[$key]);
@@ -106,8 +106,7 @@ final class OrderHookDispatcher
         $delivered = $this->invoke($deletion->order(), $event);
 
         try {
-            // Keep only the last sanitized outcome, not a deleted customer's
-            // snapshot or a second durable order archive merely for hook retries.
+            // Keep only the last sanitized outcome, not a deleted customer's snapshot or a second durable order archive merely for hook retries.
             $written = Data::write($this->deletionOutcomePath(), [
                 'deliveryId' => $event->deliveryId(),
                 'occurredAt' => OrderData::timestamp($event->occurredAt()),
@@ -145,19 +144,17 @@ final class OrderHookDispatcher
         $languageCode = $this->kirby->languageCode();
 
         try {
-            // The initiating content language, not the Panel/webhook request's,
-            // determines localized project work. A removed language falls back natively.
+            // The initiating content language, not the Panel/webhook request's, determines localized project work.
+            // A removed language falls back natively.
             $this->kirby->setCurrentLanguage($event->languageCode());
-            // Kirby's shared Events instance retains processed listeners when
-            // one throws. An independent native dispatcher keeps later deliveries
-            // callable without replacing registration, wildcards or named arguments.
+            // Kirby's shared Events instance retains processed listeners when one throws.
+            // An independent native dispatcher keeps later deliveries callable without replacing registration, wildcards or named arguments.
             (new Events($this->kirby))->trigger('programmatordev.stripe-checkout.' . $event->type()->value, [
                 'order' => $order,
                 'lifecycleEvent' => $event,
             ]);
 
-            // Success means the hook returned without throwing, not that an
-            // email arrived or another external effect completed exactly once.
+            // Success means the hook returned without throwing, not that an email arrived or another external effect completed exactly once.
             return true;
         } catch (Throwable) {
             // Never persist the exception message: listeners may include PII or credentials.

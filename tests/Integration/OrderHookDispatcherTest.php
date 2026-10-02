@@ -57,8 +57,7 @@ final class OrderHookDispatcherTest extends KirbyTestCase
                 },
                 'page.create:after' => function (Page $page) use (&$atWrite): void {
                     if ($page instanceof OrderPage) {
-                        // Intent must already be persisted before after hooks or
-                        // lifecycle dispatch, not repaired by a subsequent write.
+                        // Intent must already be persisted before after hooks or lifecycle dispatch, not repaired by a subsequent write.
                         $atWrite = (new OrderPageStore($page->kirby()))->data($page);
                         $page->update(['note' => 'Later edit']);
                     }

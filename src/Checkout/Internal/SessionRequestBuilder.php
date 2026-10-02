@@ -48,8 +48,7 @@ final class SessionRequestBuilder
         $order = $context->order();
         $hasShipping = $initiatingShipping !== null;
 
-        // Certify the transient quote against the frozen purchase before its
-        // mapped request becomes the attempt's permanent initiating evidence.
+        // Certify the transient quote against the frozen purchase before its mapped request becomes the attempt's permanent initiating evidence.
         if ($order->requiresShipping() !== $hasShipping) {
             throw new LogicException('The initiating shipping quote does not match the order.');
         }
@@ -61,8 +60,7 @@ final class SessionRequestBuilder
             throw new LogicException('The initiating shipping quote does not match the order.');
         }
 
-        // Keep the same order correlation on both Stripe resources because
-        // later lifecycle events may expose either the Session or PaymentIntent.
+        // Keep the same order correlation on both Stripe resources because later lifecycle events may expose either the Session or PaymentIntent.
         $correlation = [
             PluginMetadata::OWNER_KEY => PluginMetadata::NAME,
             PluginMetadata::ORDER_KEY => $order->pageUuid(),
@@ -178,8 +176,7 @@ final class SessionRequestBuilder
     /** @return array{enabled: true, required: string}|null */
     private function taxIdCollection(): ?array
     {
-        // Stripe owns location-aware tax-ID support; its required mode only
-        // applies where Checkout supports a relevant tax-ID type.
+        // Stripe owns location-aware tax-ID support; its required mode only applies where Checkout supports a relevant tax-ID type.
         // https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-tax_id_collection-required
         return match ($this->settings->taxIdCollection()) {
             TaxIdCollection::Off => null,
@@ -204,8 +201,7 @@ final class SessionRequestBuilder
         }
 
         if ($this->settings->promotionsConsent()) {
-            // Stripe exposes promotional-email consent as an automatic mode
-            // whose availability it decides from the merchant and customer.
+            // Stripe exposes promotional-email consent as an automatic mode whose availability it decides from the merchant and customer.
             // https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-consent_collection-promotions
             $collection['promotions'] = 'auto';
         }
@@ -271,8 +267,7 @@ final class SessionRequestBuilder
         $lineItems = [];
 
         foreach ($order->lineItems() as $index => $lineItem) {
-            // The immutable order UUID and snapshot position identify the line
-            // without depending on product content that can change later.
+            // The immutable order UUID and snapshot position identify the line without depending on product content that can change later.
             $metadata = [
                 PluginMetadata::OWNER_KEY => PluginMetadata::NAME,
                 PluginMetadata::ORDER_KEY => $order->pageUuid(),
@@ -333,16 +328,14 @@ final class SessionRequestBuilder
         ];
 
         if ($this->settings->automaticTax() && $this->settings->priceSource() === PriceSource::Kirby) {
-            // Omission delegates to Stripe's presets; local policy applies only
-            // to inline prices, never to an existing Stripe Price or Product.
+            // Omission delegates to Stripe's presets; local policy applies only to inline prices, never to an existing Stripe Price or Product.
             // https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-line_items-price_data-tax_behavior
             if ($this->settings->taxBehavior() !== TaxBehavior::StripeDefault) {
                 $priceData['tax_behavior'] = $this->settings->taxBehavior()->value;
             }
 
             if (is_string($lineItem['taxCode'] ?? null)) {
-                // Categories needing an event location use product tax_details
-                // through the complete-request filter; Stripe enforces that need.
+                // Categories needing an event location use product tax_details through the complete-request filter; Stripe enforces that need.
                 // https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-line_items-price_data-product_data-tax_details
                 $priceData['product_data']['tax_code'] = $lineItem['taxCode'];
             }
@@ -360,8 +353,8 @@ final class SessionRequestBuilder
             'shipping_address_collection' => [
                 'allowed_countries' => $shipping->allowedCountries(),
             ],
-            // Checkout accepts no more than five options and preselects the
-            // first. ShippingQuote preserves the validated merchant order.
+            // Checkout accepts no more than five options and preselects the first.
+            // ShippingQuote preserves the validated merchant order.
             // https://docs.stripe.com/api/checkout/sessions/create#checkout_session_create-shipping_options
             'shipping_options' => array_map(
                 fn(ShippingOption $option): array => [
@@ -476,8 +469,7 @@ final class SessionRequestBuilder
             . '?' . self::ORDER_QUERY_KEY . '=' . rawurlencode($context->order()->pageUuid());
 
         if ($includeSessionId) {
-            // Stripe replaces this exact unencoded placeholder after creating
-            // the Session, so it must not pass through URL encoding.
+            // Stripe replaces this exact unencoded placeholder after creating the Session, so it must not pass through URL encoding.
             $url .= '&' . self::SESSION_ID_QUERY_KEY . '=' . self::SESSION_ID_PLACEHOLDER;
         }
 

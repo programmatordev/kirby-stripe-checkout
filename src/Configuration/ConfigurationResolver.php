@@ -83,8 +83,7 @@ final class ConfigurationResolver
     }
 
     /**
-     * Resolve the structural switch independently so broken product settings
-     * cannot prevent customers from removing stale selections.
+     * Resolve the structural switch independently so broken product settings cannot prevent customers from removing stale selections.
      *
      * @param array<string, mixed> $options
      */
@@ -94,8 +93,7 @@ final class ConfigurationResolver
     }
 
     /**
-     * Returns explicit non-null PHP setting leaves without resolving values
-     * that may depend on their Page-owned peers.
+     * Returns explicit non-null PHP setting leaves without resolving values that may depend on their Page-owned peers.
      *
      * @param array<string, mixed> $options
      * @return list<string>
@@ -118,8 +116,7 @@ final class ConfigurationResolver
     /**
      * Resolves only store-facing settings for Panel validation.
      *
-     * This deliberately avoids making unrelated credentials or product
-     * configuration prerequisites for saving the protected Settings Page.
+     * This deliberately avoids making unrelated credentials or product configuration prerequisites for saving the protected Settings Page.
      *
      * @param array<string, mixed> $options
      */

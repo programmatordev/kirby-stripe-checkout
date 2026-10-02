@@ -35,8 +35,7 @@ final class PaymentFixtures
 
     public static function mbWay(): PaymentIntent
     {
-        // App approval happens in Stripe's payment flow, not through a voucher
-        // reference that the store must invent or persist after completion.
+        // App approval happens in Stripe's payment flow, not through a voucher reference that the store must invent or persist after completion.
         // https://docs.stripe.com/payments/mb-way/accept-a-payment?payment-ui=checkout
         return self::intent(
             methodType: PaymentMethod::TYPE_MB_WAY,
@@ -47,8 +46,8 @@ final class PaymentFixtures
 
     public static function klarna(): PaymentIntent
     {
-        // The buyer's repayment schedule is Klarna's concern. A succeeded merchant
-        // payment is not pending merely because the buyer selected instalments.
+        // The buyer's repayment schedule is Klarna's concern.
+        // A succeeded merchant payment is not pending merely because the buyer selected instalments.
         // https://docs.stripe.com/payments/klarna
         return self::intent(
             methodType: PaymentMethod::TYPE_KLARNA,
@@ -91,8 +90,8 @@ final class PaymentFixtures
             ],
         );
 
-        // The pending test-mode voucher observation had instructions before a
-        // Charge existed. Keep that shape instead of inventing Charge evidence.
+        // The pending test-mode voucher observation had instructions before a Charge existed.
+        // Keep that shape instead of inventing Charge evidence.
         $paymentIntent->latest_charge = null;
 
         return $paymentIntent;

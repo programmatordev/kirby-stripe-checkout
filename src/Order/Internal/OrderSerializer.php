@@ -65,8 +65,8 @@ final class OrderSerializer
             'createdAt' => OrderData::timestamp($createdAt),
             'updatedAt' => OrderData::timestamp($createdAt),
             'checkoutExpiresAt' => OrderData::timestamp($checkoutAttempt->expiresAt()),
-            // Keep provider-neutral product/variant facts independently from the
-            // exact Stripe request, whose Price lines may contain only an ID and quantity.
+            // Keep provider-neutral product/variant facts independently from the exact Stripe request,
+            // whose Price lines may contain only an ID and quantity.
             'initiatingLineItems' => $context->lineItems(),
         ]);
     }
@@ -108,8 +108,7 @@ final class OrderSerializer
             foreach ($fields as $field => $value) {
                 $name = $names[strtolower($field)] ?? null;
 
-                // The caller may pass complete native content; custom fields are
-                // outside this projection and must survive the eventual Page merge.
+                // The caller may pass complete native content; custom fields are outside this projection and must survive the eventual Page merge.
                 if ($name === null) {
                     continue;
                 }
@@ -167,8 +166,8 @@ final class OrderSerializer
     {
         try {
             OrderData::validateAllowedKeys($data, OrderSchema::fields());
-            // Only top-level null means an absent field. Keep explicit zero/false
-            // and nested nulls, which carry different snapshot meanings.
+            // Only top-level null means an absent field.
+            // Keep explicit zero/false and nested nulls, which carry different snapshot meanings.
             $data = array_filter($data, static fn(mixed $value): bool => $value !== null);
             $required = ['title', 'uuid', 'stripeCheckout', 'orderNumber', 'checkoutAttempt', 'checkoutStatus', 'paymentStatus', 'refundStatus', 'disputeStatus', 'currency', 'subtotal', 'refundedTotal', 'createdAt', 'updatedAt', 'checkoutExpiresAt', 'initiatingLineItems', ...OrderSchema::FLAGS];
 
@@ -240,8 +239,8 @@ final class OrderSerializer
 
             $subtotal = $registry->toMoney($registry->fromDecimal(OrderData::text($data['subtotal']), $currency));
 
-            // Before completion, subtotal describes the initiating lines. Completed
-            // provider totals are separate facts, not a locally reconstructed tax equation.
+            // Before completion, subtotal describes the initiating lines.
+            // Completed provider totals are separate facts, not a locally reconstructed tax equation.
             if ($checkoutStatus !== CheckoutStatus::Complete && $subtotal->isEqualTo($context->subtotal()) === false) {
                 throw new OrderDataException();
             }
@@ -252,8 +251,8 @@ final class OrderSerializer
                 $data['lifecycleDeliveries'] = HookDeliveryLedger::normalize($data['lifecycleDeliveries'], $uuid);
             }
 
-            // Page content is an untrusted persistence boundary. Rebuild every
-            // provider snapshot through the same values used at normalization.
+            // Page content is an untrusted persistence boundary.
+            // Rebuild every provider snapshot through the same values used at normalization.
             if (isset($data['customer'])) {
                 $data['customer'] = CustomerSnapshot::fromArray(OrderData::map($data['customer']))->toArray();
             }
@@ -284,8 +283,7 @@ final class OrderSerializer
 
             self::validateDiscountSnapshots($data, $currency, $registry);
 
-            // The reference preserves Stripe identity while the snapshot freezes
-            // the selected rate facts; either one alone is incomplete evidence.
+            // The reference preserves Stripe identity while the snapshot freezes the selected rate facts; either one alone is incomplete evidence.
             if (isset($data['stripeShippingRateId']) !== isset($data['shipping'])) {
                 throw new OrderDataException();
             }
@@ -298,8 +296,7 @@ final class OrderSerializer
                 }
 
                 if (isset($data['taxTotal']) && $data['tax']['amount'] !== null) {
-                    // Compare monetary values, not decimal spelling: persisted
-                    // totals may use an equivalent scale such as "0" versus "0.00".
+                    // Compare monetary values, not decimal spelling: persisted totals may use an equivalent scale such as "0" versus "0.00".
                     $taxTotal = $registry->toMoney($registry->fromDecimal(OrderData::text($data['taxTotal']), $currency));
                     $snapshotTotal = $registry->toMoney($registry->fromDecimal(OrderData::text($data['tax']['amount']), $currency));
 
@@ -478,8 +475,7 @@ final class OrderSerializer
         $createdAt = OrderData::date($data['createdAt']);
         $expiresAt = OrderData::date($data['checkoutExpiresAt']);
 
-        // These intervals are part of the immutable idempotency contract, not
-        // merchant-editable retention settings.
+        // These intervals are part of the immutable idempotency contract, not merchant-editable retention settings.
         if (
             $retryUntil != $createdAt->add(new DateInterval(CheckoutAttempt::RETRY_WINDOW))
             || $expiresAt != $createdAt->add(new DateInterval(CheckoutAttempt::SESSION_LIFETIME))
@@ -592,8 +588,7 @@ final class OrderSerializer
             if (isset($data[$field])) {
                 OrderData::date($data[$field]);
 
-                // Expiration is a future deadline; the other fields record facts
-                // already known at the time this projection was last updated.
+                // Expiration is a future deadline; the other fields record facts already known at the time this projection was last updated.
                 if (
                     $data[$field] < $data['createdAt']
                     || $field !== 'checkoutExpiresAt' && $data[$field] > $data['updatedAt']
@@ -616,9 +611,8 @@ final class OrderSerializer
             throw new OrderDataException();
         }
 
-        // Keep legitimate earlier observations (e.g. uncertainty before opening),
-        // but reject mutually exclusive terminal facts. Missing intermediate
-        // timestamps are allowed when reconciliation skips an unobserved state.
+        // Keep legitimate earlier observations (e.g. uncertainty before opening), but reject mutually exclusive terminal facts.
+        // Missing intermediate timestamps are allowed when reconciliation skips an unobserved state.
         $applicableStates = [
             'creationUncertainAt' => [CheckoutStatus::CreationUncertain, CheckoutStatus::CreationFailed, CheckoutStatus::Open, CheckoutStatus::Complete, CheckoutStatus::Expired],
             'creationFailedAt' => [CheckoutStatus::CreationFailed],
@@ -650,8 +644,7 @@ final class OrderSerializer
                 throw new OrderDataException();
             }
 
-            // Explicit empty lists distinguish an authoritative absence from a
-            // snapshot that reconciliation has not populated yet.
+            // Explicit empty lists distinguish an authoritative absence from a snapshot that reconciliation has not populated yet.
             OrderData::validateRequiredKeys($data, [
                 ...OrderSchema::FINAL_AMOUNTS,
                 'customFields',
@@ -665,8 +658,8 @@ final class OrderSerializer
             throw new OrderDataException();
         }
 
-        // A later authoritative paid observation may correct a failure; retaining
-        // that earlier failure timestamp does not make the paid state inconsistent.
+        // A later authoritative paid observation may correct a failure;
+        // retaining that earlier failure timestamp does not make the paid state inconsistent.
         if (isset($data['paymentFailedAt']) && in_array($paymentStatus, [PaymentStatus::Failed, PaymentStatus::Paid], true) === false) {
             throw new OrderDataException();
         }

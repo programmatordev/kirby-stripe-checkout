@@ -389,10 +389,9 @@ final class PaymentMethodDxTest extends KirbyTestCase
         $this->environment = KirbyTestEnvironment::start(
             hooks: [
                 'programmatordev.stripe-checkout.payment.pending' => function (Page $order, LifecycleEvent $lifecycleEvent) use (&$message): void {
-                    // This conversion exercises the candidate API only. Neither a
-                    // lifecycle accessor nor this instruction schema is approved yet.
-                    // Read event-time payment facts, not the live Order Page: a
-                    // retried hook can run after that Page's payment state changes.
+                    // This conversion exercises the candidate API only.
+                    // Neither a lifecycle accessor nor this instruction schema is approved yet.
+                    // Read event-time payment facts, not the live Order Page: a retried hook can run after that Page's payment state changes.
                     $payment = Payment::fromArray(OrderData::map($lifecycleEvent->orderSnapshot()['payment']));
                     $instructions = $payment->instructions();
 
@@ -466,8 +465,7 @@ final class PaymentMethodDxTest extends KirbyTestCase
         $this->assertSame(PaymentStatus::Paid, $livePayment->status());
         $this->assertNull($livePayment->instructions());
 
-        // Native Events exercises named hook arguments, not a production reducer,
-        // payment commit, delivery ledger or lifecycle retry implementation.
+        // Native Events exercises named hook arguments, not a production reducer, payment commit, delivery ledger or lifecycle retry implementation.
         (new Events($this->kirby))->trigger('programmatordev.stripe-checkout.payment.pending', [
             'order' => $order,
             'lifecycleEvent' => $event,
@@ -491,8 +489,7 @@ final class PaymentMethodDxTest extends KirbyTestCase
         $details = $action->multibanco_display_details ?? null;
         $this->assertNotNull($details);
 
-        // SDK PHPDoc gives method-specific completion, but nested SDK objects
-        // are mutable even when a wrapper's property is declared readonly.
+        // SDK PHPDoc gives method-specific completion, but nested SDK objects are mutable even when a wrapper's property is declared readonly.
         $this->assertSame('123456789', $details->reference);
         $details['reference'] = 'changed-sdk-reference';
         $this->assertSame('changed-sdk-reference', $details->reference);

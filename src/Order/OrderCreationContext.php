@@ -16,8 +16,8 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 
 /**
  * Immutable purchase facts prepared before the Order Page is created.
- * The caller supplies a Kirby-generated identifier; this value neither creates
- * nor looks up a Page and contains no writable Page or raw attempt token.
+ * The caller supplies a Kirby-generated identifier;
+ * this value neither creates nor looks up a Page and contains no writable Page or raw attempt token.
  */
 final readonly class OrderCreationContext
 {
@@ -42,9 +42,8 @@ final readonly class OrderCreationContext
         private string $currency,
         array $lineItems,
     ) {
-        // Snapshot the native content ID, not a live Page UUID object: its methods
-        // can populate caches or generate missing IDs. Only the public reference
-        // needs a scheme, which Kirby's URI value builds without those side effects.
+        // Snapshot the native content ID, not a live Page UUID object: its methods can populate caches or generate missing IDs.
+        // Only the public reference needs a scheme, which Kirby's URI value builds without those side effects.
         $reference = new Uri([
             'scheme' => 'page',
             'host' => OrderData::text($uuid),

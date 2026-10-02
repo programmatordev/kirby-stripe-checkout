@@ -163,8 +163,7 @@ final class RuntimeFactory
         $provider = $this->configuredStripePriceProvider();
         $stripe = $this->configurationReport()->configurationOrFail()->stripe();
 
-        // Partition by credentials and currency so key rotation cannot reuse
-        // another account's or mode's last-good catalogue.
+        // Partition by credentials and currency so key rotation cannot reuse another account's or mode's last-good catalogue.
         return new PriceCatalogue(
             cache: $this->kirby->cache('programmatordev.stripe-checkout.prices'),
             provider: $provider,
@@ -207,8 +206,8 @@ final class RuntimeFactory
     {
         return new CartViewFactory(
             kirby: $this->kirby,
-            // A retained Cart can survive login/logout and language changes in
-            // the same request. Capture current inputs for each new presentation.
+            // A retained Cart can survive login/logout and language changes in the same request.
+            // Capture current inputs for each new presentation.
             checkoutResolverFactory: fn(): CheckoutResolver => (new self($this->kirby))->checkoutResolver(),
         );
     }

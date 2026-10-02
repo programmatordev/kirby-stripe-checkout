@@ -24,8 +24,7 @@ abstract class ProtectedOrderPage extends Page
      */
     public function createContent(array $content = []): array
     {
-        // Keep native defaults and save handlers for custom fields, but do not
-        // manufacture final payment facts from canonical blueprint defaults.
+        // Keep native defaults and save handlers for custom fields, but do not manufacture final payment facts from canonical blueprint defaults.
         /** @var array<string, mixed> $created */
         $created = array_filter(
             parent::createContent($content),
@@ -35,8 +34,7 @@ abstract class ProtectedOrderPage extends Page
 
         foreach ($content as $field => $value) {
             if (OrderSchema::isReserved($field)) {
-                // Canonical values have already passed OrderSerializer and must
-                // not be re-shaped by display-only Object/Structure fields.
+                // Canonical values have already passed OrderSerializer and must not be re-shaped by display-only Object/Structure fields.
                 $created[strtolower($field)] = $value;
             }
         }
@@ -52,8 +50,8 @@ abstract class ProtectedOrderPage extends Page
     /** @param array<string, mixed> $props */
     public function createChild(array $props): Page
     {
-        // Kirby checks the new child's permissions, not this parent's. A child
-        // with a different template must not bypass the controlled order creator.
+        // Kirby checks the new child's permissions, not this parent's.
+        // A child with a different template must not bypass the controlled order creator.
         throw new PermissionException(message: I18n::template('programmatordev.stripe-checkout.orders.errors.manualCreation'));
     }
 

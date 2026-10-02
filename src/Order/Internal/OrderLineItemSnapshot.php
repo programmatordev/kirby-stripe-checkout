@@ -48,14 +48,13 @@ final readonly class OrderLineItemSnapshot
             'priceSource' => $lineItem->priceSource()->value,
             'stripePriceId' => $lineItem->stripePriceId(),
             'stripeProductId' => $lineItem->stripeProductId(),
-            // Freeze the effective local classification alongside the initiating
-            // price. Retrying an exact request must not re-read edited content.
+            // Freeze the effective local classification alongside the initiating price.
+            // Retrying an exact request must not re-read edited content.
             'taxCode' => $lineItem->taxCode()?->id(),
             'currency' => $price->getCurrency()->getCurrencyCode(),
             'price' => (string) $price->getAmount(),
             'subtotal' => (string) $subtotal->getAmount(),
-            // Preserve provider units alongside decimal amounts: Stripe's exponent
-            // is not necessarily the currency's ISO/Brick minor-unit exponent.
+            // Preserve provider units alongside decimal amounts: Stripe's exponent is not necessarily the currency's ISO/Brick minor-unit exponent.
             'providerAmounts' => [
                 'price' => $registry->fromMoney($price)->minorAmount(),
                 'subtotal' => $registry->fromMoney($subtotal)->minorAmount(),
@@ -119,8 +118,7 @@ final readonly class OrderLineItemSnapshot
             }
 
             // Reuse product invariants rather than maintain a second options/image/SKU validator.
-            // Stored tax IDs need only structural validation here; catalogue
-            // membership is checked when preparing a new Checkout request, not on reads.
+            // Stored tax IDs need only structural validation here; catalogue membership is checked when preparing a new Checkout request, not on reads.
             $product = new Product(
                 $request,
                 OrderData::text($data['name']),

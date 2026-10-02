@@ -38,8 +38,8 @@ final class CheckoutResolver
     private ?ProductResolutionContext $context = null;
 
     /**
-     * These closures construct dependencies on demand: shipping-only work needs
-     * no product context, and Kirby-priced lines need no Stripe Price resolver.
+     * These closures construct dependencies on demand:
+     * shipping-only work needs no product context, and Kirby-priced lines need no Stripe Price resolver.
      * The product context is captured once per resolver operation, not per line.
      *
      * @param Closure(): ProductResolutionContext $productContextFactory
@@ -82,8 +82,8 @@ final class CheckoutResolver
         $lineItems = [];
 
         foreach ($requests as $request) {
-            // Normalization can merge duplicate lines. Resolve the resulting request
-            // so quantity limits and product facts reflect the final quantity.
+            // Normalization can merge duplicate lines.
+            // Resolve the resulting request so quantity limits and product facts reflect the final quantity.
             $product = $this->resolveProduct($request);
 
             // Canonicalization may change a locator, never the selected product.
@@ -114,8 +114,8 @@ final class CheckoutResolver
         $product = $this->resolveProduct($request);
 
         if ($product->price() instanceof StripePriceReference) {
-            // Selection writes check eligibility, not presentation totals. A cart
-            // must remain editable even when its resolved subtotal is unavailable.
+            // Selection writes check eligibility, not presentation totals.
+            // A cart must remain editable even when its resolved subtotal is unavailable.
             ($this->stripePriceResolverFactory)()->resolve($product->price(), $this->currency());
         }
 
@@ -138,8 +138,7 @@ final class CheckoutResolver
             uiMode: $this->settings->uiMode(),
         );
 
-        // Individually valid lines can still exceed provider-unit integer bounds
-        // when their subtotals are combined.
+        // Individually valid lines can still exceed provider-unit integer bounds when their subtotals are combined.
         (new StripeCurrencyRegistry())->fromMoney($context->subtotal());
 
         return $context;
@@ -192,8 +191,7 @@ final class CheckoutResolver
     public function shippingCountryCodes(): array
     {
         if ($this->customShippingResolver) {
-            // A replacement resolver owns shipping-country eligibility, so the
-            // built-in zones cannot narrow its possible input countries.
+            // A replacement resolver owns shipping-country eligibility, so the built-in zones cannot narrow its possible input countries.
             return (new StripeShippingCountryRegistry())->codes();
         }
 
@@ -214,8 +212,7 @@ final class CheckoutResolver
 
     public function validateTaxCode(TaxCode $taxCode): void
     {
-        // Inactive local classification must not require a current product
-        // context just to map an already frozen order into a Session request.
+        // Inactive local classification must not require a current product context just to map an already frozen order into a Session request.
         if ($this->settings->automaticTax() === false || $this->settings->priceSource() !== PriceSource::Kirby) {
             return;
         }

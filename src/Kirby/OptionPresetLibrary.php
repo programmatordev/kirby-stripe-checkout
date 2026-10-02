@@ -116,8 +116,7 @@ final class OptionPresetLibrary
     private function decodeValues(mixed $value): array
     {
         if (is_string($value)) {
-            // Kirby's Tags field stores its values as a comma-separated scalar
-            // inside each nested Structure entry.
+            // Kirby's Tags field stores its values as a comma-separated scalar inside each nested Structure entry.
             $value = explode(',', $value);
         }
 

@@ -27,8 +27,8 @@ use Throwable;
 /**
  * Converts selected untrusted Stripe Session fields into canonical order facts.
  *
- * It reads only the current provider result. Settings and the initiating request
- * cannot stand in for fields Stripe omitted, changed, or populated at Checkout.
+ * It reads only the current provider result.
+ * Settings and the initiating request cannot stand in for fields Stripe omitted, changed, or populated at Checkout.
  *
  * @internal
  * @see https://docs.stripe.com/api/checkout/sessions/object
@@ -43,8 +43,7 @@ final class CheckoutSessionSnapshotNormalizer
     public function normalizeForReconciliation(CheckoutSessionReconciliationRecord $record): CheckoutSessionSnapshot
     {
         $sessionData = $record->session->orderSnapshotSource;
-        // Tax allocations must use the complete endpoint result, never the
-        // optional line-item preview returned with the Session itself.
+        // Tax allocations must use the complete endpoint result, never the optional line-item preview returned with the Session itself.
         $sessionData['line_items'] = [
             'data' => $record->lineItems,
             'has_more' => false,
@@ -104,8 +103,8 @@ final class CheckoutSessionSnapshotNormalizer
                 return CheckoutShippingSnapshot::unavailable();
             }
 
-            // An explicit zero is an authoritative no-shipping result. A missing
-            // amount remains unknown and must not be converted into a zero fact.
+            // An explicit zero is an authoritative no-shipping result.
+            // A missing amount remains unknown and must not be converted into a zero fact.
             if ($providerShippingAmount !== 0 || $currency === null) {
                 throw new OrderDataException();
             }
@@ -121,8 +120,7 @@ final class CheckoutSessionSnapshotNormalizer
         $shippingRateId = $this->referenceId($shippingRate, 'shr_');
         $shippingRateData = $this->referenceData($shippingRate);
 
-        // A selected ID alone proves the reference but cannot provide the
-        // immutable rate details required by the final order snapshot.
+        // A selected ID alone proves the reference but cannot provide the immutable rate details required by the final order snapshot.
         if ($shippingRateId === null || $shippingRateData === []) {
             throw new OrderDataException();
         }
@@ -143,10 +141,8 @@ final class CheckoutSessionSnapshotNormalizer
         $fixedProviderAmount = $fixedAmount['amount'] ?? null;
         $fixedCurrency = $fixedAmount['currency'] ?? null;
 
-        // The Session's shipping amount and the fixed Rate describe the quoted
-        // subtotal, not the final shipping total after exclusive tax. Inclusive
-        // tax remains inside that subtotal; preserve Stripe's returned amounts
-        // rather than reconstructing the tax equation locally.
+        // The Session's shipping amount and the fixed Rate describe the quoted subtotal, not the final shipping total after exclusive tax.
+        // Inclusive tax remains inside that subtotal; preserve Stripe's returned amounts rather than reconstructing the tax equation locally.
         // https://docs.stripe.com/api/checkout/sessions/object#checkout_session_object-shipping_cost
         if (
             is_int($providerSubtotal) === false
@@ -160,8 +156,8 @@ final class CheckoutSessionSnapshotNormalizer
             throw new OrderDataException();
         }
 
-        // Stripe only returns this allocation when `shipping_cost.taxes` is
-        // expanded. When present, it must agree with the aggregate tax amount.
+        // Stripe only returns this allocation when `shipping_cost.taxes` is expanded.
+        // When present, it must agree with the aggregate tax amount.
         // https://docs.stripe.com/api/checkout/sessions/object#checkout_session_object-shipping_cost-taxes
         if (
             ($shippingCost['taxes'] ?? null) !== null
@@ -271,8 +267,7 @@ final class CheckoutSessionSnapshotNormalizer
         if ($totalBreakdown !== null && array_key_exists('taxes', $totalBreakdown)) {
             $breakdown = $this->taxEntries($totalBreakdown['taxes'], 'order', null, $currency);
 
-            // Preserve the meaning of an explicitly empty aggregate before
-            // appending separately expanded line/shipping allocations.
+            // Preserve the meaning of an explicitly empty aggregate before appending separately expanded line/shipping allocations.
             if ($breakdown === [] && $providerAmount !== null && $providerAmount !== 0) {
                 throw new OrderDataException();
             }
@@ -281,8 +276,8 @@ final class CheckoutSessionSnapshotNormalizer
         if (($sessionData['line_items'] ?? null) !== null) {
             $lineItems = $this->map($sessionData['line_items']);
 
-            // An expanded Session contains only the first handful of lines. The
-            // reconciliation caller must supply a fully paginated collection.
+            // An expanded Session contains only the first handful of lines.
+            // The reconciliation caller must supply a fully paginated collection.
             // https://docs.stripe.com/api/checkout/sessions/line_items
             if (($lineItems['has_more'] ?? null) !== false) {
                 throw new OrderDataException();
@@ -483,8 +478,7 @@ final class CheckoutSessionSnapshotNormalizer
                 'required' => isset($customField['optional']) && is_bool($customField['optional'])
                     ? $customField['optional'] === false
                     : null,
-                // Presence in the returned Session establishes configuration for
-                // that Session without consulting current plugin Settings.
+                // Presence in the returned Session establishes configuration for that Session without consulting current plugin Settings.
                 'configured' => true,
                 'answered' => $answer !== null,
                 'value' => $answer,
@@ -565,8 +559,8 @@ final class CheckoutSessionSnapshotNormalizer
             $minimumAmount = $restrictions['minimum_amount'] ?? null;
             $minimumCurrency = $restrictions['minimum_amount_currency'] ?? null;
 
-            // Promotion Codes may return a currency-specific minimum instead of
-            // the legacy top-level pair. Select only this Session's currency.
+            // Promotion Codes may return a currency-specific minimum instead of the legacy top-level pair.
+            // Select only this Session's currency.
             // https://docs.stripe.com/api/promotion_codes/object#promotion_code_object-restrictions-currency_options
             if ($minimumAmount === null && isset($restrictions['currency_options'])) {
                 $currencyOptions = $this->map($restrictions['currency_options']);

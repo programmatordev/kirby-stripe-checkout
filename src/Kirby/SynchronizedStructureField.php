@@ -13,10 +13,10 @@ use Kirby\Form\FieldClass;
  * Keeps Structure identity and technical data in the default language.
  *
  * Concrete fields provide their own schema adapter and Panel presentation.
- * Secondary-language submissions are always projected back to a label-only
- * overlay, so direct API writes cannot change canonical membership or values.
- * Adapters report neutral PHP argument errors; this Field boundary converts
- * them to Kirby exceptions while other callers can map them differently.
+ * Secondary-language submissions are always projected back to a label-only overlay,
+ * so direct API writes cannot change canonical membership or values.
+ * Adapters report neutral PHP argument errors; this Field boundary converts them to Kirby exceptions
+ * while other callers can map them differently.
  *
  * @internal
  */

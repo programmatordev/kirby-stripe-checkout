@@ -29,8 +29,7 @@ final class KirbySessionCartStoreTest extends KirbyTestCase
         $initial = $first->read();
         $token = $session->token();
         $this->assertNotNull($token);
-        // Both requests initially see the same state; separate native stores
-        // ensure this isn't merely testing one object's in-memory cache.
+        // Both requests initially see the same state; separate native stores ensure this isn't merely testing one object's in-memory cache.
         $secondSession = $this->sessions()->get($token);
         $second = new KirbySessionCartStore($secondSession, Uuid::generate(...));
         $this->assertSame($initial->revision(), $second->read()->revision());
@@ -169,8 +168,8 @@ final class KirbySessionCartStoreTest extends KirbyTestCase
                 fwrite($pipes[0], "go\n");
                 $read = [$pipes[1]];
                 $write = $except = [];
-                // The worker has reached its mutation but cannot finish while
-                // the parent holds Kirby's lock. No timing-dependent lost-add assertion.
+                // The worker has reached its mutation but cannot finish while the parent holds Kirby's lock.
+                // No timing-dependent lost-add assertion.
                 $this->assertSame(0, stream_select($read, $write, $except, 0, 100000));
 
                 return new CartSnapshot($current->id(), 'parent-revision', [
@@ -220,8 +219,8 @@ final class KirbySessionCartStoreTest extends KirbyTestCase
             $beforeExpiry = new AutoSession($this->environment->workspace()->roots()['sessions'], ['cookieName' => $cookie, 'durationNormal' => 1, 'gcInterval' => false]);
             $resumed = new KirbySessionCartStore($beforeExpiry->get(), Uuid::generate(...));
             $this->assertSame($old->id(), $resumed->read()->id());
-            // Exercise normal expiry without changing signed session files or
-            // mocking core internals. Bounded to three seconds.
+            // Exercise normal expiry without changing signed session files or mocking core internals.
+            // Bounded to three seconds.
             sleep(3);
             $automatic = new AutoSession($this->environment->workspace()->roots()['sessions'], ['cookieName' => $cookie, 'gcInterval' => false]);
             $freshSession = $automatic->get();

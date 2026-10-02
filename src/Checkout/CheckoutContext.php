@@ -12,8 +12,7 @@ use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 /**
  * Immutable purchase facts shared by Cart and direct Checkout operations.
  *
- * This context exists before order identity or persistence and deliberately
- * exposes no mutable Cart, Order Page, provider client, or runtime service.
+ * This context exists before order identity or persistence and deliberately exposes no mutable Cart, Order Page, provider client, or runtime service.
  */
 final readonly class CheckoutContext
 {

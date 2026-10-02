@@ -49,8 +49,7 @@ final class ProductRequestNormalizer
             $existing->selectedOptions(),
         ));
 
-        // A persisted canonical reference must remain stable; changing it here
-        // could silently turn an update into a second equivalent cart entry.
+        // A persisted canonical reference must remain stable; changing it here could silently turn an update into a second equivalent cart entry.
         if (ProductRequestData::sameItem($existing, $request) === false) {
             throw new CheckoutInputException(SelectionErrorCode::INVALID);
         }

@@ -116,8 +116,8 @@ final class OrderData
         self::text($value);
 
         try {
-            // Kirby's URI constructor currently treats parse_url(false) as an
-            // array. Reject malformed input first to avoid a PHP deprecation.
+            // Kirby's URI constructor currently treats parse_url(false) as an array.
+            // Reject malformed input first to avoid a PHP deprecation.
             $parts = parse_url($value);
 
             if ($parts === false) {
@@ -196,8 +196,7 @@ final class OrderData
 
     public static function json(mixed $value): string
     {
-        // Validate before encoding so serialization cannot invoke user-supplied
-        // objects (for example, JsonSerializable) or accept floating-point amounts.
+        // Validate before encoding so serialization cannot invoke user-supplied objects (for example, JsonSerializable) or accept floating-point amounts.
         return json_encode(self::normalize($value), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 

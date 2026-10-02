@@ -95,8 +95,7 @@ final readonly class ShippingSnapshot
     {
         $amounts = [];
         $registry = new StripeCurrencyRegistry();
-        // Retain Stripe's integer representation beside the decimal amount so
-        // special provider currency units cannot be reinterpreted after storage.
+        // Retain Stripe's integer representation beside the decimal amount so special provider currency units cannot be reinterpreted after storage.
         $fields = [
             'subtotal' => 'providerSubtotal',
             'tax' => 'providerTax',

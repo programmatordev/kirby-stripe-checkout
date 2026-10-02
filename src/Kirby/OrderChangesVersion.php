@@ -22,15 +22,15 @@ final class OrderChangesVersion extends Version
             return null;
         }
 
-        // Kirby publishes the complete changes version, including disabled
-        // fields. Its saved copy must not roll back or conflict with newer facts.
+        // Kirby publishes the complete changes version, including disabled fields.
+        // Its saved copy must not roll back or conflict with newer facts.
         $customFields = array_filter(
             $fields,
             static fn(string $field): bool => OrderSchema::isReserved($field) === false,
             ARRAY_FILTER_USE_KEY,
         );
-        // VersionCache belongs to the model instance. A canonical write through
-        // another Page cannot refresh this retained model's cached latest values.
+        // VersionCache belongs to the model instance.
+        // A canonical write through another Page cannot refresh this retained model's cached latest values.
         /** @var OrderPage $model */
         $model = $this->model;
         $page = (new OrderPageStore($model->kirby()))->requirePage($model->id());
@@ -41,8 +41,7 @@ final class OrderChangesVersion extends Version
             ARRAY_FILTER_USE_KEY,
         );
 
-        // Read the same language; Kirby's content() supplies default-language
-        // fallback without copying canonical fields into a translation.
+        // Read the same language; Kirby's content() supplies default-language fallback without copying canonical fields into a translation.
         return [...$customFields, ...$protectedFields];
     }
 }

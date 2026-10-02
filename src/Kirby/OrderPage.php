@@ -85,14 +85,13 @@ final class OrderPage extends ProtectedOrderPage
             return parent::commit($action, $arguments, $callback);
         }
 
-        // Keep native before/after hooks and Form conversion, but never write a
-        // stale full form over canonical data or another custom-field edit.
+        // Keep native before/after hooks and Form conversion, but never write a stale full form over canonical data or another custom-field edit.
         $languageCode = OrderData::string($arguments['languageCode'] ?? $this->kirby()->languageCode() ?? 'default');
         $baseline = $this->version('latest')->read($languageCode) ?? [];
 
         return (new ModelCommit($this, 'update'))->call($arguments, function (OrderPage $page, array $values, array $strings, ?string $languageCode) use ($baseline): OrderPage {
-            // Read-only Object/Structure fields may have a display-only subset
-            // of the snapshot schema. Never persist their Form re-encoding.
+            // Read-only Object/Structure fields may have a display-only subset of the snapshot schema.
+            // Never persist their Form re-encoding.
             $customFields = array_filter(
                 OrderData::map($strings),
                 static fn(string $field): bool => $field !== 'lock' && OrderSchema::isReserved($field) === false,
@@ -122,13 +121,11 @@ final class OrderPage extends ProtectedOrderPage
 
         try {
             parent::commit('create', $arguments, static function (OrderPage $page) use ($callback, $initialData, &$creationData, &$created): OrderPage {
-                // Kirby has applied defaults and all native before hooks, but
-                // this Page still uses memory storage: no order file exists yet.
+                // Kirby has applied defaults and all native before hooks, but this Page still uses memory storage: no order file exists yet.
                 $content = $page->version('latest')->read('default') ?? [];
                 $data = OrderSerializer::decode($content, $page->intendedTemplate()->name(), $page->slug());
 
-                // Valid data is not necessarily unchanged data: native hooks
-                // may edit custom fields, but cannot replace the purchase facts.
+                // Valid data is not necessarily unchanged data: native hooks may edit custom fields, but cannot replace the purchase facts.
                 if (OrderSerializer::hash($data) !== OrderSerializer::hash($initialData)) {
                     throw new OrderStorageException(PersistenceErrorCode::VERIFY_FAILED);
                 }
@@ -140,16 +137,15 @@ final class OrderPage extends ProtectedOrderPage
                 ));
                 $event = HookDeliveryLedger::event($data, $customFields, LifecycleEventType::OrderCreated, 1);
                 $creationData = [...$data, 'lifecycleDeliveries' => [HookDeliveryLedger::pending($event)]];
-                // Add intent in memory so the native callback persists the order
-                // and its final creation snapshot together, not in two writes.
+                // Add intent in memory so the native callback persists the order and its final creation snapshot together, not in two writes.
                 $page->version('latest')->update(['lifecycleDeliveries' => Yaml::encode($creationData['lifecycleDeliveries'])], 'default');
 
                 return $created = $callback($page);
             });
         } catch (Throwable $error) {
             // Only recover after this invocation's native write completed.
-            // Collisions and failed writes do not produce a completed callback
-            // result. Verification below still precedes lifecycle dispatch.
+            // Collisions and failed writes do not produce a completed callback result.
+            // Verification below still precedes lifecycle dispatch.
             if ($created instanceof self === false) {
                 throw $error;
             }
@@ -162,8 +158,8 @@ final class OrderPage extends ProtectedOrderPage
         $store = new OrderPageStore($this->kirby());
         $page = $store->requirePage($this->id());
 
-        // Include the frozen delivery record in verification. Later custom-field
-        // edits are allowed, but must not rewrite the initial event's snapshot.
+        // Include the frozen delivery record in verification.
+        // Later custom-field edits are allowed, but must not rewrite the initial event's snapshot.
         if (OrderSerializer::hash($store->data($page)) !== OrderSerializer::hash($creationData)) {
             throw new OrderStorageException(PersistenceErrorCode::VERIFY_FAILED);
         }
@@ -204,8 +200,7 @@ final class OrderPage extends ProtectedOrderPage
             }
 
             // The Panel submits native form values, not raw text content.
-            // Accept unchanged display projections, then discard them: only
-            // the store may write the complete canonical snapshots.
+            // Accept unchanged display projections, then discard them: only the store may write the complete canonical snapshots.
             $form ??= Form::for($this, language: 'default');
             $formValues ??= $form->toFormValues();
 

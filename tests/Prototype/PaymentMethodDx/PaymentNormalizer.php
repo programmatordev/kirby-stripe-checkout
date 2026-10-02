@@ -15,8 +15,8 @@ use Stripe\PaymentIntent;
 /** Offline projection experiment only: retrieval, correlation and state reduction are later work. */
 final class PaymentNormalizer
 {
-    // Canonical state is supplied by the caller. A provider action alone does not
-    // distinguish unfinished Checkout authentication from a completed pending payment.
+    // Canonical state is supplied by the caller.
+    // A provider action alone does not distinguish unfinished Checkout authentication from a completed pending payment.
     public function normalize(PaymentStatus $status, Money $amount, ?PaymentIntent $paymentIntent): Payment
     {
         if ($paymentIntent === null) {
@@ -61,8 +61,8 @@ final class PaymentNormalizer
         $type = $nextAction['type'] ?? null;
 
         // next_action is keyed by its action type, not by the payment-method type.
-        // This experiment maps only three instruction shapes; it does not establish
-        // a production contract for other methods or for preserving Stripe-shaped data.
+        // This experiment maps only three instruction shapes;
+        // it does not establish a production contract for other methods or for preserving Stripe-shaped data.
         // Authentication/redirect actions are not durable voucher instructions.
         // https://docs.stripe.com/api/payment_intents/object?query=next_action
         if (in_array($type, ['multibanco_display_details', 'oxxo_display_details', 'paynow_display_qr_code'], true) === false) {

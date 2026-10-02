@@ -208,9 +208,8 @@ final class LocalDiagnostics
             return $this->check('orderIdentity', self::FAIL, 'orderIdentity.disabled');
         }
 
-        // Calling a project-defined generator could consume a sequence number or
-        // trigger other project work merely by opening Diagnostics. Its concrete
-        // output is therefore checked only when Checkout issues a real token.
+        // Calling a project-defined generator could consume a sequence number or trigger other project work merely by opening Diagnostics.
+        // Its concrete output is therefore checked only when Checkout issues a real token.
         if (Uuid::$generator !== null) {
             return $this->check('orderIdentity', self::UNKNOWN, 'orderIdentity.custom');
         }

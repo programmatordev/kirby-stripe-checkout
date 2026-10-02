@@ -17,8 +17,8 @@ use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
 
 /**
  * Compares the actor and canonical source/context bound to an already matched token.
- * Actor identity belongs to the attempt, not the cart: changing users preserves
- * selections but must not allow reuse of another actor's attempt binding.
+ * Actor identity belongs to the attempt, not the cart:
+ * changing users preserves selections but must not allow reuse of another actor's attempt binding.
  *
  * @internal No attempt lookup, persistence, or Session reuse happens here.
  */
@@ -80,9 +80,9 @@ final readonly class AttemptBinding
             throw new CheckoutInputException(SelectionErrorCode::INVALID);
         }
 
-        // Cart identity/revision identify selection state. The separate request
-        // context fingerprint must still cover current commerce facts, which can change
-        // without a cart mutation (for example, a merchant changing a price).
+        // Cart identity/revision identify selection state.
+        // The separate request context fingerprint must still cover current commerce facts,
+        // which can change without a cart mutation (for example, a merchant changing a price).
         return new self(
             checkoutSource: CheckoutSource::Cart,
             userUuid: $userUuid,
@@ -154,8 +154,8 @@ final readonly class AttemptBinding
     {
         $this->assertCompatibleActorAndSource($order->checkoutSource(), $order->userUuid(), $guestReference);
 
-        // CheckoutContext carries resolved purchase facts, not cart state. The
-        // Order also preserves the revision from which this attempt was prepared.
+        // CheckoutContext carries resolved purchase facts, not cart state.
+        // The Order also preserves the revision from which this attempt was prepared.
         if ($this->cartRevision !== $order->cartRevision()) {
             throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
         }

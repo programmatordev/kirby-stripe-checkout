@@ -25,8 +25,7 @@ final readonly class Payment
         private ?string $failureCode = null,
         private ?PaymentInstructions $instructions = null,
     ) {
-        // Both amounts share one serialized currency; restoration must not
-        // silently reinterpret a received amount from a different currency.
+        // Both amounts share one serialized currency; restoration must not silently reinterpret a received amount from a different currency.
         if ($amountReceived !== null && $amount->getCurrency()->isEqualTo($amountReceived->getCurrency()) === false) {
             throw new OrderDataException();
         }

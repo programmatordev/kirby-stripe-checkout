@@ -1395,8 +1395,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             configuration: $configuration,
             gateway: $loserGateway,
             numberFormatter: static function () use ($winner, $checkout, $shipping, $binding, $winnerToken, $now): string {
-                // Both callers have observed no order. Commit the winner before
-                // the outer caller reaches its authoritative locked recheck.
+                // Both callers have observed no order.
+                // Commit the winner before the outer caller reaches its authoritative locked recheck.
                 $winner->create(
                     checkout: $checkout,
                     shipping: $shipping,
@@ -1456,8 +1456,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             $this->sessionRecord(order: $order, request: $request, now: $now),
         ]);
         $kirby = $this->kirby;
-        // These locks reject reentrant acquisition, so a callback running inside
-        // either write boundary fails here instead of silently passing the check.
+        // These locks reject reentrant acquisition, so a callback running inside either write boundary fails here
+        // instead of silently passing the check.
         $checkLocks = static fn(): bool => OrderWriteLock::run(
             $kirby,
             'checkout-attempt:' . self::ORDER_UUID,
@@ -1549,8 +1549,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         DateTimeImmutable $now,
         bool $retryable,
     ): void {
-        // Establish retry/reconciliation preconditions through the real creation
-        // path. Fail here if setup did not reach the state the scenario requires.
+        // Establish retry/reconciliation preconditions through the real creation path.
+        // Fail here if setup did not reach the state the scenario requires.
         $gateway = new FakeCheckoutSessionGateway();
         $gateway->creationFailure = new CheckoutSessionGatewayException(
             failure: new CheckoutSessionFailure(
@@ -1586,8 +1586,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         string $secretKey = 'sk_test_checkout',
         PriceSource $priceSource = PriceSource::Kirby,
     ): Configuration {
-        // All collaborators read the same configuration. Cloning retains the
-        // disposable site's roots, including orders used by credential-rotation tests.
+        // All collaborators read the same configuration.
+        // Cloning retains the disposable site's roots, including orders used by credential-rotation tests.
         $this->kirby = $this->kirby->clone([
             'options' => [
                 'programmatordev.stripe-checkout' => [
@@ -1684,8 +1684,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         ?InitiatingShippingSnapshot $initiatingShipping = null,
         string $uuid = self::ORDER_UUID,
     ): SessionRequest {
-        // Build a compatible request for the offline provider fixture. Exact
-        // payload mappings are tested separately in SessionRequestBuilderTest.
+        // Build a compatible request for the offline provider fixture.
+        // Exact payload mappings are tested separately in SessionRequestBuilderTest.
         $context = (new SessionRequestContextFactory($this->kirby))->create(
             order: $this->order($checkout, $uuid),
             configuration: $configuration,

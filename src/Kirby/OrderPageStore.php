@@ -71,8 +71,7 @@ final class OrderPageStore
     /** @phpstan-impure Reads the current filesystem inventory. */
     public function container(): ?OrdersPage
     {
-        // A fresh native inventory must not reuse an earlier request-scoped
-        // collection or the temporary model left by a failed Page creation.
+        // A fresh native inventory must not reuse an earlier request-scoped collection or the temporary model left by a failed Page creation.
         $page = $this->kirby->site()->clone()->findPageOrDraft(OrderSchema::ORDERS_PAGE_ID);
 
         if ($page === null) {
@@ -149,22 +148,20 @@ final class OrderPageStore
             throw $error instanceof OrderStorageException ? $error : new OrderStorageException(PersistenceErrorCode::WRITE_FAILED);
         }
 
-        // The Order Page commit captures and verifies the final native creation
-        // content, including defaults and before-hook edits, before returning.
+        // The Order Page commit captures and verifies the final native creation content, including defaults and before-hook edits, before returning.
         return $this->requirePage(OrderSchema::ORDERS_PAGE_ID . '/' . $uuid);
     }
 
     private function dispatchCreated(OrderPage $page): OrderPage
     {
         $deliveries = OrderData::list($this->data($page)['lifecycleDeliveries']);
-        // Creation writes and verifies one initial event. Restore its saved ID
-        // rather than generating a different identity for the first delivery.
+        // Creation writes and verifies one initial event.
+        // Restore its saved ID rather than generating a different identity for the first delivery.
         $entry = OrderData::map($deliveries[0]);
         $event = HookDeliveryLedger::restoreEvent(OrderData::map($entry['event']));
         (new OrderHookDispatcher($this->kirby))->dispatch($page->uuid()->toString(), $event->deliveryId());
 
-        // Listeners may update custom fields; return the post-hook Page rather
-        // than the model read before dispatch and outcome persistence.
+        // Listeners may update custom fields; return the post-hook Page rather than the model read before dispatch and outcome persistence.
         return $this->requirePage($page->id());
     }
 
@@ -172,11 +169,10 @@ final class OrderPageStore
      * Serializes the identity lookup with local creation, then releases the lock.
      *
      * The structured attempt token reserves this Kirby UUID before submission.
-     * Because Order slugs equal their UUID IDs, the persisted Page is also the
-     * durable lookup for retries of that attempt.
-     * Product/shipping resolution finishes before this call. Request customization
-     * stays in the callback so only the winning creator runs it; post-commit
-     * lifecycle delivery and provider Session calls run after the lock is released.
+     * Because Order slugs equal their UUID IDs, the persisted Page is also the durable lookup for retries of that attempt.
+     * Product/shipping resolution finishes before this call.
+     * Request customization stays in the callback so only the winning creator runs it;
+     * post-commit lifecycle delivery and provider Session calls run after the lock is released.
      *
      * @param Closure(): CheckoutAttempt $prepare
      */
@@ -248,8 +244,8 @@ final class OrderPageStore
 
         try {
             $this->requireUuids();
-            // Order slugs are their native UUID IDs. Keep lookups inside the
-            // owned container instead of resolving arbitrary site-wide Pages.
+            // Order slugs are their native UUID IDs.
+            // Keep lookups inside the owned container instead of resolving arbitrary site-wide Pages.
             $page = $this->container()?->drafts()->find($slug);
 
             if ($page instanceof Page === false) {
@@ -318,8 +314,8 @@ final class OrderPageStore
         try {
             $fields = OrderData::map($page->version('latest')->read('default'));
 
-            // Ordinary Page reads merge translated content. Reject translated
-            // canonical overrides so those reads cannot shadow validated facts.
+            // Ordinary Page reads merge translated content.
+            // Reject translated canonical overrides so those reads cannot shadow validated facts.
             foreach ($this->kirby->languages() as $language) {
                 if ($language->isDefault()) {
                     continue;
@@ -349,8 +345,7 @@ final class OrderPageStore
 
         $deliveryIds = [];
         $updated = OrderWriteLock::run($this->kirby, $pageId, function () use ($pageId, $reduce, $events, $triggerType, $triggerId, &$deliveryIds): OrderPage {
-            // Reload after acquiring the lock: a writer may have committed
-            // while this request waited, changing which transitions are valid.
+            // Reload after acquiring the lock: a writer may have committed while this request waited, changing which transitions are valid.
             $page = $this->requirePage($pageId);
             $before = $this->data($page);
             $candidate = $reduce($before);
@@ -369,8 +364,8 @@ final class OrderPageStore
             $orderChanged = OrderData::normalize(array_diff_key($before, $bookkeeping))
                 !== OrderData::normalize(array_diff_key($candidate, $bookkeeping));
 
-            // Hook attempts/results are not new order observations. Keep their
-            // timestamps in the ledger without aging the order or its page cache.
+            // Hook attempts/results are not new order observations.
+            // Keep their timestamps in the ledger without aging the order or its page cache.
             if ($orderChanged) {
                 $candidate['updatedAt'] = max(OrderData::timestamp(new DateTimeImmutable()), $updatedAt);
             }
@@ -436,8 +431,8 @@ final class OrderPageStore
         OrderData::uuid($uuid);
         $pageId = OrderSchema::ORDERS_PAGE_ID . '/' . (new Uri($uuid))->host();
         $deletion = OrderWriteLock::run($this->kirby, $pageId, function () use ($pageId, $policy, $now): ?OrderDeletion {
-            // An earlier cleanup candidate may since have been paid. Eligibility
-            // must be checked again against the record protected by this lock.
+            // An earlier cleanup candidate may since have been paid.
+            // Eligibility must be checked again against the record protected by this lock.
             $page = $this->requirePage($pageId);
             $data = $this->data($page);
 
@@ -454,8 +449,8 @@ final class OrderPageStore
             try {
                 $this->kirby->impersonate('kirby', fn(): bool => $page->deleteStoredOrder());
             } catch (Throwable) {
-                // A native after-hook can throw after deletion. Verify storage
-                // before deciding whether the committed deletion failed.
+                // A native after-hook can throw after deletion.
+                // Verify storage before deciding whether the committed deletion failed.
                 if ($this->container()?->drafts()->find($pageId) !== null) {
                     throw new OrderStorageException(PersistenceErrorCode::WRITE_FAILED);
                 }
@@ -546,8 +541,7 @@ final class OrderPageStore
             }
         }
 
-        // These record the first observation; repeated evidence must not move
-        // their timestamps or erase the history of an earlier state.
+        // These record the first observation; repeated evidence must not move their timestamps or erase the history of an earlier state.
         $observationFields = ['checkoutOpenedAt', 'creationUncertainAt', 'creationFailedAt', 'checkoutCompletedAt', 'checkoutExpiredAt', 'paidAt', 'paymentFailedAt'];
 
         foreach ($observationFields as $field) {

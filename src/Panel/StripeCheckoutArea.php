@@ -33,8 +33,7 @@ final class StripeCheckoutArea
             'label' => self::translate('area.label'),
             'icon' => 'credit-card',
             'menu' => static function (array $areas = [], array $permissions = []) use ($kirby): bool {
-                // Kirby calls menu callbacks with context while building the menu,
-                // then without arguments while normalizing the active area view.
+                // Kirby calls menu callbacks with context while building the menu, then without arguments while normalizing the active area view.
                 if ($permissions === []) {
                     return self::canRead($kirby);
                 }
@@ -57,8 +56,8 @@ final class StripeCheckoutArea
         ];
     }
 
-    // Kirby rebinds route closures to its Route object. This public handler
-    // keeps the actual work independent from that closure scope.
+    // Kirby rebinds route closures to its Route object.
+    // This public handler keeps the actual work independent from that closure scope.
     /** @return array<string, mixed> */
     public static function view(App $kirby): array
     {
@@ -76,8 +75,7 @@ final class StripeCheckoutArea
     /** @return array<string, mixed> */
     private static function pageView(App $kirby, StripeCheckoutPage $page): array
     {
-        // Reuse Kirby's complete native Page view, changing only the navigation
-        // that would otherwise point outside the Stripe Checkout area.
+        // Reuse Kirby's complete native Page view, changing only the navigation that would otherwise point outside the Stripe Checkout area.
         /** @var array<string, mixed> $view */
         $view = $page->panel()->view();
         $view['title'] = self::translate('area.label');
@@ -118,10 +116,9 @@ final class StripeCheckoutArea
         $changes = $page->version('changes');
         $changesContent = $changes->exists('current') ? $changes->content('current')->toArray() : null;
 
-        // Project effective values only into the view. Opening Settings must
-        // neither backfill content nor erase an intentionally blank pending edit.
-        // Keep both versions aligned where no edit exists, otherwise defaults
-        // alone would make Kirby show an unsaved-change state on opening.
+        // Project effective values only into the view.
+        // Opening Settings must neither backfill content nor erase an intentionally blank pending edit.
+        // Keep both versions aligned where no edit exists, otherwise defaults alone would make Kirby show an unsaved-change state on opening.
         foreach ($settings->all() as $name => $setting) {
             $field = $fields->get(strtolower($name));
 
@@ -134,8 +131,8 @@ final class StripeCheckoutArea
             $value = $setting->value();
 
             if ($name === 'customFields') {
-                // Page values carry the stable Panel row IDs. PHP definitions
-                // use their localized public projection and get view-only IDs.
+                // Page values carry the stable Panel row IDs.
+                // PHP definitions use their localized public projection and get view-only IDs.
                 $value = $setting->isLocked()
                     ? array_map(
                         static fn(CustomField $customField): array => $customField->toArray(),
@@ -145,9 +142,8 @@ final class StripeCheckoutArea
             }
 
             if ($name === 'shippingZones') {
-                // Page-owned lists keep their persisted synchronization IDs. The
-                // field gives PHP-locked public definitions view-only IDs because
-                // those identities are not part of project configuration.
+                // Page-owned lists keep their persisted synchronization IDs.
+                // The field gives PHP-locked public definitions view-only IDs because those identities are not part of project configuration.
                 $value = $setting->isLocked()
                     ? array_map(
                         static fn(ShippingZone $shippingZone): array => $shippingZone->toArray(),
@@ -164,8 +160,8 @@ final class StripeCheckoutArea
             try {
                 $panelValue = $field->fill($value)->toFormValue();
             } catch (InvalidArgumentException) {
-                // Effective-value projection is only a Panel convenience. A
-                // projection mismatch must not hide the native recovery view.
+                // Effective-value projection is only a Panel convenience.
+                // A projection mismatch must not hide the native recovery view.
                 continue;
             }
 

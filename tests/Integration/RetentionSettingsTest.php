@@ -263,8 +263,7 @@ final class RetentionSettingsTest extends KirbyTestCase
     /** @param array<string, mixed> $values */
     private static function seedExistingSettings(TestWorkspace $workspace, array $values = [], bool $multilang = false): void
     {
-        // Boot from content that predates the retention blueprint, rather than
-        // deleting fields from a model whose content Kirby has already cached.
+        // Boot from content that predates the retention blueprint, rather than deleting fields from a model whose content Kirby has already cached.
         $workspace->writeDraftPage(StripeCheckoutPage::ID, StripeCheckoutPage::TEMPLATE, [
             'title' => 'Stripe Checkout',
             'uuid' => 'existingsettings',

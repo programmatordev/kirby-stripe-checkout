@@ -12,9 +12,9 @@ use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 /**
  * Preserves stored PHP-locked settings through Kirby's native content versions.
  *
- * The Panel's Save action publishes pending `changes` into `latest`; this does
- * not change the Page's visibility. Both stages convert form values, so both
- * versions need the write guard. Permissions and publication remain Kirby-owned.
+ * The Panel's Save action publishes pending `changes` into `latest`; this does not change the Page's visibility.
+ * Both stages convert form values, so both versions need the write guard.
+ * Permissions and publication remain Kirby-owned.
  *
  * @internal
  */
@@ -39,8 +39,8 @@ final class SettingsVersion extends Version
      */
     protected function prepareFieldsBeforeWrite(array $fields, Language $language): array
     {
-        // Native forms include disabled fields and can synthesize defaults for
-        // missing toggles. Neither belongs in a locked setting's stored shadow.
+        // Native forms include disabled fields and can synthesize defaults for missing toggles.
+        // Neither belongs in a locked setting's stored shadow.
         /** @var array<string, mixed> */
         return parent::prepareFieldsBeforeWrite(
             $this->preserveLockedSettings(array_change_key_case($fields, CASE_LOWER), $language),
@@ -57,8 +57,8 @@ final class SettingsVersion extends Version
     {
         $latest = $this->model->version('latest')->read($language);
 
-        // Initial native Page creation may establish blueprint defaults. Once
-        // content exists, both pending saves and publication retain its shadows.
+        // Initial native Page creation may establish blueprint defaults.
+        // Once content exists, both pending saves and publication retain its shadows.
         if ($latest === null) {
             return $fields;
         }
@@ -69,8 +69,7 @@ final class SettingsVersion extends Version
 
         foreach ($lockedSettings as $name) {
             $field = strtolower($name);
-            // Absence is meaningful: removing a PHP override must not expose a
-            // value that only came from a disabled field or its form default.
+            // Absence is meaningful: removing a PHP override must not expose a value that only came from a disabled field or its form default.
             unset($fields[$field]);
 
             if (array_key_exists($field, $latest)) {

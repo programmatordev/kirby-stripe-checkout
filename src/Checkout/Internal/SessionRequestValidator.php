@@ -28,12 +28,11 @@ final class SessionRequestValidator
     /**
      * Provider-managed state that the current Order model cannot reconcile yet.
      *
-     * Adaptive pricing needs presentment snapshots; recovery can create another
-     * Session; optional items can change saved lines; server-only shipping needs
-     * a Session update flow; and saved methods need an explicit customer/consent
-     * contract. Managed Payments changes the merchant-of-record model entirely.
-     * The removed static payment-method parameter is rejected; compatible
-     * payment-method filters remain Stripe-owned.
+     * Adaptive pricing needs presentment snapshots; recovery can create another Session;
+     * optional items can change saved lines; server-only shipping needs a Session update flow;
+     * and saved methods need an explicit customer/consent contract.
+     * Managed Payments changes the merchant-of-record model entirely.
+     * The removed static payment-method parameter is rejected; compatible payment-method filters remain Stripe-owned.
      *
      * @see https://docs.stripe.com/payments/currencies/localize-prices/adaptive-pricing
      * @see https://docs.stripe.com/payments/checkout/abandoned-carts
@@ -148,8 +147,7 @@ final class SessionRequestValidator
             $invoiceData = $invoiceCreation['invoice_data'] ?? null;
 
             if (is_array($invoiceData) && array_is_list($invoiceData) === false) {
-                // Stripe can assign invoice branding and support details to a
-                // connected account, which is outside the one-merchant model.
+                // Stripe can assign invoice branding and support details to a connected account, which is outside the one-merchant model.
                 // https://docs.stripe.com/api/checkout/sessions/create?query=invoice_creation.invoice_data.issuer
                 $this->assertAbsent(
                     $invoiceData,
@@ -284,8 +282,8 @@ final class SessionRequestValidator
     }
 
     /**
-     * Keeps the quoted destination scope and option identities stable while
-     * allowing trusted filters to customize supported customer-facing fields.
+     * Keeps the quoted destination scope and option identities stable
+     * while allowing trusted filters to customize supported customer-facing fields.
      *
      * @param array<string, mixed> $expected
      * @param array<string, mixed> $parameters
@@ -350,8 +348,7 @@ final class SessionRequestValidator
 
             /** @var array<string, mixed> $expectedData */
             /** @var array<string, mixed> $data */
-            // The later Session association expects one inline fixed-amount
-            // Rate per protected option identity; other Rate leaves stay Stripe-owned.
+            // The later Session association expects one inline fixed-amount Rate per protected option identity; other Rate leaves stay Stripe-owned.
             $this->assertSame(
                 $expectedData,
                 $data,

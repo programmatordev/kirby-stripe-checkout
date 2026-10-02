@@ -121,8 +121,7 @@ export default {
 			return `${this.name ?? "stripe-checkout-custom-fields"}-row`;
 		},
 		languageTransitioning() {
-			// Kirby changes global language state before refreshed field props
-			// arrive; hide the stale language briefly instead of exposing it.
+			// Kirby changes global language state before refreshed field props arrive; hide the stale language briefly instead of exposing it.
 			return this.$panel.languages.length > 1 &&
 				this.serverTechnicalLocked !== this.panelTechnicalLocked;
 		},

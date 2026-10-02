@@ -133,8 +133,7 @@ final class CustomFieldFactory
                 'options' => $this->normalizeOptions($rawOptions, $path . '.options'),
             ];
 
-            // The domain constructor owns constraints that depend on several
-            // fields, such as dropdown defaults and compatible length bounds.
+            // The domain constructor owns constraints that depend on several fields, such as dropdown defaults and compatible length bounds.
             $values[] = $this->create($normalizedField, $path);
             $normalized[] = $normalizedField;
         }

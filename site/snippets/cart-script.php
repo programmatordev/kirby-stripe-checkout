@@ -58,8 +58,7 @@
                 if (!next) throw new Error('No cart fragment');
 
                 next.open = previous.open || method === 'POST' || !response.ok;
-                // Replace error fragments too: a 409 carries the current cart
-                // and fresh revision inputs, but must never trigger a write retry.
+                // Replace error fragments too: a 409 carries the current cart and fresh revision inputs, but must never trigger a write retry.
                 previous.replaceWith(next);
                 feedback.textContent = response.ok
                     ? (successMessage ?? { POST: 'Added to cart.', PATCH: 'Quantity updated.', DELETE: 'Cart updated.', GET: 'Cart refreshed.' }[method])
@@ -68,8 +67,8 @@
                         : 'Could not update the cart. Review the message above.';
 
                 if (restoreCartFocus) {
-                    // Replacement removes the focused element. If its item was
-                    // deleted, return focus to the cart summary instead.
+                    // Replacement removes the focused element.
+                    // If its item was deleted, return focus to the cart summary instead.
                     const replacementForm = [...next.querySelectorAll('form')].find(candidate =>
                         candidate.action === action && candidate.dataset.cartMethod === method);
                     const target = active?.name

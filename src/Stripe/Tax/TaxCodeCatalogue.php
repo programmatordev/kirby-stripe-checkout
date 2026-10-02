@@ -48,8 +48,7 @@ final class TaxCodeCatalogue
             $items = [];
 
             foreach ($cached['items'] as $item) {
-                // Cached classifications must retain requirement metadata so
-                // an authorized Panel load cannot silently omit the location warning.
+                // Cached classifications must retain requirement metadata so an authorized Panel load cannot silently omit the location warning.
                 if (
                     is_array($item) === false
                     || is_string($item['id'] ?? null) === false

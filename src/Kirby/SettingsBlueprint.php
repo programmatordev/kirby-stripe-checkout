@@ -41,8 +41,7 @@ final class SettingsBlueprint
         $settingsSection = $settingsSections['settings'];
         /** @var array<string, array<string, mixed>> $settingsFields */
         $settingsFields = $settingsSection['fields'];
-        // The provider registry and active Panel locale make these options
-        // runtime data; the YAML blueprint supplies only their static field.
+        // The provider registry and active Panel locale make these options runtime data; the YAML blueprint supplies only their static field.
         $settingsFields['currency']['options'] = self::currencyOptions();
         $settingsFields['shippingZones']['countryOptions'] = (new ShippingCountryOptions())->all();
 

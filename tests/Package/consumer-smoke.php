@@ -26,8 +26,8 @@ use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 
-// Exercises only the exported package's Composer installation boundary. It is
-// invoked by the package job and deliberately kept outside the PHPUnit suites.
+// Exercises only the exported package's Composer installation boundary.
+// It is invoked by the package job and deliberately kept outside the PHPUnit suites.
 $consumerRoot = realpath($argv[1] ?? '');
 
 if ($consumerRoot === false) {
@@ -42,8 +42,7 @@ if (is_file($bootstrap) === false) {
 
 require $bootstrap;
 
-// Resolve Composer's recorded installation path so the check cannot pass by
-// loading plugin code directly from the repository checkout.
+// Resolve Composer's recorded installation path so the check cannot pass by loading plugin code directly from the repository checkout.
 $installedPluginRoot = InstalledVersions::getInstallPath(
     'programmatordev/kirby-stripe-checkout',
 );
@@ -69,8 +68,7 @@ $runtimeRoot = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
     . 'kirby-stripe-checkout-consumer-'
     . bin2hex(random_bytes(8));
 
-// Keep the consumer's site root for plugin discovery while redirecting Kirby's
-// generated content and runtime state to disposable directories.
+// Keep the consumer's site root for plugin discovery while redirecting Kirby's generated content and runtime state to disposable directories.
 $runtimeRoots = [
     'index' => $consumerRoot,
     'content' => $runtimeRoot . '/content',
@@ -94,8 +92,7 @@ try {
     App::destroy();
     App::$enableWhoops = false;
 
-    // Do not require the plugin bootstrap here: Kirby must discover the
-    // Composer-installed copy through the consumer's site/plugins directory.
+    // Do not require the plugin bootstrap here: Kirby must discover the Composer-installed copy through the consumer's site/plugins directory.
     $app = new App([
         'roots' => $runtimeRoots,
         'options' => [

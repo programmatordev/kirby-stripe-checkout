@@ -10,8 +10,7 @@ trap 'rm -f "$archive_files"' EXIT
 
 tar -tzf "$archive" > "$archive_files"
 
-# These stable package entrypoints should exist regardless of how the internal
-# implementation is organized.
+# These stable package entrypoints should exist regardless of how the internal implementation is organized.
 required=(
   LICENSE
   README.md
@@ -39,8 +38,8 @@ runtime_roots=(
   translations
 )
 
-# Every tracked runtime file must be packaged. New classes and documentation
-# are covered automatically without extending a second filename allowlist.
+# Every tracked runtime file must be packaged.
+# New classes and documentation are covered automatically without extending a second filename allowlist.
 while IFS= read -r runtime_file; do
   if grep -Fxq "$runtime_file" "$archive_files"; then
     continue

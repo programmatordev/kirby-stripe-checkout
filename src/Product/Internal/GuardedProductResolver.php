@@ -40,8 +40,7 @@ final class GuardedProductResolver implements ProductResolverInterface
             throw new ProductPriceSourceMismatchException();
         }
 
-        // A resolver may canonicalize only the lookup reference; quantity and
-        // customer selections must remain exactly as submitted.
+        // A resolver may canonicalize only the lookup reference; quantity and customer selections must remain exactly as submitted.
         if (
             $product->request()->quantity() !== $request->quantity()
             || $product->request()->selectedOptions() !== $request->selectedOptions()
@@ -49,8 +48,7 @@ final class GuardedProductResolver implements ProductResolverInterface
             throw new InvalidProductException(ProductErrorCode::RESOLVER_CHANGED_REQUEST);
         }
 
-        // Stripe references are checked against the currency when they are
-        // retrieved fresh; inline values can be checked at this boundary.
+        // Stripe references are checked against the currency when they are retrieved fresh; inline values can be checked at this boundary.
         if (
             $product->price() instanceof Price
             && $product->price()->price()->getCurrency()->getCurrencyCode() !== $context->settings()->currency()

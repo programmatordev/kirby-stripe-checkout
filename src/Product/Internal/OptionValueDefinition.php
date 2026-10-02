@@ -6,8 +6,8 @@ namespace ProgrammatorDev\StripeCheckout\Product\Internal;
 
 /**
  * One stable value in a stored product-option definition.
- * A value object preserves numeric-looking IDs as strings; using them as PHP
- * array keys would otherwise coerce their type and break selection matching.
+ * A value object preserves numeric-looking IDs as strings;
+ * using them as PHP array keys would otherwise coerce their type and break selection matching.
  *
  * @internal
  */

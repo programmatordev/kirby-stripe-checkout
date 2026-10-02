@@ -94,8 +94,7 @@ final class CartEndpoint
             }
         } catch (CartException $failure) {
             $error = $this->httpError($failure->error());
-            // Conflicts supply newer state; other rejections retain the cart
-            // already read instead of replacing its controls with "unavailable".
+            // Conflicts supply newer state; other rejections retain the cart already read instead of replacing its controls with "unavailable".
             $cart = $failure->cart() ?? $cart;
         } catch (CheckoutInputException $failure) {
             // Only our strict transport mapper can reach this catch directly.
@@ -193,8 +192,8 @@ final class CartEndpoint
         $best = null;
         $bestQuality = 0.0;
 
-        // Kirby's preferredMimeType does not exclude q=0 or give an explicit
-        // exclusion precedence over a wildcard. Apply that narrow HTTP rule here.
+        // Kirby's preferredMimeType does not exclude q=0 or give an explicit exclusion precedence over a wildcard.
+        // Apply that narrow HTTP rule here.
         foreach (['application/json', 'text/html'] as $type) {
             $quality = 0.0;
             $specificity = -1;

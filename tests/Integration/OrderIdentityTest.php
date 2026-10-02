@@ -38,8 +38,7 @@ final class OrderIdentityTest extends TestCase
                 Uuid::$generator = static fn(int $length): string => 'custom-order-identity';
             }
 
-            // A regular disposable Page proves the native boundary without adding
-            // plugin order storage or relying on its future Page model.
+            // A regular disposable Page proves the native boundary without adding plugin order storage or relying on its future Page model.
             $page = $environment->app()->site()->createChild([
                 'slug' => 'identity-fixture',
                 'template' => 'default',
@@ -56,8 +55,8 @@ final class OrderIdentityTest extends TestCase
 
             $this->assertUuidMatchesFormat($format, $id);
 
-            // The attempt token reserves the future Order identity. Generate it
-            // through Kirby as well, so custom UUID formats remain authoritative.
+            // The attempt token reserves the future Order identity.
+            // Generate it through Kirby as well, so custom UUID formats remain authoritative.
             $this->assertUuidMatchesFormat($format, $attemptToken->orderUuid());
 
             $number = (new OrderNumberFormatter())->format($id);
@@ -96,8 +95,8 @@ final class OrderIdentityTest extends TestCase
             });
             $this->assertSame('CUSTOM-ORDER', $customNumber->format($id));
 
-            // A core UUID object is mutable. No such handle escapes into the
-            // immutable context, even when the source Page supplied its identity.
+            // A core UUID object is mutable.
+            // No such handle escapes into the immutable context, even when the source Page supplied its identity.
             $nativeUuid->uri->host('changed');
             $this->assertSame($id, $context->uuid());
             $this->assertSame($reference, $context->pageUuid());

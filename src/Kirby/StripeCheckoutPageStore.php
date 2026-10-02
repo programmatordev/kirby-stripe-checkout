@@ -16,8 +16,7 @@ use Throwable;
 /**
  * Initializes and reads the fixed Panel-managed Page through Kirby's APIs.
  *
- * Keeping the record as a Page lets Kirby provide persistence, permissions,
- * multilingual content handling and its standard Panel editor.
+ * Keeping the record as a Page lets Kirby provide persistence, permissions, multilingual content handling and its standard Panel editor.
  *
  * @internal
  */
@@ -54,8 +53,8 @@ final class StripeCheckoutPageStore
                 ]),
             );
         } catch (Throwable $error) {
-            // A concurrent initializer may have completed between lookup and
-            // create. Re-read through Kirby before classifying the failure.
+            // A concurrent initializer may have completed between lookup and create.
+            // Re-read through Kirby before classifying the failure.
             if (($created = $this->find()) !== null) {
                 return $this->validate($created);
             }

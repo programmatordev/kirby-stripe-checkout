@@ -63,8 +63,8 @@ final readonly class CheckoutPreparationFactory
     ): SessionRequest {
         foreach ($context->order()->lineItems() as $lineItem) {
             if (is_string($lineItem['taxCode'])) {
-                // Frozen local classifications are checked before a new attempt is
-                // persisted. Exact saved retries bypass request preparation entirely.
+                // Frozen local classifications are checked before a new attempt is persisted.
+                // Exact saved retries bypass request preparation entirely.
                 $this->resolver->validateTaxCode(new TaxCode($lineItem['taxCode']));
             }
         }

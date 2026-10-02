@@ -15,8 +15,7 @@ final readonly class CheckoutShippingSnapshot
 
     public static function unavailable(): self
     {
-        // Distinct from none(): Stripe did not return authoritative shipping
-        // totals, so consumers must not infer that shipping cost zero.
+        // Distinct from none(): Stripe did not return authoritative shipping totals, so consumers must not infer that shipping cost zero.
         return new self(null, null, null);
     }
 

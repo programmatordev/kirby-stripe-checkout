@@ -384,8 +384,7 @@ final class CartApiTest extends KirbyTestCase
         ]]);
         $page = $this->product();
         $source = $this->environment->workspace()->root() . '/image.png';
-        // A real image exercises Kirby's dimensions and thumbnail API, not
-        // merely a filename that happens to have an image extension.
+        // A real image exercises Kirby's dimensions and thumbnail API, not merely a filename that happens to have an image extension.
         F::write($source, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1sAAAAASUVORK5CYII=', true));
         $hero = $page->createFile(['filename' => 'hero.png', 'source' => $source, 'content' => ['alt' => 'Shirt image']]);
         $gallery = $page->createFile(['filename' => 'gallery.png', 'source' => $hero->root()]);
@@ -660,8 +659,7 @@ final class CartApiTest extends KirbyTestCase
         $this->kirby->impersonate(null);
         $this->assertSame('pt:guest', $this->cart()->items()[0]->product()?->name());
         $this->assertSame($revision, $this->cart()->revision());
-        // Reusing the same Cart must refresh the injected resolver too, not just
-        // a newly obtained Cart after a language or authentication change.
+        // Reusing the same Cart must refresh the injected resolver too, not just a newly obtained Cart after a language or authentication change.
         $cart->update($cart->items()[0]->id(), 2);
         $this->assertSame('pt:guest', $cart->items()[0]->product()->name());
         $this->kirby->setCurrentLanguage('en');

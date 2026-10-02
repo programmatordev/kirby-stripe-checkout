@@ -10,8 +10,8 @@ use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 /**
  * Immutable SDK-independent parameters for one Checkout Session creation.
  *
- * Values stay limited to Stripe's scalar/list/map request vocabulary. The
- * gateway is the only boundary that converts this value into an SDK request.
+ * Values stay limited to Stripe's scalar/list/map request vocabulary.
+ * The gateway is the only boundary that converts this value into an SDK request.
  */
 final readonly class SessionRequest
 {

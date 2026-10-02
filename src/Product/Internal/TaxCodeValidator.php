@@ -30,8 +30,8 @@ final class TaxCodeValidator
         }
 
         if ($this->catalogueIds === null) {
-            // Built-in and custom resolvers use cached membership, never a
-            // caller's confirmation flag. Storefront reads do not refresh.
+            // Built-in and custom resolvers use cached membership, never a caller's confirmation flag.
+            // Storefront reads do not refresh.
             $state = $this->catalogue->cached();
 
             // Empty successful snapshots mean unknown codes, not an outage.

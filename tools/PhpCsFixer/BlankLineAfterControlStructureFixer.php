@@ -98,8 +98,8 @@ final class BlankLineAfterControlStructureFixer extends AbstractFixer implements
 
     private function separate(Tokens $tokens, int $end): void
     {
-        // Keep same-line comments attached to the completed block. A comment
-        // on its own next line belongs to the following section instead.
+        // Keep same-line comments attached to the completed block.
+        // A comment on its own next line belongs to the following section instead.
         while (($next = $tokens->getNextNonWhitespace($end)) !== null && $tokens[$next]->isComment()) {
             $gap = $tokens[$end + 1]->isWhitespace() ? $tokens[$end + 1]->getContent() : '';
 

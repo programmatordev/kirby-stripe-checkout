@@ -144,8 +144,7 @@ final class CheckoutSessionFactory
                 throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
             }
 
-            // The gateway reduces expanded Rates to IDs; all references remain
-            // untrusted until the association validates them against the request.
+            // The gateway reduces expanded Rates to IDs; all references remain untrusted until the association validates them against the request.
             $ids[] = $shippingOption['shipping_rate'] ?? null;
         }
 

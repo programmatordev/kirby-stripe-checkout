@@ -341,8 +341,7 @@ export default {
 			];
 		},
 		technicalLocked() {
-			// Kirby changes its global language state before refreshed field props
-			// arrive, so either signal must lock technical controls immediately.
+			// Kirby changes its global language state before refreshed field props arrive, so either signal must lock technical controls immediately.
 			return this.serverTechnicalLocked || this.panelTechnicalLocked;
 		},
 		languageTransitioning() {
@@ -430,8 +429,7 @@ export default {
 			};
 
 			if (this.technicalLocked) {
-				// Keep the familiar Structure editor while fixing its membership and
-				// order to the canonical default-language values.
+				// Keep the familiar Structure editor while fixing its membership and order to the canonical default-language values.
 				fields.values.duplicate = false;
 				fields.values.max = option.values.length;
 				fields.values.min = option.values.length;
@@ -532,8 +530,7 @@ export default {
 		updateOptionFromForm(option, value, valueIds) {
 			const updated = this.optionFromForm(option, value, valueIds);
 
-			// Keep incomplete drawer drafts local so Kirby never receives a
-			// temporarily invalid option while the merchant is still editing it.
+			// Keep incomplete drawer drafts local so Kirby never receives a temporarily invalid option while the merchant is still editing it.
 			if (this.optionIsComplete(updated) === false) {
 				return;
 			}

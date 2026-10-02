@@ -27,8 +27,7 @@ final class StripeApiTaxProvider implements TaxProviderInterface
                 id: $taxCode->id,
                 name: $taxCode->name,
                 description: $taxCode->description,
-                // A performance location is where the activity takes place
-                // (such as an event venue), not the buyer's address.
+                // A performance location is where the activity takes place (such as an event venue), not the buyer's address.
                 // https://docs.stripe.com/api/tax_codes/object#tax_code_object-requirements-performance_location
                 requiresPerformanceLocation: ($taxCode->requirements->performance_location ?? null) === 'required',
             );

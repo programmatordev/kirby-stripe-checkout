@@ -180,8 +180,7 @@ export default {
 				this.$emit("refreshed", refreshed);
 
 				const selectedId = this.selected?.id;
-				// List results are filtered and paginated; only a selected-ID read can
-				// establish that the chosen Price disappeared from the refreshed cache.
+				// List results are filtered and paginated; only a selected-ID read can establish that the chosen Price disappeared from the refreshed cache.
 				const [response, selectedResponse] = await Promise.all([
 					this.$api.get(this.endpoint, {
 						page: this.pagination.page,

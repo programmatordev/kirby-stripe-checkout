@@ -32,8 +32,8 @@ final readonly class ProductOptions
         }
 
         $valuesByOption = [];
-        // Disabled variants still occupy a valid combination, so every Cartesian
-        // row must be present for deterministic matching and availability checks.
+        // Disabled variants still occupy a valid combination,
+        // so every Cartesian row must be present for deterministic matching and availability checks.
         $expectedVariantCount = $options === [] ? 0 : 1;
 
         foreach ($options as $option) {

@@ -52,8 +52,8 @@ final readonly class LifecycleEvent
             }
         }
 
-        // The writer owns canonical schema/privacy validation. Here we detach
-        // references and verify the event header agrees with its event-time snapshot.
+        // The writer owns canonical schema/privacy validation.
+        // Here we detach references and verify the event header agrees with its event-time snapshot.
         $snapshot = OrderData::map($orderSnapshot);
         $snapshotReference = new Uri([
             'scheme' => 'page',

@@ -18,8 +18,7 @@ interface CheckoutSessionGatewayInterface
     public function retrieve(string $sessionId): CheckoutSessionRecord;
 
     /**
-     * Reads all line-item pages and expands the PaymentIntent, PaymentMethod,
-     * latest Charge, selected Shipping Rate, shipping taxes and aggregate discount/tax breakdown.
+     * Reads all line-item pages and expands the PaymentIntent, PaymentMethod, latest Charge, selected Shipping Rate, shipping taxes and aggregate discount/tax breakdown.
      * Failures or incomplete reads must throw, never return a partial reconciliation record.
      */
     public function retrieveForReconciliation(string $sessionId): CheckoutSessionReconciliationRecord;

@@ -10,8 +10,7 @@ use Stripe\StripeObject;
 
 /**
  * @internal Transient provider action, not a durable customer-instruction snapshot.
- * Readable actions can contain authentication data; never copy the raw value
- * into persisted orders or replayable hook snapshots.
+ * Readable actions can contain authentication data; never copy the raw value into persisted orders or replayable hook snapshots.
  */
 final readonly class PaymentAction
 {
@@ -32,15 +31,14 @@ final readonly class PaymentAction
         $details = $action[$type] ?? null;
 
         // The action type selects its provider branch, not a payment-method schema.
-        // SDK toArray() represents empty objects as []; an empty branch is
-        // therefore different from a missing branch.
+        // SDK toArray() represents empty objects as []; an empty branch is therefore different from a missing branch.
         // https://docs.stripe.com/api/payment_intents/object#payment_intent_object-next_action
         if (is_array($details) === false || ($details !== [] && array_is_list($details))) {
             throw new OrderDataException();
         }
 
-        // Keep the active branch only. Do not interpret provider details or apply
-        // order-persistence scalar rules to transient SDK/authentication payloads.
+        // Keep the active branch only.
+        // Do not interpret provider details or apply order-persistence scalar rules to transient SDK/authentication payloads.
         return new self($type, $details);
     }
 
@@ -50,8 +48,7 @@ final readonly class PaymentAction
     }
 
     /**
-     * SDK objects are mutable: each access creates a fresh object so callers
-     * cannot edit the captured action through its nested details.
+     * SDK objects are mutable: each access creates a fresh object so callers cannot edit the captured action through its nested details.
      */
     public function details(): StripeObject
     {

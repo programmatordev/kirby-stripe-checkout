@@ -18,9 +18,8 @@ final class CustomFieldsField extends SynchronizedStructureField
         $this->structureAdapter = new CustomFieldStructureAdapter();
         $lockedValue = $params['lockedValue'] ?? null;
 
-        // PHP definitions have no storage-only synchronization IDs. Canonical
-        // conversion supplies transient IDs so the locked Panel field can use
-        // the same table and drawer components as Page-owned definitions.
+        // PHP definitions have no storage-only synchronization IDs.
+        // Canonical conversion supplies transient IDs so the locked Panel field can use the same table and drawer components as Page-owned definitions.
         $this->lockedValue = is_array($lockedValue)
             ? $this->structureAdapter->canonical($lockedValue)
             : null;

@@ -34,8 +34,8 @@ use ProgrammatorDev\StripeCheckout\Translation\Registration;
 App::plugin(
     name: PluginMetadata::NAME,
     extends: [
-        // Business defaults stay in the resolver. This only enables Kirby's
-        // native caches for read-only Stripe resource catalogues.
+        // Business defaults stay in the resolver.
+        // This only enables Kirby's native caches for read-only Stripe resource catalogues.
         'options' => [
             'cache' => [
                 'prices' => true,
@@ -45,8 +45,7 @@ App::plugin(
         'blueprints' => [
             'pages/stripe-checkout' => [SettingsBlueprint::class, 'load'],
             'pages/stripe-checkout-order' => [OrderBlueprint::class, 'load'],
-            // A site override needs a separate extension target; extending its
-            // own pages/stripe-checkout-order name would resolve back to itself.
+            // A site override needs a separate extension target; extending its own pages/stripe-checkout-order name would resolve back to itself.
             PluginMetadata::NAME . '/pages/order' => [OrderBlueprint::class, 'load'],
             'pages/stripe-checkout-orders' => __DIR__ . '/blueprints/pages/stripe-checkout-orders.yml',
             'fields/stripe-checkout/name' => [ProductBlueprint::class, 'name'],
@@ -112,21 +111,18 @@ App::plugin(
                 Registration::applyCustomOverrides($this);
 
                 try {
-                    // Composer cannot create site content while installing the
-                    // package, so initialize it on the first Kirby boot instead.
+                    // Composer cannot create site content while installing the package, so initialize it on the first Kirby boot instead.
                     // @phpstan-ignore variable.undefined, argument.type
                     (new StripeCheckoutPageStore($this))->initialize();
                 } catch (ConfigurationException) {
-                    // Storage problems must remain recoverable through the
-                    // Panel Settings error view and local diagnostics.
+                    // Storage problems must remain recoverable through the Panel Settings error view and local diagnostics.
                 }
 
                 try {
                     // @phpstan-ignore variable.undefined, argument.type
                     (new OrderPageStore($this))->initialize();
                 } catch (OrderStorageException) {
-                    // Leave unowned/corrupt infrastructure untouched; queries
-                    // report unavailable storage rather than an empty store.
+                    // Leave unowned/corrupt infrastructure untouched; queries report unavailable storage rather than an empty store.
                 }
             },
         ],

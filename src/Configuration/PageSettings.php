@@ -83,8 +83,7 @@ final class PageSettings
             );
         }
 
-        // Kirby's select field stores stable strings; PHP configuration reaches
-        // the resolver separately as a native boolean.
+        // Kirby's select field stores stable strings; PHP configuration reaches the resolver separately as a native boolean.
         $defaultRequiresShipping = match ($defaultRequiresShipping) {
             null, '' => null,
             true, 'yes' => true,
@@ -155,8 +154,8 @@ final class PageSettings
                 continue;
             }
 
-            // Kirby persists toggle/number fields as text. Normalize only that
-            // transport here; PHP options are checked without string coercion.
+            // Kirby persists toggle/number fields as text.
+            // Normalize only that transport here; PHP options are checked without string coercion.
             $value = is_bool($default)
                 ? match ($value) {
                     true, 'true' => true,

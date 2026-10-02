@@ -44,8 +44,7 @@ final class CheckoutAttemptFactory
             'mode' => 'payment',
         ]);
         $productRequest = new ProductRequest('product');
-        // Keep the binding independently valid so malformed CheckoutAttempt
-        // actor combinations are rejected by the domain object under test.
+        // Keep the binding independently valid so malformed CheckoutAttempt actor combinations are rejected by the domain object under test.
         $bindingGuestReference = $order->userUuid() === null
             ? $guestReference ?? 'binding-guest'
             : null;

@@ -84,8 +84,7 @@ export default {
 	},
 	computed: {
 		actions() {
-			// A literal copy would duplicate exclusive countries or the single
-			// fallback scope, so zones deliberately offer no duplicate action.
+			// A literal copy would duplicate exclusive countries or the single fallback scope, so zones deliberately offer no duplicate action.
 			const actions = [{
 				click: "edit",
 				icon: "edit",
@@ -131,8 +130,8 @@ export default {
 				this.$panel.language.isDefault === false;
 		},
 		rows() {
-			// `k-table` reserves `row.options` for its action menu. Project the
-			// nested Structure under another key so Kirby can preview the array.
+			// `k-table` reserves `row.options` for its action menu.
+			// Project the nested Structure under another key so Kirby can preview the array.
 			return this.localValue.map(row => ({
 				_id: row.id,
 				destinations: row.scope === "fallback"

@@ -165,8 +165,7 @@ final class KirbyPageProductResolver implements ProductResolverInterface
                 $url = $file->url();
 
                 if (preg_match('#^https?://#', $url) === 1) {
-                    // Preserve the Kirby File so templates retain operations
-                    // such as crop(); URLs are projected only by the caller.
+                    // Preserve the Kirby File so templates retain operations such as crop(); URLs are projected only by the caller.
                     $imagesByUrl[$url] ??= $file;
                 }
             }

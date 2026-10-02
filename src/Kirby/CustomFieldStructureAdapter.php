@@ -14,9 +14,9 @@ use Throwable;
 /**
  * Adapts Panel Structure rows to canonical custom-field definitions.
  *
- * Internal row IDs connect translations. Page-managed fields reuse that stable
- * identity as their generated public key, while PHP definitions keep explicit
- * developer-owned keys. Dropdown values remain merchant-owned commerce data.
+ * Internal row IDs connect translations.
+ * Page-managed fields reuse that stable identity as their generated public key, while PHP definitions keep explicit developer-owned keys.
+ * Dropdown values remain merchant-owned commerce data.
  *
  * @internal
  * @phpstan-type CanonicalOption array{id: string, value: string, label: string}
@@ -66,8 +66,8 @@ final class CustomFieldStructureAdapter implements SynchronizedStructureAdapterI
             $this->assertKnownKeys($row, self::FIELD_KEYS, $path);
             $id = $this->stableId($row, $path);
             $this->assertUnique($rowIds, $id, $path . '.id');
-            // Page-managed rows may omit the technical key and reuse their
-            // immutable ID. PHP-owned definitions retain their explicit key.
+            // Page-managed rows may omit the technical key and reuse their immutable ID.
+            // PHP-owned definitions retain their explicit key.
             $key = $this->requiredString($row['key'] ?? $id, $path . '.key');
             $type = $this->requiredString($row['type'] ?? null, $path . '.type');
 
@@ -268,8 +268,8 @@ final class CustomFieldStructureAdapter implements SynchronizedStructureAdapterI
             try {
                 $value = Yaml::decode($value);
             } catch (Throwable $error) {
-                // Kirby's selectable YAML handlers throw different exception
-                // types. Keep the adapter's public failure contract stable.
+                // Kirby's selectable YAML handlers throw different exception types.
+                // Keep the adapter's public failure contract stable.
                 throw new InvalidArgumentException(
                     'Synchronized Structure data contains invalid YAML.',
                     previous: $error,
@@ -312,8 +312,8 @@ final class CustomFieldStructureAdapter implements SynchronizedStructureAdapterI
     }
 
     /**
-     * Unknown and malformed IDs are ignored because an overlay cannot create
-     * canonical membership. Duplicate known IDs are rejected as ambiguous.
+     * Unknown and malformed IDs are ignored because an overlay cannot create canonical membership.
+     * Duplicate known IDs are rejected as ambiguous.
      *
      * @param list<array<string, mixed>> $rows
      * @return array<string, array<string, mixed>>
@@ -377,8 +377,8 @@ final class CustomFieldStructureAdapter implements SynchronizedStructureAdapterI
     /** @param array<string, mixed> $row */
     private function submittedId(array $row): ?string
     {
-        // Stored plugin rows use `id`; Kirby's native Structure transport uses
-        // `_id`. Accept either form, but never guess between two identities.
+        // Stored plugin rows use `id`; Kirby's native Structure transport uses `_id`.
+        // Accept either form, but never guess between two identities.
         $id = $row['id'] ?? null;
         $kirbyId = $row['_id'] ?? null;
 
@@ -470,9 +470,8 @@ final class CustomFieldStructureAdapter implements SynchronizedStructureAdapterI
     ): string {
         $label = $this->optionalLabel($value, $maximumLength, $path);
 
-        // The Panel displays fallback labels in translated forms. Avoid storing
-        // those unchanged values as explicit translations so later edits to the
-        // default language continue to flow through.
+        // The Panel displays fallback labels in translated forms.
+        // Avoid storing those unchanged values as explicit translations so later edits to the default language continue to flow through.
         return $label === $fallback ? '' : $label;
     }
 

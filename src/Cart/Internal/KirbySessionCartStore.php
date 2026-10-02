@@ -40,8 +40,7 @@ final class KirbySessionCartStore implements CartStoreInterface
 
     public function read(): CartSnapshot
     {
-        // A read can initialize or repair the payload, so it needs the same
-        // locked reload as a mutation rather than Kirby's cached session data.
+        // A read can initialize or repair the payload, so it needs the same locked reload as a mutation rather than Kirby's cached session data.
         return $this->mutate(static fn(CartSnapshot $current): CartSnapshot => $current);
     }
 
@@ -64,9 +63,8 @@ final class KirbySessionCartStore implements CartStoreInterface
 
             return $next;
         } finally {
-            // Release the lock even on rejection. Cart changes require a
-            // successful callback; empty-cart initialization/repair and unrelated
-            // Kirby writes can still be committed.
+            // Release the lock even on rejection.
+            // Cart changes require a successful callback; empty-cart initialization/repair and unrelated Kirby writes can still be committed.
             $this->session->commit();
         }
     }
@@ -94,8 +92,8 @@ final class KirbySessionCartStore implements CartStoreInterface
         return $empty;
     }
 
-    // Validate stored selections without resolving products: a deleted product or
-    // provider outage must not be mistaken for corruption and erase the cart.
+    // Validate stored selections without resolving products:
+    // a deleted product or provider outage must not be mistaken for corruption and erase the cart.
     private function decode(mixed $payload): CartSnapshot
     {
         if (
@@ -126,8 +124,7 @@ final class KirbySessionCartStore implements CartStoreInterface
                 throw new InvalidArgumentException('Invalid cart entry.');
             }
 
-            // The shared parser rejects a missing request; only its optional
-            // quantity/options members may use defaults.
+            // The shared parser rejects a missing request; only its optional quantity/options members may use defaults.
             $entries[] = new CartEntry($entry['id'], ProductRequestData::parse($entry['request'] ?? null));
         }
 
