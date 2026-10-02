@@ -633,13 +633,21 @@ final class OrderPageStoreTest extends KirbyTestCase
             'cache' => ['pages' => ['active' => true]],
         ]);
         $this->kirby = $this->environment->app();
-        $page = $this->createOrder();
+        $page = $this->createOrder(createdAt: new DateTimeImmutable('2025-01-01T00:00:00Z'));
         $uuid = $page->uuid()->toString();
         $store = new OrderPageStore($this->kirby);
         $cache = $this->kirby->cache('pages');
         $cache->set('order-summary', 'creating');
         $this->assertSame('creating', $cache->get('order-summary'));
         $store->update($uuid, static fn(array $data): array => $data);
+        $this->assertSame('creating', $cache->get('order-summary'));
+        $before = $store->data($store->requirePage($page->id()));
+        $unchanged = $store->update($uuid, static fn(array $data): array => [
+            ...$data,
+            'stripePaymentIntentId' => null,
+            'refundedTotal' => '0.00',
+        ]);
+        $this->assertSame($before, $store->data($unchanged));
         $this->assertSame('creating', $cache->get('order-summary'));
 
         try {

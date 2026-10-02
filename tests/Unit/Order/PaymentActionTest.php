@@ -54,6 +54,63 @@ final class PaymentActionTest extends TestCase
         $this->assertSame($action->toArray(), PaymentAction::fromJson($action->toJson())->toArray());
     }
 
+    public function testDeepestAcceptedActionRoundTripsThroughJson(): void
+    {
+        $details = ['value' => 1];
+
+        for ($depth = 0; $depth < 29; $depth++) {
+            $details = ['nested' => $details];
+        }
+
+        $action = PaymentAction::fromArray([
+            'type' => 'future_action',
+            'future_action' => $details,
+        ]) ?? $this->fail('An action within the JSON depth limit must be accepted.');
+        $this->assertSame($action->toArray(), PaymentAction::fromJson($action->toJson())->toArray());
+
+        $this->expectException(OrderDataException::class);
+        PaymentAction::fromArray([
+            'type' => 'future_action',
+            'future_action' => ['nested' => $details],
+        ]);
+    }
+
+    public function testNumericMapsStayDistinctFromListsAndHaveStableKeyOrdering(): void
+    {
+        $first = PaymentAction::fromArray([
+            'type' => 'future_action',
+            'future_action' => [
+                'values' => [
+                    1 => 'b',
+                    2 => 'c',
+                    0 => 'a',
+                ],
+            ],
+        ]) ?? $this->fail('Numeric provider maps must be accepted.');
+        $reordered = PaymentAction::fromArray([
+            'type' => 'future_action',
+            'future_action' => [
+                'values' => [
+                    2 => 'c',
+                    0 => 'a',
+                    1 => 'b',
+                ],
+            ],
+        ]) ?? $this->fail('Reordered numeric provider maps must be accepted.');
+        $list = PaymentAction::fromArray([
+            'type' => 'future_action',
+            'future_action' => ['values' => ['a', 'b', 'c']],
+        ]) ?? $this->fail('Nested provider lists must be accepted.');
+
+        $this->assertSame('{"type":"future_action","future_action":{"values":{"2":"c","1":"b","0":"a"}}}', $first->toJson());
+        $this->assertSame($first->toJson(), $reordered->toJson());
+        $this->assertNotSame(hash('sha256', $first->toJson()), hash('sha256', $list->toJson()));
+        $this->assertSame($first->toArray(), PaymentAction::fromJson($first->toJson())->toArray());
+        $values = $first->details()->toArray()['values'];
+        $this->assertIsArray($values);
+        $this->assertFalse(array_is_list($values));
+    }
+
     #[DataProvider('invalidStoredActions')]
     public function testRejectsInvalidStoredActionEnvelopes(string $json): void
     {

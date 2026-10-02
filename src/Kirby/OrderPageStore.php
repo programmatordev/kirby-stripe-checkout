@@ -360,20 +360,27 @@ final class OrderPageStore
                 throw new OrderDataException();
             }
 
+            // New observation timestamps need the write time during validation.
+            // Compare canonical values afterward so absent fields and equivalent money representations remain no-ops.
+            $writeTimestamp = max(OrderData::timestamp(new DateTimeImmutable()), $updatedAt);
+            $candidate['updatedAt'] = $writeTimestamp;
+            $after = OrderSerializer::normalize($candidate);
+            // Exclude the provisional validation time from change detection while preserving the caller's explicit timestamp.
+            $after['updatedAt'] = $updatedAt;
+
             $bookkeeping = [
                 'lifecycleDeliveries' => true,
                 'events' => true,
             ];
             $orderChanged = OrderData::normalize(array_diff_key($before, $bookkeeping))
-                !== OrderData::normalize(array_diff_key($candidate, $bookkeeping));
+                !== OrderData::normalize(array_diff_key($after, $bookkeeping));
 
             // Provider Event bookkeeping and hook attempts/results are not new commerce observations.
             // Keep their timestamps in the ledger without aging the order or its page cache.
             if ($orderChanged) {
-                $candidate['updatedAt'] = max(OrderData::timestamp(new DateTimeImmutable()), $updatedAt);
+                $after['updatedAt'] = $writeTimestamp;
             }
 
-            $after = OrderSerializer::normalize($candidate);
             $this->validateTransition($before, $after);
             $transitionNotifications = $notifications instanceof Closure ? $notifications($before, $after) : $notifications;
 

@@ -5,9 +5,14 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Brick\Money\Money;
+use Closure;
 use DateTimeImmutable;
+use Kirby\Cms\App;
+use Kirby\Cms\ModelWithContent;
 use Kirby\Cms\Page;
+use Kirby\Content\Storage;
 use Kirby\Data\Data;
+use Kirby\Data\Yaml;
 use Kirby\Exception\PermissionException;
 use Kirby\Uuid\Uuid;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -68,6 +73,45 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $dispatcher->dispatch($page->uuid()->toString(), $deliveryId, $expiresAt->modify('+1 day'));
         $this->assertSame(2, $attempts);
         $this->assertSame($beforeExpiry, $this->entries($store->requirePage($page->id()))[0]);
+    }
+
+    public function testDeadlineCrossedDuringReloadCannotInvokeTheHook(): void
+    {
+        $attempts = 0;
+        $this->restart([
+            'programmatordev.stripe-checkout.order.created' => function () use (&$attempts): void {
+                $attempts++;
+                throw new RuntimeException('Intentional listener failure');
+            },
+        ]);
+        $page = $this->createOrder();
+        $entries = $this->entries($page);
+        $expiresAt = OrderData::date(OrderData::timestamp(new DateTimeImmutable('+2 seconds')));
+        // A near deadline in disposable storage avoids waiting for the real retention period; normal updates cannot edit it.
+        $entries[0]['createdAt'] = OrderData::timestamp($expiresAt->modify('-30 days'));
+        $entries[0]['expiresAt'] = OrderData::timestamp($expiresAt);
+        $page->version('latest')->update(['lifecycleDeliveries' => Yaml::encode($entries)], 'default');
+        /** @var Closure(App, ModelWithContent): Storage $nativeStorage */
+        $nativeStorage = $this->kirby->component('storage');
+        $delayed = false;
+        $this->kirby->extend(['components' => ['storage' => static function (App $kirby, ModelWithContent $model) use ($nativeStorage, $expiresAt, &$delayed): Storage {
+            if ($model instanceof OrderPage && $delayed === false) {
+                $delayed = true;
+
+                while (new DateTimeImmutable() < $expiresAt) {
+                    usleep(10000);
+                }
+            }
+
+            return $nativeStorage($kirby, $model);
+        }]]);
+        $this->assertLessThan($expiresAt, new DateTimeImmutable());
+        $deliveryId = OrderData::string(OrderData::map($entries[0]['event'])['deliveryId']);
+        (new OrderHookDispatcher($this->kirby))->dispatch($page->uuid()->toString(), $deliveryId);
+
+        $this->assertTrue($delayed);
+        $this->assertSame(1, $attempts);
+        $this->assertSame($entries, $this->entries((new OrderPageStore($this->kirby))->requirePage($page->id())));
     }
 
     public function testCreationSnapshotIncludesNativeDefaultsAndBeforeHookEdits(): void

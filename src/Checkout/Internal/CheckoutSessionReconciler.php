@@ -40,6 +40,8 @@ final class CheckoutSessionReconciler
         $data = $this->orders->data($page);
         $order = OrderSerializer::context($data);
         $checkoutAttempt = OrderData::map($data['checkoutAttempt']);
+        $baseline = $data;
+        $observation = null;
 
         if (
             $this->credentialMode === CredentialMode::Unknown
@@ -55,7 +57,12 @@ final class CheckoutSessionReconciler
             if ($trigger?->type === Event::PAYMENT_INTENT_REQUIRES_ACTION) {
                 // Early action Events can precede the local Session association.
                 // Establish their PaymentIntent backlink through a complete read before attaching an Event ledger entry to this order.
-                $paymentIntentId = $data['stripePaymentIntentId'] ?? $this->retrieve($data, $sessionId)->payment()->stripePaymentIntentId();
+                $paymentIntentId = $data['stripePaymentIntentId'] ?? null;
+
+                if ($paymentIntentId === null) {
+                    $observation = $this->retrieve($baseline, $sessionId);
+                    $paymentIntentId = $observation->payment()->stripePaymentIntentId();
+                }
 
                 if ($trigger->resourceId !== $paymentIntentId) {
                     throw new OrderDataException();
@@ -90,9 +97,12 @@ final class CheckoutSessionReconciler
             // Do not hold a filesystem write lock across provider requests.
             // If commerce facts changed during the read, re-fetch rather than commit an older graph over the newer order.
             for ($read = 0; $read < 3; $read++) {
-                $page = $this->orders->order($pageUuid) ?? throw new OrderDataException();
-                $baseline = $this->orders->data($page);
-                $observation = $this->retrieve($baseline, $sessionId);
+                // The early correlation read is already complete; the same locked conflict check protects its original baseline.
+                if ($observation === null) {
+                    $page = $this->orders->order($pageUuid) ?? throw new OrderDataException();
+                    $baseline = $this->orders->data($page);
+                    $observation = $this->retrieve($baseline, $sessionId);
+                }
 
                 if ($trigger?->type === Event::PAYMENT_INTENT_REQUIRES_ACTION && $trigger->resourceId !== $observation->payment()->stripePaymentIntentId()) {
                     throw new OrderDataException();
@@ -129,6 +139,7 @@ final class CheckoutSessionReconciler
                     );
                 } catch (ReconciliationConflictException) {
                     // A new complete provider read follows the fresh local state; no mutation is replayed.
+                    $observation = null;
                 }
             }
 

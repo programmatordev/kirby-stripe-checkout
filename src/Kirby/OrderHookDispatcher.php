@@ -33,7 +33,6 @@ final class OrderHookDispatcher
         }
 
         self::$active[$key] = true;
-        $now ??= new DateTimeImmutable();
 
         try {
             $store = new OrderPageStore($this->kirby);
@@ -45,16 +44,20 @@ final class OrderHookDispatcher
                 foreach ($entries as &$entry) {
                     $candidate = HookDeliveryLedger::restoreEvent(OrderData::map($entry['event']));
 
+                    if ($candidate->deliveryId() !== $deliveryId || $entry['status'] === 'delivered') {
+                        continue;
+                    }
+
+                    // Resolve the default clock after lock acquisition and reload; waiting must not admit an expired retry.
+                    $attemptedAt = $now ?? new DateTimeImmutable();
+
                     // Check the persisted deadline under the order lock, independently of whether physical cleanup has run.
-                    if (
-                        $candidate->deliveryId() === $deliveryId && $entry['status'] !== 'delivered'
-                        && HookDeliveryLedger::isExpired($entry, $now) === false
-                    ) {
+                    if (HookDeliveryLedger::isExpired($entry, $attemptedAt) === false) {
                         // Record the attempt before invoking listeners.
                         // A process exit leaves the original event available for another try within its saved window.
                         $event = $candidate;
                         $entry['attempts'] = OrderData::integer($entry['attempts']) + 1;
-                        $entry['lastAttemptAt'] = max(OrderData::timestamp($now), OrderData::timestamp($event->occurredAt()));
+                        $entry['lastAttemptAt'] = max(OrderData::timestamp($attemptedAt), OrderData::timestamp($event->occurredAt()));
 
                         break;
                     }

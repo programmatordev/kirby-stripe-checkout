@@ -279,8 +279,10 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
 
     public function testActionsBeforeCompletionNotifyImmediatelyAndPendingDoesNotRepeatThem(): void
     {
-        $reconciler = $this->reconciler($this->gateway($this->record('open')));
+        $gateway = $this->gateway($this->record('open'));
+        $reconciler = $this->reconciler($gateway);
         $reconciler->reconcile($this->order->pageUuid(), 'cs_current', $this->actionEvent());
+        $this->assertCount(1, $gateway->reconciliationRetrievals);
         $this->assertSame('unpaid', $this->data()['paymentStatus']);
         $this->assertSame(['session.created', 'payment.requiresAction'], array_map(static fn(LifecycleEvent $event): string => $event->type()->value, $this->deliveries()));
         $this->assertSame('unpaid', $this->deliveries()[1]->paymentStatus()->value);
@@ -630,6 +632,99 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
         $reconciler->reconcile($this->order->pageUuid(), 'cs_current', $event);
         $this->assertSame('processed', $this->entries('events')[0]['status']);
         $this->assertSame(['session.created', 'payment.pending'], array_map(static fn(LifecycleEvent $event): string => $event->type()->value, $this->deliveries()));
+    }
+
+    public function testEarlyActionCorrelationReadIsRefetchedAfterAConcurrentCommerceChange(): void
+    {
+        $paid = $this->record(status: 'complete', sessionPayment: 'paid', intentStatus: 'succeeded');
+        $open = $this->record(status: 'open');
+        $reads = 0;
+        $gateway = $this->createMock(CheckoutSessionGatewayInterface::class);
+        $gateway->expects($this->exactly(2))->method('retrieveForReconciliation')->willReturnCallback(function () use ($paid, $open, &$reads): CheckoutSessionReconciliationRecord {
+            $reads++;
+
+            if ($reads === 1) {
+                $this->reconciler($this->gateway($paid))->reconcile($this->order->pageUuid(), 'cs_current');
+
+                return $open;
+            }
+
+            return $paid;
+        });
+        $reconciler = new CheckoutSessionReconciler($this->store, new CheckoutSessionRetriever($gateway), CredentialMode::Test);
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_current', $this->actionEvent());
+
+        $this->assertSame('paid', $this->data()['paymentStatus']);
+        $this->assertSame('processed', $this->entries('events')[0]['status']);
+        $this->assertSame(['session.created', 'payment.succeeded'], array_map(static fn(LifecycleEvent $event): string => $event->type()->value, $this->deliveries()));
+    }
+
+    public function testThreeConflictingReadsPreserveCompetingWritesAndLeaveTheEventRetryable(): void
+    {
+        $this->reconciler($this->gateway($this->record()))->reconcile($this->order->pageUuid(), 'cs_current');
+        $paid = $this->record(status: 'complete', sessionPayment: 'paid', intentStatus: 'succeeded');
+        $gateway = $this->createMock(CheckoutSessionGatewayInterface::class);
+        $reads = 0;
+        $gateway->expects($this->exactly(3))->method('retrieveForReconciliation')->willReturnCallback(function () use ($paid, &$reads): CheckoutSessionReconciliationRecord {
+            $reads++;
+            // Each competing commerce update invalidates the provider read's baseline, independently of Event bookkeeping.
+            $this->store->update($this->order->pageUuid(), static fn(array $data): array => [
+                ...$data,
+                'stripeInvoiceId' => 'in_concurrent_' . $reads,
+            ]);
+
+            return $paid;
+        });
+        $reconciler = new CheckoutSessionReconciler($this->store, new CheckoutSessionRetriever($gateway), CredentialMode::Test);
+
+        try {
+            $reconciler->reconcile($this->order->pageUuid(), 'cs_current', $this->event());
+            $this->fail('Unstable commerce facts must stop after three reads.');
+        } catch (CheckoutSessionException $error) {
+            $this->assertSame(CheckoutErrorCode::RECONCILIATION_CONFLICT, $error->errorCode());
+            $this->assertTrue($error->isRetryable());
+        }
+
+        $this->assertSame('pending', $this->data()['paymentStatus']);
+        $this->assertSame('in_concurrent_3', $this->data()['stripeInvoiceId']);
+        $this->assertSame('failed', $this->entries('events')[0]['status']);
+        $this->assertSame(CheckoutErrorCode::RECONCILIATION_CONFLICT, $this->entries('events')[0]['errorCode']);
+        $this->assertCount(2, $this->deliveries());
+
+        $this->reconciler($this->gateway($paid))->reconcile($this->order->pageUuid(), 'cs_current', $this->event());
+        $this->assertSame('paid', $this->data()['paymentStatus']);
+        $this->assertSame('processed', $this->entries('events')[0]['status']);
+        $this->assertSame(2, $this->entries('events')[0]['attempts']);
+    }
+
+    public function testLateRetrievalFailureCannotReplaceAConcurrentProcessedEvent(): void
+    {
+        $event = $this->event();
+        $gateway = $this->createMock(CheckoutSessionGatewayInterface::class);
+        $gateway->expects($this->once())->method('retrieveForReconciliation')->willReturnCallback(function () use ($event): never {
+            $this->reconciler($this->gateway($this->record(status: 'complete', sessionPayment: 'paid', intentStatus: 'succeeded')))
+                ->reconcile($this->order->pageUuid(), 'cs_current', $event);
+
+            throw new CheckoutSessionGatewayException(
+                new CheckoutSessionFailure(CheckoutSessionFailureType::Unavailable, true),
+                new RuntimeException('SECRET_CANARY'),
+            );
+        });
+        $reconciler = new CheckoutSessionReconciler($this->store, new CheckoutSessionRetriever($gateway), CredentialMode::Test);
+
+        try {
+            $reconciler->reconcile($this->order->pageUuid(), 'cs_current', $event);
+            $this->fail('The failed caller still receives its retrieval error.');
+        } catch (CheckoutSessionException $error) {
+            $this->assertSame(CheckoutErrorCode::SESSION_UNAVAILABLE, $error->errorCode());
+        }
+
+        $this->assertSame('paid', $this->data()['paymentStatus']);
+        $this->assertSame('processed', $this->entries('events')[0]['status']);
+        $this->assertNull($this->entries('events')[0]['errorCode']);
+        $this->assertSame(2, $this->entries('events')[0]['attempts']);
+        $this->assertSame(['session.created', 'payment.succeeded'], array_map(static fn(LifecycleEvent $event): string => $event->type()->value, $this->deliveries()));
+        $this->assertStringNotContainsString('SECRET_CANARY', OrderData::json($this->data()));
     }
 
     public function testCurrentReadThenWebhookUsesOneTransitionAndNoInventedTrigger(): void

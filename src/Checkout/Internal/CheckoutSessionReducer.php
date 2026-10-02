@@ -23,6 +23,8 @@ use Stripe\PaymentIntent;
 final class CheckoutSessionReducer
 {
     /**
+     * The store owns updatedAt after canonical normalization; $now timestamps newly observed lifecycle facts only.
+     *
      * @param array<string, mixed> $data Fresh locked order content.
      * @return array<string, mixed> Canonical persistence projection, committed by the existing store.
      */
@@ -89,11 +91,6 @@ final class CheckoutSessionReducer
             } elseif ($paymentStatus === PaymentStatus::Failed) {
                 $after['paymentFailedAt'] ??= $timestamp;
             }
-        }
-
-        // Bookkeeping alone does not create a fresh commerce timestamp or transition.
-        if (OrderData::normalize($after) !== OrderData::normalize($data)) {
-            $after['updatedAt'] = max(OrderData::string($data['updatedAt']), $timestamp);
         }
 
         return $after;

@@ -16,6 +16,8 @@ use Stripe\StripeObject;
  */
 final readonly class PaymentAction
 {
+    private const MAX_JSON_DEPTH = 32;
+
     /** @param array<array-key, mixed> $details */
     private function __construct(
         private string $type,
@@ -47,7 +49,7 @@ final readonly class PaymentAction
     public static function fromJson(string $json): self
     {
         try {
-            $action = json_decode($json, true, 32, JSON_THROW_ON_ERROR);
+            $action = json_decode($json, true, self::MAX_JSON_DEPTH, JSON_THROW_ON_ERROR);
 
             if (is_array($action) === false) {
                 throw new OrderDataException();
@@ -85,7 +87,7 @@ final readonly class PaymentAction
     public function toJson(): string
     {
         try {
-            return json_encode($this->toArray(), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION, 32);
+            return json_encode($this->toArray(), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION, self::MAX_JSON_DEPTH);
         } catch (JsonException) {
             throw new OrderDataException();
         }
@@ -103,9 +105,10 @@ final readonly class PaymentAction
     /** @param array<array-key, mixed> $details
      * @return array<array-key, mixed>
      */
-    private static function normalizeDetails(array $details, int $depth = 0): array
+    private static function normalizeDetails(array $details, int $depth = 2): array
     {
-        if ($depth > 30) {
+        // Count the envelope and active branch; decoding requires a limit greater than the deepest container.
+        if ($depth >= self::MAX_JSON_DEPTH) {
             throw new OrderDataException();
         }
 
@@ -126,6 +129,12 @@ final readonly class PaymentAction
             // JSON object key order must not turn identical provider evidence into a different notification.
             // Lists preserve their provider order.
             ksort($result, SORT_STRING);
+
+            if (array_is_list($result)) {
+                // Sorting numeric map keys into list order would change their JSON kind and collide with list evidence.
+                // Reverse order keeps the map distinguishable and deterministic without introducing PHP objects.
+                krsort($result, SORT_STRING);
+            }
         }
 
         return $result;
