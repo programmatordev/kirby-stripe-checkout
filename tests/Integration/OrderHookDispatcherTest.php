@@ -50,6 +50,67 @@ use RuntimeException;
 
 final class OrderHookDispatcherTest extends KirbyTestCase
 {
+    public function testRetentionConfigurationChangesOnlyNewDeliveriesAndCleanupUsesEachSavedDeadline(): void
+    {
+        $calls = 0;
+        $this->restart([
+            'programmatordev.stripe-checkout.order.created' => function () use (&$calls): void {
+                $calls++;
+                throw new RuntimeException('Intentional listener failure');
+            },
+        ]);
+        $page = $this->createOrder();
+        $store = new OrderPageStore($this->kirby);
+        $originalDelivery = $this->entries($page)[0];
+        $originalDeadline = OrderData::date($originalDelivery['expiresAt']);
+        $this->assertEquals(OrderData::date($originalDelivery['createdAt'])->modify('+30 days'), $originalDeadline);
+
+        $this->kirby->extend(['options' => [
+            'programmatordev.stripe-checkout.housekeeping.lifecycleDeliveryPayloadRetentionDays' => 90,
+        ]]);
+        $page = $store->update(
+            uuid: $page->uuid()->toString(),
+            reduce: static fn(array $data): array => [
+                ...$data,
+                'checkoutStatus' => 'open',
+                'stripeCheckoutSessionId' => 'cs_test',
+                'stripeShippingRateIds' => [],
+                'checkoutOpenedAt' => $data['createdAt'],
+            ],
+            notifications: [new LifecycleNotification(LifecycleEventType::SessionCreated)],
+        );
+        $deliveries = [];
+
+        foreach ($this->entries($page) as $entry) {
+            $deliveries[OrderData::string(OrderData::map($entry['event'])['type'])] = $entry;
+        }
+
+        $this->assertSame($originalDelivery, $deliveries['order.created']);
+        $newDelivery = $deliveries['session.created'];
+        $this->assertEquals(OrderData::date($newDelivery['createdAt'])->modify('+90 days'), OrderData::date($newDelivery['expiresAt']));
+        $this->assertSame('delivered', $newDelivery['status']);
+
+        $deliveryId = OrderData::string(OrderData::map($originalDelivery['event'])['deliveryId']);
+        $dispatcher = new OrderHookDispatcher($this->kirby);
+        $dispatcher->dispatch($page->uuid()->toString(), $deliveryId, $originalDeadline->modify('-1 second'));
+        $dispatcher->dispatch($page->uuid()->toString(), $deliveryId, $originalDeadline);
+        $page = $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $originalDeadline);
+        $afterCleanup = [];
+
+        foreach ($this->entries($page) as $entry) {
+            $afterCleanup[OrderData::string(OrderData::map($entry['event'])['type'])] = $entry;
+        }
+
+        $expiredDelivery = $afterCleanup['order.created'];
+        $this->assertSame($originalDelivery['expiresAt'], $expiredDelivery['expiresAt']);
+        $this->assertSame('failed', $expiredDelivery['status']);
+        $this->assertSame(2, $expiredDelivery['attempts']);
+        $this->assertSame(OrderData::timestamp($originalDeadline), $expiredDelivery['payloadPrunedAt']);
+        $this->assertArrayNotHasKey('orderSnapshot', OrderData::map($expiredDelivery['event']));
+        $this->assertSame($newDelivery, $afterCleanup['session.created']);
+        $this->assertSame(2, $calls);
+    }
+
     public function testPayloadCleanupPreservesOrderTimeCacheAndSanitizedDeliveryHistory(): void
     {
         $calls = 0;
