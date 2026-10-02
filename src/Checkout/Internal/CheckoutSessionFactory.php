@@ -11,11 +11,12 @@ use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\CheckoutSessionAssociation;
+use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
 use Stripe\Checkout\Session;
 
-/** Converts one untrusted provider record into a validated Checkout Session. */
+/** Correlates provider Sessions and verifies the data needed to open Checkout. */
 final class CheckoutSessionFactory
 {
     public function create(
@@ -24,6 +25,44 @@ final class CheckoutSessionFactory
         SessionRequest $request,
         ?bool $liveMode,
     ): CheckoutSession {
+        $canOpenCheckout = match ($context->uiMode()) {
+            UiMode::Hosted => CheckoutUrlValidator::isHostedCheckoutUrl($record->url) && $record->clientSecret === null,
+            UiMode::Embedded => is_string($record->clientSecret)
+                && trim($record->clientSecret) !== ''
+                && $record->url === null,
+        };
+
+        if (
+            $record->expiresAt !== $context->expiresAt()->getTimestamp()
+            || $record->status !== Session::STATUS_OPEN
+            || in_array($record->paymentStatus, [
+                Session::PAYMENT_STATUS_UNPAID,
+                Session::PAYMENT_STATUS_NO_PAYMENT_REQUIRED,
+            ], true) === false
+            || $canOpenCheckout === false
+        ) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+        }
+
+        return new CheckoutSession(
+            association: $this->association($record, $context->order(), $request, $liveMode),
+            url: $record->url,
+            clientSecret: $record->clientSecret,
+        );
+    }
+
+    /**
+     * Shared purchase correlation; historical reads do not require a hosted URL or embedded client secret.
+     *
+     * @param bool|null $liveMode Expected credential mode. Null means it cannot be inferred;
+     *                           the returned Session must still declare its actual mode.
+     */
+    public function association(
+        CheckoutSessionRecord $record,
+        OrderCreationContext $order,
+        SessionRequest $request,
+        ?bool $liveMode,
+    ): CheckoutSessionAssociation {
         $parameters = $request->parameters();
         $expectedMetadata = array_filter(
             is_array($parameters['metadata'] ?? null) ? $parameters['metadata'] : [],
@@ -31,34 +70,27 @@ final class CheckoutSessionFactory
                 && str_starts_with($key, PluginMetadata::KEY_PREFIX),
             ARRAY_FILTER_USE_BOTH,
         );
-        $uiMode = match ($context->uiMode()) {
+        $uiMode = match ($order->uiMode()) {
             UiMode::Hosted => Session::UI_MODE_HOSTED_PAGE,
             UiMode::Embedded => Session::UI_MODE_EMBEDDED_PAGE,
         };
-        $hasPresentation = match ($context->uiMode()) {
-            UiMode::Hosted => CheckoutUrlValidator::isHostedPresentation($record->url) && $record->clientSecret === null,
-            UiMode::Embedded => is_string($record->clientSecret)
-                && trim($record->clientSecret) !== ''
-                && $record->url === null,
-        };
 
         if (
-            $record->createdAt === null
-            || $record->createdAt < 0
-            || $record->expiresAt !== $context->expiresAt()->getTimestamp()
-            || $record->status !== Session::STATUS_OPEN
-            || in_array($record->paymentStatus, [
-                Session::PAYMENT_STATUS_UNPAID,
-                Session::PAYMENT_STATUS_NO_PAYMENT_REQUIRED,
-            ], true) === false
+            $record->createdAt === null || $record->createdAt < 0
+            || $record->expiresAt === null || $record->expiresAt <= $record->createdAt
+            || $record->expiresAt !== ($parameters['expires_at'] ?? null)
+            || in_array($record->status, [Session::STATUS_OPEN, Session::STATUS_COMPLETE, Session::STATUS_EXPIRED], true) === false
+            || in_array($record->paymentStatus, [Session::PAYMENT_STATUS_PAID, Session::PAYMENT_STATUS_UNPAID, Session::PAYMENT_STATUS_NO_PAYMENT_REQUIRED], true) === false
+            || $record->liveMode === null
             || $liveMode !== null && $record->liveMode !== $liveMode
             || $record->mode !== Session::MODE_PAYMENT
             || $record->uiMode !== $uiMode
-            || strtolower((string) $record->currency) !== strtolower($context->order()->currency())
-            || $record->clientReferenceId !== $context->order()->pageUuid()
+            || strtoupper((string) $record->currency) !== $order->currency()
+            || $record->clientReferenceId !== $order->pageUuid()
             || $record->integrationIdentifier !== ($parameters['integration_identifier'] ?? null)
+            || ($record->metadata[PluginMetadata::OWNER_KEY] ?? null) !== PluginMetadata::NAME
+            || ($record->metadata[PluginMetadata::ORDER_KEY] ?? null) !== $order->pageUuid()
             || $this->hasExpectedMetadata($record->metadata, $expectedMetadata) === false
-            || $hasPresentation === false
             || ($record->requestId !== null && trim($record->requestId) === '')
         ) {
             throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
@@ -74,11 +106,7 @@ final class CheckoutSessionFactory
             throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
         }
 
-        return new CheckoutSession(
-            association: $association,
-            url: $record->url,
-            clientSecret: $record->clientSecret,
-        );
+        return $association;
     }
 
     /**

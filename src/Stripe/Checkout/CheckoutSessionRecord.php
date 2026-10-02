@@ -34,5 +34,8 @@ final readonly class CheckoutSessionRecord
         public ?string $clientSecret,
         public array $orderSnapshotSource = [],
         public mixed $shippingOptions = null,
+        public ?int $amountSubtotal = null,
+        public ?int $amountTotal = null,
+        public ?string $invoiceId = null,
     ) {}
 }

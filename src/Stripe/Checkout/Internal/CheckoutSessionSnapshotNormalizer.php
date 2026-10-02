@@ -19,6 +19,7 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\ShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\TaxSnapshot;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
+use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionReconciliationRecord;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
 use Stripe\ShippingRate;
 use Throwable;
@@ -36,8 +37,26 @@ final class CheckoutSessionSnapshotNormalizer
 {
     public function normalize(CheckoutSessionRecord $sessionRecord): CheckoutSessionSnapshot
     {
+        return $this->normalizeSource($sessionRecord->orderSnapshotSource, $sessionRecord->currency);
+    }
+
+    public function normalizeForReconciliation(CheckoutSessionReconciliationRecord $record): CheckoutSessionSnapshot
+    {
+        $sessionData = $record->session->orderSnapshotSource;
+        // Tax allocations must use the complete endpoint result, never the
+        // optional line-item preview returned with the Session itself.
+        $sessionData['line_items'] = [
+            'data' => $record->lineItems,
+            'has_more' => false,
+        ];
+
+        return $this->normalizeSource($sessionData, $record->session->currency);
+    }
+
+    /** @param array<string, mixed> $sessionData */
+    private function normalizeSource(array $sessionData, ?string $currency): CheckoutSessionSnapshot
+    {
         try {
-            $sessionData = $sessionRecord->orderSnapshotSource;
             $customerDetails = $this->nullableMap($sessionData['customer_details'] ?? null);
             $collectedInformation = $this->nullableMap($sessionData['collected_information'] ?? null);
             $customer = $customerDetails === null ? null : $this->customer($customerDetails);
@@ -47,13 +66,13 @@ final class CheckoutSessionSnapshotNormalizer
                 : $this->shippingAddress($collectedInformation);
             $checkoutShipping = $this->shipping(
                 sessionData: $sessionData,
-                currency: $sessionRecord->currency,
+                currency: $currency,
             );
             $checkoutDiscounts = $this->discounts(
                 sessionData: $sessionData,
-                currency: $sessionRecord->currency,
+                currency: $currency,
             );
-            $tax = $this->tax($sessionData, $sessionRecord->currency);
+            $tax = $this->tax($sessionData, $currency);
 
             return new CheckoutSessionSnapshot(
                 stripeCustomerId: $this->referenceId($sessionData['customer'] ?? null, 'cus_'),
@@ -506,10 +525,17 @@ final class CheckoutSessionSnapshotNormalizer
         }
 
         $currency = strtoupper($currency);
-        $registry = new StripeCurrencyRegistry();
-        $total = $registry->toMoney($registry->fromProviderAmount($providerTotal, $currency));
         $breakdown = $this->nullableMap($totalDetails['breakdown'] ?? null);
         $discountEntries = $breakdown === null ? [] : $this->list($breakdown['discounts'] ?? []);
+
+        return $this->normalizeDiscounts($discountEntries, $providerTotal, $currency);
+    }
+
+    /** @param list<mixed> $discountEntries Untrusted aggregate or line-item discount allocations. */
+    public function normalizeDiscounts(array $discountEntries, int $providerTotal, string $currency): CheckoutDiscountsSnapshot
+    {
+        $registry = new StripeCurrencyRegistry();
+        $total = $registry->toMoney($registry->fromProviderAmount($providerTotal, $currency));
         $discounts = [];
         $calculatedTotal = 0;
 

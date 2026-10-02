@@ -33,7 +33,7 @@ final class CheckoutUrlValidatorTest extends TestCase
         $this->assertFalse(CheckoutUrlValidator::isPersistedDestination('http://store.example/checkout', requiresHttps: true));
         $this->assertFalse(CheckoutUrlValidator::isPersistedDestination('https://store.example/checkout#fragment', requiresHttps: false));
         $this->assertFalse(CheckoutUrlValidator::isPersistedDestination('https://store.example/checkout?_stripe_checkout_result=token', requiresHttps: false));
-        $this->assertTrue(CheckoutUrlValidator::isHostedPresentation('https://checkout.stripe.com/c/pay/session'));
-        $this->assertFalse(CheckoutUrlValidator::isHostedPresentation('http://checkout.stripe.com/c/pay/session'));
+        $this->assertTrue(CheckoutUrlValidator::isHostedCheckoutUrl('https://checkout.stripe.com/c/pay/session'));
+        $this->assertFalse(CheckoutUrlValidator::isHostedCheckoutUrl('http://checkout.stripe.com/c/pay/session'));
     }
 }

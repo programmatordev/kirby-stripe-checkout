@@ -5,10 +5,15 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Stripe\Checkout;
 
 use InvalidArgumentException;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
+use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
+use ProgrammatorDev\StripeCheckout\Order\Internal\PaymentAction;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Exception\CheckoutSessionGatewayException;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Internal\CheckoutSessionFailureClassifier;
+use Stripe\Charge;
 use Stripe\Checkout\Session;
+use Stripe\PaymentIntent;
 use Stripe\StripeClient;
 use Stripe\StripeObject;
 use Throwable;
@@ -67,6 +72,108 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
         return $this->sessionRecord($session);
     }
 
+    public function retrieveForReconciliation(string $sessionId): CheckoutSessionReconciliationRecord
+    {
+        if (preg_match('/\Acs_[A-Za-z0-9_]+\z/D', $sessionId) !== 1) {
+            throw new InvalidArgumentException('A valid Checkout Session ID is required.');
+        }
+
+        try {
+            $session = $this->client->checkout->sessions->retrieve($sessionId, [
+                'expand' => [
+                    'payment_intent.latest_charge',
+                    'payment_intent.payment_method',
+                    'shipping_cost.shipping_rate',
+                    'total_details.breakdown',
+                ],
+            ]);
+            $lineItems = $this->completeLineItems($sessionId);
+            $record = new CheckoutSessionReconciliationRecord(
+                session: $this->sessionRecord($session),
+                lineItems: $lineItems,
+                paymentSource: $this->paymentSource($session->payment_intent ?? null),
+                nextAction: $this->nextAction($session->payment_intent ?? null),
+            );
+        } catch (OrderDataException $error) {
+            throw new CheckoutSessionGatewayException(
+                failure: new CheckoutSessionFailure(CheckoutSessionFailureType::Incompatible, false),
+                error: $error,
+            );
+        } catch (Throwable $error) {
+            throw new CheckoutSessionGatewayException(
+                failure: $this->failures->classify($error, mutation: false),
+                error: $error,
+            );
+        }
+
+        return $record;
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function completeLineItems(string $sessionId): array
+    {
+        $items = [];
+        $ids = [];
+        $startingAfter = null;
+
+        // Expanded Session lines are only a preview. Read the dedicated endpoint
+        // to completion, rejecting repeated cursors rather than returning a prefix.
+        // https://docs.stripe.com/api/checkout/sessions/line_items
+        for ($page = 0; $page < ProductRequestNormalizer::MAX_ENTRIES; $page++) {
+            $parameters = [
+                'limit' => 100,
+                'expand' => ['data.discounts.discount', 'data.taxes.rate'],
+            ];
+
+            if ($startingAfter !== null) {
+                $parameters['starting_after'] = $startingAfter;
+            }
+
+            $collection = $this->client->checkout->sessions->allLineItems($sessionId, $parameters);
+            $collectionData = $collection->toArray();
+            $data = $collectionData['data'] ?? null;
+            $hasMore = $collectionData['has_more'] ?? null;
+
+            if (is_array($data) === false || array_is_list($data) === false || is_bool($hasMore) === false) {
+                throw new OrderDataException();
+            }
+
+            foreach ($data as $lineItem) {
+                if (
+                    is_array($lineItem) === false
+                    || is_string($lineItem['id'] ?? null) === false
+                    || $lineItem['id'] === ''
+                    || isset($ids[$lineItem['id']])
+                    || count($items) >= ProductRequestNormalizer::MAX_ENTRIES
+                ) {
+                    throw new OrderDataException();
+                }
+
+                $ids[$lineItem['id']] = true;
+                $items[] = array_intersect_key($lineItem, array_flip([
+                    'id', 'object', 'metadata', 'quantity', 'currency', 'description',
+                    'amount_subtotal', 'amount_discount', 'amount_tax', 'amount_total', 'discounts', 'taxes',
+                ])) + ['price' => is_array($lineItem['price'] ?? null)
+                    ? array_intersect_key($lineItem['price'], array_flip([
+                        'id', 'object', 'product', 'currency', 'unit_amount', 'unit_amount_decimal',
+                        'billing_scheme', 'type', 'recurring', 'transform_quantity',
+                    ]))
+                    : null];
+                $startingAfter = $lineItem['id'];
+            }
+
+            if ($hasMore === false) {
+                return $items;
+            }
+
+            if ($data === []) {
+                throw new OrderDataException();
+            }
+        }
+
+        throw new OrderDataException();
+    }
+
     private function sessionRecord(Session $session): CheckoutSessionRecord
     {
         $metadata = $session->metadata;
@@ -118,11 +225,82 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
             integrationIdentifier: $this->nullableString($session->integration_identifier),
             metadata: $metadata,
             requestId: $this->nullableString($lastResponse?->headers['request-id'] ?? null),
-            url: $this->nullableString($session->url),
-            clientSecret: $this->nullableString($session->client_secret),
+            url: $this->nullableString($session->url ?? null),
+            clientSecret: $this->nullableString($session->client_secret ?? null),
             orderSnapshotSource: $orderSnapshotSource,
             shippingOptions: $this->shippingOptions($sessionData['shipping_options'] ?? null),
+            amountSubtotal: $this->nullableInteger($sessionData['amount_subtotal'] ?? null),
+            amountTotal: $this->nullableInteger($sessionData['amount_total'] ?? null),
+            invoiceId: $this->nullableString($sessionData['invoice'] ?? null),
         );
+    }
+
+    /** @return array<string, mixed>|null */
+    private function paymentSource(mixed $paymentIntent): ?array
+    {
+        if ($paymentIntent === null) {
+            return null;
+        }
+
+        // These expansions are required by this read contract. An ID alone is
+        // not a partial payment observation that can be silently accepted.
+        if ($paymentIntent instanceof PaymentIntent === false) {
+            throw new OrderDataException();
+        }
+
+        $payment = $this->selectedFields($paymentIntent, [
+            'id', 'object', 'livemode', 'currency', 'metadata', 'created', 'status',
+            'amount', 'amount_received', 'capture_method',
+        ]);
+        $payment['failure_code'] = $paymentIntent->last_payment_error->code ?? null;
+        $method = $paymentIntent->payment_method ?? null;
+
+        // Retain the method reference/type, not its card or bank details.
+        if ($method instanceof StripeObject) {
+            $payment['payment_method'] = $this->selectedFields($method, ['id', 'object', 'type']);
+        } elseif ($method !== null) {
+            throw new OrderDataException();
+        }
+
+        $charge = $paymentIntent->latest_charge ?? null;
+
+        if ($charge instanceof Charge) {
+            $payment['latest_charge'] = $this->selectedFields($charge, [
+                'id', 'object', 'livemode', 'payment_intent', 'currency', 'amount', 'created',
+                'status', 'paid', 'captured', 'amount_captured', 'payment_method',
+            ]);
+            $payment['latest_charge']['method_type'] = $charge->payment_method_details->type ?? null;
+            $payment['latest_charge']['failure_code'] = $charge->failure_code ?? null;
+        } elseif ($charge !== null) {
+            throw new OrderDataException();
+        }
+
+        return $payment;
+    }
+
+    private function nextAction(mixed $paymentIntent): ?PaymentAction
+    {
+        if ($paymentIntent instanceof PaymentIntent === false) {
+            return null;
+        }
+
+        // Unlike selected payment facts, this branch can contain authentication
+        // directives. Keep it separate from the canonical order snapshot source.
+        $nextAction = $paymentIntent->toArray()['next_action'] ?? null;
+
+        if ($nextAction !== null && is_array($nextAction) === false) {
+            throw new OrderDataException();
+        }
+
+        return PaymentAction::fromArray($nextAction);
+    }
+
+    /** @param list<string> $fields
+     * @return array<string, mixed>
+     */
+    private function selectedFields(StripeObject $object, array $fields): array
+    {
+        return array_intersect_key($object->toArray(), array_flip($fields));
     }
 
     private function shippingOptions(mixed $shippingOptions): mixed

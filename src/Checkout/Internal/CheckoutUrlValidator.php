@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
-/** @internal Shared URL rules for Checkout destinations and Stripe presentation values. */
+/** @internal Shared URL rules for Checkout destinations and hosted Checkout URLs. */
 final class CheckoutUrlValidator
 {
     public const RESULT_QUERY_KEY = '_stripe_checkout_result';
@@ -36,7 +36,7 @@ final class CheckoutUrlValidator
         return array_key_exists(self::RESULT_QUERY_KEY, $query) === false;
     }
 
-    public static function isHostedPresentation(?string $value): bool
+    public static function isHostedCheckoutUrl(?string $value): bool
     {
         if ($value === null) {
             return false;

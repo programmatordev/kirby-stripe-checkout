@@ -24,7 +24,7 @@ final readonly class CheckoutSessionPresentation
         if (
             ($uiMode === UiMode::Hosted) !== ($redirectUrl !== null)
             || ($uiMode === UiMode::Embedded) !== ($clientSecret !== null)
-            || ($redirectUrl !== null && CheckoutUrlValidator::isHostedPresentation($redirectUrl) === false)
+            || ($redirectUrl !== null && CheckoutUrlValidator::isHostedCheckoutUrl($redirectUrl) === false)
             || (
                 $clientSecret !== null
                 && (

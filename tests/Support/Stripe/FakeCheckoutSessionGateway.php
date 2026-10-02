@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Support\Stripe;
 use Closure;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionGatewayInterface;
+use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionReconciliationRecord;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Exception\CheckoutSessionGatewayException;
 use RuntimeException;
@@ -23,6 +24,9 @@ final class FakeCheckoutSessionGateway implements CheckoutSessionGatewayInterfac
     /** @var list<string> */
     public array $retrievals = [];
 
+    /** @var list<string> */
+    public array $reconciliationRetrievals = [];
+
     public ?CheckoutSessionGatewayException $creationFailure = null;
 
     public ?CheckoutSessionGatewayException $retrievalFailure = null;
@@ -33,10 +37,12 @@ final class FakeCheckoutSessionGateway implements CheckoutSessionGatewayInterfac
     /**
      * @param list<CheckoutSessionRecord> $results
      * @param array<string, CheckoutSessionRecord> $retrievalResults
+     * @param array<string, CheckoutSessionReconciliationRecord> $reconciliationResults
      */
     public function __construct(
         private array $results = [],
         private array $retrievalResults = [],
+        private array $reconciliationResults = [],
     ) {}
 
     public function create(
@@ -65,5 +71,17 @@ final class FakeCheckoutSessionGateway implements CheckoutSessionGatewayInterfac
 
         return $this->retrievalResults[$sessionId]
             ?? throw new RuntimeException('No fake Checkout Session retrieval result is available.');
+    }
+
+    public function retrieveForReconciliation(string $sessionId): CheckoutSessionReconciliationRecord
+    {
+        $this->reconciliationRetrievals[] = $sessionId;
+
+        if ($this->retrievalFailure !== null) {
+            throw $this->retrievalFailure;
+        }
+
+        return $this->reconciliationResults[$sessionId]
+            ?? throw new RuntimeException('No fake Checkout Session reconciliation result is available.');
     }
 }
