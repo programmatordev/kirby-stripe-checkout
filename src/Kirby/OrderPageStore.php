@@ -14,6 +14,7 @@ use Kirby\Data\Yaml;
 use Kirby\Uuid\Uri;
 use Kirby\Uuid\Uuids;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutAttempt;
+use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
@@ -25,6 +26,7 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
 use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
+use ProgrammatorDev\StripeCheckout\Order\Internal\StripeEventLedger;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Order\OrderErrorCode;
 use Throwable;
@@ -233,6 +235,7 @@ final class OrderPageStore
         }
     }
 
+    /** @phpstan-impure Reads the current order inventory, which concurrent writers can change. */
     public function order(string $uuid): ?OrderPage
     {
         try {
@@ -336,9 +339,9 @@ final class OrderPageStore
 
     /**
      * @param Closure(array<string, mixed>): array<string, mixed> $reduce
-     * @param list<LifecycleEventType> $events Events owned by the calling transition, not inferred from arbitrary field edits.
+     * @param list<LifecycleEventType>|Closure(array<string, mixed>, array<string, mixed>): list<LifecycleEventType> $events Events owned by the calling transition, selected against locked before/after facts.
      */
-    public function update(string $uuid, Closure $reduce, array $events = [], ?string $triggerType = null, ?string $triggerId = null): OrderPage
+    public function update(string $uuid, Closure $reduce, array|Closure $events = [], ?string $triggerType = null, ?string $triggerId = null): OrderPage
     {
         OrderData::uuid($uuid);
         $pageId = OrderSchema::ORDERS_PAGE_ID . '/' . (new Uri($uuid))->host();
@@ -360,11 +363,14 @@ final class OrderPageStore
                 throw new OrderDataException();
             }
 
-            $bookkeeping = ['lifecycleDeliveries' => true];
+            $bookkeeping = [
+                'lifecycleDeliveries' => true,
+                'events' => true,
+            ];
             $orderChanged = OrderData::normalize(array_diff_key($before, $bookkeeping))
                 !== OrderData::normalize(array_diff_key($candidate, $bookkeeping));
 
-            // Hook attempts/results are not new order observations.
+            // Provider Event bookkeeping and hook attempts/results are not new commerce observations.
             // Keep their timestamps in the ledger without aging the order or its page cache.
             if ($orderChanged) {
                 $candidate['updatedAt'] = max(OrderData::timestamp(new DateTimeImmutable()), $updatedAt);
@@ -372,6 +378,7 @@ final class OrderPageStore
 
             $after = OrderSerializer::normalize($candidate);
             $this->validateTransition($before, $after);
+            $transitionEvents = $events instanceof Closure ? $events($before, $after) : $events;
             $content = $page->version('latest')->read('default') ?? [];
 
             // Replace the whole canonical projection, including removed fields,
@@ -382,20 +389,24 @@ final class OrderPageStore
                 }
             }
 
-            if ($events !== []) {
+            if ($transitionEvents !== []) {
                 /** @var list<array<string, mixed>> $entries */
                 $entries = $after['lifecycleDeliveries'] ?? [];
                 $revision = HookDeliveryLedger::nextRevision($entries);
                 $types = [];
+                /** @var array<string, mixed> $options */
+                $options = $this->kirby->options();
+                // New deliveries capture current PHP policy; existing entries keep their original deadlines.
+                $housekeeping = (new ConfigurationResolver())->housekeeping($options);
 
-                foreach ($events as $type) {
+                foreach ($transitionEvents as $type) {
                     if (in_array($type, [LifecycleEventType::OrderCreated, LifecycleEventType::OrderDeleted], true) || isset($types[$type->value])) {
                         throw new OrderDataException();
                     }
 
                     $types[$type->value] = true;
                     $event = HookDeliveryLedger::event($after, $content, $type, $revision, $triggerType, $triggerId);
-                    $entries[] = HookDeliveryLedger::pending($event);
+                    $entries[] = HookDeliveryLedger::pending($event, $housekeeping->lifecycleDeliveryRetentionDays());
                     $deliveryIds[] = $event->deliveryId();
                 }
 
@@ -511,6 +522,12 @@ final class OrderPageStore
         $deliveries = $after['lifecycleDeliveries'] ?? [];
         HookDeliveryLedger::validateTransition($previousDeliveries, $deliveries);
 
+        /** @var list<array<string, mixed>> $previousEvents */
+        $previousEvents = $before['events'] ?? [];
+        /** @var list<array<string, mixed>> $events */
+        $events = $after['events'] ?? [];
+        StripeEventLedger::validateTransition($previousEvents, $events);
+
         $immutableFields = ['uuid', 'title', 'orderNumber', 'stripeCheckout', 'userUuid', 'languageCode', 'currency', 'createdAt', 'checkoutExpiresAt', 'initiatingLineItems'];
 
         foreach ($immutableFields as $field) {
@@ -554,6 +571,8 @@ final class OrderPageStore
             CheckoutStatus::Creating => ['creating', 'creation_uncertain', 'creation_failed', 'open', 'complete', 'expired'],
             CheckoutStatus::CreationUncertain => ['creation_uncertain', 'creation_failed', 'open', 'complete', 'expired'],
             CheckoutStatus::Open => ['open', 'complete', 'expired'],
+            // A correlated provider Session can repair a locally closed creation attempt without replaying its POST.
+            CheckoutStatus::CreationFailed => ['creation_failed', 'open', 'complete', 'expired'],
             default => [$before['checkoutStatus']],
         };
 

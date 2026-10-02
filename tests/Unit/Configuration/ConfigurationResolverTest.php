@@ -57,12 +57,15 @@ final class ConfigurationResolverTest extends TestCase
         $defaults = $resolver->housekeeping([]);
         $this->assertSame(24, $defaults->intervalHours());
         $this->assertSame(25, $defaults->batchSize());
+        $this->assertSame(30, $defaults->lifecycleDeliveryRetentionDays());
         $configured = $resolver->resolve([
             self::PREFIX . '.housekeeping.intervalHours' => 12,
             self::PREFIX . '.housekeeping.batchSize' => 100,
+            self::PREFIX . '.housekeeping.lifecycleDeliveryRetentionDays' => 14,
         ])->configurationOrFail()->housekeeping();
         $this->assertSame(12, $configured->intervalHours());
         $this->assertSame(100, $configured->batchSize());
+        $this->assertSame(14, $configured->lifecycleDeliveryRetentionDays());
         $invalid = [
             ['intervalHours' => '24'],
             ['intervalHours' => null],
@@ -71,6 +74,10 @@ final class ConfigurationResolverTest extends TestCase
             ['batchSize' => 101],
             ['batchSize' => 2.5],
             ['batchSize' => true],
+            ['lifecycleDeliveryRetentionDays' => 0],
+            ['lifecycleDeliveryRetentionDays' => null],
+            ['lifecycleDeliveryRetentionDays' => '30'],
+            ['lifecycleDeliveryRetentionDays' => 1.5],
             ['unknown' => 1],
         ];
 

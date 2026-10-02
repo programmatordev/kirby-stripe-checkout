@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Lifecycle\Internal;
 
+use DateInterval;
+use DateTimeImmutable;
 use Kirby\Uuid\Uri;
 use Kirby\Uuid\Uuid;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleErrorCode;
@@ -29,7 +31,7 @@ final class HookDeliveryLedger
     {
         // Never nest older delivery snapshots inside a new snapshot.
         // Event-time custom content is retained alongside normalized canonical facts.
-        unset($data['lifecycleDeliveries']);
+        unset($data['lifecycleDeliveries'], $data['events']);
 
         return new LifecycleEvent(
             deliveryId: Uuid::generate(),
@@ -52,15 +54,28 @@ final class HookDeliveryLedger
     }
 
     /** @return array<string, mixed> */
-    public static function pending(LifecycleEvent $event): array
+    public static function pending(LifecycleEvent $event, int $retentionDays, ?DateTimeImmutable $now = null): array
     {
+        // Calculate in UTC so daylight-saving changes cannot lengthen or shorten the retained replay window.
+        $createdAt = OrderData::date(OrderData::timestamp($now ?? new DateTimeImmutable()));
+
+        // The local delivery window starts when intent is saved, not at a potentially older provider/business timestamp.
+        // Retries and subsequent configuration changes never extend this original deadline.
         return [
             'event' => $event->toArray(),
+            'createdAt' => OrderData::timestamp($createdAt),
+            'expiresAt' => OrderData::timestamp($createdAt->add(new DateInterval('P' . $retentionDays . 'D'))),
             'status' => 'pending',
             'attempts' => 0,
             'lastAttemptAt' => null,
             'errorCode' => null,
         ];
+    }
+
+    /** @param array<string, mixed> $entry Persisted delivery metadata. */
+    public static function isExpired(array $entry, DateTimeImmutable $now): bool
+    {
+        return OrderData::date($entry['expiresAt']) <= $now;
     }
 
     /** @param array<string, mixed> $data */
@@ -96,14 +111,16 @@ final class HookDeliveryLedger
     /** @return list<array<string, mixed>> */
     public static function normalize(mixed $value, string $uuid): array
     {
+        // Expired entries remain valid stored evidence until cleanup; expiry controls dispatch, not order readability.
         $entries = [];
         $ids = [];
         $revision = 0;
 
         foreach (OrderData::list($value) as $entry) {
             $entry = OrderData::map($entry);
-            OrderData::validateAllowedKeys($entry, ['event', 'status', 'attempts', 'lastAttemptAt', 'errorCode']);
-            OrderData::validateRequiredKeys($entry, ['event', 'status', 'attempts', 'lastAttemptAt', 'errorCode']);
+            $keys = ['event', 'createdAt', 'expiresAt', 'status', 'attempts', 'lastAttemptAt', 'errorCode'];
+            OrderData::validateAllowedKeys($entry, $keys);
+            OrderData::validateRequiredKeys($entry, $keys);
             $event = self::restoreEvent(OrderData::map($entry['event']));
             $attempts = OrderData::integer($entry['attempts']);
 
@@ -114,6 +131,7 @@ final class HookDeliveryLedger
                 || $event->type() === LifecycleEventType::OrderDeleted
                 || in_array($entry['status'], ['pending', 'delivered', 'failed'], true) === false
                 || $attempts < 0
+                || OrderData::date($entry['expiresAt']) <= OrderData::date($entry['createdAt'])
                 || ($attempts === 0) !== ($entry['lastAttemptAt'] === null)
                 || $entry['status'] !== 'pending' && $attempts === 0
                 || $entry['errorCode'] !== ($entry['status'] === 'failed' ? LifecycleErrorCode::LISTENER_FAILED : null)
@@ -152,12 +170,15 @@ final class HookDeliveryLedger
     {
         // Existing event facts are append-only.
         // Only their delivery bookkeeping may advance, so retries retain the original identity and snapshot.
+        // Keep the original replay window immutable as well; editing a deadline must not reactivate an expired delivery.
         foreach ($before as $index => $entry) {
             $updated = $after[$index] ?? null;
 
             if (
                 $updated === null
                 || OrderData::normalize($updated['event']) !== OrderData::normalize($entry['event'])
+                || $updated['createdAt'] !== $entry['createdAt']
+                || $updated['expiresAt'] !== $entry['expiresAt']
                 || $updated['attempts'] < $entry['attempts']
                 || $entry['status'] === 'delivered' && $updated['status'] !== 'delivered'
                 || $entry['lastAttemptAt'] !== null && $updated['lastAttemptAt'] < $entry['lastAttemptAt']

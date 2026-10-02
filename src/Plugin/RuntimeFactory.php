@@ -16,6 +16,9 @@ use ProgrammatorDev\StripeCheckout\Cart\Internal\KirbySessionCartStore;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutPreparationFactory;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutResolver;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionCreator;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionReconciler;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionReducer;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionRetriever;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestBuilder;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestContextFactory;
@@ -249,6 +252,22 @@ final class RuntimeFactory
             sessionGateway: $this->checkoutSessionGateway(),
             preparationFactory: $this->checkoutPreparationFactory(),
             stripeApiVersion: ApiVersion::CURRENT,
+        );
+    }
+
+    /** Historical order reads need server credentials, not a valid current storefront or presentation key. */
+    public function checkoutSessionReconciler(): CheckoutSessionReconciler
+    {
+        /** @var array<string, mixed> $options */
+        $options = $this->kirby->options();
+        $stripe = (new ConfigurationResolver())->stripe($options);
+        $client = (new StripeApiClientFactory())->create($stripe, App::plugin(PluginMetadata::NAME)?->version());
+
+        return new CheckoutSessionReconciler(
+            orders: new OrderPageStore($this->kirby),
+            retriever: new CheckoutSessionRetriever(new StripeApiCheckoutSessionGateway($client)),
+            credentialMode: $stripe->secretKeyMode(),
+            reducer: new CheckoutSessionReducer((new ConfigurationResolver())->housekeeping($options)->lifecycleDeliveryRetentionDays()),
         );
     }
 

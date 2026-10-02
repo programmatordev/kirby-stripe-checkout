@@ -89,7 +89,6 @@ final class OrderSerializationTest extends TestCase
         yield 'premature expiry' => [CheckoutStatus::Creating, 'checkoutExpiredAt', $now];
         yield 'premature opening' => [CheckoutStatus::Creating, 'checkoutOpenedAt', $now];
         yield 'premature uncertainty' => [CheckoutStatus::Creating, 'creationUncertainAt', $now];
-        yield 'failure on open Session' => [CheckoutStatus::Open, 'creationFailedAt', $now];
         yield 'opening after definitive failure' => [CheckoutStatus::CreationFailed, 'checkoutOpenedAt', $now];
         yield 'completion while uncertain' => [CheckoutStatus::CreationUncertain, 'checkoutCompletedAt', $now];
         yield 'completed and expired' => [CheckoutStatus::Complete, 'checkoutExpiredAt', $now];
@@ -109,6 +108,15 @@ final class OrderSerializationTest extends TestCase
         $data['paidAt'] = $data['createdAt'];
         $data['checkoutExpiresAt'] = '2026-09-06T10:20:30Z';
         $this->assertSame(OrderData::map($data), OrderSerializer::normalize($data));
+    }
+
+    public function testRetainsCreationFailureHistoryAfterAuthoritativeSessionRepair(): void
+    {
+        $data = $this->dataWithCheckoutStatus(CheckoutStatus::Open);
+        $data['creationFailedAt'] = $data['createdAt'];
+        $normalized = OrderSerializer::normalize($data);
+        $this->assertSame($data['createdAt'], $normalized['creationFailedAt']);
+        $this->assertSame('open', $normalized['checkoutStatus']);
     }
 
     public function testCompletedOrderRevalidatesTheAuthoritativeShippingSnapshot(): void

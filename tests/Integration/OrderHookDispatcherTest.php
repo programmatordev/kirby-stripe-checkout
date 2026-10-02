@@ -40,6 +40,35 @@ use RuntimeException;
 
 final class OrderHookDispatcherTest extends KirbyTestCase
 {
+    public function testExpiredDeliveryCannotInvokeHooksOrExtendItsRetryWindow(): void
+    {
+        $attempts = 0;
+        $this->restart([
+            'programmatordev.stripe-checkout.order.created' => function () use (&$attempts): void {
+                $attempts++;
+                throw new RuntimeException('Intentional listener failure');
+            },
+        ]);
+        $page = $this->createOrder();
+        $entry = $this->entries($page)[0];
+        $createdAt = OrderData::date($entry['createdAt']);
+        $expiresAt = OrderData::date($entry['expiresAt']);
+        $this->assertEquals($createdAt->modify('+30 days'), $expiresAt);
+        $dispatcher = new OrderHookDispatcher($this->kirby);
+        $store = new OrderPageStore($this->kirby);
+        $deliveryId = OrderData::string(OrderData::map($entry['event'])['deliveryId']);
+
+        $dispatcher->dispatch($page->uuid()->toString(), $deliveryId, $expiresAt->modify('-1 second'));
+        $beforeExpiry = $this->entries($store->requirePage($page->id()))[0];
+        $this->assertSame(2, $beforeExpiry['attempts']);
+        $this->assertSame($entry['expiresAt'], $beforeExpiry['expiresAt']);
+
+        $dispatcher->dispatch($page->uuid()->toString(), $deliveryId, $expiresAt);
+        $dispatcher->dispatch($page->uuid()->toString(), $deliveryId, $expiresAt->modify('+1 day'));
+        $this->assertSame(2, $attempts);
+        $this->assertSame($beforeExpiry, $this->entries($store->requirePage($page->id()))[0]);
+    }
+
     public function testCreationSnapshotIncludesNativeDefaultsAndBeforeHookEdits(): void
     {
         $observed = null;

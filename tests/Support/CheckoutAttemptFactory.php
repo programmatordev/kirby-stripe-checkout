@@ -27,6 +27,7 @@ final class CheckoutAttemptFactory
         DateTimeImmutable $createdAt,
         ?string $guestReference = 'guest',
         ?AttemptToken $token = null,
+        ?SessionRequest $request = null,
     ): CheckoutAttempt {
         $context = new SessionRequestContext(
             order: $order,
@@ -37,7 +38,7 @@ final class CheckoutAttemptFactory
             cancelDestination: 'https://example.test/cancel',
             returnDestination: 'https://example.test/return',
         );
-        $request = new SessionRequest([
+        $request ??= new SessionRequest([
             'client_reference_id' => $order->pageUuid(),
             'currency' => strtolower($order->currency()),
             'expires_at' => $context->expiresAt()->getTimestamp(),

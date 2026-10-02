@@ -7,7 +7,7 @@
 Stripe Checkout integration for [Kirby CMS](https://getkirby.com).
 
 > [!CAUTION]
-> The plugin is under active development and is not ready for production use. The current package provides configuration, exact money formatting, Kirby and Stripe Price product resolution, variants, a session-backed PHP cart API and HTTP routes, the native Stripe Checkout Page, and local Panel diagnostics; Checkout, orders, and webhooks are not implemented yet.
+> The plugin is under active development and is not ready for production use. The current package provides configuration, exact money formatting, Kirby and Stripe Price product resolution, variants, a session-backed PHP cart API and HTTP routes, native order storage, protected Session creation and payment reconciliation at the service layer, the native Stripe Checkout Page, and local Panel diagnostics. Customer-facing Checkout routes and signed webhooks are not implemented yet.
 
 ## Requirements
 

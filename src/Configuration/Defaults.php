@@ -52,4 +52,6 @@ final class Defaults
 
     public const HOUSEKEEPING_INTERVAL_HOURS = 24;
     public const HOUSEKEEPING_BATCH_SIZE = 25;
+    // Plugin replay policy, not Stripe's webhook retry schedule or the lifetime of a payment action.
+    public const LIFECYCLE_DELIVERY_RETENTION_DAYS = 30;
 }

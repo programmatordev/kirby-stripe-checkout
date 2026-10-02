@@ -44,7 +44,7 @@ return [
     'programmatordev.stripe-checkout.settings.unpaidOrderRetentionDays.help' => 'Reduzir este prazo pode tornar encomendas existentes elegíveis para a próxima limpeza.',
     'programmatordev.stripe-checkout.orders.fields.lifecycleDeliveries' => 'Notificações do ciclo de vida',
     'programmatordev.stripe-checkout.diagnostics.housekeeping' => 'Manutenção',
-    'programmatordev.stripe-checkout.diagnostics.housekeeping.configured' => 'Configuração PHP: intervalo de {intervalHours} horas; até {batchSize} candidatos por execução. A limpeza automática ainda não está ativa.',
+    'programmatordev.stripe-checkout.diagnostics.housekeeping.configured' => 'Configuração PHP: intervalo de {intervalHours} horas; até {batchSize} candidatos por execução; prazo de repetição dos hooks de {lifecycleDays} dias. A limpeza automática ainda não está ativa.',
     'programmatordev.stripe-checkout.diagnostics.retention' => 'Retenção de encomendas',
     'programmatordev.stripe-checkout.diagnostics.retention.configured' => 'Quando ativada: tentativas falhadas são mantidas durante {creationDays} dias; encomendas não pagas durante {unpaidDays} dias. Prazos mais curtos podem tornar registos existentes elegíveis.',
     'programmatordev.stripe-checkout.diagnostics.lifecycle' => 'Hooks do ciclo de vida',

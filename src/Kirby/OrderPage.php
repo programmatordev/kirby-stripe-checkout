@@ -12,6 +12,7 @@ use Kirby\Data\Yaml;
 use Kirby\Exception\PermissionException;
 use Kirby\Form\Form;
 use Kirby\Toolkit\I18n;
+use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleErrorCode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
@@ -136,7 +137,14 @@ final class OrderPage extends ProtectedOrderPage
                     ARRAY_FILTER_USE_KEY,
                 ));
                 $event = HookDeliveryLedger::event($data, $customFields, LifecycleEventType::OrderCreated, 1);
-                $creationData = [...$data, 'lifecycleDeliveries' => [HookDeliveryLedger::pending($event)]];
+                /** @var array<string, mixed> $options */
+                $options = $page->kirby()->options();
+                // Resolve only PHP housekeeping policy: historical order work must not depend on today's storefront Settings.
+                $housekeeping = (new ConfigurationResolver())->housekeeping($options);
+                $creationData = [
+                    ...$data,
+                    'lifecycleDeliveries' => [HookDeliveryLedger::pending($event, $housekeeping->lifecycleDeliveryRetentionDays())],
+                ];
                 // Add intent in memory so the native callback persists the order and its final creation snapshot together, not in two writes.
                 $page->version('latest')->update(['lifecycleDeliveries' => Yaml::encode($creationData['lifecycleDeliveries'])], 'default');
 

@@ -21,6 +21,7 @@ final class OptionExtractor
         'cart.renderer',
         'housekeeping.intervalHours',
         'housekeeping.batchSize',
+        'housekeeping.lifecycleDeliveryRetentionDays',
         'orders.numberFormatter',
         'products.fields.description',
         'products.fields.images',

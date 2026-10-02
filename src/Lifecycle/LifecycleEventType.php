@@ -9,6 +9,7 @@ enum LifecycleEventType: string
     case OrderCreated = 'order.created';
     case SessionCreated = 'session.created';
     case PaymentPending = 'payment.pending';
+    case PaymentRequiresAction = 'payment.requiresAction';
     case PaymentSucceeded = 'payment.succeeded';
     case PaymentFailed = 'payment.failed';
     case CheckoutExpired = 'checkout.expired';

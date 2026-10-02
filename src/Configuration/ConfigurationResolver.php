@@ -206,13 +206,17 @@ final class ConfigurationResolver
      */
     private function resolveHousekeeping(array $values): HousekeepingConfiguration
     {
-        $this->assertKnownKeys($values, ['intervalHours', 'batchSize'], 'housekeeping');
+        $this->assertKnownKeys($values, ['intervalHours', 'batchSize', 'lifecycleDeliveryRetentionDays'], 'housekeeping');
         $intervalHours = array_key_exists('intervalHours', $values)
             ? $values['intervalHours']
             : Defaults::HOUSEKEEPING_INTERVAL_HOURS;
         $batchSize = array_key_exists('batchSize', $values)
             ? $values['batchSize']
             : Defaults::HOUSEKEEPING_BATCH_SIZE;
+        // The hook replay window is developer-owned and independent of merchant-configured order deletion.
+        $lifecycleDeliveryRetentionDays = array_key_exists('lifecycleDeliveryRetentionDays', $values)
+            ? $values['lifecycleDeliveryRetentionDays']
+            : Defaults::LIFECYCLE_DELIVERY_RETENTION_DAYS;
 
         if (is_int($intervalHours) === false) {
             throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'housekeeping.intervalHours');
@@ -230,9 +234,18 @@ final class ConfigurationResolver
             throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'housekeeping.batchSize');
         }
 
+        if (is_int($lifecycleDeliveryRetentionDays) === false) {
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'housekeeping.lifecycleDeliveryRetentionDays');
+        }
+
+        if ($lifecycleDeliveryRetentionDays < 1) {
+            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'housekeeping.lifecycleDeliveryRetentionDays');
+        }
+
         return new HousekeepingConfiguration(
             intervalHours: $intervalHours,
             batchSize: $batchSize,
+            lifecycleDeliveryRetentionDays: $lifecycleDeliveryRetentionDays,
         );
     }
 
@@ -413,8 +426,24 @@ final class ConfigurationResolver
     }
 
     /**
-     * @param array<string, mixed> $stripe
+     * Provider reads of saved orders must not depend on editable storefront settings.
+     *
+     * @param array<string, mixed> $options
      */
+    public function stripe(#[SensitiveParameter] array $options): StripeConfiguration
+    {
+        $root = $this->extractor->extract($options);
+        $stripe = $root['stripe'] ?? [];
+
+        if (is_array($stripe) === false) {
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'stripe');
+        }
+
+        /** @var array<string, mixed> $stripe */
+        return $this->resolveStripe($stripe);
+    }
+
+    /** @param array<string, mixed> $stripe */
     private function resolveStripe(#[SensitiveParameter] array $stripe): StripeConfiguration
     {
         $this->assertKnownKeys($stripe, self::STRIPE_KEYS, 'stripe');

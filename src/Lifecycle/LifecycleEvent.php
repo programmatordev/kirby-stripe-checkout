@@ -10,6 +10,7 @@ use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\DisputeStatus;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Order\Payment;
 use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 use ProgrammatorDev\StripeCheckout\Order\RefundStatus;
 
@@ -140,6 +141,14 @@ final readonly class LifecycleEvent
     public function triggerId(): ?string
     {
         return $this->triggerId;
+    }
+
+    /** Restores frozen payment facts, never a current provider lookup or the live Page's state. */
+    public function payment(): ?Payment
+    {
+        return isset($this->orderSnapshot['payment'])
+            ? Payment::fromArray(OrderData::map($this->orderSnapshot['payment']))
+            : null;
     }
 
     /** @return array<string, mixed> */

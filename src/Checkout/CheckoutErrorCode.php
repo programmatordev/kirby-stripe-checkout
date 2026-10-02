@@ -27,6 +27,8 @@ final class CheckoutErrorCode
 
     public const SESSION_UNCERTAIN = 'checkout.session_uncertain';
 
+    public const RECONCILIATION_CONFLICT = 'checkout.reconciliation_conflict';
+
     /** Map provider failure categories to the plugin's public Session errors. */
     public static function forSessionFailure(CheckoutSessionFailureType $failureType): string
     {

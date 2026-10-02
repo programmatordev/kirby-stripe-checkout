@@ -1,6 +1,6 @@
 # Orders
 
-Orders are stored as native Kirby draft Pages under the protected `stripe-checkout-orders` container, which is initialized automatically. The package includes guarded internal creation and updates, developer queries, local lifecycle hooks, and an extendable order blueprint. The internal Checkout pipeline now creates an order before its Stripe Session; the public browser Checkout flow, payment synchronization, and automatic cleanup are not implemented yet.
+Orders are stored as native Kirby draft Pages under the protected `stripe-checkout-orders` container, which is initialized automatically. The package includes guarded internal creation and updates, developer queries, lifecycle hooks, and an extendable order blueprint. The internal Checkout pipeline creates an order before its Stripe Session and can reconcile current payment results. The public browser Checkout flow, signed webhook endpoint, and automatic cleanup are not implemented yet.
 
 ## Query orders
 
@@ -138,7 +138,7 @@ The stored shapes are:
 - `tax`: nullable returned calculation with `automaticTaxEnabled`, nullable `calculationStatus` and `provider`, currency, exact `amount` and integer `providerAmount`. Its nullable `breakdown` preserves ordered allocations with an `order`, `line_item` or `shipping` target and optional target ID, taxable amount, tax amount, inclusive flag, rate percentages, jurisdiction, tax type and taxability reason when returned.
 - `shipping`: nullable selected Shipping Rate details with the plugin option key and quote fingerprint, customer-facing label, currency, exact subtotal/tax/total pairs, nullable delivery estimate, tax behavior and Tax Code. `stripeShippingRateId` keeps the selected `shr_...` reference separately, while `shippingTotal` keeps the authoritative order-level shipping total.
 
-Tax facts do not determine payment state. A completed zero-tax calculation is different from disabled Automatic Tax: reasons such as `not_collecting`, exemption or reverse charge are retained. Manual tax can also have a positive amount while `automaticTaxEnabled` is false. Missing totals stay `null`; an unexpanded breakdown stays `null`, not an invented empty list. Order-level and line/shipping allocations overlap, so do not add all targets together. Line allocations require a complete paginated collection; a truncated Stripe line list is rejected rather than silently stored as complete. Automatic retrieval/pagination remains part of the reconciliation work described below.
+Tax facts do not determine payment state. A completed zero-tax calculation is different from disabled Automatic Tax: reasons such as `not_collecting`, exemption or reverse charge are retained. Manual tax can also have a positive amount while `automaticTaxEnabled` is false. Missing totals stay `null`; an unexpanded breakdown stays `null`, not an invented empty list. Order-level and line/shipping allocations overlap, so do not add all targets together. Internal reconciliation retrieves every line-item page; an incomplete collection is rejected rather than stored as complete.
 
 When both are present, the tax snapshot amount must agree with `taxTotal` in the order currency. The plugin checks returned amounts and allocations, but never derives tax from a percentage or forces inclusive/exclusive totals through its own tax equation.
 
@@ -146,9 +146,48 @@ A selected shipping snapshot must come from an expanded Stripe Shipping Rate. A 
 
 `stripeCustomerId` remains a separate protected provider reference. Each discount stores both its decimal `amount` and exact Stripe `providerAmount`; the sum must equal `discountTotal` in the order currency. A completed order has explicit `customFields` and `discounts` lists, including empty lists when nothing was collected or applied.
 
-These schemas and their Stripe-response normalization are available now. Automatic authoritative retrieval and order reconciliation are not implemented yet, so the plugin does not populate these fields during the public payment lifecycle yet.
+Internal reconciliation retrieves the current Session, complete line items, and required payment and shipping expansions. It commits the resulting payment and capability facts together. It uses the saved purchase and Session request, not today's products, cart, or storefront Settings. Failed or contradictory reads do not partially update the order. There is no public reconciliation endpoint or signed webhook route yet.
 
-Only the selected facts above cross the stripe-php boundary. The order never stores a complete Session, Stripe SDK object, payment credentials, client secret, hosted URL or raw provider response. Customer, address, tax-ID and custom-field values are private order data.
+Only selected facts cross the stripe-php boundary. The order never stores a complete Session or PaymentIntent, Stripe SDK object, payment credentials, root PaymentIntent client secret, Checkout redirect URL or raw webhook response. Customer, address, tax-ID and custom-field values are private order data. The active payment-action branch can also be retained temporarily as described below; its URLs, codes and authentication directives are private.
+
+## Payment facts and actions
+
+The protected `payment` snapshot retains common payment facts: status, exact amounts, method type, PaymentIntent/Charge/PaymentMethod identifiers, provider statuses, safe failure code, and provider timestamps. A free Checkout can have no PaymentIntent; missing amounts remain unknown rather than being invented as zero. A successful payment is not assumed to have been captured immediately.
+
+Hooks read these frozen facts through `$lifecycleEvent->payment()`. This does not contact Stripe or read the current Order Page:
+
+```php
+use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEvent;
+
+'hooks' => [
+    'programmatordev.stripe-checkout.payment.requiresAction' => function (
+        Kirby\Cms\Page $order,
+        LifecycleEvent $lifecycleEvent,
+    ): void {
+        $payment = $lifecycleEvent->payment();
+        $nextAction = $payment?->nextAction();
+
+        if ($nextAction === null) {
+            return;
+        }
+
+        $type = $nextAction->type();
+        $details = $nextAction->details(); // Fresh StripeObject; original provider field names.
+        $paymentIntent = $nextAction->toPaymentIntent(); // Optional partial SDK projection for IDE types.
+        // Choose how your store presents these private facts; deduplicate effects by deliveryId().
+    },
+],
+```
+
+`Payment` exposes `status()`, `amount()`, `amountReceived()`, `amountCaptured()`, provider identifiers/statuses, `methodType()`, `failureCode()`, timestamps, and `nextAction()`. Amount methods return Brick Money or `null`. `PaymentAction` preserves Stripe's action `type` and the complete corresponding branch, without a payment-method allowlist or renamed fields. `details()` and `toPaymentIntent()` return independent mutable SDK objects, so changing them cannot alter the saved snapshot. The partial PaymentIntent contains only the retained `next_action`, not a complete or current PaymentIntent; never use it for Stripe writes.
+
+An action is not necessarily a set of customer payment instructions. It may describe a voucher, a QR code, an authentication step, an SDK directive or a future Stripe capability. Your store decides what to do with its type and provider details; the plugin does not classify payment methods or promise universal instruction fields. Do not expose raw action data in public order summaries, logs or analytics.
+
+A pending payment can be recorded before its action arrives. `payment.pending` therefore does not promise an action. `payment.requiresAction` runs after a new or changed action is committed while payment is pending; it does not repeat the pending transition or forward every Stripe Event. Identical actions do not notify again. An action observed before Checkout completes is kept in the existing payment slot until payment becomes pending, expires, or becomes terminal. Terminal payment clears that live copy and ignores late action capture; earlier hook snapshots keep their frozen evidence within their delivery window.
+
+`nextActionObservedAt()` records the observation timestamp, and `nextActionExpiresAt()` records the local replay-evidence deadline. The deadline uses the PHP-only `housekeeping.lifecycleDeliveryRetentionDays`, defaulting to 30 days. Repeated observations of the same action do not renew its deadline. These are retention facts, not Stripe's own action-expiry rules: historical codes or URLs may already be unusable. Reconciliation clears an expired live action. Physical pruning of successful/expired hook payloads and unattended live action copies is not implemented yet.
+
+Current Stripe reads determine payment state. A correlated `payment_intent.requires_action` Event may additionally supply a historical action that a later read can no longer recover. This capture path is implemented at the trusted service boundary; signed HTTP delivery is not wired yet.
 
 ## Lifecycle hooks
 
@@ -171,7 +210,7 @@ Keep the argument names `order` and `lifecycleEvent`: Kirby supplies them by nam
 
 `order` is freshly read before delivery; `lifecycleEvent` keeps the original event-time facts. Hooks run after the write, outside the order lock and internal impersonation. The initiating content language is active during the hook, then the caller's language is restored—even if a listener throws. If that language was removed from Kirby, its normal default-language fallback applies.
 
-Failed listeners do not undo the order or its payment state. A protected `lifecycleDeliveries` field records pending, delivered or failed status, attempt count, safe error code and the original event. Diagnostics show pending/failed counts. A retry keeps the same delivery ID and snapshot, but receives the current Page. The internal retry primitive exists; there is no Panel retry action or automatic retry runner yet.
+Failed listeners do not undo the order or its payment state. A protected `lifecycleDeliveries` field records pending, delivered or failed status, attempt count, safe error code, the original event and a fixed local expiry deadline. Diagnostics show pending/failed counts. A retry keeps the same delivery ID and snapshot, but receives the current Page; it is refused at or after the deadline, even before physical cleanup runs. The internal retry primitive exists; there is no Panel retry action or automatic retry runner yet.
 
 Recording a hook attempt or result does not advance the order's `updatedAt` or invalidate the storefront page cache. Business-state changes still invalidate that cache.
 
@@ -183,7 +222,9 @@ Kirby stops calling listeners when one throws. Retrying the whole hook can there
 
 The controlled, single-order deletion primitive emits `programmatordev.stripe-checkout.order.deleted` with Kirby's final in-memory Page after deletion. A failed deletion hook **cannot be retried**: only the last sanitized outcome is retained, not the deleted customer's snapshot. Durable deletion integrations must enqueue successfully during the first invocation. No public deletion route or automatic cleanup runner is available yet.
 
-The Session-creation pipeline emits `programmatordev.stripe-checkout.session.created` after the Session ID is committed. Payment, refund and dispute event types are defined, but their provider flows do not emit hooks yet.
+The Session-creation pipeline emits `programmatordev.stripe-checkout.session.created` after the Session ID is committed. Internal reconciliation can also repair an association missed locally without creating another Session. It emits new `payment.pending`, `payment.succeeded`, `payment.failed`, `payment.requiresAction`, and `checkout.expired` transitions after persistence. Duplicate or unchanged observations do not dispatch them again. Refund and dispute provider flows are not implemented yet.
+
+The protected `events` ledger records correlated Stripe Event identity, type, resource, provider creation time, attempts and sanitized processing outcome. It is separate from `lifecycleDeliveries`: an Event can be successfully processed while an optional hook delivery fails. Successfully processed duplicates need no new Stripe read. A failed provider read remains retryable according to its error classification; a storage failure cannot mark the canonical processing successful. Current-state reconciliation without an Event creates no invented Event entry or trigger identity.
 
 ### Event values
 
@@ -191,7 +232,7 @@ The Session-creation pipeline emits `programmatordev.stripe-checkout.session.cre
 
 `toArray()` produces plain JSON-safe data: enum cases become their string values, timestamps use UTC, and snapshots contain no PHP objects. A trigger type and ID can identify provider evidence; both are `null` when there is no provider event. The value does not itself dispatch hooks or perform retries.
 
-`revision()` identifies the event-bearing commit within the order's delivery ledger. Multiple events from the same commit share it; retries and custom-field edits do not increment it. The snapshot excludes the delivery ledger itself, avoiding nested copies of earlier snapshots.
+`revision()` identifies the event-bearing commit within the order's delivery ledger. Multiple events from the same commit share it; retries and custom-field edits do not increment it. The snapshot excludes both bookkeeping ledgers, avoiding nested copies of earlier snapshots and unrelated provider attempts.
 
 Snapshots can contain customer information and custom fields. Treat them as private order data, not general-purpose log payloads.
 

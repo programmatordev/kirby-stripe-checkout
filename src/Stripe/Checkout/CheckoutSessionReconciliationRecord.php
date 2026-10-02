@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Stripe\Checkout;
 
-use ProgrammatorDev\StripeCheckout\Order\Internal\PaymentAction;
+use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
 
 /**
  * @internal Provider read with every line-item page and the payment/rate expansions needed for reconciliation.

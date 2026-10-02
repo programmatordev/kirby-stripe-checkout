@@ -37,3 +37,5 @@ These namespaces are relative to `ProgrammatorDev\StripeCheckout`. Other domain 
 An error can be mapped to a safer code at a public boundary. For example, unavailable Tax Code catalogue data is `tax.catalogue_unavailable` during product resolution, but Cart presents it as `CartErrorCode::PROVIDER_UNAVAILABLE`. Compare the code returned by the API you are using.
 
 Translation keys remain literal strings; use the existing keys when [overriding messages](translations.md). Stripe-owned codes and provider statuses also remain strings. Constants list the plugin's own codes, not every error Stripe or custom integration code can return.
+
+Internal reconciliation uses `CheckoutErrorCode::RECONCILIATION_CONFLICT` when repeated concurrent changes prevent a stable commit. It is retryable: retry the read/commit operation, not Session creation. `SESSION_INCOMPATIBLE` means required provider facts are missing or contradict the saved purchase evidence; the order is not partially updated.

@@ -20,6 +20,7 @@ use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\DisputeStatus;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
+use ProgrammatorDev\StripeCheckout\Order\Payment;
 use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 use ProgrammatorDev\StripeCheckout\Order\RefundStatus;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailureType;
@@ -247,6 +248,28 @@ final class OrderSerializer
 
             self::validateState($data, $checkoutStatus, $paymentStatus);
 
+            if (isset($data['events'])) {
+                $data['events'] = StripeEventLedger::normalize($data['events']);
+            }
+
+            if (isset($data['payment'])) {
+                $payment = Payment::fromArray(OrderData::map($data['payment']));
+                $data['payment'] = $payment->toArray();
+
+                if (
+                    $payment->status() !== $paymentStatus || $data['payment']['currency'] !== $currency
+                    || $payment->stripePaymentIntentId() !== ($data['stripePaymentIntentId'] ?? null)
+                    || $payment->stripeChargeId() !== ($data['stripeChargeId'] ?? null)
+                    || $payment->nextAction() !== null && $payment->stripePaymentIntentId() === null
+                ) {
+                    throw new OrderDataException();
+                }
+            }
+
+            if (isset($data['lineItems'])) {
+                $data['lineItems'] = self::normalizeLineItems($data, $context);
+            }
+
             if (isset($data['lifecycleDeliveries'])) {
                 $data['lifecycleDeliveries'] = HookDeliveryLedger::normalize($data['lifecycleDeliveries'], $uuid);
             }
@@ -328,6 +351,9 @@ final class OrderSerializer
                 'checkoutAttempt',
                 'stripeShippingRateIds',
                 'initiatingLineItems',
+                'lineItems',
+                'payment',
+                'events',
                 'customer',
                 'billingAddress',
                 'shippingAddress',
@@ -387,6 +413,67 @@ final class OrderSerializer
         if ($calculated->isEqualTo($total) === false) {
             throw new OrderDataException();
         }
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return list<array<string, mixed>>
+     */
+    private static function normalizeLineItems(array $data, OrderCreationContext $context): array
+    {
+        $lines = [];
+        $ids = [];
+        $initiatingLineItems = $context->lineItems();
+        $subtotal = Money::zero($context->currency());
+        $total = Money::zero($context->currency());
+
+        foreach (OrderData::list($data['lineItems']) as $index => $value) {
+            $line = CheckoutLineItemSnapshot::fromArray(OrderData::map($value));
+
+            if (
+                $line->initiatingIndex() !== $index || isset($ids[$line->stripeLineItemId()])
+                || isset($initiatingLineItems[$index]) === false
+                || $line->quantity() !== $initiatingLineItems[$index]['quantity']
+                || $line->price()->getCurrency()->getCurrencyCode() !== $context->currency()
+                || $line->price()->isEqualTo(Money::of(OrderData::string($initiatingLineItems[$index]['price']), $context->currency())) === false
+                || $line->subtotal()->isEqualTo($line->price()->multipliedBy($line->quantity())) === false
+                || $initiatingLineItems[$index]['stripePriceId'] !== null && $line->stripePriceId() !== $initiatingLineItems[$index]['stripePriceId']
+                || $initiatingLineItems[$index]['stripeProductId'] !== null && $line->stripeProductId() !== $initiatingLineItems[$index]['stripeProductId']
+            ) {
+                throw new OrderDataException();
+            }
+
+            $ids[$line->stripeLineItemId()] = true;
+            $subtotal = $subtotal->plus($line->subtotal());
+            $total = $total->plus($line->total());
+            $discountTotal = Money::zero($context->currency());
+
+            foreach ($line->discounts() as $discount) {
+                $snapshot = $discount->toArray();
+
+                if ($snapshot['currency'] !== $context->currency()) {
+                    throw new OrderDataException();
+                }
+
+                $discountTotal = $discountTotal->plus(Money::of(OrderData::string($snapshot['amount']), $context->currency()));
+            }
+
+            if ($discountTotal->isEqualTo($line->discount()) === false) {
+                throw new OrderDataException();
+            }
+
+            $lines[] = $line->toArray();
+        }
+
+        if (
+            count($lines) !== count($initiatingLineItems)
+            || $subtotal->isEqualTo(Money::of(OrderData::string($data['subtotal']), $context->currency())) === false
+            || isset($data['total']) && $total->plus(OrderData::string($data['shippingTotal']))->isEqualTo(Money::of(OrderData::string($data['total']), $context->currency())) === false
+        ) {
+            throw new OrderDataException();
+        }
+
+        return $lines;
     }
 
     /**
@@ -615,7 +702,7 @@ final class OrderSerializer
         // Missing intermediate timestamps are allowed when reconciliation skips an unobserved state.
         $applicableStates = [
             'creationUncertainAt' => [CheckoutStatus::CreationUncertain, CheckoutStatus::CreationFailed, CheckoutStatus::Open, CheckoutStatus::Complete, CheckoutStatus::Expired],
-            'creationFailedAt' => [CheckoutStatus::CreationFailed],
+            'creationFailedAt' => [CheckoutStatus::CreationFailed, CheckoutStatus::Open, CheckoutStatus::Complete, CheckoutStatus::Expired],
             'checkoutOpenedAt' => [CheckoutStatus::Open, CheckoutStatus::Complete, CheckoutStatus::Expired],
             'checkoutCompletedAt' => [CheckoutStatus::Complete],
             'checkoutExpiredAt' => [CheckoutStatus::Expired],
