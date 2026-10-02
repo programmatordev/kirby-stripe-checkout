@@ -38,6 +38,7 @@ final class StripeEventLedger
 
                 if ($entry['status'] !== 'processed') {
                     $entries[$index]['attempts'] = OrderData::integer($entry['attempts']) + 1;
+                    // Keep attempt time monotonic even if the local clock moves backward.
                     $entries[$index]['lastAttemptAt'] = max($entry['lastAttemptAt'], OrderData::timestamp($now));
                 }
 
@@ -88,7 +89,6 @@ final class StripeEventLedger
         $entries = [];
         $ids = [];
         $keys = ['id', 'type', 'createdAt', 'resourceId', 'status', 'attempts', 'lastAttemptAt', 'errorCode'];
-        $errors = [CheckoutErrorCode::SESSION_INCOMPATIBLE, CheckoutErrorCode::SESSION_REJECTED, CheckoutErrorCode::SESSION_UNAVAILABLE, CheckoutErrorCode::SESSION_UNCERTAIN, CheckoutErrorCode::RECONCILIATION_CONFLICT];
 
         foreach (OrderData::list($value) as $entry) {
             $entry = OrderData::map($entry);
@@ -98,25 +98,52 @@ final class StripeEventLedger
             $type = OrderData::text($entry['type']);
             $resourcePrefix = $type === \Stripe\Event::PAYMENT_INTENT_REQUIRES_ACTION ? 'pi_' : 'cs_';
 
+            if (isset($ids[$id]) || preg_match('/\Aevt_[A-Za-z0-9_]+\z/', $id) !== 1) {
+                throw new OrderDataException();
+            }
+
             if (
-                isset($ids[$id]) || preg_match('/\Aevt_[A-Za-z0-9_]+\z/', $id) !== 1
-                || in_array($type, ReconciliationEvent::TYPES, true) === false
+                in_array($type, ReconciliationEvent::TYPES, true) === false
                 || preg_match('/\A' . $resourcePrefix . '[A-Za-z0-9_]+\z/', OrderData::text($entry['resourceId'], 255)) !== 1
-                || OrderData::integer($entry['createdAt']) < 0
-                || OrderData::integer($entry['attempts']) < 1
-                || in_array($entry['status'], ['pending', 'processed', 'failed'], true) === false
-                || ($entry['status'] === 'failed') !== ($entry['errorCode'] !== null)
-                || $entry['errorCode'] !== null && in_array($entry['errorCode'], $errors, true) === false
             ) {
                 throw new OrderDataException();
             }
 
-            OrderData::date($entry['lastAttemptAt']);
+            if (OrderData::integer($entry['createdAt']) < 0) {
+                throw new OrderDataException();
+            }
+
+            self::validateProcessingOutcome($entry);
             $ids[$id] = true;
             $entries[] = $entry;
         }
 
         return $entries;
+    }
+
+    /** @param array<string, mixed> $entry */
+    private static function validateProcessingOutcome(array $entry): void
+    {
+        // An Event enters this ledger only when an attempt is recorded, so pending entries also require attempt history.
+        if (OrderData::integer($entry['attempts']) < 1) {
+            throw new OrderDataException();
+        }
+
+        if (in_array($entry['status'], ['pending', 'processed', 'failed'], true) === false) {
+            throw new OrderDataException();
+        }
+
+        if (($entry['status'] === 'failed') !== ($entry['errorCode'] !== null)) {
+            throw new OrderDataException();
+        }
+
+        $errors = [CheckoutErrorCode::SESSION_INCOMPATIBLE, CheckoutErrorCode::SESSION_REJECTED, CheckoutErrorCode::SESSION_UNAVAILABLE, CheckoutErrorCode::SESSION_UNCERTAIN, CheckoutErrorCode::RECONCILIATION_CONFLICT];
+
+        if ($entry['errorCode'] !== null && in_array($entry['errorCode'], $errors, true) === false) {
+            throw new OrderDataException();
+        }
+
+        OrderData::date($entry['lastAttemptAt']);
     }
 
     /**
@@ -130,10 +157,20 @@ final class StripeEventLedger
 
             if (
                 array_intersect_key($entry, array_flip(['id', 'type', 'createdAt', 'resourceId'])) !== array_intersect_key($updated, array_flip(['id', 'type', 'createdAt', 'resourceId']))
-                || $updated['attempts'] < $entry['attempts']
-                || $updated['lastAttemptAt'] < $entry['lastAttemptAt']
-                || $entry['status'] === 'processed' && $updated !== $entry
             ) {
+                throw new OrderDataException();
+            }
+
+            if ($updated['attempts'] < $entry['attempts']) {
+                throw new OrderDataException();
+            }
+
+            if ($updated['lastAttemptAt'] < $entry['lastAttemptAt']) {
+                throw new OrderDataException();
+            }
+
+            // Once processed, the entire entry is final, including its attempt history.
+            if ($entry['status'] === 'processed' && $updated !== $entry) {
                 throw new OrderDataException();
             }
         }

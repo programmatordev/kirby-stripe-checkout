@@ -58,25 +58,61 @@ final readonly class ReconciliationEvent
         $isAction = $type === Event::PAYMENT_INTENT_REQUIRES_ACTION;
         $resourceId = OrderData::text($object['id'] ?? null, 255);
 
+        if (in_array($type, self::TYPES, true) === false) {
+            throw new OrderDataException();
+        }
+
+        if (preg_match('/\Aevt_[A-Za-z0-9_]+\z/', $id) !== 1) {
+            throw new OrderDataException();
+        }
+
+        if ($created < 0) {
+            throw new OrderDataException();
+        }
+
+        if (($data['object'] ?? null) !== Event::OBJECT_NAME) {
+            throw new OrderDataException();
+        }
+
         if (
-            in_array($type, self::TYPES, true) === false
-            || preg_match('/\Aevt_[A-Za-z0-9_]+\z/', $id) !== 1
-            || $created < 0
-            || ($data['object'] ?? null) !== Event::OBJECT_NAME
-            || ($object['livemode'] ?? null) !== $liveMode
+            ($object['livemode'] ?? null) !== $liveMode
             || $mode === CredentialMode::Unknown
             || $liveMode !== ($mode === CredentialMode::Live)
-            || ($metadata[PluginMetadata::OWNER_KEY] ?? null) !== PluginMetadata::NAME
-            || ($metadata[PluginMetadata::ORDER_KEY] ?? null) !== $order->pageUuid()
-            || ($object['object'] ?? null) !== ($isAction ? PaymentIntent::OBJECT_NAME : Session::OBJECT_NAME)
-            || $isAction === false && ($resourceId !== $sessionId || ($object['client_reference_id'] ?? null) !== $order->pageUuid())
-            || $isAction && (
-                preg_match('/\Api_[A-Za-z0-9_]+\z/', $resourceId) !== 1
-                || ($object['status'] ?? null) !== PaymentIntent::STATUS_REQUIRES_ACTION
-                || strtoupper(OrderData::text($object['currency'] ?? null)) !== $order->currency()
-            )
         ) {
             throw new OrderDataException();
+        }
+
+        if (
+            ($metadata[PluginMetadata::OWNER_KEY] ?? null) !== PluginMetadata::NAME
+            || ($metadata[PluginMetadata::ORDER_KEY] ?? null) !== $order->pageUuid()
+        ) {
+            throw new OrderDataException();
+        }
+
+        if ($isAction) {
+            // The reconciler checks the PaymentIntent backlink against saved or freshly retrieved Session evidence.
+            if (
+                ($object['object'] ?? null) !== PaymentIntent::OBJECT_NAME
+                || preg_match('/\Api_[A-Za-z0-9_]+\z/', $resourceId) !== 1
+            ) {
+                throw new OrderDataException();
+            }
+
+            if (($object['status'] ?? null) !== PaymentIntent::STATUS_REQUIRES_ACTION) {
+                throw new OrderDataException();
+            }
+
+            if (strtoupper(OrderData::text($object['currency'] ?? null)) !== $order->currency()) {
+                throw new OrderDataException();
+            }
+        } else {
+            if (
+                ($object['object'] ?? null) !== Session::OBJECT_NAME
+                || $resourceId !== $sessionId
+                || ($object['client_reference_id'] ?? null) !== $order->pageUuid()
+            ) {
+                throw new OrderDataException();
+            }
         }
 
         $action = $isAction ? ($object['next_action'] ?? null) : null;

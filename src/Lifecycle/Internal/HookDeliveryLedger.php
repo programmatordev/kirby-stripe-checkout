@@ -193,6 +193,7 @@ final class HookDeliveryLedger
                 throw new OrderDataException();
             }
 
+            // Deletion is a one-shot notification; this ledger must not retain a deleted order's snapshot.
             if ($eventData['type'] === LifecycleEventType::OrderDeleted->value) {
                 throw new OrderDataException();
             }
@@ -220,6 +221,7 @@ final class HookDeliveryLedger
 
         $attempts = OrderData::integer($entry['attempts']);
 
+        // Attempts are saved before listeners run; an interrupted process can leave pending status with a nonzero count.
         if (
             $attempts < 0
             || ($attempts === 0) !== ($entry['lastAttemptAt'] === null)
@@ -347,6 +349,7 @@ final class HookDeliveryLedger
                 throw new OrderDataException();
             }
 
+            // A successful concurrent listener wins over a later failure from another attempt.
             if ($entry['status'] === 'delivered' && $updated['status'] !== 'delivered') {
                 throw new OrderDataException();
             }
