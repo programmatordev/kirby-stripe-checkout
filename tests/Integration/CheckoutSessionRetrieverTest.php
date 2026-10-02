@@ -108,6 +108,7 @@ final class CheckoutSessionRetrieverTest extends KirbyTestCase
             'payment_intent.latest_charge',
             'payment_intent.payment_method',
             'shipping_cost.shipping_rate',
+            'shipping_cost.taxes',
             'total_details.breakdown',
         ], $this->requests[0]['expand']);
         $this->assertCount(3, $this->requests);
@@ -164,6 +165,73 @@ final class CheckoutSessionRetrieverTest extends KirbyTestCase
         $this->expectException(CheckoutSessionException::class);
         $this->expectExceptionMessage(CheckoutErrorCode::SESSION_INCOMPATIBLE);
         $this->read();
+    }
+
+    public function testKeepsTheCurrentPaymentMethodWhenTheLatestChargeBelongsToAPreviousAttempt(): void
+    {
+        $session = $this->session();
+        $session['status'] = 'open';
+        $payment = $this->payment();
+        $payment['status'] = 'requires_confirmation';
+        $payment['next_action'] = null;
+        $payment['payment_method'] = [
+            'id' => 'pm_next',
+            'object' => 'payment_method',
+            'type' => 'mb_way',
+        ];
+        $payment['latest_charge'] = [
+            'id' => 'ch_previous',
+            'object' => 'charge',
+            'amount' => 6400,
+            'amount_captured' => 0,
+            'captured' => false,
+            'created' => 1001,
+            'currency' => 'eur',
+            'livemode' => false,
+            'paid' => false,
+            'payment_intent' => 'pi_current',
+            'payment_method' => 'pm_previous',
+            'payment_method_details' => ['type' => 'card'],
+            'status' => 'failed',
+            'failure_code' => 'card_declined',
+        ];
+        $session['payment_intent'] = $payment;
+        $this->responses([$session, $this->page([$this->line(0), $this->line(1)])]);
+
+        $paymentSnapshot = $this->read()->payment();
+
+        $this->assertSame('pm_next', $paymentSnapshot->stripePaymentMethodId());
+        $this->assertSame('mb_way', $paymentSnapshot->methodType());
+        $this->assertSame('requires_confirmation', $paymentSnapshot->paymentIntentStatus());
+        $this->assertSame('ch_previous', $paymentSnapshot->stripeChargeId());
+        $this->assertSame('failed', $paymentSnapshot->chargeStatus());
+        $this->assertFalse($paymentSnapshot->chargePaid());
+
+        $payment['payment_method'] = null;
+        $session['payment_intent'] = $payment;
+        $this->responses([$session, $this->page([$this->line(0), $this->line(1)])]);
+
+        $paymentSnapshot = $this->read()->payment();
+
+        $this->assertSame('pm_previous', $paymentSnapshot->stripePaymentMethodId());
+        $this->assertSame('card', $paymentSnapshot->methodType());
+    }
+
+    #[DataProvider('descriptions')]
+    public function testPreservesReturnedDescriptionsWithoutIdentifierConstraints(string $description): void
+    {
+        $line = $this->line(0);
+        $line['description'] = $description;
+        $this->responses([$this->session(), $this->page([$line, $this->line(1)])]);
+
+        $this->assertSame($description, $this->read()->lineItems()[0]->description());
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function descriptions(): iterable
+    {
+        yield 'multiline text with surrounding whitespace' => ["  First line\nSecond line  "];
+        yield 'text longer than the identifier boundary' => [str_repeat('x', 2049)];
     }
 
     public function testReadsArchivedStripePricesInEmbeddedModeUsingFrozenEvidence(): void
@@ -323,6 +391,15 @@ final class CheckoutSessionRetrieverTest extends KirbyTestCase
             'amount_subtotal' => 500,
             'amount_tax' => 115,
             'amount_total' => 615,
+            'taxes' => [[
+                'amount' => 115,
+                'taxable_amount' => 500,
+                'rate' => [
+                    'id' => 'txr_portugal',
+                    'inclusive' => false,
+                    'percentage' => 23,
+                ],
+            ]],
             'shipping_rate' => [
                 'id' => 'shr_standard',
                 'object' => 'shipping_rate',
@@ -344,6 +421,17 @@ final class CheckoutSessionRetrieverTest extends KirbyTestCase
         $this->assertSame('shr_standard', $observation->snapshot()->stripeShippingRateId());
         $this->assertSame('6.15', $observation->snapshot()->shippingTotal());
         $this->assertSame('70.15', (string) $observation->total()->getAmount());
+        $expansions = $this->requests[0]['expand'];
+        $this->assertIsArray($expansions);
+        $this->assertContains('shipping_cost.taxes', $expansions);
+        $taxBreakdown = $observation->snapshot()->tax()?->toArray()['breakdown'];
+        $this->assertIsArray($taxBreakdown);
+        $this->assertSame(['order', 'shipping'], array_column($taxBreakdown, 'target'));
+        $shippingAllocation = $taxBreakdown[1];
+        $this->assertIsArray($shippingAllocation);
+        $this->assertSame('shr_standard', $shippingAllocation['targetId']);
+        $this->assertSame('txr_portugal', $shippingAllocation['rateId']);
+        $this->assertSame('1.15', $shippingAllocation['amount']);
 
         $session['shipping_cost']['shipping_rate']['metadata'][PluginMetadata::SHIPPING_QUOTE_KEY] = str_repeat('b', 64);
         $this->responses([$session, $this->page([$this->line(0), $this->line(1)])]);
@@ -565,6 +653,7 @@ final class CheckoutSessionRetrieverTest extends KirbyTestCase
         yield 'changed quantity' => ['line', 'quantity', 1];
         yield 'wrong subtotal' => ['line', 'amount_subtotal', 1];
         yield 'incomplete allocation' => ['line', 'amount_tax', null];
+        yield 'description is not text' => ['line', 'description', 123];
         yield 'foreign PaymentIntent' => ['payment', 'metadata', []];
         yield 'wrong PaymentIntent amount' => ['payment', 'amount', 1];
         yield 'unexpanded PaymentIntent' => ['session', 'payment_intent', 'pi_current'];

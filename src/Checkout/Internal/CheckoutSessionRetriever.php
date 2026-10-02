@@ -41,7 +41,7 @@ final class CheckoutSessionRetriever
     public function __construct(
         private readonly CheckoutSessionGatewayInterface $gateway,
         private readonly CheckoutSessionSnapshotNormalizer $snapshots = new CheckoutSessionSnapshotNormalizer(),
-        private readonly CheckoutSessionFactory $sessions = new CheckoutSessionFactory(),
+        private readonly CheckoutSessionFactory $sessionFactory = new CheckoutSessionFactory(),
     ) {}
 
     /**
@@ -73,7 +73,7 @@ final class CheckoutSessionRetriever
                 throw new OrderDataException();
             }
 
-            $currentAssociation = $this->sessions->association(
+            $currentAssociation = $this->sessionFactory->association(
                 record: $sessionRecord,
                 order: $order,
                 request: $request,
@@ -217,7 +217,10 @@ final class CheckoutSessionRetriever
                 stripePriceId: $priceId,
                 stripeProductId: $productId,
                 quantity: OrderData::integer($line['quantity']),
-                description: OrderData::nullableSingleLine($line['description'] ?? null),
+                // Stripe descriptions are arbitrary display text, not identifiers;
+                // preserve line breaks and whitespace while checking type/UTF-8.
+                // https://docs.stripe.com/api/checkout/sessions/object#checkout_session_object-line_items-data-description
+                description: OrderData::nullableString($line['description'] ?? null),
                 price: $this->amount($price['unit_amount'], $currency),
                 subtotal: $this->amount($line['amount_subtotal'], $currency),
                 discount: $discount,
@@ -356,14 +359,19 @@ final class CheckoutSessionRetriever
                 || strtoupper(OrderData::text($charge['currency'] ?? null)) !== $currency
                 || $this->amount($charge['amount'] ?? null, $currency)->isEqualTo($amount) === false
                 || in_array($chargeStatus, [Charge::STATUS_FAILED, Charge::STATUS_PENDING, Charge::STATUS_SUCCEEDED], true) === false
-                || $methodId !== null && $chargeMethodId !== $methodId
-                || $methodType !== null && $chargeMethodType !== null && $methodType !== $chargeMethodType
             ) {
                 throw new OrderDataException();
             }
 
-            $methodId ??= $chargeMethodId;
-            $methodType ??= $chargeMethodType;
+            // The latest Charge can describe a previous failed attempt while
+            // the PaymentIntent already has a different method for its next try.
+            // Prefer the current method; use Charge details only when it is absent.
+            // https://docs.stripe.com/api/payment_intents/object#payment_intent_object-latest_charge
+            if ($method === null) {
+                $methodId = $chargeMethodId;
+                $methodType = $chargeMethodType;
+            }
+
             $chargeCreatedAt = $this->timestamp($charge['created'] ?? null);
             $chargePaid = OrderData::boolean($charge['paid'] ?? null);
             // Automatic asynchronous capture can leave capture facts incomplete

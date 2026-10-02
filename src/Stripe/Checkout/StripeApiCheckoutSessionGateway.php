@@ -84,6 +84,9 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
                     'payment_intent.latest_charge',
                     'payment_intent.payment_method',
                     'shipping_cost.shipping_rate',
+                    // Shipping allocations are includable separately from the Rate.
+                    // https://docs.stripe.com/api/checkout/sessions/object#checkout_session_object-shipping_cost-taxes
+                    'shipping_cost.taxes',
                     'total_details.breakdown',
                 ],
             ]);
@@ -150,15 +153,7 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
                 }
 
                 $ids[$lineItem['id']] = true;
-                $items[] = array_intersect_key($lineItem, array_flip([
-                    'id', 'object', 'metadata', 'quantity', 'currency', 'description',
-                    'amount_subtotal', 'amount_discount', 'amount_tax', 'amount_total', 'discounts', 'taxes',
-                ])) + ['price' => is_array($lineItem['price'] ?? null)
-                    ? array_intersect_key($lineItem['price'], array_flip([
-                        'id', 'object', 'product', 'currency', 'unit_amount', 'unit_amount_decimal',
-                        'billing_scheme', 'type', 'recurring', 'transform_quantity',
-                    ]))
-                    : null];
+                $items[] = $this->lineItemSource($lineItem);
                 $startingAfter = $lineItem['id'];
             }
 
@@ -172,6 +167,30 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
         }
 
         throw new OrderDataException();
+    }
+
+    /**
+     * Projects selected provider fields without certifying purchase correlation.
+     * Missing required facts remain missing/null for the retriever to reject.
+     *
+     * @param array<array-key, mixed> $lineItem
+     * @return array<string, mixed>
+     */
+    private function lineItemSource(array $lineItem): array
+    {
+        $source = array_intersect_key($lineItem, array_flip([
+            'id', 'object', 'metadata', 'quantity', 'currency', 'description',
+            'amount_subtotal', 'amount_discount', 'amount_tax', 'amount_total', 'discounts', 'taxes',
+        ]));
+        $price = $lineItem['price'] ?? null;
+        $source['price'] = is_array($price)
+            ? array_intersect_key($price, array_flip([
+                'id', 'object', 'product', 'currency', 'unit_amount', 'unit_amount_decimal',
+                'billing_scheme', 'type', 'recurring', 'transform_quantity',
+            ]))
+            : null;
+
+        return $source;
     }
 
     private function sessionRecord(Session $session): CheckoutSessionRecord

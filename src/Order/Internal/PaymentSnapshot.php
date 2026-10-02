@@ -11,6 +11,8 @@ use Brick\Money\Money;
  * The reconciliation owner decides which monotonic state transition these facts justify.
  * An empty snapshot means no PaymentIntent was returned, not a failed payment;
  * its amount is absent rather than inferred from the Session total.
+ * Method facts prefer the current PaymentIntent, falling back to its latest Charge
+ * only when absent. Charge facts can describe a previous payment attempt.
  * This read value is not a persistence schema: nextAction() is transient provider data,
  * potentially including authentication directives, and must not enter stored order/hook snapshots.
  */
@@ -99,6 +101,7 @@ final readonly class PaymentSnapshot
         return $this->amountCaptured;
     }
 
+    /** Last reported provider failure; its presence alone does not establish current payment state. */
     public function failureCode(): ?string
     {
         return $this->failureCode;
