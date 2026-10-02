@@ -16,10 +16,10 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutSessionException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionReconciler;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionReducer;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionRetriever;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderHookDispatcher;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\PersistenceErrorCode;
@@ -162,6 +162,8 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
         $this->assertSame('payment_intent.requires_action', $actionEvent->triggerType());
         $this->assertSame('123456789', $nextAction->details()['reference']);
         $this->assertNull($nextAction->toPaymentIntent()->client_secret ?? null);
+        $this->assertNull(Payment::fromArray(OrderData::map($this->data()['payment']))->nextAction());
+        $this->assertArrayNotHasKey('nextAction', OrderData::map($actionEvent->orderSnapshot()['payment']));
 
         $gateway = $this->gateway($this->record('complete', 'paid', 'succeeded'));
         $this->reconciler($gateway)->reconcile($this->order->pageUuid(), 'cs_current', $this->event('checkout.session.async_payment_succeeded', 'evt_paid'));
@@ -231,7 +233,7 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
         $raw['data'] = ['object' => $object];
         $page = $this->reconciler($this->gateway($this->record()))->reconcile($this->order->pageUuid(), 'cs_current', Event::constructFrom($raw));
         $payment = Payment::fromArray(OrderData::map($this->data($page)['payment']));
-        $this->assertEquals($action, $payment->nextAction()?->toArray());
+        $this->assertNull($payment->nextAction());
         $this->assertEquals($action, $this->deliveries()[2]->payment()?->nextAction()?->toArray());
         $this->assertStringNotContainsString('SECRET_CANARY', json_encode($this->data($page), JSON_THROW_ON_ERROR));
     }
@@ -252,76 +254,126 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
         ]];
     }
 
-    public function testActionExpiryUsesConfiguredDaysAndUnchangedReadsDoNotRenewIt(): void
+    public function testActionOnlyReadsCreateDeliveriesWithoutChangingCanonicalPaymentFacts(): void
     {
         $action = PaymentAction::fromArray([
             'type' => 'future_action',
             'future_action' => ['reference' => 'example'],
         ]);
-        $observation = (new CheckoutSessionRetriever($this->gateway($this->record(action: $action))))->retrieve(
-            sessionId: 'cs_current',
-            order: $this->order,
-            request: $this->request,
-            credentialMode: CredentialMode::Test,
-        );
-        $reducer = new CheckoutSessionReducer(lifecycleDeliveryPayloadRetentionDays: 7);
-        $now = new DateTimeImmutable('2026-10-02T12:00:00Z');
-        $captured = $reducer->reduce($this->data(), $observation, null, $now);
-        $expiresAt = Payment::fromArray(OrderData::map($captured['payment']))->nextActionExpiresAt();
-        $this->assertEquals($now->modify('+7 days'), $expiresAt);
-        $unchanged = $reducer->reduce($captured, $observation, null, $now->modify('+1 day'));
-        $this->assertSame($captured, $unchanged);
+        $this->reconciler($this->gateway($this->record()))->reconcile($this->order->pageUuid(), 'cs_current');
+        $before = $this->data();
+        unset($before['lifecycleDeliveries']);
+        $reconciler = $this->reconciler($this->gateway($this->record(action: $action)));
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_current');
+        $captured = $this->data();
+        $after = $captured;
+        unset($after['lifecycleDeliveries']);
+        $this->assertSame($before, $after);
+        $this->assertCount(3, $this->deliveries());
+        $this->assertSame('example', $this->deliveries()[2]->payment()?->nextAction()?->details()['reference']);
 
-        $expired = $reducer->reduce($unchanged, $observation, null, $now->modify('+7 days'));
-        $payment = Payment::fromArray(OrderData::map($expired['payment']));
-        $this->assertNull($payment->nextAction());
-        $this->assertNull($payment->nextActionExpiresAt());
-        $this->assertSame('pending', $expired['paymentStatus']);
-        $this->assertSame([], $reducer->events($unchanged, $expired));
-        OrderSerializer::normalize($expired);
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_current');
+        $this->assertSame($captured, $this->data());
+        $this->assertCount(3, $this->deliveries());
     }
 
-    public function testActionsBeforeCompletionNotifyOnlyWhenPaymentBecomesPending(): void
+    public function testActionsBeforeCompletionNotifyImmediatelyAndPendingDoesNotRepeatThem(): void
     {
         $reconciler = $this->reconciler($this->gateway($this->record('open')));
         $reconciler->reconcile($this->order->pageUuid(), 'cs_current', $this->actionEvent());
         $this->assertSame('unpaid', $this->data()['paymentStatus']);
-        $this->assertSame(['session.created'], array_map(static fn(LifecycleEvent $event): string => $event->type()->value, $this->deliveries()));
+        $this->assertSame(['session.created', 'payment.requiresAction'], array_map(static fn(LifecycleEvent $event): string => $event->type()->value, $this->deliveries()));
+        $this->assertSame('unpaid', $this->deliveries()[1]->paymentStatus()->value);
+        $this->assertSame('open', $this->deliveries()[1]->checkoutStatus()->value);
+        $this->assertSame('123456789', $this->deliveries()[1]->payment()?->nextAction()?->details()['reference']);
         $this->reconciler($this->gateway($this->record()))->reconcile($this->order->pageUuid(), 'cs_current', $this->event());
-        $this->assertSame(['session.created', 'payment.pending', 'payment.requiresAction'], array_map(static fn(LifecycleEvent $event): string => $event->type()->value, $this->deliveries()));
+        $this->assertSame(['session.created', 'payment.requiresAction', 'payment.pending'], array_map(static fn(LifecycleEvent $event): string => $event->type()->value, $this->deliveries()));
+        $this->assertNull($this->deliveries()[2]->payment()?->nextAction());
     }
 
-    public function testNewerIdenticalActionsPreventOlderDifferentActionsFromReplacingThem(): void
+    public function testActionDeduplicationUsesEventIdentityAndFingerprintNotTimestampOrdering(): void
     {
         $reconciler = $this->reconciler($this->gateway($this->record()));
         $reconciler->reconcile($this->order->pageUuid(), 'cs_current');
         $reconciler->reconcile($this->order->pageUuid(), 'cs_current', $this->actionEvent());
-        $expiresAt = Payment::fromArray(OrderData::map($this->data()['payment']))->nextActionExpiresAt();
         $raw = $this->actionEvent()->toArray();
-        $raw['id'] = 'evt_newer';
-        $raw['created'] = $this->createdAt->getTimestamp() + 120;
+        $raw['id'] = 'evt_identical';
         $reconciler->reconcile($this->order->pageUuid(), 'cs_current', Event::constructFrom($raw));
-        $raw['id'] = 'evt_older';
-        $raw['created'] = $this->createdAt->getTimestamp() + 90;
+        $this->assertCount(3, $this->deliveries());
+        $raw['id'] = 'evt_changed';
         $object = OrderData::map(OrderData::map($raw['data'])['object']);
         $object['next_action'] = [
             'type' => 'multibanco_display_details',
-            'multibanco_display_details' => ['reference' => 'OLDER'],
+            'multibanco_display_details' => ['reference' => 'CHANGED'],
         ];
         $raw['data'] = ['object' => $object];
         $reconciler->reconcile($this->order->pageUuid(), 'cs_current', Event::constructFrom($raw));
         $payment = Payment::fromArray(OrderData::map($this->data()['payment']));
-        $this->assertSame('123456789', $payment->nextAction()?->details()['reference']);
-        $this->assertSame($this->createdAt->getTimestamp() + 120, $payment->nextActionObservedAt());
-        $this->assertEquals($expiresAt, $payment->nextActionExpiresAt());
-        $this->assertSame(['session.created', 'payment.pending', 'payment.requiresAction'], array_map(static fn(LifecycleEvent $event): string => $event->type()->value, $this->deliveries()));
-
-        $raw['id'] = 'evt_changed';
-        $raw['created'] = $this->createdAt->getTimestamp() + 180;
+        $this->assertNull($payment->nextAction());
+        $this->assertSame('123456789', $this->deliveries()[2]->payment()?->nextAction()?->details()['reference']);
+        $this->assertSame('CHANGED', $this->deliveries()[3]->payment()?->nextAction()?->details()['reference']);
         $reconciler->reconcile($this->order->pageUuid(), 'cs_current', Event::constructFrom($raw));
-        $this->assertSame('OLDER', Payment::fromArray(OrderData::map($this->data()['payment']))->nextAction()?->details()['reference']);
         $this->assertCount(4, $this->deliveries());
         $this->assertSame('payment.requiresAction', $this->deliveries()[3]->type()->value);
+
+        $raw = $this->actionEvent()->toArray();
+        $raw['id'] = 'evt_same_evidence_late';
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_current', Event::constructFrom($raw));
+        $this->assertCount(4, $this->deliveries());
+    }
+
+    public function testFailedActionDeliveryReplaysItsOwnEvidenceAfterTheOrderIsPaid(): void
+    {
+        $observed = [];
+        $orderStatuses = [];
+        $this->kirby->extend(['hooks' => [
+            'programmatordev.stripe-checkout.payment.requiresAction' => function (OrderPage $order, LifecycleEvent $lifecycleEvent) use (&$observed, &$orderStatuses): void {
+                $observed[] = $lifecycleEvent;
+                $orderStatuses[] = $order->content()->toArray()['paymentstatus'];
+
+                if (count($observed) === 1) {
+                    throw new RuntimeException('SECRET_CANARY');
+                }
+
+            },
+        ]]);
+        $this->reconciler($this->gateway($this->record()))->reconcile($this->order->pageUuid(), 'cs_current', $this->actionEvent());
+        $entry = $this->entries('lifecycleDeliveries')[3];
+        $this->assertSame('failed', $entry['status']);
+        $this->assertSame('processed', $this->entries('events')[0]['status']);
+        $this->assertNull(Payment::fromArray(OrderData::map($this->data()['payment']))->nextAction());
+
+        $this->reconciler($this->gateway($this->record('complete', 'paid', 'succeeded')))->reconcile($this->order->pageUuid(), 'cs_current');
+        (new OrderHookDispatcher($this->kirby))->dispatch($this->order->pageUuid(), $observed[0]->deliveryId());
+        $this->assertCount(2, $observed);
+        $this->assertSame(['pending', 'paid'], $orderStatuses);
+        $this->assertSame($observed[0]->toArray(), $observed[1]->toArray());
+        $this->assertSame('pending', $observed[1]->paymentStatus()->value);
+        $this->assertSame('123456789', $observed[1]->payment()?->nextAction()?->details()['reference']);
+        $retried = $this->entries('lifecycleDeliveries')[3];
+        $this->assertSame('delivered', $retried['status']);
+        $this->assertSame($entry['expiresAt'], $retried['expiresAt']);
+        $this->assertStringNotContainsString('SECRET_CANARY', json_encode($this->data(), JSON_THROW_ON_ERROR));
+    }
+
+    #[DataProvider('deliveryOnlyPaymentFields')]
+    public function testCanonicalOrderPaymentRejectsDeliveryOnlyFields(string $field): void
+    {
+        $this->reconciler($this->gateway($this->record()))->reconcile($this->order->pageUuid(), 'cs_current');
+        $data = $this->data();
+        $payment = OrderData::map($data['payment']);
+        $payment[$field] = null;
+        $data['payment'] = $payment;
+        $this->expectException(OrderDataException::class);
+        OrderSerializer::normalize($data);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function deliveryOnlyPaymentFields(): iterable
+    {
+        yield 'action' => ['nextAction'];
+        yield 'observation watermark' => ['nextActionObservedAt'];
+        yield 'action expiry' => ['nextActionExpiresAt'];
     }
 
     public function testCommitsReturnedCustomerCapabilitiesTogetherWithPaymentAndFrozenHookFacts(): void
@@ -557,6 +609,27 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
         $this->assertSame('paid', $this->data()['paymentStatus']);
         $this->assertCount(2, $this->deliveries());
         $this->assertSame('processed', $this->entries('events')[0]['status']);
+    }
+
+    public function testConcurrentProcessorCompletingTheSameEventSuppressesLateNotifications(): void
+    {
+        $event = $this->event();
+        $action = PaymentAction::fromArray([
+            'type' => 'future_action',
+            'future_action' => ['reference' => 'example'],
+        ]);
+        $record = $this->record(action: $action);
+        $gateway = $this->createMock(CheckoutSessionGatewayInterface::class);
+        $gateway->expects($this->once())->method('retrieveForReconciliation')->willReturnCallback(function () use ($event, $record): CheckoutSessionReconciliationRecord {
+            // Another request processes this same Event while the first request is still retrieving provider data.
+            $this->reconciler($this->gateway($this->record()))->reconcile($this->order->pageUuid(), 'cs_current', $event);
+
+            return $record;
+        });
+        $reconciler = new CheckoutSessionReconciler($this->store, new CheckoutSessionRetriever($gateway), CredentialMode::Test);
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_current', $event);
+        $this->assertSame('processed', $this->entries('events')[0]['status']);
+        $this->assertSame(['session.created', 'payment.pending'], array_map(static fn(LifecycleEvent $event): string => $event->type()->value, $this->deliveries()));
     }
 
     public function testCurrentReadThenWebhookUsesOneTransitionAndNoInventedTrigger(): void

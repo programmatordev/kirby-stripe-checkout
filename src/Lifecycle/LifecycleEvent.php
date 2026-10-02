@@ -11,6 +11,7 @@ use ProgrammatorDev\StripeCheckout\Order\DisputeStatus;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Payment;
+use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
 use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 use ProgrammatorDev\StripeCheckout\Order\RefundStatus;
 
@@ -37,6 +38,7 @@ final readonly class LifecycleEvent
         private ?string $triggerType,
         private ?string $triggerId,
         array $orderSnapshot,
+        private ?PaymentAction $nextAction = null,
     ) {
         OrderData::text($deliveryId, 255);
         OrderData::uuid($pageUuid);
@@ -56,6 +58,16 @@ final readonly class LifecycleEvent
         // The writer owns canonical schema/privacy validation.
         // Here we detach references and verify the event header agrees with its event-time snapshot.
         $snapshot = OrderData::map($orderSnapshot);
+        $paymentFacts = $nextAction === null ? [] : OrderData::map($snapshot['payment'] ?? null);
+
+        // Actions are delivery-only evidence, never part of the canonical order snapshot.
+        if (
+            ($type === LifecycleEventType::PaymentRequiresAction) !== ($nextAction !== null)
+            || $nextAction !== null && isset($paymentFacts['stripePaymentIntentId']) === false
+        ) {
+            throw new OrderDataException();
+        }
+
         $snapshotReference = new Uri([
             'scheme' => 'page',
             'host' => OrderData::text($snapshot['uuid'] ?? null),
@@ -147,7 +159,7 @@ final readonly class LifecycleEvent
     public function payment(): ?Payment
     {
         return isset($this->orderSnapshot['payment'])
-            ? Payment::fromArray(OrderData::map($this->orderSnapshot['payment']))
+            ? Payment::fromArray(OrderData::map($this->orderSnapshot['payment']), nextAction: $this->nextAction)
             : null;
     }
 
@@ -174,6 +186,7 @@ final readonly class LifecycleEvent
             'triggerType' => $this->triggerType,
             'triggerId' => $this->triggerId,
             'orderSnapshot' => $this->orderSnapshot,
+            'nextAction' => $this->nextAction?->toJson(),
         ];
     }
 }

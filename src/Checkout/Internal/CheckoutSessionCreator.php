@@ -17,6 +17,7 @@ use ProgrammatorDev\StripeCheckout\Configuration\Configuration;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
+use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\LifecycleNotification;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
@@ -85,47 +86,51 @@ final class CheckoutSessionCreator
         $requestContext = null;
         $sessionRequest = null;
         $checkoutAttempt = null;
+        // The store skips this callback when another request has already created the order.
+        // Captured references expose the prepared values only when this request wins, without rerunning customization on reuse.
+        $prepareAttempt = function () use (
+            $order,
+            $binding,
+            $token,
+            $guestReference,
+            $now,
+            $initiatingUrl,
+            $preparation,
+            &$requestContext,
+            &$sessionRequest,
+            &$checkoutAttempt,
+        ): CheckoutAttempt {
+            $requestContext = $this->requestContextFactory->create(
+                order: $order,
+                configuration: $this->configuration,
+                createdAt: $now,
+                initiatingUrl: $initiatingUrl,
+            );
+            // Shipping remains transient only until it becomes part of the exact Session request persisted with this new attempt.
+            // Reuse reads that request instead of reconstructing mutable policy.
+            $sessionRequest = $this->preparationFactory->sessionRequest(
+                $requestContext,
+                $preparation->shipping(),
+            );
+            $checkoutAttempt = new CheckoutAttempt(
+                order: $order,
+                context: $requestContext,
+                request: $sessionRequest,
+                binding: $binding,
+                token: $token,
+                guestReference: $guestReference,
+                stripeApiVersion: $this->stripeApiVersion,
+                credentialMode: $this->configuration->stripe()->secretKeyMode(),
+                credentialFingerprint: $this->credentialFingerprint($order),
+                createdAt: $now,
+            );
+
+            return $checkoutAttempt;
+        };
+
         $page = $this->orderPageStore->createAttemptOnce(
             orderUuid: $token->orderUuid(),
-            prepare: function () use (
-                $order,
-                $binding,
-                $token,
-                $guestReference,
-                $now,
-                $initiatingUrl,
-                $preparation,
-                &$requestContext,
-                &$sessionRequest,
-                &$checkoutAttempt,
-            ): CheckoutAttempt {
-                $requestContext = $this->requestContextFactory->create(
-                    order: $order,
-                    configuration: $this->configuration,
-                    createdAt: $now,
-                    initiatingUrl: $initiatingUrl,
-                );
-                // Shipping remains transient only until it becomes part of the exact Session request persisted with this new attempt.
-                // Reuse reads that request instead of reconstructing mutable policy.
-                $sessionRequest = $this->preparationFactory->sessionRequest(
-                    $requestContext,
-                    $preparation->shipping(),
-                );
-                $checkoutAttempt = new CheckoutAttempt(
-                    order: $order,
-                    context: $requestContext,
-                    request: $sessionRequest,
-                    binding: $binding,
-                    token: $token,
-                    guestReference: $guestReference,
-                    stripeApiVersion: $this->stripeApiVersion,
-                    credentialMode: $this->configuration->stripe()->secretKeyMode(),
-                    credentialFingerprint: $this->credentialFingerprint($order),
-                    createdAt: $now,
-                );
-
-                return $checkoutAttempt;
-            },
+            prepare: $prepareAttempt,
         );
 
         if ($requestContext === null || $sessionRequest === null || $checkoutAttempt === null) {
@@ -452,34 +457,53 @@ final class CheckoutSessionCreator
     ): OrderPage {
         $association = $session->association();
         $sessionId = $association->sessionId();
-        $associationData = $association->toOrderData();
+        $reduceOrder = function (array $data) use ($association, $now): array {
+            /** @var array<string, mixed> $data */
+            return $this->associateOrderData(
+                data: $data,
+                association: $association,
+                now: $now,
+            );
+        };
+        // A matching concurrent association is reuse, not a second Session-created notification.
+        $selectNotifications = static fn(array $before, array $after): array => isset($before['stripeCheckoutSessionId']) === false && isset($after['stripeCheckoutSessionId'])
+            ? [new LifecycleNotification(LifecycleEventType::SessionCreated)] : [];
 
         return $this->orderPageStore->update(
             uuid: $page->uuid()->toString(),
-            reduce: static function (array $data) use ($associationData, $sessionId, $now): array {
-                // A future webhook reconciler may associate the same Session before this POST response acquires the order write lock.
-                if (isset($data['stripeCheckoutSessionId'])) {
-                    if (
-                        $data['stripeCheckoutSessionId'] !== $sessionId
-                        || ($data['stripeShippingRateIds'] ?? null) !== $associationData['stripeShippingRateIds']
-                    ) {
-                        throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
-                    }
-
-                    return $data;
-                }
-
-                $data = [...$data, ...$associationData];
-                $data['checkoutStatus'] = CheckoutStatus::Open->value;
-                $data['checkoutOpenedAt'] = OrderData::timestamp($now);
-                $data['updatedAt'] = max($data['updatedAt'], OrderData::timestamp($now));
-
-                return $data;
-            },
-            events: [LifecycleEventType::SessionCreated],
+            reduce: $reduceOrder,
+            notifications: $selectNotifications,
             triggerType: 'checkout.session',
             triggerId: $sessionId,
         );
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function associateOrderData(array $data, CheckoutSessionAssociation $association, DateTimeImmutable $now): array
+    {
+        $associationData = $association->toOrderData();
+
+        // Reconciliation may associate the same Session before this POST response acquires the order write lock.
+        if (isset($data['stripeCheckoutSessionId'])) {
+            if (
+                $data['stripeCheckoutSessionId'] !== $association->sessionId()
+                || ($data['stripeShippingRateIds'] ?? null) !== $associationData['stripeShippingRateIds']
+            ) {
+                throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+            }
+
+            return $data;
+        }
+
+        $data = [...$data, ...$associationData];
+        $data['checkoutStatus'] = CheckoutStatus::Open->value;
+        $data['checkoutOpenedAt'] = OrderData::timestamp($now);
+        $data['updatedAt'] = max($data['updatedAt'], OrderData::timestamp($now));
+
+        return $data;
     }
 
     private function recordFailure(
@@ -487,56 +511,75 @@ final class CheckoutSessionCreator
         CheckoutSessionFailure $failure,
         DateTimeImmutable $now,
     ): OrderPage {
+        $reduceOrder = function (array $data) use ($failure, $now): array {
+            /** @var array<string, mixed> $data */
+            return $this->reduceFailure(
+                data: $data,
+                failure: $failure,
+                now: $now,
+            );
+        };
+
         return $this->orderPageStore->update(
             uuid: $page->uuid()->toString(),
-            reduce: static function (array $data) use ($failure, $now): array {
-                $status = CheckoutStatus::from(OrderData::text($data['checkoutStatus']));
-
-                // A concurrent request or webhook owns the stronger observation.
-                // Late local failures must not age or modify that record.
-                if (in_array($status, [CheckoutStatus::Creating, CheckoutStatus::CreationUncertain], true) === false) {
-                    return $data;
-                }
-
-                $checkoutAttempt = OrderData::map($data['checkoutAttempt']);
-                $checkoutAttempt['providerFailure'] = [
-                    ...$failure->toArray(),
-                    'occurredAt' => OrderData::timestamp($now),
-                ];
-                $data['checkoutAttempt'] = $checkoutAttempt;
-                $data['updatedAt'] = max($data['updatedAt'], OrderData::timestamp($now));
-
-                // Outcome certainty controls state; retry permission remains a separate persisted decision consulted by attempt reuse.
-                if ($failure->type() === CheckoutSessionFailureType::Uncertain || $failure->type() === CheckoutSessionFailureType::Incompatible) {
-                    $data['checkoutStatus'] = CheckoutStatus::CreationUncertain->value;
-                    $data['creationUncertainAt'] ??= OrderData::timestamp($now);
-                } elseif ($failure->isRetryable() === false) {
-                    $data['checkoutStatus'] = CheckoutStatus::CreationFailed->value;
-                    $data['creationFailedAt'] ??= OrderData::timestamp($now);
-                }
-
-                return $data;
-            },
+            reduce: $reduceOrder,
         );
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function reduceFailure(array $data, CheckoutSessionFailure $failure, DateTimeImmutable $now): array
+    {
+        $status = CheckoutStatus::from(OrderData::text($data['checkoutStatus']));
+
+        // A concurrent request or webhook owns the stronger observation.
+        // Late local failures must not age or modify that record.
+        if (in_array($status, [CheckoutStatus::Creating, CheckoutStatus::CreationUncertain], true) === false) {
+            return $data;
+        }
+
+        $checkoutAttempt = OrderData::map($data['checkoutAttempt']);
+        $checkoutAttempt['providerFailure'] = [
+            ...$failure->toArray(),
+            'occurredAt' => OrderData::timestamp($now),
+        ];
+        $data['checkoutAttempt'] = $checkoutAttempt;
+        $data['updatedAt'] = max($data['updatedAt'], OrderData::timestamp($now));
+
+        // Outcome certainty controls state; retry permission remains a separate persisted decision consulted by attempt reuse.
+        if ($failure->type() === CheckoutSessionFailureType::Uncertain || $failure->type() === CheckoutSessionFailureType::Incompatible) {
+            $data['checkoutStatus'] = CheckoutStatus::CreationUncertain->value;
+            $data['creationUncertainAt'] ??= OrderData::timestamp($now);
+        } elseif ($failure->isRetryable() === false) {
+            $data['checkoutStatus'] = CheckoutStatus::CreationFailed->value;
+            $data['creationFailedAt'] ??= OrderData::timestamp($now);
+        }
+
+        return $data;
     }
 
     private function markRetryExpired(OrderPage $page, DateTimeImmutable $now): OrderPage
     {
+        $expireRetry = static function (array $data) use ($now): array {
+            /** @var array<string, mixed> $data */
+            $status = CheckoutStatus::from(OrderData::text($data['checkoutStatus']));
+
+            if (in_array($status, [CheckoutStatus::Creating, CheckoutStatus::CreationUncertain], true) === false) {
+                return $data;
+            }
+
+            $data['checkoutStatus'] = CheckoutStatus::CreationFailed->value;
+            $data['creationFailedAt'] ??= OrderData::timestamp($now);
+            $data['updatedAt'] = max($data['updatedAt'], OrderData::timestamp($now));
+
+            return $data;
+        };
+
         return $this->orderPageStore->update(
             uuid: $page->uuid()->toString(),
-            reduce: static function (array $data) use ($now): array {
-                $status = CheckoutStatus::from(OrderData::text($data['checkoutStatus']));
-
-                if (in_array($status, [CheckoutStatus::Creating, CheckoutStatus::CreationUncertain], true) === false) {
-                    return $data;
-                }
-
-                $data['checkoutStatus'] = CheckoutStatus::CreationFailed->value;
-                $data['creationFailedAt'] ??= OrderData::timestamp($now);
-                $data['updatedAt'] = max($data['updatedAt'], OrderData::timestamp($now));
-
-                return $data;
-            },
+            reduce: $expireRetry,
         );
     }
 

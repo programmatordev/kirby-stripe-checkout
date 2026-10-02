@@ -17,6 +17,7 @@ use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
+use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
 use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 use ProgrammatorDev\StripeCheckout\Order\RefundStatus;
 
@@ -27,7 +28,7 @@ final class HookDeliveryLedger
      * @param array<string, mixed> $data
      * @param array<string, mixed> $customFields
      */
-    public static function event(array $data, array $customFields, LifecycleEventType $type, int $revision, ?string $triggerType = null, ?string $triggerId = null): LifecycleEvent
+    public static function event(array $data, array $customFields, LifecycleEventType $type, int $revision, ?string $triggerType = null, ?string $triggerId = null, ?PaymentAction $nextAction = null): LifecycleEvent
     {
         // Never nest older delivery snapshots inside a new snapshot.
         // Event-time custom content is retained alongside normalized canonical facts.
@@ -50,6 +51,7 @@ final class HookDeliveryLedger
             triggerType: $triggerType,
             triggerId: $triggerId,
             orderSnapshot: [...$customFields, ...$data],
+            nextAction: $nextAction,
         );
     }
 
@@ -64,6 +66,7 @@ final class HookDeliveryLedger
         // Expiry ends replay eligibility; it does not expire the delivery identity or its sanitized outcome.
         return [
             'event' => $event->toArray(),
+            'actionFingerprint' => self::actionFingerprint($event->payment()?->nextAction()),
             'createdAt' => OrderData::timestamp($createdAt),
             'expiresAt' => OrderData::timestamp($createdAt->add(new DateInterval('P' . $lifecycleDeliveryPayloadRetentionDays . 'D'))),
             'status' => 'pending',
@@ -82,7 +85,7 @@ final class HookDeliveryLedger
     /** @param array<string, mixed> $data */
     public static function restoreEvent(array $data): LifecycleEvent
     {
-        OrderData::validateAllowedKeys($data, ['deliveryId', 'type', 'pageUuid', 'occurredAt', 'revision', 'languageCode', 'checkoutStatus', 'paymentStatus', 'refundStatus', 'disputeStatus', 'triggerType', 'triggerId', 'orderSnapshot']);
+        OrderData::validateAllowedKeys($data, ['deliveryId', 'type', 'pageUuid', 'occurredAt', 'revision', 'languageCode', 'checkoutStatus', 'paymentStatus', 'refundStatus', 'disputeStatus', 'triggerType', 'triggerId', 'orderSnapshot', 'nextAction']);
         $snapshot = OrderData::map($data['orderSnapshot'] ?? null);
 
         if (array_key_exists('lifecycleDeliveries', $snapshot) || ($data['occurredAt'] ?? null) !== ($snapshot['updatedAt'] ?? null)) {
@@ -106,6 +109,7 @@ final class HookDeliveryLedger
             triggerType: OrderData::nullableString($data['triggerType'] ?? null),
             triggerId: OrderData::nullableString($data['triggerId'] ?? null),
             orderSnapshot: $snapshot,
+            nextAction: ($data['nextAction'] ?? null) === null ? null : PaymentAction::fromJson(OrderData::string($data['nextAction'])),
         );
     }
 
@@ -119,7 +123,7 @@ final class HookDeliveryLedger
 
         foreach (OrderData::list($value) as $entry) {
             $entry = OrderData::map($entry);
-            $keys = ['event', 'createdAt', 'expiresAt', 'status', 'attempts', 'lastAttemptAt', 'errorCode'];
+            $keys = ['event', 'actionFingerprint', 'createdAt', 'expiresAt', 'status', 'attempts', 'lastAttemptAt', 'errorCode'];
             OrderData::validateAllowedKeys($entry, $keys);
             OrderData::validateRequiredKeys($entry, $keys);
             $event = self::restoreEvent(OrderData::map($entry['event']));
@@ -136,6 +140,7 @@ final class HookDeliveryLedger
                 || ($attempts === 0) !== ($entry['lastAttemptAt'] === null)
                 || $entry['status'] !== 'pending' && $attempts === 0
                 || $entry['errorCode'] !== ($entry['status'] === 'failed' ? LifecycleErrorCode::LISTENER_FAILED : null)
+                || $entry['actionFingerprint'] !== self::actionFingerprint($event->payment()?->nextAction())
             ) {
                 throw new OrderDataException();
             }
@@ -163,6 +168,27 @@ final class HookDeliveryLedger
         return $last === null ? 1 : self::restoreEvent(OrderData::map($last['event']))->revision() + 1;
     }
 
+    private static function actionFingerprint(?PaymentAction $nextAction): ?string
+    {
+        return $nextAction === null ? null : hash('sha256', $nextAction->toJson());
+    }
+
+    /** @param list<array<string, mixed>> $entries */
+    public static function hasAction(array $entries, PaymentAction $nextAction): bool
+    {
+        $fingerprint = self::actionFingerprint($nextAction);
+
+        // Retain the fingerprint outside the expiring payload, so cleanup cannot re-enable duplicate notifications.
+        // A later, different action must not make an older identical Event's evidence appear new again.
+        foreach ($entries as $entry) {
+            if ($entry['actionFingerprint'] === $fingerprint) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * @param list<array<string, mixed>> $before
      * @param list<array<string, mixed>> $after
@@ -180,6 +206,7 @@ final class HookDeliveryLedger
                 || OrderData::normalize($updated['event']) !== OrderData::normalize($entry['event'])
                 || $updated['createdAt'] !== $entry['createdAt']
                 || $updated['expiresAt'] !== $entry['expiresAt']
+                || $updated['actionFingerprint'] !== $entry['actionFingerprint']
                 || $updated['attempts'] < $entry['attempts']
                 || $entry['status'] === 'delivered' && $updated['status'] !== 'delivered'
                 || $entry['lastAttemptAt'] !== null && $updated['lastAttemptAt'] < $entry['lastAttemptAt']

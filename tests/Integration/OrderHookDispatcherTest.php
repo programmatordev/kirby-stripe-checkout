@@ -19,6 +19,7 @@ use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderHookDispatcher;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
+use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\LifecycleNotification;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEvent;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
@@ -334,8 +335,10 @@ final class OrderHookDispatcherTest extends KirbyTestCase
             'stripeShippingRateIds' => [],
             'checkoutOpenedAt' => $data['createdAt'],
         ];
-        $store->update($page->uuid()->toString(), $reduce, [LifecycleEventType::SessionCreated], 'checkout.session.completed', 'evt_test');
-        $page = $store->update($page->uuid()->toString(), $reduce, [LifecycleEventType::SessionCreated], 'checkout.session.completed', 'evt_test');
+        $events = static fn(array $before, array $after): array => isset($before['stripeCheckoutSessionId']) === false && isset($after['stripeCheckoutSessionId'])
+            ? [new LifecycleNotification(LifecycleEventType::SessionCreated)] : [];
+        $store->update($page->uuid()->toString(), $reduce, $events, 'checkout.session.completed', 'evt_test');
+        $page = $store->update($page->uuid()->toString(), $reduce, $events, 'checkout.session.completed', 'evt_test');
         $this->assertCount(1, $observed);
         $this->assertCount(2, $this->entries($page));
         $this->assertSame(2, $observed[0]->revision());

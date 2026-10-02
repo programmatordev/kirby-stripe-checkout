@@ -260,7 +260,6 @@ final class OrderSerializer
                     $payment->status() !== $paymentStatus || $data['payment']['currency'] !== $currency
                     || $payment->stripePaymentIntentId() !== ($data['stripePaymentIntentId'] ?? null)
                     || $payment->stripeChargeId() !== ($data['stripeChargeId'] ?? null)
-                    || $payment->nextAction() !== null && $payment->stripePaymentIntentId() === null
                 ) {
                     throw new OrderDataException();
                 }

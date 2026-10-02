@@ -5,28 +5,26 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Order;
 
 use Brick\Money\Money;
-use DateTimeImmutable;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\PaymentSnapshot;
 
-/** Frozen common payment facts and optional expiring action evidence; neither promises that an action remains usable. */
+/** Common payment facts; only a requires-action lifecycle snapshot attaches historical action evidence. */
 final readonly class Payment
 {
     private const MONEY_FIELDS = ['amount', 'amountReceived', 'amountCaptured'];
     private const TEXT_FIELDS = ['stripePaymentIntentId', 'stripeChargeId', 'stripePaymentMethodId', 'paymentIntentStatus', 'chargeStatus', 'methodType', 'failureCode'];
-    private const TIME_FIELDS = ['createdAt', 'chargeCreatedAt', 'nextActionObservedAt'];
+    private const TIME_FIELDS = ['createdAt', 'chargeCreatedAt'];
     private const BOOLEAN_FIELDS = ['chargePaid', 'chargeCaptured'];
 
     /** @param array<string, mixed> $data */
     private function __construct(
         private array $data,
         private ?PaymentAction $nextAction,
-        private ?DateTimeImmutable $nextActionExpiresAt,
     ) {}
 
-    public static function fromSnapshot(PaymentSnapshot $snapshot, PaymentStatus $status, string $currency, ?PaymentAction $nextAction, ?int $nextActionObservedAt, ?DateTimeImmutable $nextActionExpiresAt): self
+    public static function fromSnapshot(PaymentSnapshot $snapshot, PaymentStatus $status, string $currency): self
     {
         return self::fromArray([
             'status' => $status->value,
@@ -45,16 +43,13 @@ final readonly class Payment
             'chargeCreatedAt' => $snapshot->chargeCreatedAt(),
             'chargePaid' => $snapshot->chargePaid(),
             'chargeCaptured' => $snapshot->chargeCaptured(),
-            'nextAction' => $nextAction?->toJson(),
-            'nextActionObservedAt' => $nextActionObservedAt,
-            'nextActionExpiresAt' => $nextActionExpiresAt === null ? null : OrderData::timestamp($nextActionExpiresAt),
         ]);
     }
 
     /** @param array<string, mixed> $data */
-    public static function fromArray(array $data): self
+    public static function fromArray(array $data, ?PaymentAction $nextAction = null): self
     {
-        $keys = ['status', 'currency', 'nextAction', 'nextActionExpiresAt', ...self::MONEY_FIELDS, ...self::TEXT_FIELDS, ...self::TIME_FIELDS, ...self::BOOLEAN_FIELDS];
+        $keys = ['status', 'currency', ...self::MONEY_FIELDS, ...self::TEXT_FIELDS, ...self::TIME_FIELDS, ...self::BOOLEAN_FIELDS];
         OrderData::validateAllowedKeys($data, $keys);
         OrderData::validateRequiredKeys($data, $keys);
         PaymentStatus::from(OrderData::text($data['status']));
@@ -98,27 +93,9 @@ final readonly class Payment
             }
         }
 
-        if (
-            ($data['nextAction'] === null) !== ($data['nextActionObservedAt'] === null)
-            || ($data['nextAction'] === null) !== ($data['nextActionExpiresAt'] === null)
-        ) {
-            throw new OrderDataException();
-        }
-
-        $nextAction = null;
-        $nextActionExpiresAt = null;
-
-        if ($data['nextAction'] !== null) {
-            // Restore historical evidence even past its deadline; dispatch and cleanup own expiry, not this frozen read value.
-            $nextAction = PaymentAction::fromJson(OrderData::string($data['nextAction']));
-            $data['nextAction'] = $nextAction->toJson();
-            $nextActionExpiresAt = OrderData::date($data['nextActionExpiresAt']);
-        }
-
         return new self(
             data: OrderData::map($data),
             nextAction: $nextAction,
-            nextActionExpiresAt: $nextActionExpiresAt,
         );
     }
 
@@ -203,18 +180,10 @@ final readonly class Payment
         return $this->nextAction;
     }
 
-    public function nextActionObservedAt(): ?int
-    {
-        return $this->data['nextActionObservedAt'] === null ? null : OrderData::integer($this->data['nextActionObservedAt']);
-    }
-
-    /** Local replay-retention deadline, not Stripe's expiry or a guarantee that the action is still usable. */
-    public function nextActionExpiresAt(): ?DateTimeImmutable
-    {
-        return $this->nextActionExpiresAt;
-    }
-
-    /** @return array<string, mixed> */
+    /**
+     * Only canonical payment facts are serialized here; LifecycleEvent owns any action payload.
+     * @return array<string, mixed>
+     */
     public function toArray(): array
     {
         return $this->data;

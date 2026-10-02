@@ -123,7 +123,7 @@ final readonly class PaymentAction
         }
 
         if (array_is_list($details) === false) {
-            // JSON object key order must not turn identical provider evidence into a changed action with a new replay window.
+            // JSON object key order must not turn identical provider evidence into a different notification.
             // Lists preserve their provider order.
             ksort($result, SORT_STRING);
         }

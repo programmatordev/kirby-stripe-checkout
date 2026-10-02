@@ -15,7 +15,7 @@ use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
  * Method facts prefer the current PaymentIntent, falling back to its latest Charge only when absent.
  * Charge facts can describe a previous payment attempt.
  * This read value is not a persistence schema. Actions can include private authentication directives;
- * reconciliation owns their separate, expiring replay storage rather than treating them as permanent payment facts.
+ * only requires-action lifecycle deliveries retain that evidence, not canonical order payment facts.
  */
 final readonly class PaymentSnapshot
 {

@@ -16,6 +16,7 @@ use Kirby\Uuid\Uuids;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutAttempt;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
+use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\LifecycleNotification;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
@@ -339,23 +340,19 @@ final class OrderPageStore
 
     /**
      * @param Closure(array<string, mixed>): array<string, mixed> $reduce
-     * @param list<LifecycleEventType>|Closure(array<string, mixed>, array<string, mixed>): list<LifecycleEventType> $events Events owned by the calling transition, selected against locked before/after facts.
+     * @param list<LifecycleNotification>|Closure(array<string, mixed>, array<string, mixed>): list<LifecycleNotification> $notifications Intent owned by the calling transition, selected against locked before/after facts.
      */
-    public function update(string $uuid, Closure $reduce, array|Closure $events = [], ?string $triggerType = null, ?string $triggerId = null): OrderPage
+    public function update(string $uuid, Closure $reduce, array|Closure $notifications = [], ?string $triggerType = null, ?string $triggerId = null): OrderPage
     {
         OrderData::uuid($uuid);
         $pageId = OrderSchema::ORDERS_PAGE_ID . '/' . (new Uri($uuid))->host();
 
         $deliveryIds = [];
-        $updated = OrderWriteLock::run($this->kirby, $pageId, function () use ($pageId, $reduce, $events, $triggerType, $triggerId, &$deliveryIds): OrderPage {
+        $updated = OrderWriteLock::run($this->kirby, $pageId, function () use ($pageId, $reduce, $notifications, $triggerType, $triggerId, &$deliveryIds): OrderPage {
             // Reload after acquiring the lock: a writer may have committed while this request waited, changing which transitions are valid.
             $page = $this->requirePage($pageId);
             $before = $this->data($page);
             $candidate = $reduce($before);
-
-            if (OrderData::normalize($before) === OrderData::normalize($candidate)) {
-                return $page;
-            }
 
             $updatedAt = OrderData::string($candidate['updatedAt'] ?? null);
 
@@ -378,7 +375,13 @@ final class OrderPageStore
 
             $after = OrderSerializer::normalize($candidate);
             $this->validateTransition($before, $after);
-            $transitionEvents = $events instanceof Closure ? $events($before, $after) : $events;
+            $transitionNotifications = $notifications instanceof Closure ? $notifications($before, $after) : $notifications;
+
+            // An action-only notification still needs a delivery, even if no canonical payment fact changed.
+            if ($transitionNotifications === [] && OrderData::normalize($before) === OrderData::normalize($after)) {
+                return $page;
+            }
+
             $content = $page->version('latest')->read('default') ?? [];
 
             // Replace the whole canonical projection, including removed fields,
@@ -389,7 +392,7 @@ final class OrderPageStore
                 }
             }
 
-            if ($transitionEvents !== []) {
+            if ($transitionNotifications !== []) {
                 /** @var list<array<string, mixed>> $entries */
                 $entries = $after['lifecycleDeliveries'] ?? [];
                 $revision = HookDeliveryLedger::nextRevision($entries);
@@ -399,13 +402,23 @@ final class OrderPageStore
                 // New deliveries capture current PHP policy; existing entries keep their original deadlines.
                 $housekeeping = (new ConfigurationResolver())->housekeeping($options);
 
-                foreach ($transitionEvents as $type) {
+                foreach ($transitionNotifications as $notification) {
+                    $type = $notification->type();
+
                     if (in_array($type, [LifecycleEventType::OrderCreated, LifecycleEventType::OrderDeleted], true) || isset($types[$type->value])) {
                         throw new OrderDataException();
                     }
 
                     $types[$type->value] = true;
-                    $event = HookDeliveryLedger::event($after, $content, $type, $revision, $triggerType, $triggerId);
+                    $event = HookDeliveryLedger::event(
+                        data: $after,
+                        customFields: $content,
+                        type: $type,
+                        revision: $revision,
+                        triggerType: $triggerType,
+                        triggerId: $triggerId,
+                        nextAction: $notification->nextAction(),
+                    );
                     $entries[] = HookDeliveryLedger::pending($event, $housekeeping->lifecycleDeliveryPayloadRetentionDays());
                     $deliveryIds[] = $event->deliveryId();
                 }

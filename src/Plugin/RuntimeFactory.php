@@ -17,7 +17,6 @@ use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutPreparationFactory;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutResolver;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionCreator;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionReconciler;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionReducer;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionRetriever;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestBuilder;
@@ -267,7 +266,6 @@ final class RuntimeFactory
             orders: new OrderPageStore($this->kirby),
             retriever: new CheckoutSessionRetriever(new StripeApiCheckoutSessionGateway($client)),
             credentialMode: $stripe->secretKeyMode(),
-            reducer: new CheckoutSessionReducer((new ConfigurationResolver())->housekeeping($options)->lifecycleDeliveryPayloadRetentionDays()),
         );
     }
 

@@ -11,6 +11,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
+use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\LifecycleNotification;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\CheckoutSessionAssociation;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
@@ -65,13 +66,16 @@ final class CheckoutSessionReconciler
         }
 
         if ($trigger !== null) {
-            $page = $this->orders->update($pageUuid, static function (array $data) use ($trigger): array {
+            $recordAttempt = static function (array $data) use ($trigger): array {
+                /** @var array<string, mixed> $data */
                 /** @var list<array<string, mixed>> $entries */
                 $entries = $data['events'] ?? [];
                 $data['events'] = StripeEventLedger::attempted($entries, $trigger, new DateTimeImmutable());
 
                 return $data;
-            });
+            };
+
+            $page = $this->orders->update($pageUuid, $recordAttempt);
             $data = $this->orders->data($page);
 
             /** @var list<array<string, mixed>> $entries */
@@ -95,29 +99,31 @@ final class CheckoutSessionReconciler
                 }
 
                 try {
+                    // These callbacks run inside the store's lock, using its freshly loaded order rather than the read baseline.
+                    $reduceOrder = function (array $data) use ($baseline, $observation, $trigger): array {
+                        /** @var array<string, mixed> $data */
+                        return $this->reduceObservation(
+                            data: $data,
+                            baseline: $baseline,
+                            observation: $observation,
+                            trigger: $trigger,
+                        );
+                    };
+                    $selectNotifications = function (array $before, array $after) use ($observation, $trigger): array {
+                        /** @var array<string, mixed> $before */
+                        /** @var array<string, mixed> $after */
+                        return $this->notificationsForObservation(
+                            before: $before,
+                            after: $after,
+                            observation: $observation,
+                            trigger: $trigger,
+                        );
+                    };
+
                     return $this->orders->update(
                         uuid: $pageUuid,
-                        reduce: function (array $data) use ($baseline, $observation, $trigger): array {
-                            /** @var list<array<string, mixed>> $entries */
-                            $entries = $data['events'] ?? [];
-
-                            if ($trigger !== null && StripeEventLedger::isComplete($entries, $trigger)) {
-                                return $data;
-                            }
-
-                            if ($this->commerceHash($baseline) !== $this->commerceHash($data)) {
-                                throw new ReconciliationConflictException();
-                            }
-
-                            $after = $this->reducer->reduce($data, $observation, $trigger, new DateTimeImmutable());
-
-                            if ($trigger !== null) {
-                                $after['events'] = StripeEventLedger::outcome($entries, $trigger);
-                            }
-
-                            return $after;
-                        },
-                        events: $this->reducer->events(...),
+                        reduce: $reduceOrder,
+                        notifications: $selectNotifications,
                         triggerType: $trigger?->type,
                         triggerId: $trigger?->id,
                     );
@@ -137,6 +143,64 @@ final class CheckoutSessionReconciler
 
             throw $error;
         }
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @param array<string, mixed> $baseline
+     * @return array<string, mixed>
+     */
+    private function reduceObservation(
+        array $data,
+        array $baseline,
+        CheckoutSessionObservation $observation,
+        ?ReconciliationEvent $trigger,
+    ): array {
+        /** @var list<array<string, mixed>> $entries */
+        $entries = $data['events'] ?? [];
+
+        // Another processor may have completed this Event while the provider read was in flight.
+        if ($trigger !== null && StripeEventLedger::isComplete($entries, $trigger)) {
+            return $data;
+        }
+
+        if ($this->commerceHash($baseline) !== $this->commerceHash($data)) {
+            throw new ReconciliationConflictException();
+        }
+
+        $after = $this->reducer->reduce($data, $observation, new DateTimeImmutable());
+
+        if ($trigger !== null) {
+            $after['events'] = StripeEventLedger::outcome($entries, $trigger);
+        }
+
+        return $after;
+    }
+
+    /**
+     * @param array<string, mixed> $before
+     * @param array<string, mixed> $after
+     * @return list<LifecycleNotification>
+     */
+    private function notificationsForObservation(
+        array $before,
+        array $after,
+        CheckoutSessionObservation $observation,
+        ?ReconciliationEvent $trigger,
+    ): array {
+        /** @var list<array<string, mixed>> $entries */
+        $entries = $before['events'] ?? [];
+
+        // Check the pre-commit ledger: this operation also marks the Event processed in $after during the same write.
+        if ($trigger !== null && StripeEventLedger::isComplete($entries, $trigger)) {
+            return [];
+        }
+
+        // Historical Events may supply action evidence, but never overwrite the current read's payment state.
+        $nextAction = $trigger?->type === Event::PAYMENT_INTENT_REQUIRES_ACTION
+            ? $trigger->nextAction : $observation->payment()->nextAction();
+
+        return $this->reducer->notifications($before, $after, $nextAction);
     }
 
     /** @param array<string, mixed> $data */
@@ -169,12 +233,15 @@ final class CheckoutSessionReconciler
             return;
         }
 
-        $this->orders->update($pageUuid, static function (array $data) use ($trigger, $error): array {
+        $recordFailure = static function (array $data) use ($trigger, $error): array {
+            /** @var array<string, mixed> $data */
             /** @var list<array<string, mixed>> $entries */
             $entries = $data['events'] ?? [];
             $data['events'] = StripeEventLedger::outcome($entries, $trigger, $error->errorCode());
 
             return $data;
-        });
+        };
+
+        $this->orders->update($pageUuid, $recordFailure);
     }
 }
