@@ -184,21 +184,33 @@ final class CheckoutSessionRetriever
             $initiatingLine = $initiatingLines[$index];
             $providerAmounts = $this->map($initiatingLine['providerAmounts']);
 
-            // Price/Product active flags describe today's catalogue, not whether the fixed purchase was valid.
-            // Never re-resolve or require active resources.
+            $this->validateLinePrice($price);
+
             if (
-                ($price['object'] ?? null) !== Price::OBJECT_NAME
-                || ($price['type'] ?? null) !== Price::TYPE_ONE_TIME
-                || ($price['billing_scheme'] ?? null) !== Price::BILLING_SCHEME_PER_UNIT
-                || ($price['recurring'] ?? null) !== null || ($price['transform_quantity'] ?? null) !== null
-                || strtoupper(OrderData::text($line['currency'] ?? null)) !== $order->currency()
+                strtoupper(OrderData::text($line['currency'] ?? null)) !== $order->currency()
                 || strtoupper(OrderData::text($price['currency'] ?? null)) !== $order->currency()
-                || ($line['quantity'] ?? null) !== $expected['quantity']
-                || ($price['unit_amount'] ?? null) !== $providerAmounts['price']
-                || ($line['amount_subtotal'] ?? null) !== $providerAmounts['subtotal']
-                || isset($expected['price']) && $priceId !== $expected['price']
-                || $initiatingLine['stripeProductId'] !== null && $productId !== $initiatingLine['stripeProductId']
             ) {
+                throw new OrderDataException();
+            }
+
+            if (($line['quantity'] ?? null) !== $expected['quantity']) {
+                throw new OrderDataException();
+            }
+
+            // The initiating price and subtotal are fixed; discounts and taxes are retained from the returned allocations below.
+            if (
+                ($price['unit_amount'] ?? null) !== $providerAmounts['price']
+                || ($line['amount_subtotal'] ?? null) !== $providerAmounts['subtotal']
+            ) {
+                throw new OrderDataException();
+            }
+
+            // Inline-price purchases have no initiating Price/Product IDs; their correlation uses line metadata and the fixed amounts above.
+            if (isset($expected['price']) && $priceId !== $expected['price']) {
+                throw new OrderDataException();
+            }
+
+            if ($initiatingLine['stripeProductId'] !== null && $productId !== $initiatingLine['stripeProductId']) {
                 throw new OrderDataException();
             }
 
@@ -231,6 +243,25 @@ final class CheckoutSessionRetriever
         ksort($result);
 
         return array_values($result);
+    }
+
+    /** @param array<string, mixed> $price */
+    private function validateLinePrice(array $price): void
+    {
+        // Price/Product active flags describe today's catalogue, not whether the fixed purchase was valid.
+        // Never re-resolve or require active resources.
+        if (($price['object'] ?? null) !== Price::OBJECT_NAME) {
+            throw new OrderDataException();
+        }
+
+        if (
+            ($price['type'] ?? null) !== Price::TYPE_ONE_TIME
+            || ($price['billing_scheme'] ?? null) !== Price::BILLING_SCHEME_PER_UNIT
+            || ($price['recurring'] ?? null) !== null
+            || ($price['transform_quantity'] ?? null) !== null
+        ) {
+            throw new OrderDataException();
+        }
     }
 
     /** @param array<string, mixed> $parameters */
@@ -309,14 +340,27 @@ final class CheckoutSessionRetriever
         $status = OrderData::text($payment['status'] ?? null, 255);
         $statuses = [PaymentIntent::STATUS_CANCELED, PaymentIntent::STATUS_PROCESSING, PaymentIntent::STATUS_REQUIRES_ACTION, PaymentIntent::STATUS_REQUIRES_CONFIRMATION, PaymentIntent::STATUS_REQUIRES_PAYMENT_METHOD, PaymentIntent::STATUS_SUCCEEDED];
 
-        if (
-            ($payment['object'] ?? null) !== PaymentIntent::OBJECT_NAME
-            || ($payment['livemode'] ?? null) !== $record->session->liveMode
-            || strtoupper(OrderData::text($payment['currency'] ?? null)) !== $currency
-            || $amount->isEqualTo($total) === false
-            || in_array($status, $statuses, true) === false
-            || in_array($payment['capture_method'] ?? null, [PaymentIntent::CAPTURE_METHOD_AUTOMATIC, PaymentIntent::CAPTURE_METHOD_AUTOMATIC_ASYNC], true) === false
-        ) {
+        if (($payment['object'] ?? null) !== PaymentIntent::OBJECT_NAME) {
+            throw new OrderDataException();
+        }
+
+        if (($payment['livemode'] ?? null) !== $record->session->liveMode) {
+            throw new OrderDataException();
+        }
+
+        if (strtoupper(OrderData::text($payment['currency'] ?? null)) !== $currency) {
+            throw new OrderDataException();
+        }
+
+        if ($amount->isEqualTo($total) === false) {
+            throw new OrderDataException();
+        }
+
+        if (in_array($status, $statuses, true) === false) {
+            throw new OrderDataException();
+        }
+
+        if (in_array($payment['capture_method'] ?? null, [PaymentIntent::CAPTURE_METHOD_AUTOMATIC, PaymentIntent::CAPTURE_METHOD_AUTOMATIC_ASYNC], true) === false) {
             throw new OrderDataException();
         }
 
@@ -350,11 +394,23 @@ final class CheckoutSessionRetriever
             if (
                 ($charge['object'] ?? null) !== Charge::OBJECT_NAME
                 || ($charge['payment_intent'] ?? null) !== $paymentIntentId
-                || ($charge['livemode'] ?? null) !== $record->session->liveMode
-                || strtoupper(OrderData::text($charge['currency'] ?? null)) !== $currency
-                || $this->amount($charge['amount'] ?? null, $currency)->isEqualTo($amount) === false
-                || in_array($chargeStatus, [Charge::STATUS_FAILED, Charge::STATUS_PENDING, Charge::STATUS_SUCCEEDED], true) === false
             ) {
+                throw new OrderDataException();
+            }
+
+            if (($charge['livemode'] ?? null) !== $record->session->liveMode) {
+                throw new OrderDataException();
+            }
+
+            if (strtoupper(OrderData::text($charge['currency'] ?? null)) !== $currency) {
+                throw new OrderDataException();
+            }
+
+            if ($this->amount($charge['amount'] ?? null, $currency)->isEqualTo($amount) === false) {
+                throw new OrderDataException();
+            }
+
+            if (in_array($chargeStatus, [Charge::STATUS_FAILED, Charge::STATUS_PENDING, Charge::STATUS_SUCCEEDED], true) === false) {
                 throw new OrderDataException();
             }
 

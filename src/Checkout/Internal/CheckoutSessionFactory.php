@@ -63,36 +63,15 @@ final class CheckoutSessionFactory
         SessionRequest $request,
         ?bool $liveMode,
     ): CheckoutSessionAssociation {
-        $parameters = $request->parameters();
-        $expectedMetadata = array_filter(
-            is_array($parameters['metadata'] ?? null) ? $parameters['metadata'] : [],
-            static fn(mixed $value, mixed $key): bool => is_string($key)
-                && str_starts_with($key, PluginMetadata::KEY_PREFIX),
-            ARRAY_FILTER_USE_BOTH,
-        );
-        $uiMode = match ($order->uiMode()) {
-            UiMode::Hosted => Session::UI_MODE_HOSTED_PAGE,
-            UiMode::Embedded => Session::UI_MODE_EMBEDDED_PAGE,
-        };
+        $this->validateSessionState(record: $record, request: $request);
 
-        if (
-            $record->createdAt === null || $record->createdAt < 0
-            || $record->expiresAt === null || $record->expiresAt <= $record->createdAt
-            || $record->expiresAt !== ($parameters['expires_at'] ?? null)
-            || in_array($record->status, [Session::STATUS_OPEN, Session::STATUS_COMPLETE, Session::STATUS_EXPIRED], true) === false
-            || in_array($record->paymentStatus, [Session::PAYMENT_STATUS_PAID, Session::PAYMENT_STATUS_UNPAID, Session::PAYMENT_STATUS_NO_PAYMENT_REQUIRED], true) === false
-            || $record->liveMode === null
-            || $liveMode !== null && $record->liveMode !== $liveMode
-            || $record->mode !== Session::MODE_PAYMENT
-            || $record->uiMode !== $uiMode
-            || strtoupper((string) $record->currency) !== $order->currency()
-            || $record->clientReferenceId !== $order->pageUuid()
-            || $record->integrationIdentifier !== ($parameters['integration_identifier'] ?? null)
-            || ($record->metadata[PluginMetadata::OWNER_KEY] ?? null) !== PluginMetadata::NAME
-            || ($record->metadata[PluginMetadata::ORDER_KEY] ?? null) !== $order->pageUuid()
-            || $this->hasExpectedMetadata($record->metadata, $expectedMetadata) === false
-            || ($record->requestId !== null && trim($record->requestId) === '')
-        ) {
+        if ($record->liveMode === null || $liveMode !== null && $record->liveMode !== $liveMode) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+        }
+
+        $this->validatePurchaseCorrelation(record: $record, order: $order, request: $request);
+
+        if ($record->requestId !== null && trim($record->requestId) === '') {
             throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
         }
 
@@ -107,6 +86,80 @@ final class CheckoutSessionFactory
         }
 
         return $association;
+    }
+
+    private function validateSessionState(CheckoutSessionRecord $record, SessionRequest $request): void
+    {
+        if ($record->createdAt === null || $record->createdAt < 0) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+        }
+
+        if ($record->expiresAt === null || $record->expiresAt <= $record->createdAt) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+        }
+
+        if ($record->expiresAt !== ($request->parameters()['expires_at'] ?? null)) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+        }
+
+        // Historical reads include closed Sessions; create() separately requires a Session that can still open Checkout.
+        if (in_array($record->status, [Session::STATUS_OPEN, Session::STATUS_COMPLETE, Session::STATUS_EXPIRED], true) === false) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+        }
+
+        if (in_array($record->paymentStatus, [Session::PAYMENT_STATUS_PAID, Session::PAYMENT_STATUS_UNPAID, Session::PAYMENT_STATUS_NO_PAYMENT_REQUIRED], true) === false) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+        }
+    }
+
+    private function validatePurchaseCorrelation(
+        CheckoutSessionRecord $record,
+        OrderCreationContext $order,
+        SessionRequest $request,
+    ): void {
+        $parameters = $request->parameters();
+        // Correlate only plugin-owned metadata; merchant keys and additional provider metadata need not match the saved request.
+        $expectedMetadata = array_filter(
+            is_array($parameters['metadata'] ?? null) ? $parameters['metadata'] : [],
+            static fn(mixed $value, mixed $key): bool => is_string($key)
+                && str_starts_with($key, PluginMetadata::KEY_PREFIX),
+            ARRAY_FILTER_USE_BOTH,
+        );
+        $uiMode = match ($order->uiMode()) {
+            UiMode::Hosted => Session::UI_MODE_HOSTED_PAGE,
+            UiMode::Embedded => Session::UI_MODE_EMBEDDED_PAGE,
+        };
+
+        if ($record->mode !== Session::MODE_PAYMENT) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+        }
+
+        if ($record->uiMode !== $uiMode) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+        }
+
+        if (strtoupper((string) $record->currency) !== $order->currency()) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+        }
+
+        if ($record->clientReferenceId !== $order->pageUuid()) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+        }
+
+        if ($record->integrationIdentifier !== ($parameters['integration_identifier'] ?? null)) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+        }
+
+        if (
+            ($record->metadata[PluginMetadata::OWNER_KEY] ?? null) !== PluginMetadata::NAME
+            || ($record->metadata[PluginMetadata::ORDER_KEY] ?? null) !== $order->pageUuid()
+        ) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+        }
+
+        if ($this->hasExpectedMetadata($record->metadata, $expectedMetadata) === false) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+        }
     }
 
     /**
