@@ -163,43 +163,45 @@ final class HookDeliveryLedger
             } else {
                 self::validatePrunedEvent($eventData);
                 $prunedAt = OrderData::date($entry['payloadPrunedAt']);
-                $requiresAction = $eventData['type'] === LifecycleEventType::PaymentRequiresAction->value;
 
-                // The removed action cannot be hashed again; validate the retained fingerprint's shape here.
-                // Transition validation preserves its original value across cleanup.
                 if (
                     $prunedAt < OrderData::date($entry['createdAt'])
                     || $prunedAt < OrderData::date($entry['expiresAt'])
-                    || $requiresAction && (is_string($entry['actionFingerprint']) === false || preg_match('/\A[a-f0-9]{64}\z/', $entry['actionFingerprint']) !== 1)
-                    || $requiresAction === false && $entry['actionFingerprint'] !== null
                 ) {
+                    throw new OrderDataException();
+                }
+
+                // The removed action cannot be hashed again; validate the retained fingerprint's shape here.
+                // Transition validation preserves its original value across cleanup.
+                if ($eventData['type'] === LifecycleEventType::PaymentRequiresAction->value) {
+                    if (is_string($entry['actionFingerprint']) === false || preg_match('/\A[a-f0-9]{64}\z/', $entry['actionFingerprint']) !== 1) {
+                        throw new OrderDataException();
+                    }
+                } elseif ($entry['actionFingerprint'] !== null) {
                     throw new OrderDataException();
                 }
             }
 
             $deliveryId = OrderData::string($eventData['deliveryId']);
             $eventRevision = OrderData::integer($eventData['revision']);
-            $attempts = OrderData::integer($entry['attempts']);
 
-            if (
-                $eventData['pageUuid'] !== 'page://' . $uuid
-                || isset($ids[$deliveryId])
-                || $eventRevision < $revision
-                || $eventData['type'] === LifecycleEventType::OrderDeleted->value
-                || in_array($entry['status'], ['pending', 'delivered', 'failed'], true) === false
-                || $attempts < 0
-                || OrderData::date($entry['expiresAt']) <= OrderData::date($entry['createdAt'])
-                || ($attempts === 0) !== ($entry['lastAttemptAt'] === null)
-                || $entry['status'] !== 'pending' && $attempts === 0
-                || $entry['errorCode'] !== ($entry['status'] === 'failed' ? LifecycleErrorCode::LISTENER_FAILED : null)
-            ) {
+            if ($eventData['pageUuid'] !== 'page://' . $uuid || isset($ids[$deliveryId])) {
                 throw new OrderDataException();
             }
 
-            if ($entry['lastAttemptAt'] !== null && OrderData::date($entry['lastAttemptAt']) < OrderData::date($eventData['occurredAt'])) {
+            if ($eventRevision < $revision) {
                 throw new OrderDataException();
             }
 
+            if ($eventData['type'] === LifecycleEventType::OrderDeleted->value) {
+                throw new OrderDataException();
+            }
+
+            if (OrderData::date($entry['expiresAt']) <= OrderData::date($entry['createdAt'])) {
+                throw new OrderDataException();
+            }
+
+            self::validateDeliveryOutcome($entry, OrderData::string($eventData['occurredAt']));
             $ids[$deliveryId] = true;
             $revision = $eventRevision;
             $entry['event'] = $eventData;
@@ -207,6 +209,32 @@ final class HookDeliveryLedger
         }
 
         return $entries;
+    }
+
+    /** @param array<string, mixed> $entry */
+    private static function validateDeliveryOutcome(array $entry, string $occurredAt): void
+    {
+        if (in_array($entry['status'], ['pending', 'delivered', 'failed'], true) === false) {
+            throw new OrderDataException();
+        }
+
+        $attempts = OrderData::integer($entry['attempts']);
+
+        if (
+            $attempts < 0
+            || ($attempts === 0) !== ($entry['lastAttemptAt'] === null)
+            || $entry['status'] !== 'pending' && $attempts === 0
+        ) {
+            throw new OrderDataException();
+        }
+
+        if ($entry['errorCode'] !== ($entry['status'] === 'failed' ? LifecycleErrorCode::LISTENER_FAILED : null)) {
+            throw new OrderDataException();
+        }
+
+        if ($entry['lastAttemptAt'] !== null && OrderData::date($entry['lastAttemptAt']) < OrderData::date($occurredAt)) {
+            throw new OrderDataException();
+        }
     }
 
     /** @param list<array<string, mixed>> $entries */
@@ -291,19 +319,39 @@ final class HookDeliveryLedger
             $payloadRemoved = $entry['payloadPrunedAt'] === null && $updated['payloadPrunedAt'] !== null;
             $expectedEvent = $payloadRemoved ? self::eventMetadata(OrderData::map($entry['event'])) : $entry['event'];
 
-            // An attempt admitted before cleanup may still finish afterward, so its outcome can advance.
-            // Once pruned, the attempt count and time stay fixed to prevent another dispatch.
-            if (
-                OrderData::normalize($updated['event']) !== OrderData::normalize($expectedEvent)
-                || $entry['payloadPrunedAt'] !== null && $updated['payloadPrunedAt'] !== $entry['payloadPrunedAt']
-                || $entry['payloadPrunedAt'] !== null && ($updated['attempts'] !== $entry['attempts'] || $updated['lastAttemptAt'] !== $entry['lastAttemptAt'])
-                || $updated['createdAt'] !== $entry['createdAt']
-                || $updated['expiresAt'] !== $entry['expiresAt']
-                || $updated['actionFingerprint'] !== $entry['actionFingerprint']
-                || $updated['attempts'] < $entry['attempts']
-                || $entry['status'] === 'delivered' && $updated['status'] !== 'delivered'
-                || $entry['lastAttemptAt'] !== null && $updated['lastAttemptAt'] < $entry['lastAttemptAt']
-            ) {
+            if (OrderData::normalize($updated['event']) !== OrderData::normalize($expectedEvent)) {
+                throw new OrderDataException();
+            }
+
+            if ($entry['payloadPrunedAt'] !== null) {
+                if ($updated['payloadPrunedAt'] !== $entry['payloadPrunedAt']) {
+                    throw new OrderDataException();
+                }
+
+                // An attempt admitted before cleanup may still finish afterward, so its outcome can advance.
+                // Once pruned, the attempt count and time stay fixed to prevent another dispatch.
+                if ($updated['attempts'] !== $entry['attempts'] || $updated['lastAttemptAt'] !== $entry['lastAttemptAt']) {
+                    throw new OrderDataException();
+                }
+            }
+
+            $immutableFields = ['createdAt', 'expiresAt', 'actionFingerprint'];
+
+            foreach ($immutableFields as $field) {
+                if ($updated[$field] !== $entry[$field]) {
+                    throw new OrderDataException();
+                }
+            }
+
+            if ($updated['attempts'] < $entry['attempts']) {
+                throw new OrderDataException();
+            }
+
+            if ($entry['status'] === 'delivered' && $updated['status'] !== 'delivered') {
+                throw new OrderDataException();
+            }
+
+            if ($entry['lastAttemptAt'] !== null && $updated['lastAttemptAt'] < $entry['lastAttemptAt']) {
                 throw new OrderDataException();
             }
         }
