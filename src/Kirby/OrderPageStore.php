@@ -406,7 +406,7 @@ final class OrderPageStore
 
                     $types[$type->value] = true;
                     $event = HookDeliveryLedger::event($after, $content, $type, $revision, $triggerType, $triggerId);
-                    $entries[] = HookDeliveryLedger::pending($event, $housekeeping->lifecycleDeliveryRetentionDays());
+                    $entries[] = HookDeliveryLedger::pending($event, $housekeeping->lifecycleDeliveryPayloadRetentionDays());
                     $deliveryIds[] = $event->deliveryId();
                 }
 

@@ -206,17 +206,17 @@ final class ConfigurationResolver
      */
     private function resolveHousekeeping(array $values): HousekeepingConfiguration
     {
-        $this->assertKnownKeys($values, ['intervalHours', 'batchSize', 'lifecycleDeliveryRetentionDays'], 'housekeeping');
+        $this->assertKnownKeys($values, ['intervalHours', 'batchSize', 'lifecycleDeliveryPayloadRetentionDays'], 'housekeeping');
         $intervalHours = array_key_exists('intervalHours', $values)
             ? $values['intervalHours']
             : Defaults::HOUSEKEEPING_INTERVAL_HOURS;
         $batchSize = array_key_exists('batchSize', $values)
             ? $values['batchSize']
             : Defaults::HOUSEKEEPING_BATCH_SIZE;
-        // The hook replay window is developer-owned and independent of merchant-configured order deletion.
-        $lifecycleDeliveryRetentionDays = array_key_exists('lifecycleDeliveryRetentionDays', $values)
-            ? $values['lifecycleDeliveryRetentionDays']
-            : Defaults::LIFECYCLE_DELIVERY_RETENTION_DAYS;
+        // Payload retention bounds hook replay, not delivery metadata or merchant-configured order deletion.
+        $lifecycleDeliveryPayloadRetentionDays = array_key_exists('lifecycleDeliveryPayloadRetentionDays', $values)
+            ? $values['lifecycleDeliveryPayloadRetentionDays']
+            : Defaults::LIFECYCLE_DELIVERY_PAYLOAD_RETENTION_DAYS;
 
         if (is_int($intervalHours) === false) {
             throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'housekeeping.intervalHours');
@@ -234,18 +234,18 @@ final class ConfigurationResolver
             throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'housekeeping.batchSize');
         }
 
-        if (is_int($lifecycleDeliveryRetentionDays) === false) {
-            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'housekeeping.lifecycleDeliveryRetentionDays');
+        if (is_int($lifecycleDeliveryPayloadRetentionDays) === false) {
+            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'housekeeping.lifecycleDeliveryPayloadRetentionDays');
         }
 
-        if ($lifecycleDeliveryRetentionDays < 1) {
-            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'housekeeping.lifecycleDeliveryRetentionDays');
+        if ($lifecycleDeliveryPayloadRetentionDays < 1) {
+            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'housekeeping.lifecycleDeliveryPayloadRetentionDays');
         }
 
         return new HousekeepingConfiguration(
             intervalHours: $intervalHours,
             batchSize: $batchSize,
-            lifecycleDeliveryRetentionDays: $lifecycleDeliveryRetentionDays,
+            lifecycleDeliveryPayloadRetentionDays: $lifecycleDeliveryPayloadRetentionDays,
         );
     }
 

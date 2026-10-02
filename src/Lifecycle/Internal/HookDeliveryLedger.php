@@ -54,17 +54,18 @@ final class HookDeliveryLedger
     }
 
     /** @return array<string, mixed> */
-    public static function pending(LifecycleEvent $event, int $retentionDays, ?DateTimeImmutable $now = null): array
+    public static function pending(LifecycleEvent $event, int $lifecycleDeliveryPayloadRetentionDays, ?DateTimeImmutable $now = null): array
     {
         // Calculate in UTC so daylight-saving changes cannot lengthen or shorten the retained replay window.
         $createdAt = OrderData::date(OrderData::timestamp($now ?? new DateTimeImmutable()));
 
-        // The local delivery window starts when intent is saved, not at a potentially older provider/business timestamp.
+        // The payload's replay window starts when delivery intent is saved, not at a potentially older provider/business timestamp.
         // Retries and subsequent configuration changes never extend this original deadline.
+        // Expiry ends replay eligibility; it does not expire the delivery identity or its sanitized outcome.
         return [
             'event' => $event->toArray(),
             'createdAt' => OrderData::timestamp($createdAt),
-            'expiresAt' => OrderData::timestamp($createdAt->add(new DateInterval('P' . $retentionDays . 'D'))),
+            'expiresAt' => OrderData::timestamp($createdAt->add(new DateInterval('P' . $lifecycleDeliveryPayloadRetentionDays . 'D'))),
             'status' => 'pending',
             'attempts' => 0,
             'lastAttemptAt' => null,

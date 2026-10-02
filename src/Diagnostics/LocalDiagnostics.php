@@ -93,7 +93,7 @@ final class LocalDiagnostics
             $checks[] = $this->check('housekeeping', self::PASS, 'housekeeping.configured', [
                 'intervalHours' => (string) $housekeeping->intervalHours(),
                 'batchSize' => (string) $housekeeping->batchSize(),
-                'lifecycleDays' => (string) $housekeeping->lifecycleDeliveryRetentionDays(),
+                'lifecycleDeliveryPayloadRetentionDays' => (string) $housekeeping->lifecycleDeliveryPayloadRetentionDays(),
             ]);
             $checks[] = $this->check('retention', self::PASS, 'retention.configured', [
                 'creationDays' => (string) $settings->creationFailureRetentionDays(),

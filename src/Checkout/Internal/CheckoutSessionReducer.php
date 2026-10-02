@@ -22,7 +22,7 @@ use Stripe\PaymentIntent;
 /** @internal Monotonic checkout/payment reduction of one complete observation, never a provider Event's state. */
 final class CheckoutSessionReducer
 {
-    public function __construct(private readonly int $lifecycleDeliveryRetentionDays = Defaults::LIFECYCLE_DELIVERY_RETENTION_DAYS) {}
+    public function __construct(private readonly int $lifecycleDeliveryPayloadRetentionDays = Defaults::LIFECYCLE_DELIVERY_PAYLOAD_RETENTION_DAYS) {}
 
     /**
      * @param array<string, mixed> $data Fresh locked order content.
@@ -75,7 +75,7 @@ final class CheckoutSessionReducer
             if ($capturedAction->toJson() !== $nextAction?->toJson()) {
                 // Capture private replay evidence in the existing payment slot, including before Checkout completes.
                 // Only a different action starts a new window; observing the same action never renews its deadline.
-                $nextActionExpiresAt = OrderData::date(OrderData::timestamp($now))->add(new DateInterval('P' . $this->lifecycleDeliveryRetentionDays . 'D'));
+                $nextActionExpiresAt = OrderData::date(OrderData::timestamp($now))->add(new DateInterval('P' . $this->lifecycleDeliveryPayloadRetentionDays . 'D'));
             }
 
             $nextAction = $capturedAction;

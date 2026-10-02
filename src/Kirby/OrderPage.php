@@ -143,7 +143,7 @@ final class OrderPage extends ProtectedOrderPage
                 $housekeeping = (new ConfigurationResolver())->housekeeping($options);
                 $creationData = [
                     ...$data,
-                    'lifecycleDeliveries' => [HookDeliveryLedger::pending($event, $housekeeping->lifecycleDeliveryRetentionDays())],
+                    'lifecycleDeliveries' => [HookDeliveryLedger::pending($event, $housekeeping->lifecycleDeliveryPayloadRetentionDays())],
                 ];
                 // Add intent in memory so the native callback persists the order and its final creation snapshot together, not in two writes.
                 $page->version('latest')->update(['lifecycleDeliveries' => Yaml::encode($creationData['lifecycleDeliveries'])], 'default');

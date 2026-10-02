@@ -44,7 +44,7 @@ return [
     'programmatordev.stripe-checkout.settings.unpaidOrderRetentionDays.help' => 'Shortening this period can make existing orders eligible for the next cleanup.',
     'programmatordev.stripe-checkout.orders.fields.lifecycleDeliveries' => 'Lifecycle deliveries',
     'programmatordev.stripe-checkout.diagnostics.housekeeping' => 'Housekeeping',
-    'programmatordev.stripe-checkout.diagnostics.housekeeping.configured' => 'PHP configuration: interval {intervalHours} hours; at most {batchSize} candidates per pass; lifecycle retry window {lifecycleDays} days. Automatic cleanup is not running yet.',
+    'programmatordev.stripe-checkout.diagnostics.housekeeping.configured' => 'PHP configuration: interval {intervalHours} hours; at most {batchSize} candidates per pass; lifecycle snapshot retention {lifecycleDeliveryPayloadRetentionDays} days. Automatic cleanup is not running yet.',
     'programmatordev.stripe-checkout.diagnostics.retention' => 'Order retention',
     'programmatordev.stripe-checkout.diagnostics.retention.configured' => 'When enabled: failed attempts are kept for {creationDays} days; unpaid orders for {unpaidDays} days. Shorter periods can make existing records eligible.',
     'programmatordev.stripe-checkout.diagnostics.lifecycle' => 'Lifecycle hooks',

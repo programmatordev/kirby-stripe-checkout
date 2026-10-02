@@ -264,7 +264,7 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
             request: $this->request,
             credentialMode: CredentialMode::Test,
         );
-        $reducer = new CheckoutSessionReducer(lifecycleDeliveryRetentionDays: 7);
+        $reducer = new CheckoutSessionReducer(lifecycleDeliveryPayloadRetentionDays: 7);
         $now = new DateTimeImmutable('2026-10-02T12:00:00Z');
         $captured = $reducer->reduce($this->data(), $observation, null, $now);
         $expiresAt = Payment::fromArray(OrderData::map($captured['payment']))->nextActionExpiresAt();

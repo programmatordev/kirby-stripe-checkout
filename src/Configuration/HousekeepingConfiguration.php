@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Configuration;
 
-/** @internal Developer-owned cleanup cadence, batch limits and lifecycle replay window. */
+/** @internal Developer-owned cleanup cadence, batch limits and lifecycle payload retention. */
 final readonly class HousekeepingConfiguration
 {
     public function __construct(
         private int $intervalHours,
         private int $batchSize,
-        private int $lifecycleDeliveryRetentionDays,
+        private int $lifecycleDeliveryPayloadRetentionDays,
     ) {}
 
     public function intervalHours(): int
@@ -23,8 +23,8 @@ final readonly class HousekeepingConfiguration
         return $this->batchSize;
     }
 
-    public function lifecycleDeliveryRetentionDays(): int
+    public function lifecycleDeliveryPayloadRetentionDays(): int
     {
-        return $this->lifecycleDeliveryRetentionDays;
+        return $this->lifecycleDeliveryPayloadRetentionDays;
     }
 }

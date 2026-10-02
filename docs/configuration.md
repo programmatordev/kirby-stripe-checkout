@@ -256,14 +256,16 @@ Request-load controls are separate, PHP-only values:
     'housekeeping' => [
         'intervalHours' => 24,
         'batchSize' => 25,
-        'lifecycleDeliveryRetentionDays' => 30,
+        'lifecycleDeliveryPayloadRetentionDays' => 30,
     ],
 ],
 ```
 
-`intervalHours` is a positive integer; `batchSize` is an integer from 1 to 100. `lifecycleDeliveryRetentionDays` is a positive integer, defaulting to 30. These values are shown read-only in Diagnostics, not exposed as merchant Settings or editable Page fields. They do not start a scheduler or cleanup process.
+`intervalHours` is a positive integer; `batchSize` is an integer from 1 to 100. `lifecycleDeliveryPayloadRetentionDays` is a positive integer, defaulting to 30. These values are shown read-only in Diagnostics, not exposed as merchant Settings or editable Page fields. They do not start a scheduler or cleanup process.
 
 Every saved lifecycle delivery receives a fixed deadline when it is created locally, regardless of hook type. Pending and failed deliveries cannot be retried at or after that deadline, even before physical cleanup runs. Retries do not extend the deadline, and changing the PHP option affects new deliveries only. The one-shot order-deletion notification remains non-retryable. Payload deletion is not implemented yet.
+
+The option limits retention of the full lifecycle snapshot, not the delivery record or the order. Cleanup will remove successful delivery payloads without waiting for the deadline, and pending/failed payloads when they expire. Sanitized delivery metadata remains for diagnostics and deduplication; a delivery without its payload cannot be retried.
 
 ## Built-in cart
 

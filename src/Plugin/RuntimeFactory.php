@@ -267,7 +267,7 @@ final class RuntimeFactory
             orders: new OrderPageStore($this->kirby),
             retriever: new CheckoutSessionRetriever(new StripeApiCheckoutSessionGateway($client)),
             credentialMode: $stripe->secretKeyMode(),
-            reducer: new CheckoutSessionReducer((new ConfigurationResolver())->housekeeping($options)->lifecycleDeliveryRetentionDays()),
+            reducer: new CheckoutSessionReducer((new ConfigurationResolver())->housekeeping($options)->lifecycleDeliveryPayloadRetentionDays()),
         );
     }
 
