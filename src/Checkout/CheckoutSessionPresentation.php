@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Checkout;
 
-use InvalidArgumentException;
-use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutUrlValidator;
-use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
-use ProgrammatorDev\StripeCheckout\Support\TextValidator;
-
-/** @internal Ephemeral hosted redirect or embedded client secret returned after orchestration. */
+/**
+ * Ephemeral projection of the validated Session and persisted Order identity.
+ * Provider validation belongs to CheckoutSessionFactory before association or reuse.
+ *
+ * @internal
+ */
 final readonly class CheckoutSessionPresentation
 {
     public function __construct(
@@ -18,26 +18,7 @@ final readonly class CheckoutSessionPresentation
         private bool $reused,
         private ?string $redirectUrl,
         private ?string $clientSecret,
-    ) {
-        OrderData::uuid($orderPageUuid);
-
-        if (
-            ($uiMode === UiMode::Hosted) !== ($redirectUrl !== null)
-            || ($uiMode === UiMode::Embedded) !== ($clientSecret !== null)
-            || ($redirectUrl !== null && CheckoutUrlValidator::isHostedCheckoutUrl($redirectUrl) === false)
-            || (
-                $clientSecret !== null
-                && (
-                    trim($clientSecret) === ''
-                    || trim($clientSecret) !== $clientSecret
-                    || strlen($clientSecret) > 2048
-                    || TextValidator::isSingleLine($clientSecret) === false
-                )
-            )
-        ) {
-            throw new InvalidArgumentException('The Checkout Session presentation is inconsistent.');
-        }
-    }
+    ) {}
 
     public function uiMode(): UiMode
     {

@@ -6,7 +6,10 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
 use ProgrammatorDev\StripeCheckout\Order\Internal\CheckoutSessionAssociation;
 
-/** Validated provider Session used for association and ephemeral presentation. */
+/**
+ * Validated provider Session used for association and ephemeral presentation.
+ * CheckoutSessionFactory owns validation; collaborators reuse these facts unchanged.
+ */
 final readonly class CheckoutSession
 {
     public function __construct(

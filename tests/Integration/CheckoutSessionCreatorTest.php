@@ -723,18 +723,20 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $this->assertSame(CheckoutStatus::CreationFailed->value, $rejectedData['checkoutStatus']);
     }
 
-    public function testIncompatibleProviderResultBecomesADurableUncertainAttempt(): void
+    /** @param array{clientReferenceId?: string, clientSecret?: string} $overrides */
+    #[DataProvider('incompatibleProviderResults')]
+    public function testIncompatibleProviderResultBecomesADurableUncertainAttempt(UiMode $uiMode, array $overrides): void
     {
         $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
-        $configuration = $this->configure(UiMode::Hosted);
-        $checkout = $this->checkout();
+        $configuration = $this->configure($uiMode);
+        $checkout = $this->checkout(uiMode: $uiMode);
         $order = $this->order($checkout);
         $request = $this->request(checkout: $checkout, configuration: $configuration, now: $now);
         $sessionRecord = $this->sessionRecord(
             order: $order,
             request: $request,
             now: $now,
-            overrides: ['clientReferenceId' => 'page://wrong'],
+            overrides: $overrides,
         );
 
         try {
@@ -754,6 +756,14 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $store = new OrderPageStore($this->kirby);
         $data = $store->data($store->order($order->pageUuid()) ?? $this->fail('Incompatible order was not persisted.'));
         $this->assertSame(CheckoutStatus::CreationUncertain->value, $data['checkoutStatus']);
+        $this->assertArrayNotHasKey('stripeCheckoutSessionId', $data);
+    }
+
+    /** @return iterable<string, array{UiMode, array{clientReferenceId?: string, clientSecret?: string}}> */
+    public static function incompatibleProviderResults(): iterable
+    {
+        yield 'wrong order reference' => [UiMode::Hosted, ['clientReferenceId' => 'page://wrong']];
+        yield 'malformed presentation secret' => [UiMode::Embedded, ['clientSecret' => ' secret']];
     }
 
     public function testRetryDeadlineClosesAnUncertainAttemptWithoutAnotherProviderCall(): void
@@ -1704,7 +1714,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         );
     }
 
-    /** @param array{clientReferenceId?: string, metadata?: array<string, string>, liveMode?: bool, shippingOptions?: mixed} $overrides */
+    /** @param array{clientReferenceId?: string, clientSecret?: string, metadata?: array<string, string>, liveMode?: bool, shippingOptions?: mixed} $overrides */
     private function sessionRecord(
         OrderCreationContext $order,
         SessionRequest $request,
@@ -1739,7 +1749,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             metadata: $overrides['metadata'] ?? $metadata,
             requestId: 'req_' . $order->uuid(),
             url: $uiMode === UiMode::Hosted ? 'https://checkout.stripe.com/c/pay/' . $order->uuid() : null,
-            clientSecret: $uiMode === UiMode::Embedded ? 'cs_test_secret_' . $order->uuid() : null,
+            clientSecret: $overrides['clientSecret'] ?? ($uiMode === UiMode::Embedded ? 'cs_test_secret_' . $order->uuid() : null),
             shippingOptions: $shippingOptions,
         );
     }

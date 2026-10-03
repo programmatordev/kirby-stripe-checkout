@@ -14,6 +14,7 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\CheckoutSessionAssociation;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
+use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 use Stripe\Checkout\Session;
 
 /** Correlates provider Sessions and verifies the data needed to open Checkout. */
@@ -25,13 +26,6 @@ final class CheckoutSessionFactory
         SessionRequest $request,
         ?bool $liveMode,
     ): CheckoutSession {
-        $canOpenCheckout = match ($context->uiMode()) {
-            UiMode::Hosted => CheckoutUrlValidator::isHostedCheckoutUrl($record->url) && $record->clientSecret === null,
-            UiMode::Embedded => is_string($record->clientSecret)
-                && trim($record->clientSecret) !== ''
-                && $record->url === null,
-        };
-
         if (
             $record->expiresAt !== $context->expiresAt()->getTimestamp()
             || $record->status !== Session::STATUS_OPEN
@@ -39,10 +33,13 @@ final class CheckoutSessionFactory
                 Session::PAYMENT_STATUS_UNPAID,
                 Session::PAYMENT_STATUS_NO_PAYMENT_REQUIRED,
             ], true) === false
-            || $canOpenCheckout === false
         ) {
             throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
         }
+
+        // Reject malformed presentation before the Creator persists the association,
+        // so it follows the existing incompatible-response recovery path.
+        $this->validatePresentation($record, $context->uiMode());
 
         return new CheckoutSession(
             association: $this->association($record, $context->order(), $request, $liveMode),
@@ -51,8 +48,39 @@ final class CheckoutSessionFactory
         );
     }
 
+    private function validatePresentation(CheckoutSessionRecord $record, UiMode $uiMode): void
+    {
+        if (($uiMode === UiMode::Hosted) !== ($record->url !== null)) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+        }
+
+        if (($uiMode === UiMode::Embedded) !== ($record->clientSecret !== null)) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+        }
+
+        if ($record->url !== null && CheckoutUrlValidator::isHostedCheckoutUrl($record->url) === false) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+        }
+
+        $clientSecret = $record->clientSecret;
+
+        // Keep the provider secret opaque and reject malformed input rather than silently trimming it.
+        if (
+            $clientSecret !== null
+            && (
+                $clientSecret === ''
+                || trim($clientSecret) !== $clientSecret
+                || strlen($clientSecret) > 2048
+                || TextValidator::isSingleLine($clientSecret) === false
+            )
+        ) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+        }
+    }
+
     /**
-     * Shared purchase correlation; historical reads do not require a hosted URL or embedded client secret.
+     * Shared purchase correlation. Historical reads reconcile payment facts without opening Checkout,
+     * so they do not require a hosted URL or embedded client secret.
      *
      * @param bool|null $liveMode Expected credential mode. Null means it cannot be inferred;
      *                           the returned Session must still declare its actual mode.
