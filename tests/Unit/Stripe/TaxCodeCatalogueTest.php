@@ -226,6 +226,57 @@ final class TaxCodeCatalogueTest extends TestCase
         $this->assertSame([null, null], $provider->listCursors);
     }
 
+    /** @param array<string, mixed> $overrides */
+    #[DataProvider('invalidCachedSnapshots')]
+    public function testMalformedCachedSnapshotIsDiscardedWithoutProviderReads(array $overrides): void
+    {
+        $cache = new MemoryCache();
+        $cache->set('test-account', array_replace([
+            'items' => [[
+                'id' => 'txcd_test',
+                'name' => 'Test',
+                'description' => 'Test description',
+                'requiresPerformanceLocation' => false,
+            ]],
+            'refreshedAt' => 2_000_000_000,
+            'failedAt' => 2_000_000_001,
+        ], $overrides));
+        $provider = new FakeTaxProvider();
+        $catalogue = new TaxCodeCatalogue($cache, $provider, 'test-account');
+
+        $state = $catalogue->cached();
+
+        $this->assertSame([], $state->items());
+        $this->assertNull($state->refreshedAt());
+        $this->assertNull($state->failedAt());
+        $this->assertNull($state->error());
+        $this->assertSame([], $provider->listCursors);
+    }
+
+    /** @return iterable<string, array{array<string, mixed>}> */
+    public static function invalidCachedSnapshots(): iterable
+    {
+        yield 'text refresh timestamp' => [['refreshedAt' => '2000000000']];
+        yield 'non-positive refresh timestamp' => [['refreshedAt' => 0]];
+        yield 'text failure timestamp' => [['failedAt' => '2000000001']];
+        yield 'non-positive failure timestamp' => [['failedAt' => 0]];
+        yield 'cached facts without refresh timestamp' => [['refreshedAt' => null]];
+        yield 'duplicate identity' => [['items' => [
+            [
+                'id' => 'txcd_test',
+                'name' => 'Test',
+                'description' => 'Test description',
+                'requiresPerformanceLocation' => false,
+            ],
+            [
+                'id' => 'txcd_test',
+                'name' => 'Conflicting name',
+                'description' => 'Conflicting description',
+                'requiresPerformanceLocation' => true,
+            ],
+        ]]];
+    }
+
     public function testLocalLabelsDoNotReplaceProviderIdentity(): void
     {
         $taxCode = new TaxCode('txcd_test', 'My category');

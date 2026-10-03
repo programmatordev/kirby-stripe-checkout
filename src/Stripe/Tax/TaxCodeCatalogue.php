@@ -44,19 +44,30 @@ final class TaxCodeCatalogue
             return $empty;
         }
 
+        // Partial catalogues would make membership checks incomplete,
+        // so any invalid entry discards the whole snapshot.
         try {
             $items = [];
 
             foreach ($cached['items'] as $item) {
-                // Cached classifications must retain requirement metadata so an authorized Panel load cannot silently omit the location warning.
+                if (is_array($item) === false) {
+                    return $empty;
+                }
+
                 if (
-                    is_array($item) === false
-                    || is_string($item['id'] ?? null) === false
+                    is_string($item['id'] ?? null) === false
                     || is_string($item['name'] ?? null) === false
                     || is_string($item['description'] ?? null) === false
-                    || is_bool($item['requiresPerformanceLocation'] ?? null) === false
-                    || isset($items[$item['id']])
                 ) {
+                    return $empty;
+                }
+
+                // Cached classifications must retain requirement metadata so an authorized Panel load cannot silently omit the location warning.
+                if (is_bool($item['requiresPerformanceLocation'] ?? null) === false) {
+                    return $empty;
+                }
+
+                if (isset($items[$item['id']])) {
                     return $empty;
                 }
 
@@ -72,11 +83,16 @@ final class TaxCodeCatalogue
             $refreshedAt = $cached['refreshedAt'] ?? null;
             $failedAt = $cached['failedAt'] ?? null;
 
-            if (
-                ($refreshedAt !== null && (is_int($refreshedAt) === false || $refreshedAt < 1))
-                || ($failedAt !== null && (is_int($failedAt) === false || $failedAt < 1))
-                || ($items !== [] && $refreshedAt === null)
-            ) {
+            if ($refreshedAt !== null && (is_int($refreshedAt) === false || $refreshedAt < 1)) {
+                return $empty;
+            }
+
+            if ($failedAt !== null && (is_int($failedAt) === false || $failedAt < 1)) {
+                return $empty;
+            }
+
+            // A failed first refresh has no successful timestamp, but it also has no cached facts.
+            if ($items !== [] && $refreshedAt === null) {
                 return $empty;
             }
 
