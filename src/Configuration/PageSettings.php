@@ -143,11 +143,13 @@ final class PageSettings
             array_column(ShippingTaxCode::cases(), 'value'),
             'shippingTaxCode',
         );
-        $retention = compact('cleanupCreationFailures', 'creationFailureRetentionDays', 'cleanupUnpaidOrders', 'unpaidOrderRetentionDays');
+        $retentionInput = compact('cleanupCreationFailures', 'creationFailureRetentionDays', 'cleanupUnpaidOrders', 'unpaidOrderRetentionDays');
+        $retention = [];
 
         foreach (Defaults::RETENTION as $name => $default) {
-            $value = $retention[$name];
+            $value = $retentionInput[$name];
 
+            // Unset Page fields must remain distinct from explicit false values when resolving defaults and PHP overrides.
             if ($value === '' || $value === null) {
                 $retention[$name] = null;
 
@@ -156,19 +158,24 @@ final class PageSettings
 
             // Kirby persists toggle/number fields as text.
             // Normalize only that transport here; PHP options are checked without string coercion.
-            $value = is_bool($default)
-                ? match ($value) {
-                    true, 'true' => true,
-                    false, 'false' => false,
-                    default => null,
-                }
-            : filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if (is_bool($default)) {
+                $retention[$name] = $this->normalizeToggle($value, $name);
 
-            if ($value === null || (is_int($default) && (is_int($value) === false || is_float($retention[$name]) || is_bool($retention[$name])))) {
+                continue;
+            }
+
+            $normalizedValue = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+            if (is_int($normalizedValue) === false) {
                 throw new ConfigurationException(PersistenceErrorCode::CONTENT_INVALID, 'settings.' . $name);
             }
 
-            $retention[$name] = $value;
+            // The integer filter can coerce booleans and whole-valued floats; inspect the original input to reject them.
+            if (is_float($value) || is_bool($value)) {
+                throw new ConfigurationException(PersistenceErrorCode::CONTENT_INVALID, 'settings.' . $name);
+            }
+
+            $retention[$name] = $normalizedValue;
         }
 
         $this->retention = $retention;

@@ -51,6 +51,51 @@ final class ConfigurationResolverTest extends TestCase
         $this->assertNull($settings->setting('housekeeping'));
     }
 
+    #[DataProvider('pageRetentionValues')]
+    public function testNormalizesPageRetentionValuesAtTheInputBoundary(string $name, mixed $value, bool|int|null $expected): void
+    {
+        $page = new PageSettings(...[$name => $value]);
+
+        $this->assertSame($expected, $page->value($name));
+    }
+
+    /** @return iterable<string, array{string, mixed, bool|int|null}> */
+    public static function pageRetentionValues(): iterable
+    {
+        yield 'native toggle' => ['cleanupCreationFailures', true, true];
+        yield 'native false toggle' => ['cleanupUnpaidOrders', false, false];
+        yield 'text toggle' => ['cleanupCreationFailures', 'true', true];
+        yield 'text false toggle' => ['cleanupUnpaidOrders', 'false', false];
+        yield 'native retention days' => ['creationFailureRetentionDays', 14, 14];
+        yield 'text retention days' => ['unpaidOrderRetentionDays', '60', 60];
+        yield 'empty toggle remains unset' => ['cleanupCreationFailures', '', null];
+        yield 'null retention remains unset' => ['unpaidOrderRetentionDays', null, null];
+    }
+
+    #[DataProvider('invalidPageRetentionValues')]
+    public function testRejectsInvalidPageRetentionValuesWithTheirSettingPath(string $name, mixed $value): void
+    {
+        try {
+            new PageSettings(...[$name => $value]);
+            $this->fail('Expected invalid Page retention input to be rejected.');
+        } catch (ConfigurationException $error) {
+            $this->assertSame('persistence.content_invalid', $error->errorCode());
+            $this->assertSame('settings.' . $name, $error->path());
+        }
+    }
+
+    /** @return iterable<string, array{string, mixed}> */
+    public static function invalidPageRetentionValues(): iterable
+    {
+        yield 'numeric toggle' => ['cleanupCreationFailures', 1];
+        yield 'numeric text toggle' => ['cleanupUnpaidOrders', '0'];
+        yield 'boolean days' => ['creationFailureRetentionDays', true];
+        yield 'whole-valued float days' => ['unpaidOrderRetentionDays', 1.0];
+        yield 'fractional text days' => ['creationFailureRetentionDays', '1.5'];
+        yield 'zero days' => ['unpaidOrderRetentionDays', 0];
+        yield 'negative days' => ['creationFailureRetentionDays', '-1'];
+    }
+
     public function testHousekeepingIsPhpOnlyAndValidatesIntegerBounds(): void
     {
         $resolver = new ConfigurationResolver();
