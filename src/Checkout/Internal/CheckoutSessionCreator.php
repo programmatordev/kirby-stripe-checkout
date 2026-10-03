@@ -248,19 +248,40 @@ final class CheckoutSessionCreator
         $binding->assertMatchesFingerprint(OrderData::text($checkoutAttempt['bindingFingerprint']));
 
         // The embedded UUID locates a candidate Page; the nonce-bearing full token hash proves that candidate belongs to this exact attempt.
-        if (
-            hash_equals(OrderData::text($checkoutAttempt['tokenHash']), $token->hash()) === false
-            || $persistedOrder->uuid() !== $token->orderUuid()
-            || $persistedOrder->currency() !== $checkout->currency()->getCurrencyCode()
-            || $persistedOrder->uiMode() !== $checkout->uiMode()
-            || $checkoutAttempt['stripeApiVersion'] !== $this->stripeApiVersion
-            || $checkoutAttempt['credentialMode'] !== $this->configuration->stripe()->secretKeyMode()->value
-            || hash_equals(
-                OrderData::text($checkoutAttempt['credentialFingerprint']),
-                $this->credentialFingerprint($persistedOrder),
-            ) === false
-            || $checkoutAttempt['operation'] !== CheckoutAttempt::OPERATION
-        ) {
+        if (hash_equals(OrderData::text($checkoutAttempt['tokenHash']), $token->hash()) === false) {
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
+        }
+
+        if ($persistedOrder->uuid() !== $token->orderUuid()) {
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
+        }
+
+        if ($persistedOrder->currency() !== $checkout->currency()->getCurrencyCode()) {
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
+        }
+
+        if ($persistedOrder->uiMode() !== $checkout->uiMode()) {
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
+        }
+
+        // A runtime upgrade must not retry the saved request under different API semantics.
+        if ($checkoutAttempt['stripeApiVersion'] !== $this->stripeApiVersion) {
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
+        }
+
+        if ($checkoutAttempt['credentialMode'] !== $this->configuration->stripe()->secretKeyMode()->value) {
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
+        }
+
+        // Matching test/live mode does not prove that the current credential belongs to the original attempt.
+        if (hash_equals(
+            OrderData::text($checkoutAttempt['credentialFingerprint']),
+            $this->credentialFingerprint($persistedOrder),
+        ) === false) {
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
+        }
+
+        if ($checkoutAttempt['operation'] !== CheckoutAttempt::OPERATION) {
             throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
         }
     }
