@@ -46,20 +46,21 @@ final class PriceResolver
     ): StripePrice {
         $currency = strtoupper($currency);
 
-        if (
-            ($expectedPriceId !== null && $record->priceId !== $expectedPriceId)
-            || preg_match('/^price_[A-Za-z0-9]{1,249}$/D', $record->priceId) !== 1
-            || $record->active === false
-            || $record->type !== Price::TYPE_ONE_TIME
-            || $record->billingScheme !== Price::BILLING_SCHEME_PER_UNIT
-            || $record->hasCustomUnitAmount
-            || $record->hasRecurring
-            || $record->hasTiers
-            || $record->tiersMode !== null
-            || $record->hasQuantityTransform
-        ) {
+        // Catalogue entries have no single requested ID; direct retrieval must match the requested reference.
+        if ($expectedPriceId !== null && $record->priceId !== $expectedPriceId) {
             throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INELIGIBLE);
         }
+
+        if (preg_match('/^price_[A-Za-z0-9]{1,249}$/D', $record->priceId) !== 1) {
+            throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INELIGIBLE);
+        }
+
+        // New purchases require active catalogue records; historical order reads use their frozen snapshots instead.
+        if ($record->active === false) {
+            throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INELIGIBLE);
+        }
+
+        $this->assertSupportedPricing($record);
 
         $productName = $record->productName;
         $productId = $record->productId;
@@ -67,15 +68,25 @@ final class PriceResolver
         if (
             is_string($productId) === false
             || preg_match('/^prod_[A-Za-z0-9]{1,249}$/D', $productId) !== 1
-            || $record->productActive === false
-            || is_string($productName) === false
         ) {
+            throw new InvalidProductException(ProductErrorCode::STRIPE_PRODUCT_INELIGIBLE);
+        }
+
+        if ($record->productActive === false) {
+            throw new InvalidProductException(ProductErrorCode::STRIPE_PRODUCT_INELIGIBLE);
+        }
+
+        if (is_string($productName) === false) {
             throw new InvalidProductException(ProductErrorCode::STRIPE_PRODUCT_INELIGIBLE);
         }
 
         $providerCurrency = strtoupper($record->currency);
 
-        if ($providerCurrency !== $currency || $this->currencies->supports($providerCurrency) === false) {
+        if ($providerCurrency !== $currency) {
+            throw new InvalidProductException(ProductErrorCode::CURRENCY_MISMATCH);
+        }
+
+        if ($this->currencies->supports($providerCurrency) === false) {
             throw new InvalidProductException(ProductErrorCode::CURRENCY_MISMATCH);
         }
 
@@ -89,6 +100,7 @@ final class PriceResolver
 
         $taxBehavior = $record->taxBehavior ?? Price::TAX_BEHAVIOR_UNSPECIFIED;
 
+        // The domain value owns name, image and optional-text validity; the resolver checks provider presence, correlation and eligibility.
         return new StripePrice(
             priceId: $record->priceId,
             productId: $productId,
@@ -102,23 +114,46 @@ final class PriceResolver
         );
     }
 
+    private function assertSupportedPricing(PriceRecord $record): void
+    {
+        if ($record->type !== Price::TYPE_ONE_TIME) {
+            throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INELIGIBLE);
+        }
+
+        if ($record->billingScheme !== Price::BILLING_SCHEME_PER_UNIT) {
+            throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INELIGIBLE);
+        }
+
+        // The enum values alone do not rule out additional pricing features in untrusted provider data.
+        if (
+            $record->hasCustomUnitAmount
+            || $record->hasRecurring
+            || $record->hasTiers
+            || $record->tiersMode !== null
+            || $record->hasQuantityTransform
+        ) {
+            throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INELIGIBLE);
+        }
+    }
+
     private function minorAmount(PriceRecord $record): int
     {
         try {
-            $decimal = $record->unitAmountDecimal;
+            $unitAmountDecimal = $record->unitAmountDecimal;
 
-            if ($decimal !== null) {
-                if (preg_match('/^[0-9]+(?:\.0+)?$/D', $decimal) !== 1) {
+            // The snapshot requires integer provider units even when the record supplies a decimal string.
+            if ($unitAmountDecimal !== null) {
+                if (preg_match('/^[0-9]+(?:\.0+)?$/D', $unitAmountDecimal) !== 1) {
                     throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INELIGIBLE);
                 }
 
-                $amount = BigDecimal::of($decimal)->toBigInteger()->toInt();
+                $minorAmount = BigDecimal::of($unitAmountDecimal)->toBigInteger()->toInt();
 
-                if ($record->unitAmount !== null && $record->unitAmount !== $amount) {
+                if ($record->unitAmount !== null && $record->unitAmount !== $minorAmount) {
                     throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INELIGIBLE);
                 }
 
-                return $amount;
+                return $minorAmount;
             }
 
             if ($record->unitAmount === null || $record->unitAmount < 0) {
@@ -129,6 +164,7 @@ final class PriceResolver
         } catch (InvalidProductException $error) {
             throw $error;
         } catch (Throwable $error) {
+            // Keep decimal conversion failures classified as ineligible data so resolve() does not report a provider outage.
             throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INELIGIBLE, $error);
         }
     }

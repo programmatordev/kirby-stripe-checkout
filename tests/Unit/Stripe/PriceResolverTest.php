@@ -29,6 +29,20 @@ final class PriceResolverTest extends TestCase
         $this->assertSame('txcd_99999999', $stripePrice->taxCode());
     }
 
+    public function testFreshResolutionRejectsADifferentPriceReturnedByTheProvider(): void
+    {
+        $provider = new FakePriceProvider(prices: ['price_requested' => self::record()]);
+
+        try {
+            (new PriceResolver($provider))->resolve('price_requested', 'EUR');
+            $this->fail('A different returned Price must not replace the requested Price.');
+        } catch (InvalidProductException $error) {
+            $this->assertSame('product.stripe_price_ineligible', $error->errorCode());
+        }
+
+        $this->assertSame(['price_requested'], $provider->retrievedIds);
+    }
+
     public function testMathematicallyIntegralDecimalProviderAmountIsAccepted(): void
     {
         $record = self::record(unitAmount: null, unitAmountDecimal: '1600.000');
