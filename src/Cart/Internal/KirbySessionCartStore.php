@@ -21,6 +21,10 @@ final class KirbySessionCartStore implements CartStoreInterface
 {
     public const KEY = 'programmatordev.stripe-checkout.cart';
 
+    private const SCHEMA_VERSION = 1;
+
+    private const INVALID_PAYLOAD_MESSAGE = 'Invalid cart payload.';
+
     /** @var Closure(string): void */
     private readonly Closure $diagnostic;
 
@@ -96,21 +100,47 @@ final class KirbySessionCartStore implements CartStoreInterface
     // a deleted product or provider outage must not be mistaken for corruption and erase the cart.
     private function decode(mixed $payload): CartSnapshot
     {
+        if (is_array($payload) === false) {
+            throw new InvalidArgumentException(self::INVALID_PAYLOAD_MESSAGE);
+        }
+
+        if (array_diff(array_keys($payload), ['schema', 'id', 'revision', 'createdAt', 'updatedAt', 'shippingCountry', 'entries']) !== []) {
+            throw new InvalidArgumentException(self::INVALID_PAYLOAD_MESSAGE);
+        }
+
+        // Unsupported versions use current()'s cart-only recovery; stored carts are not migrated.
+        if (($payload['schema'] ?? null) !== self::SCHEMA_VERSION) {
+            throw new InvalidArgumentException(self::INVALID_PAYLOAD_MESSAGE);
+        }
+
         if (
-            is_array($payload) === false
-            || array_diff(array_keys($payload), ['schema', 'id', 'revision', 'createdAt', 'updatedAt', 'shippingCountry', 'entries']) !== []
-            || ($payload['schema'] ?? null) !== 2
-            || is_string($payload['id'] ?? null) === false
+            is_string($payload['id'] ?? null) === false
             || is_string($payload['revision'] ?? null) === false
-            || is_int($payload['createdAt'] ?? null) === false
+        ) {
+            throw new InvalidArgumentException(self::INVALID_PAYLOAD_MESSAGE);
+        }
+
+        if (
+            is_int($payload['createdAt'] ?? null) === false
             || is_int($payload['updatedAt'] ?? null) === false
-            || array_key_exists('shippingCountry', $payload) === false
+        ) {
+            throw new InvalidArgumentException(self::INVALID_PAYLOAD_MESSAGE);
+        }
+
+        // Null records an unselected country; a missing key is incompatible with the stored schema.
+        if (
+            array_key_exists('shippingCountry', $payload) === false
             || ($payload['shippingCountry'] !== null && is_string($payload['shippingCountry']) === false)
-            || is_array($payload['entries'] ?? null) === false
+        ) {
+            throw new InvalidArgumentException(self::INVALID_PAYLOAD_MESSAGE);
+        }
+
+        if (
+            is_array($payload['entries'] ?? null) === false
             || array_is_list($payload['entries']) === false
             || count($payload['entries']) > ProductRequestNormalizer::MAX_ENTRIES
         ) {
-            throw new InvalidArgumentException('Invalid cart payload.');
+            throw new InvalidArgumentException(self::INVALID_PAYLOAD_MESSAGE);
         }
 
         $entries = [];
@@ -128,6 +158,7 @@ final class KirbySessionCartStore implements CartStoreInterface
             $entries[] = new CartEntry($entry['id'], ProductRequestData::parse($entry['request'] ?? null));
         }
 
+        // Shape checks belong to decoding; the snapshot enforces value and collection invariants.
         return new CartSnapshot(
             $payload['id'],
             $payload['revision'],
@@ -142,7 +173,7 @@ final class KirbySessionCartStore implements CartStoreInterface
     private function encode(CartSnapshot $snapshot): array
     {
         return [
-            'schema' => 2,
+            'schema' => self::SCHEMA_VERSION,
             'id' => $snapshot->id(),
             'revision' => $snapshot->revision(),
             'createdAt' => $snapshot->createdAt(),

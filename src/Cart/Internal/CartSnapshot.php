@@ -16,6 +16,8 @@ use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
  */
 final readonly class CartSnapshot
 {
+    private const INVALID_SNAPSHOT_MESSAGE = 'Invalid cart snapshot.';
+
     /** @var list<CartEntry> */
     private array $entries;
 
@@ -31,16 +33,18 @@ final readonly class CartSnapshot
         ProductData::identifier($id);
         ProductData::identifier($revision);
 
+        if (array_is_list($entries) === false || count($entries) > ProductRequestNormalizer::MAX_ENTRIES) {
+            throw new InvalidArgumentException(self::INVALID_SNAPSHOT_MESSAGE);
+        }
+
+        if ($createdAt < 0 || $updatedAt < $createdAt) {
+            throw new InvalidArgumentException(self::INVALID_SNAPSHOT_MESSAGE);
+        }
+
         // Persisted cart state stays provider-independent.
         // Public input boundaries apply Stripe's narrower supported-country policy.
-        if (
-            array_is_list($entries) === false
-            || count($entries) > ProductRequestNormalizer::MAX_ENTRIES
-            || $createdAt < 0
-            || $updatedAt < $createdAt
-            || ($shippingCountry !== null && preg_match('/\A[A-Z]{2}\z/D', $shippingCountry) !== 1)
-        ) {
-            throw new InvalidArgumentException('Invalid cart snapshot.');
+        if ($shippingCountry !== null && preg_match('/\A[A-Z]{2}\z/D', $shippingCountry) !== 1) {
+            throw new InvalidArgumentException(self::INVALID_SNAPSHOT_MESSAGE);
         }
 
         $seen = [];

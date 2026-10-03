@@ -70,8 +70,8 @@ final class KirbySessionCartStoreTest extends KirbyTestCase
     {
         yield 'scalar' => ['private-data'];
         yield 'empty' => [[]];
-        $base = ['schema' => 2, 'id' => 'cart', 'revision' => 'revision', 'createdAt' => 1, 'updatedAt' => 1, 'shippingCountry' => null, 'entries' => []];
-        yield 'unknown schema' => [array_replace($base, ['schema' => 3])];
+        $base = ['schema' => 1, 'id' => 'cart', 'revision' => 'revision', 'createdAt' => 1, 'updatedAt' => 1, 'shippingCountry' => null, 'entries' => []];
+        yield 'unknown schema' => [array_replace($base, ['schema' => 2])];
         yield 'impossible times' => [array_replace($base, ['updatedAt' => 0])];
         yield 'protected fields' => [array_replace($base, ['entries' => [['id' => 'item', 'request' => ['reference' => 'shirt', 'price' => '1.00']]]])];
         yield 'string quantity' => [array_replace($base, ['entries' => [['id' => 'item', 'request' => ['reference' => 'shirt', 'quantity' => '1']]]])];
@@ -140,6 +140,9 @@ final class KirbySessionCartStoreTest extends KirbyTestCase
         $store = new KirbySessionCartStore($session, Uuid::generate(...));
         $initial = $store->read();
         $updated = $this->mutator($store)->updateShippingCountry('PT', $initial->revision());
+        $payload = $session->data()->get(KirbySessionCartStore::KEY);
+        $this->assertIsArray($payload);
+        $this->assertSame(1, $payload['schema']);
         $token = $session->token();
         $this->assertNotNull($token);
 
