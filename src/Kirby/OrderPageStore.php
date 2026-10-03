@@ -573,6 +573,7 @@ final class OrderPageStore
 
         $beforeAttempt = OrderData::map($before['checkoutAttempt']);
         $afterAttempt = OrderData::map($after['checkoutAttempt']);
+        // Retry failure observations may change while the exact request, identity and deadlines remain fixed.
         unset($beforeAttempt['providerFailure'], $afterAttempt['providerFailure']);
 
         if ($beforeAttempt !== $afterAttempt) {
@@ -611,11 +612,16 @@ final class OrderPageStore
             default => [$before['checkoutStatus']],
         };
 
-        if (
-            in_array($after['checkoutStatus'], $allowedCheckoutStatuses, true) === false
-            || in_array($before['paymentStatus'], ['paid', 'no_payment_required'], true) && $after['paymentStatus'] !== $before['paymentStatus']
-            || $before['paymentStatus'] === 'failed' && in_array($after['paymentStatus'], ['failed', 'paid'], true) === false
-        ) {
+        if (in_array($after['checkoutStatus'], $allowedCheckoutStatuses, true) === false) {
+            throw new OrderDataException();
+        }
+
+        if (in_array($before['paymentStatus'], ['paid', 'no_payment_required'], true) && $after['paymentStatus'] !== $before['paymentStatus']) {
+            throw new OrderDataException();
+        }
+
+        // An authoritative paid observation can repair failure while the first failure timestamp remains immutable above.
+        if ($before['paymentStatus'] === 'failed' && in_array($after['paymentStatus'], ['failed', 'paid'], true) === false) {
             throw new OrderDataException();
         }
     }

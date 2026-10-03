@@ -429,16 +429,38 @@ final class OrderSerializer
         foreach (OrderData::list($data['lineItems']) as $index => $value) {
             $line = CheckoutLineItemSnapshot::fromArray(OrderData::map($value));
 
+            // Retrieval restores initiating order before persistence, even when provider pages arrive in a different order.
             if (
                 $line->initiatingIndex() !== $index || isset($ids[$line->stripeLineItemId()])
                 || isset($initiatingLineItems[$index]) === false
-                || $line->quantity() !== $initiatingLineItems[$index]['quantity']
-                || $line->price()->getCurrency()->getCurrencyCode() !== $context->currency()
-                || $line->price()->isEqualTo(Money::of(OrderData::string($initiatingLineItems[$index]['price']), $context->currency())) === false
-                || $line->subtotal()->isEqualTo($line->price()->multipliedBy($line->quantity())) === false
-                || $initiatingLineItems[$index]['stripePriceId'] !== null && $line->stripePriceId() !== $initiatingLineItems[$index]['stripePriceId']
-                || $initiatingLineItems[$index]['stripeProductId'] !== null && $line->stripeProductId() !== $initiatingLineItems[$index]['stripeProductId']
             ) {
+                throw new OrderDataException();
+            }
+
+            // Snapshot construction validates the line itself; these checks bind it to the order's frozen purchase.
+            $initiatingLineItem = $initiatingLineItems[$index];
+
+            if ($line->quantity() !== $initiatingLineItem['quantity']) {
+                throw new OrderDataException();
+            }
+
+            if ($line->price()->getCurrency()->getCurrencyCode() !== $context->currency()) {
+                throw new OrderDataException();
+            }
+
+            if ($line->price()->isEqualTo(Money::of(OrderData::string($initiatingLineItem['price']), $context->currency())) === false) {
+                throw new OrderDataException();
+            }
+
+            if ($line->subtotal()->isEqualTo($line->price()->multipliedBy($line->quantity())) === false) {
+                throw new OrderDataException();
+            }
+
+            if ($initiatingLineItem['stripePriceId'] !== null && $line->stripePriceId() !== $initiatingLineItem['stripePriceId']) {
+                throw new OrderDataException();
+            }
+
+            if ($initiatingLineItem['stripeProductId'] !== null && $line->stripeProductId() !== $initiatingLineItem['stripeProductId']) {
                 throw new OrderDataException();
             }
 
@@ -464,11 +486,15 @@ final class OrderSerializer
             $lines[] = $line->toArray();
         }
 
-        if (
-            count($lines) !== count($initiatingLineItems)
-            || $subtotal->isEqualTo(Money::of(OrderData::string($data['subtotal']), $context->currency())) === false
-            || isset($data['total']) && $total->plus(OrderData::string($data['shippingTotal']))->isEqualTo(Money::of(OrderData::string($data['total']), $context->currency())) === false
-        ) {
+        if (count($lines) !== count($initiatingLineItems)) {
+            throw new OrderDataException();
+        }
+
+        if ($subtotal->isEqualTo(Money::of(OrderData::string($data['subtotal']), $context->currency())) === false) {
+            throw new OrderDataException();
+        }
+
+        if (isset($data['total']) && $total->plus(OrderData::string($data['shippingTotal']))->isEqualTo(Money::of(OrderData::string($data['total']), $context->currency())) === false) {
             throw new OrderDataException();
         }
 
@@ -548,12 +574,17 @@ final class OrderSerializer
 
         $credentialMode = CredentialMode::tryFrom(OrderData::text($checkoutAttempt['credentialMode']));
 
-        if (
-            OrderData::text($checkoutAttempt['idempotencyKey'], 255) !== 'stripe-checkout/session/' . $uuid
-            || OrderData::text($checkoutAttempt['stripeApiVersion'], 80) === ''
-            || $credentialMode === null
-            || $checkoutAttempt['operation'] !== CheckoutAttempt::OPERATION
-        ) {
+        if (OrderData::text($checkoutAttempt['idempotencyKey'], 255) !== 'stripe-checkout/session/' . $uuid) {
+            throw new OrderDataException();
+        }
+
+        OrderData::text($checkoutAttempt['stripeApiVersion'], 80);
+
+        if ($credentialMode === null) {
+            throw new OrderDataException();
+        }
+
+        if ($checkoutAttempt['operation'] !== CheckoutAttempt::OPERATION) {
             throw new OrderDataException();
         }
 
@@ -750,10 +781,11 @@ final class OrderSerializer
             throw new OrderDataException();
         }
 
-        if (
-            $paymentStatus === PaymentStatus::Failed && isset($data['paymentFailedAt']) === false
-            || $paymentStatus === PaymentStatus::NoPaymentRequired && $data['total'] !== '0'
-        ) {
+        if ($paymentStatus === PaymentStatus::Failed && isset($data['paymentFailedAt']) === false) {
+            throw new OrderDataException();
+        }
+
+        if ($paymentStatus === PaymentStatus::NoPaymentRequired && $data['total'] !== '0') {
             throw new OrderDataException();
         }
 
