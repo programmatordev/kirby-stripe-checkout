@@ -352,6 +352,14 @@ final class ConfigurationResolverTest extends TestCase
         $rawField = $rawFields[0] ?? null;
         $this->assertIsArray($rawField);
         $this->assertSame('Tax number', $rawField['label'] ?? null);
+        $rawDropdown = $rawFields[1] ?? null;
+        $this->assertIsArray($rawDropdown);
+        $rawOptions = $rawDropdown['options'] ?? null;
+        $this->assertIsArray($rawOptions);
+        $rawOption = $rawOptions[0] ?? null;
+        $this->assertIsArray($rawOption);
+        $this->assertSame('Morning', $rawOption['label'] ?? null);
+        $this->assertSame(['pt' => 'Manhã'], $rawOption['labels'] ?? null);
     }
 
     #[DataProvider('invalidCollectionSettingProvider')]

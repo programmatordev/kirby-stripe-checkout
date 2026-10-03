@@ -121,20 +121,39 @@ final class CustomFieldFactory
                 throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path . '.options');
             }
 
+            $label = $this->label($field['label'], 50, $path . '.label');
+            $labels = $this->labels($field['labels'] ?? [], 50, $path . '.labels');
+            $minimumLength = $this->length($field['minimumLength'] ?? null, $path . '.minimumLength');
+            $maximumLength = $this->length($field['maximumLength'] ?? null, $path . '.maximumLength');
+            $optionResolution = $this->resolveOptions($rawOptions, $path . '.options');
             $normalizedField = [
                 'key' => $key,
-                'label' => $this->label($field['label'], 50, $path . '.label'),
-                'labels' => $this->labels($field['labels'] ?? [], 50, $path . '.labels'),
+                'label' => $label,
+                'labels' => $labels,
                 'type' => $customFieldType->value,
                 'required' => $required,
-                'minimumLength' => $this->length($field['minimumLength'] ?? null, $path . '.minimumLength'),
-                'maximumLength' => $this->length($field['maximumLength'] ?? null, $path . '.maximumLength'),
+                'minimumLength' => $minimumLength,
+                'maximumLength' => $maximumLength,
                 'defaultValue' => $defaultValue,
-                'options' => $this->normalizeOptions($rawOptions, $path . '.options'),
+                'options' => $optionResolution->definitions(),
             ];
 
             // The domain constructor owns constraints that depend on several fields, such as dropdown defaults and compatible length bounds.
-            $values[] = $this->create($normalizedField, $path);
+            try {
+                $values[] = new CustomField(
+                    key: $key,
+                    label: $this->localizedLabel($label, $labels),
+                    type: $customFieldType,
+                    required: $required,
+                    minimumLength: $minimumLength,
+                    maximumLength: $maximumLength,
+                    defaultValue: $defaultValue,
+                    options: $optionResolution->items(),
+                );
+            } catch (InvalidCustomFieldException $error) {
+                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path . '.' . $error->attribute());
+            }
+
             $normalized[] = $normalizedField;
         }
 
@@ -145,69 +164,18 @@ final class CustomFieldFactory
     }
 
     /**
-     * @param array<mixed, mixed> $field
-     */
-    private function create(array $field, string $path): CustomField
-    {
-        $key = $field['key'] ?? null;
-        $label = $field['label'] ?? null;
-        $labels = $field['labels'] ?? null;
-        $type = $field['type'] ?? null;
-        $required = $field['required'] ?? null;
-        $minimumLength = $field['minimumLength'] ?? null;
-        $maximumLength = $field['maximumLength'] ?? null;
-        $defaultValue = $field['defaultValue'] ?? null;
-        $rawOptions = $field['options'] ?? null;
-
-        if (
-            is_string($key) === false
-            || is_string($label) === false
-            || is_array($labels) === false
-            || is_string($type) === false
-            || is_bool($required) === false
-            || ($minimumLength !== null && is_int($minimumLength) === false)
-            || ($maximumLength !== null && is_int($maximumLength) === false)
-            || ($defaultValue !== null && is_string($defaultValue) === false)
-            || is_array($rawOptions) === false
-        ) {
-            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path);
-        }
-
-        $customFieldType = CustomFieldType::tryFrom($type);
-
-        if ($customFieldType === null) {
-            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path . '.type');
-        }
-
-        /** @var array<string, string> $labels */
-        try {
-            return new CustomField(
-                key: $key,
-                label: $this->localizedLabel($label, $labels),
-                type: $customFieldType,
-                required: $required,
-                minimumLength: $minimumLength,
-                maximumLength: $maximumLength,
-                defaultValue: $defaultValue,
-                options: $this->createOptions($rawOptions, $path . '.options'),
-            );
-        } catch (InvalidCustomFieldException $error) {
-            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path . '.' . $error->attribute());
-        }
-    }
-
-    /**
      * @param array<mixed, mixed> $options
-     * @return list<array{value: string, label: string, labels: array<string, string>}>
+     * @return ConfigurationCollection<CustomFieldOption>
      */
-    private function normalizeOptions(array $options, string $path): array
+    private function resolveOptions(array $options, string $path): ConfigurationCollection
     {
         if (array_is_list($options) === false || count($options) > 200) {
             throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path);
         }
 
         $normalized = [];
-        $values = [];
+        $optionValues = [];
+        $items = [];
 
         foreach ($options as $index => $option) {
             $optionPath = $path . '.' . $index;
@@ -233,56 +201,39 @@ final class CustomFieldFactory
                 path: $optionPath . '.value',
             );
 
-            if (isset($values[$value])) {
+            if (isset($optionValues[$value])) {
                 throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $optionPath . '.value');
             }
 
-            $values[$value] = true;
-            $normalized[] = [
+            $optionValues[$value] = true;
+            $label = $this->label($option['label'], 100, $optionPath . '.label');
+            $labels = $this->labels($option['labels'] ?? [], 100, $optionPath . '.labels');
+            // Preserve fallback labels and translations in storage so resolving another language does not rewrite the definition.
+            $normalizedOption = [
                 'value' => $value,
-                'label' => $this->label($option['label'], 100, $optionPath . '.label'),
-                'labels' => $this->labels($option['labels'] ?? [], 100, $optionPath . '.labels'),
+                'label' => $label,
+                'labels' => $labels,
             ];
-        }
-
-        return $normalized;
-    }
-
-    /**
-     * @param array<mixed, mixed> $options
-     * @return list<CustomFieldOption>
-     */
-    private function createOptions(array $options, string $path): array
-    {
-        $values = [];
-
-        foreach ($options as $index => $option) {
-            if (
-                is_array($option) === false
-                || is_string($option['value'] ?? null) === false
-                || is_string($option['label'] ?? null) === false
-                || is_array($option['labels'] ?? null) === false
-            ) {
-                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path . '.' . $index);
-            }
-
-            /** @var array<string, string> $labels */
-            $labels = $option['labels'];
 
             try {
-                $values[] = new CustomFieldOption(
-                    value: $option['value'],
-                    label: $this->localizedLabel($option['label'], $labels),
+                $items[] = new CustomFieldOption(
+                    value: $value,
+                    label: $this->localizedLabel($label, $labels),
                 );
             } catch (InvalidCustomFieldException $error) {
                 throw new ConfigurationException(
                     ConfigurationErrorCode::VALUE_INVALID,
-                    $path . '.' . $index . '.' . $error->attribute(),
+                    $optionPath . '.' . $error->attribute(),
                 );
             }
+
+            $normalized[] = $normalizedOption;
         }
 
-        return $values;
+        return new ConfigurationCollection(
+            definitions: $normalized,
+            items: $items,
+        );
     }
 
     private function identifier(mixed $value, int $maximumLength, string $path): string

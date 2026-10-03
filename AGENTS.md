@@ -61,6 +61,7 @@
 - Qualify ambiguous PHP-facing names such as `source`, `status`, or `reference` with their domain role when multiple meanings coexist. Concise persisted and transport keys may remain generic when their schema context is explicit.
 - Name methods for the precise result or action visible at the call site. Qualify ambiguous names when context matters, such as `httpStatus()`, `cached()`, and `normalizeDirectInput()`.
 - Keep variable, method, type, and persisted-data terminology aligned for the same domain concept. Prefer explicit names such as `lineItem`, `requestNormalizer`, and `options` over shortened or competing terms.
+- When assigning or passing a value, keep its variable name aligned with the corresponding parameter, property, field or persisted key, such as `conceptName: $conceptName` instead of `conceptName: $alias`. Use different names only to distinguish meaningful roles or representations; avoid shortened names or synonyms for the same concept.
 - Avoid vague names such as `Manager`, `Service`, `Helper`, and `Handler` when a more specific responsibility can be named.
 - Keep related PHP classes, Panel components, tests, factory methods, and documentation terminology aligned when a concept is renamed.
 

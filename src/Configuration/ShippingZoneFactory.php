@@ -138,15 +138,25 @@ final class ShippingZoneFactory
                 throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path . '.options');
             }
 
-            $options = $this->options($rawOptions, $path . '.options', $optionKeys);
+            $optionResolution = $this->resolveOptions($rawOptions, $path . '.options', $optionKeys);
             $normalizedZone = [
                 'name' => $name,
                 'scope' => $scope,
                 'countries' => $countries,
-                'options' => $options,
+                'options' => $optionResolution->definitions(),
             ];
 
-            $values[] = $this->create($normalizedZone, $path);
+            try {
+                $values[] = new ShippingZone(
+                    name: $name,
+                    scope: $zoneScope,
+                    countries: $countries,
+                    options: $optionResolution->items(),
+                );
+            } catch (InvalidArgumentException $error) {
+                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path, previous: $error);
+            }
+
             $normalized[] = $normalizedZone;
         }
 
@@ -157,53 +167,11 @@ final class ShippingZoneFactory
     }
 
     /**
-     * @param array<string, mixed> $zone
-     */
-    private function create(array $zone, string $path): ShippingZone
-    {
-        $name = $zone['name'] ?? null;
-        $scope = $zone['scope'] ?? null;
-        $countries = $zone['countries'] ?? null;
-        $options = $zone['options'] ?? null;
-
-        if (
-            is_string($name) === false
-            || is_string($scope) === false
-            || is_array($countries) === false
-            || is_array($options) === false
-        ) {
-            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path);
-        }
-
-        $zoneOptions = [];
-
-        foreach ($options as $index => $option) {
-            if (is_array($option) === false) {
-                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path . '.options.' . $index);
-            }
-
-            /** @var array<string, mixed> $option */
-            $zoneOptions[] = $this->createOption($option, $path . '.options.' . $index);
-        }
-
-        try {
-            return new ShippingZone(
-                name: $name,
-                scope: ShippingZoneScope::from($scope),
-                countries: $countries,
-                options: $zoneOptions,
-            );
-        } catch (InvalidArgumentException $error) {
-            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path, previous: $error);
-        }
-    }
-
-    /**
      * @param array<mixed, mixed> $options
      * @param array<string, true> $globalKeys
-     * @return list<array<string, mixed>>
+     * @return ConfigurationCollection<ShippingOption>
      */
-    private function options(array $options, string $path, array &$globalKeys): array
+    private function resolveOptions(array $options, string $path, array &$globalKeys): ConfigurationCollection
     {
         if (array_is_list($options) === false) {
             throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path);
@@ -217,6 +185,7 @@ final class ShippingZoneFactory
 
         $normalized = [];
         $labels = [];
+        $values = [];
 
         foreach ($options as $index => $option) {
             $optionPath = $path . '.' . $index;
@@ -262,6 +231,7 @@ final class ShippingZoneFactory
                 throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $optionPath . '.amount');
             }
 
+            // Shipping can remain unconfigured without a currency; require one only when an option needs a monetary amount.
             if ($this->currency === null) {
                 throw new ConfigurationException(ConfigurationErrorCode::REQUIRED_MISSING, 'settings.currency');
             }
@@ -272,7 +242,9 @@ final class ShippingZoneFactory
                 throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $optionPath . '.taxBehavior');
             }
 
-            if (TaxBehavior::tryFrom($taxBehavior) === null) {
+            $optionTaxBehavior = TaxBehavior::tryFrom($taxBehavior);
+
+            if ($optionTaxBehavior === null) {
                 throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $optionPath . '.taxBehavior');
             }
 
@@ -282,70 +254,44 @@ final class ShippingZoneFactory
                 throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $optionPath . '.taxCode');
             }
 
+            $estimate = $this->deliveryEstimate($option['deliveryEstimate'] ?? null, $optionPath . '.deliveryEstimate');
+            // Stored definitions retain configured decimals and fallback labels; runtime options normalize money and localize labels.
             $normalizedOption = [
                 'key' => $key,
                 'label' => $label,
                 'labels' => $localizedLabels,
                 'amount' => $amount,
-                'deliveryEstimate' => $this->deliveryEstimate(
-                    $option['deliveryEstimate'] ?? null,
-                    $optionPath . '.deliveryEstimate',
-                ),
+                'deliveryEstimate' => $estimate,
                 'taxBehavior' => $taxBehavior,
                 'taxCode' => $taxCode,
             ];
 
-            $this->createOption($normalizedOption, $optionPath);
+            try {
+                $values[] = new ShippingOption(
+                    key: $key,
+                    label: $effectiveLabel,
+                    amount: Money::of($amount, $this->currency),
+                    deliveryEstimate: $estimate === null ? null : new DeliveryEstimate(
+                        minimum: $estimate['minimum'],
+                        maximum: $estimate['maximum'],
+                        unit: DeliveryEstimateUnit::from($estimate['unit']),
+                    ),
+                    taxBehavior: $optionTaxBehavior,
+                    taxCode: $taxCode,
+                );
+            } catch (InvalidShippingOptionException $error) {
+                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $optionPath . '.' . $error->attribute());
+            } catch (Throwable $error) {
+                throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $optionPath . '.amount', previous: $error);
+            }
+
             $normalized[] = $normalizedOption;
         }
 
-        return $normalized;
-    }
-
-    /** @param array<string, mixed> $option */
-    private function createOption(array $option, string $path): ShippingOption
-    {
-        $key = $option['key'] ?? null;
-        $label = $option['label'] ?? null;
-        $labels = $option['labels'] ?? null;
-        $amount = $option['amount'] ?? null;
-        $estimate = $option['deliveryEstimate'] ?? null;
-        $taxBehavior = $option['taxBehavior'] ?? null;
-        $taxCode = $option['taxCode'] ?? null;
-
-        if (
-            is_string($key) === false
-            || is_string($label) === false
-            || is_array($labels) === false
-            || is_string($amount) === false
-            || ($estimate !== null && is_array($estimate) === false)
-            || is_string($taxBehavior) === false
-            || ($taxCode !== null && is_string($taxCode) === false)
-            || $this->currency === null
-        ) {
-            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path);
-        }
-
-        try {
-            /** @var array<string, string> $labels */
-            /** @var array{minimum: int|null, maximum: int|null, unit: string}|null $estimate */
-            return new ShippingOption(
-                key: $key,
-                label: $this->localizedLabel($label, $labels),
-                amount: Money::of($amount, $this->currency),
-                deliveryEstimate: $estimate === null ? null : new DeliveryEstimate(
-                    minimum: $estimate['minimum'],
-                    maximum: $estimate['maximum'],
-                    unit: DeliveryEstimateUnit::from($estimate['unit']),
-                ),
-                taxBehavior: TaxBehavior::from($taxBehavior),
-                taxCode: $taxCode,
-            );
-        } catch (InvalidShippingOptionException $error) {
-            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path . '.' . $error->attribute());
-        } catch (Throwable $error) {
-            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path . '.amount', previous: $error);
-        }
+        return new ConfigurationCollection(
+            definitions: $normalized,
+            items: $values,
+        );
     }
 
     /** @return list<string> */

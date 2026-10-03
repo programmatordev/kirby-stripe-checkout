@@ -40,6 +40,7 @@ final class ShippingSettingsTest extends TestCase
                 'countries' => ['PT', 'ES'],
                 'options' => [[
                     ...self::option('standard', 'Standard delivery'),
+                    'amount' => '4.9',
                     'labels' => ['pt' => 'Entrega normal'],
                     'deliveryEstimate' => [
                         'minimum' => 2,
@@ -60,6 +61,17 @@ final class ShippingSettingsTest extends TestCase
         $this->assertSame(DeliveryEstimateUnit::BusinessDay, $option->deliveryEstimate()?->unit());
         $this->assertSame(TaxBehavior::Inclusive, $option->taxBehavior());
         $this->assertSame('txcd_92010001', $option->taxCode());
+        $storedZones = $settings->setting('shippingZones')?->value();
+        $this->assertIsArray($storedZones);
+        $storedZone = $storedZones[0] ?? null;
+        $this->assertIsArray($storedZone);
+        $storedOptions = $storedZone['options'] ?? null;
+        $this->assertIsArray($storedOptions);
+        $storedOption = $storedOptions[0] ?? null;
+        $this->assertIsArray($storedOption);
+        $this->assertSame('Standard delivery', $storedOption['label'] ?? null);
+        $this->assertSame(['pt' => 'Entrega normal'], $storedOption['labels'] ?? null);
+        $this->assertSame('4.9', $storedOption['amount'] ?? null);
     }
 
     public function testPhpZoneListLocksReplaceRatherThanMergePageValues(): void
