@@ -463,14 +463,14 @@ final class PageSettings
                     );
                 }
 
-                $estimate = $option['deliveryEstimate'] ?? null;
+                $deliveryEstimate = $option['deliveryEstimate'] ?? null;
 
-                if (is_array($estimate)) {
+                if (is_array($deliveryEstimate)) {
                     foreach (['minimum', 'maximum'] as $bound) {
-                        $rawBound = $estimate[$bound] ?? null;
+                        $rawBound = $deliveryEstimate[$bound] ?? null;
 
                         if ($rawBound === null || $rawBound === '') {
-                            $estimate[$bound] = null;
+                            $deliveryEstimate[$bound] = null;
 
                             continue;
                         }
@@ -488,15 +488,15 @@ final class PageSettings
                             );
                         }
 
-                        $estimate[$bound] = $normalizedBound;
+                        $deliveryEstimate[$bound] = $normalizedBound;
                     }
 
-                    if (($estimate['minimum'] ?? null) === null && ($estimate['maximum'] ?? null) === null) {
-                        $estimate = null;
+                    if (($deliveryEstimate['minimum'] ?? null) === null && ($deliveryEstimate['maximum'] ?? null) === null) {
+                        $deliveryEstimate = null;
                     }
                 }
 
-                $option['deliveryEstimate'] = $estimate;
+                $option['deliveryEstimate'] = $deliveryEstimate;
                 $options[$optionIndex] = $option;
             }
 
