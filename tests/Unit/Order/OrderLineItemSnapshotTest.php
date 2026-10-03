@@ -107,6 +107,7 @@ final class OrderLineItemSnapshotTest extends TestCase
         yield 'quantity' => ['quantity', 0];
         yield 'fraction quantity' => ['quantity', 1.5];
         yield 'source mix' => ['stripePriceId', 'price_test'];
+        yield 'Kirby source with Stripe Product reference' => ['stripeProductId', 'prod_test'];
         yield 'missing options' => ['options', []];
         yield 'unknown fact' => ['cardNumber', 'private'];
         yield 'unknown option' => ['options', [[
@@ -117,6 +118,28 @@ final class OrderLineItemSnapshotTest extends TestCase
             'extra' => true,
         ]]];
         yield 'SDK object' => ['metadata', new stdClass()];
+    }
+
+    /** @param array<string, mixed> $changes */
+    #[DataProvider('invalidStripePricingFacts')]
+    public function testRejectsInconsistentStoredStripePricingFacts(array $changes): void
+    {
+        $data = array_replace(OrderFixture::lineItemData(), [
+            'priceSource' => 'stripe',
+            'stripePriceId' => 'price_test',
+            'stripeProductId' => 'prod_test',
+        ], $changes);
+
+        $this->expectException(OrderDataException::class);
+        OrderLineItemSnapshot::fromArray($data);
+    }
+
+    /** @return iterable<string, array{array<string, mixed>}> */
+    public static function invalidStripePricingFacts(): iterable
+    {
+        yield 'non-string Product reference' => [['stripeProductId' => 123]];
+        yield 'wrong resource reference' => [['stripeProductId' => 'price_test']];
+        yield 'local tax override' => [['taxCode' => 'txcd_33020002']];
     }
 
     public function testFreezesProductDetailsAndSelectedOptions(): void

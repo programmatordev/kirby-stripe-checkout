@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Order\Internal;
 
 use Brick\Money\Money;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
+use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Product\Price;
@@ -103,17 +104,23 @@ final readonly class OrderLineItemSnapshot
             $currency = OrderData::text($data['currency']);
             $price = $registry->toMoney($registry->fromDecimal(OrderData::text($data['price']), $currency));
             $request = new ProductRequest(OrderData::text($data['reference']), OrderData::integer($data['quantity']), $selection);
+            // Rebuild price identity from saved evidence; even Stripe-priced lines retain their frozen amounts without a catalogue lookup.
             $priceDefinition = match ($data['priceSource']) {
-                'kirby' => new Price($price),
-                'stripe' => new StripePriceReference(OrderData::text($data['stripePriceId'])),
+                PriceSource::Kirby->value => new Price($price),
+                PriceSource::Stripe->value => new StripePriceReference(OrderData::text($data['stripePriceId'])),
                 default => throw new OrderDataException(),
             };
 
-            if (
-                $data['priceSource'] === 'kirby' && ($data['stripePriceId'] !== null || $data['stripeProductId'] !== null)
-                || $data['stripeProductId'] !== null && (is_string($data['stripeProductId']) === false || preg_match('/\Aprod_[A-Za-z0-9]+\z/', $data['stripeProductId']) !== 1)
-                || $data['priceSource'] === 'stripe' && $data['taxCode'] !== null
-            ) {
+            if ($data['priceSource'] === PriceSource::Kirby->value && ($data['stripePriceId'] !== null || $data['stripeProductId'] !== null)) {
+                throw new OrderDataException();
+            }
+
+            if ($data['stripeProductId'] !== null && (is_string($data['stripeProductId']) === false || preg_match('/\Aprod_[A-Za-z0-9]+\z/', $data['stripeProductId']) !== 1)) {
+                throw new OrderDataException();
+            }
+
+            // Stripe-priced items use the provider's product classification; local tax overrides belong only to Kirby-priced items.
+            if ($data['priceSource'] === PriceSource::Stripe->value && $data['taxCode'] !== null) {
                 throw new OrderDataException();
             }
 
@@ -132,10 +139,15 @@ final readonly class OrderLineItemSnapshot
                 OrderData::nullableString($data['variantId']),
                 taxCode: $data['taxCode'] === null ? null : new TaxCode(OrderData::text($data['taxCode'])),
             );
+            // Initiating subtotals exclude later provider discounts and taxes, so they must match the frozen unit price and quantity.
             $subtotal = $price->multipliedBy($request->quantity());
             $providedSubtotal = $registry->toMoney($registry->fromDecimal(OrderData::text($data['subtotal']), $currency));
 
-            if ($subtotal->isEqualTo($providedSubtotal) === false || $data['providerAmounts'] !== [
+            if ($subtotal->isEqualTo($providedSubtotal) === false) {
+                throw new OrderDataException();
+            }
+
+            if ($data['providerAmounts'] !== [
                 'price' => $registry->fromMoney($price)->minorAmount(),
                 'subtotal' => $registry->fromMoney($subtotal)->minorAmount(),
             ]) {
