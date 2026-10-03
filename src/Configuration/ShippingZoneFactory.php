@@ -254,14 +254,14 @@ final class ShippingZoneFactory
                 throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $optionPath . '.taxCode');
             }
 
-            $estimate = $this->deliveryEstimate($option['deliveryEstimate'] ?? null, $optionPath . '.deliveryEstimate');
+            $deliveryEstimate = $this->deliveryEstimate($option['deliveryEstimate'] ?? null, $optionPath . '.deliveryEstimate');
             // Stored definitions retain configured decimals and fallback labels; runtime options normalize money and localize labels.
             $normalizedOption = [
                 'key' => $key,
                 'label' => $label,
                 'labels' => $localizedLabels,
                 'amount' => $amount,
-                'deliveryEstimate' => $estimate,
+                'deliveryEstimate' => $deliveryEstimate,
                 'taxBehavior' => $taxBehavior,
                 'taxCode' => $taxCode,
             ];
@@ -271,10 +271,10 @@ final class ShippingZoneFactory
                     key: $key,
                     label: $effectiveLabel,
                     amount: Money::of($amount, $this->currency),
-                    deliveryEstimate: $estimate === null ? null : new DeliveryEstimate(
-                        minimum: $estimate['minimum'],
-                        maximum: $estimate['maximum'],
-                        unit: DeliveryEstimateUnit::from($estimate['unit']),
+                    deliveryEstimate: $deliveryEstimate === null ? null : new DeliveryEstimate(
+                        minimum: $deliveryEstimate['minimum'],
+                        maximum: $deliveryEstimate['maximum'],
+                        unit: DeliveryEstimateUnit::from($deliveryEstimate['unit']),
                     ),
                     taxBehavior: $optionTaxBehavior,
                     taxCode: $taxCode,
@@ -324,20 +324,20 @@ final class ShippingZoneFactory
     }
 
     /** @return array{minimum: ?int, maximum: ?int, unit: string}|null */
-    private function deliveryEstimate(mixed $estimate, string $path): ?array
+    private function deliveryEstimate(mixed $deliveryEstimate, string $path): ?array
     {
-        if ($estimate === null || $estimate === '') {
+        if ($deliveryEstimate === null || $deliveryEstimate === '') {
             return null;
         }
 
-        if (is_array($estimate) === false) {
+        if (is_array($deliveryEstimate) === false) {
             throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path);
         }
 
-        $this->assertKnownKeys($estimate, self::ESTIMATE_KEYS, $path);
-        $minimum = $estimate['minimum'] ?? null;
-        $maximum = $estimate['maximum'] ?? null;
-        $unit = $estimate['unit'] ?? null;
+        $this->assertKnownKeys($deliveryEstimate, self::ESTIMATE_KEYS, $path);
+        $minimum = $deliveryEstimate['minimum'] ?? null;
+        $maximum = $deliveryEstimate['maximum'] ?? null;
+        $unit = $deliveryEstimate['unit'] ?? null;
 
         foreach (['minimum' => $minimum, 'maximum' => $maximum] as $name => $value) {
             if ($value !== null && is_int($value) === false) {
