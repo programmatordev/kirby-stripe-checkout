@@ -29,12 +29,22 @@ final readonly class CustomFieldSnapshot
             $value = OrderData::nullableSingleLine($data['value'], 255);
             $configured = OrderData::boolean($data['configured']);
 
-            if (
-                preg_match('/\A[a-z0-9]+\z/D', $key) !== 1
-                || $configured === false
-                || $answered !== ($value !== null)
-                || $type === CustomFieldType::Numeric && $value !== null && preg_match('/\A[0-9]+\z/D', $value) !== 1
-            ) {
+            if (preg_match('/\A[a-z0-9]+\z/D', $key) !== 1) {
+                throw new OrderDataException();
+            }
+
+            // This records fields presented by the saved Session, independently of current store Settings.
+            if ($configured === false) {
+                throw new OrderDataException();
+            }
+
+            // An empty text answer is still a returned value; only null means unanswered.
+            if ($answered !== ($value !== null)) {
+                throw new OrderDataException();
+            }
+
+            // Validate digit syntax without converting the answer to a number; leading zeros remain meaningful data.
+            if ($type === CustomFieldType::Numeric && $value !== null && preg_match('/\A[0-9]+\z/D', $value) !== 1) {
                 throw new OrderDataException();
             }
 
