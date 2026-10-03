@@ -371,6 +371,8 @@ final class SessionRequestValidator
     /**
      * Protects the single-currency Order boundary, not Stripe's complete amount schema.
      *
+     * Trusted filters can replace the quoted amount, so validation belongs to the final request.
+     *
      * @param array<string, mixed> $data
      */
     private function validateShippingAmount(
@@ -387,14 +389,20 @@ final class SessionRequestValidator
         $providerAmount = $amount['amount'] ?? null;
         $currency = $amount['currency'] ?? null;
 
-        if (
-            is_int($providerAmount) === false
-            || $providerAmount < 0
-            || is_string($currency) === false
-            || strtolower($currency) !== $currency
-            || $currency !== $expectedCurrency
-            || array_key_exists('currency_options', $amount)
-        ) {
+        if (is_int($providerAmount) === false || $providerAmount < 0) {
+            $this->invalid($path);
+        }
+
+        if (is_string($currency) === false || strtolower($currency) !== $currency) {
+            $this->invalid($path);
+        }
+
+        if ($currency !== $expectedCurrency) {
+            $this->invalid($path);
+        }
+
+        // The Order snapshot has one currency, so alternate amounts would escape its reconciliation contract.
+        if (array_key_exists('currency_options', $amount)) {
             $this->invalid($path);
         }
 

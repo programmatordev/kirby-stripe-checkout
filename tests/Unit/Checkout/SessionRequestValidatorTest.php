@@ -141,7 +141,8 @@ final class SessionRequestValidatorTest extends TestCase
         );
     }
 
-    public function testAllowsShippingBusinessOverridesWhilePreservingCorrelation(): void
+    #[DataProvider('shippingBusinessAmounts')]
+    public function testAllowsShippingBusinessOverridesWhilePreservingCorrelation(int $providerAmount): void
     {
         $request = $this->standardShippingRequest();
         $parameters = $request->parameters();
@@ -150,7 +151,7 @@ final class SessionRequestValidatorTest extends TestCase
         $data = $this->map($option['shipping_rate_data']);
         $data['display_name'] = 'Next-day delivery';
         $data['fixed_amount'] = [
-            'amount' => 1_250,
+            'amount' => $providerAmount,
             'currency' => 'eur',
         ];
         $data['tax_behavior'] = 'exclusive';
@@ -164,6 +165,13 @@ final class SessionRequestValidatorTest extends TestCase
             $customizedRequest,
             (new SessionRequestValidator())->validate($request, $customizedRequest),
         );
+    }
+
+    /** @return iterable<string, array{int}> */
+    public static function shippingBusinessAmounts(): iterable
+    {
+        yield 'paid shipping' => [1_250];
+        yield 'free shipping' => [0];
     }
 
     #[DataProvider('invalidShippingChanges')]
@@ -302,6 +310,24 @@ final class SessionRequestValidatorTest extends TestCase
                 'currency' => 'eur',
             ],
         ];
+        yield 'text amount' => [
+            [
+                'amount' => '500',
+                'currency' => 'eur',
+            ],
+        ];
+        yield 'non-string currency' => [
+            [
+                'amount' => 500,
+                'currency' => true,
+            ],
+        ];
+        yield 'uppercase currency' => [
+            [
+                'amount' => 500,
+                'currency' => 'EUR',
+            ],
+        ];
         yield 'different currency' => [
             [
                 'amount' => 500,
@@ -315,6 +341,13 @@ final class SessionRequestValidatorTest extends TestCase
                 'currency_options' => [
                     'usd' => ['amount' => 500],
                 ],
+            ],
+        ];
+        yield 'null currency options' => [
+            [
+                'amount' => 500,
+                'currency' => 'eur',
+                'currency_options' => null,
             ],
         ];
     }
