@@ -63,11 +63,15 @@ final readonly class OrderCreationContext
             OrderData::text($cartRevision);
         }
 
-        if (
-            ($checkoutSource === CheckoutSource::Cart) !== ($cartRevision !== null)
-            || array_is_list($lineItems) === false || $lineItems === []
-            || count($lineItems) > ProductRequestNormalizer::MAX_ENTRIES
-        ) {
+        if (($checkoutSource === CheckoutSource::Cart) !== ($cartRevision !== null)) {
+            throw new OrderDataException();
+        }
+
+        if (array_is_list($lineItems) === false || $lineItems === []) {
+            throw new OrderDataException();
+        }
+
+        if (count($lineItems) > ProductRequestNormalizer::MAX_ENTRIES) {
             throw new OrderDataException();
         }
 
@@ -77,10 +81,15 @@ final readonly class OrderCreationContext
         $priceSource = null;
         $requiresShipping = false;
 
+        // Each line owns its product and amount invariants; this context enforces consistency across the purchase.
         foreach ($lineItems as $lineItem) {
             $snapshot = $lineItem->toArray();
 
-            if ($snapshot['currency'] !== $currency || $priceSource !== null && $priceSource !== $snapshot['priceSource']) {
+            if ($snapshot['currency'] !== $currency) {
+                throw new OrderDataException();
+            }
+
+            if ($priceSource !== null && $priceSource !== $snapshot['priceSource']) {
                 throw new OrderDataException();
             }
 
@@ -90,6 +99,7 @@ final readonly class OrderCreationContext
             $requiresShipping = $requiresShipping || $snapshot['requiresShipping'] === true;
         }
 
+        // Individually valid line amounts can sum beyond the snapshot's provider-unit integer range.
         $registry->fromMoney($subtotal);
         $this->subtotal = $subtotal;
         $this->lineItems = $snapshots;
