@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Exception\CheckoutSessionGatewayException;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Internal\CheckoutSessionFailureClassifier;
@@ -108,6 +109,40 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
         }
 
         return $record;
+    }
+
+    public function sessionForPaymentIntent(string $paymentIntentId): ?string
+    {
+        try {
+            // Two results detect ambiguity; never pick the first match or use eventually consistent Search.
+            // https://docs.stripe.com/api/checkout/sessions/list
+            $collection = $this->client->checkout->sessions->all([
+                'payment_intent' => $paymentIntentId,
+                'limit' => 2,
+            ])->toArray();
+            $items = OrderData::list($collection['data'] ?? null);
+
+            if (OrderData::boolean($collection['has_more'] ?? null) || count($items) > 1) {
+                throw new OrderDataException();
+            }
+
+            if ($items === []) {
+                return null;
+            }
+
+            $item = OrderData::map($items[0]);
+
+            if (($item['object'] ?? null) !== Session::OBJECT_NAME || ($item['payment_intent'] ?? null) !== $paymentIntentId) {
+                throw new OrderDataException();
+            }
+
+            // The subsequent Session read validates the full result against the saved purchase.
+            return OrderData::string($item['id'] ?? null);
+        } catch (OrderDataException $error) {
+            throw new CheckoutSessionGatewayException(new CheckoutSessionFailure(CheckoutSessionFailureType::Incompatible, false), $error);
+        } catch (Throwable $error) {
+            throw new CheckoutSessionGatewayException($this->failures->classify($error, mutation: false), $error);
+        }
     }
 
     /** @return list<array<string, mixed>> */

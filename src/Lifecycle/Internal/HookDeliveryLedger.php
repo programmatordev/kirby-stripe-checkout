@@ -267,8 +267,8 @@ final class HookDeliveryLedger
         $triggerKeys = ['triggerType', 'triggerId'];
 
         foreach ($triggerKeys as $key) {
-            if ($event[$key] !== null) {
-                OrderData::text($event[$key], 255);
+            if ($event[$key] !== null && OrderData::string($event[$key]) === '') {
+                throw new OrderDataException();
             }
         }
     }

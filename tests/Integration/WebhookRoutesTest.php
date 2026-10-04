@@ -13,6 +13,7 @@ use Kirby\Content\PlainTextStorage;
 use Kirby\Content\Storage;
 use Kirby\Content\VersionId;
 use Kirby\Filesystem\F;
+use Kirby\Form\Form;
 use Kirby\Http\Environment;
 use Kirby\Http\Request;
 use Kirby\Http\Response;
@@ -20,9 +21,11 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderHookDispatcher;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEvent;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
@@ -106,7 +109,7 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->provider = new WebhookCheckoutClient($this->order->pageUuid(), $this->createdAt->getTimestamp());
         ApiRequestor::setHttpClient($this->provider);
         $hooks = [];
-        $names = ['session.created', 'payment.pending', 'payment.succeeded', 'payment.failed', 'checkout.expired', 'payment.requiresAction'];
+        $names = ['session.created', 'payment.pending', 'payment.succeeded', 'payment.failed', 'checkout.expired', 'payment.requiresAction', 'refund.updated'];
 
         $test = $this;
         $orders = $this->orders;
@@ -148,7 +151,9 @@ final class WebhookRoutesTest extends KirbyTestCase
 
     public function testRedeliveryAfterALostSuccessfulResponseDoesNotRepeatEffects(): void
     {
-        $body = $this->event();
+        $event = OrderData::map(json_decode($this->event(), true, flags: JSON_THROW_ON_ERROR));
+        $event['id'] = 'checkout.event-reference';
+        $body = json_encode($event, JSON_THROW_ON_ERROR);
         // Discard the acknowledgement as if the connection failed after the canonical commit.
         $this->send($body);
         $committed = $this->data();
@@ -271,7 +276,7 @@ final class WebhookRoutesTest extends KirbyTestCase
     public static function ignoredEvents(): iterable
     {
         yield 'future unsupported event' => ['future.event', PluginMetadata::NAME];
-        yield 'refund remains deferred' => ['refund.created', PluginMetadata::NAME];
+        yield 'dispute remains deferred' => ['charge.dispute.created', PluginMetadata::NAME];
         yield 'foreign Checkout' => ['checkout.session.completed', 'other/plugin'];
         yield 'unowned Checkout' => ['checkout.session.completed', ''];
     }
@@ -406,7 +411,9 @@ final class WebhookRoutesTest extends KirbyTestCase
     public static function malformedEnvelopes(): iterable
     {
         yield 'not an Event' => ['{"id":"evt_bad","object":"payment_intent","type":"future.event"}'];
-        yield 'unsafe id' => ['{"id":"evt_bad\\nprivate","object":"event","type":"future.event"}'];
+        yield 'empty id' => ['{"id":"","object":"event","type":"future.event"}'];
+        yield 'missing id' => ['{"object":"event","type":"future.event"}'];
+        yield 'non-string id' => ['{"id":1,"object":"event","type":"future.event"}'];
         yield 'missing type' => ['{"id":"evt_bad","object":"event"}'];
         yield 'missing object' => ['{"id":"evt_bad","object":"event","type":"checkout.session.completed","data":{}}'];
         yield 'invalid metadata' => ['{"id":"evt_bad","object":"event","type":"checkout.session.completed","data":{"object":{"metadata":"PRIVATE"}}}'];
@@ -532,6 +539,606 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->assertStringNotContainsString(self::SECRET, $logs);
         $this->assertStringNotContainsString('sk_test_webhook_fixture', $logs);
         $this->assertStringNotContainsString('PRIVATE', json_encode($this->data(), JSON_THROW_ON_ERROR));
+    }
+
+    #[DataProvider('refundOutcomes')]
+    public function testRefundEventsRefreshPaymentAndPersistCurrentRefundFacts(string $type, string $status, string $summary): void
+    {
+        $this->setRefunds([$this->refund(status: $status)]);
+        $this->assertResponse($this->send($this->refundEvent($type)), 204);
+        $data = $this->data();
+        $this->assertSame('paid', $data['paymentStatus']);
+        $this->assertSame($summary, $data['refundStatus']);
+        $this->assertSame($status === 'succeeded' ? '16.00' : '0', $data['refundedTotal']);
+        $this->assertSame('pi_webhook', $this->entries('refunds')[0]['stripePaymentIntentId']);
+        $this->assertSame('re_webhook', $this->entries('events')[0]['resourceId']);
+        $this->assertSame('processed', $this->entries('events')[0]['status']);
+        $this->assertSame(['session.created', 'payment.succeeded', 'refund.updated'], array_map(static fn(LifecycleEvent $event): string => $event->type()->value, $this->delivered));
+        $this->assertSame($data['refunds'], $this->delivered[2]->orderSnapshot()['refunds']);
+        $this->assertSame($type, $this->delivered[2]->triggerType());
+        $this->assertStringNotContainsString('PRIVATE_REFUND', json_encode($data, JSON_THROW_ON_ERROR));
+    }
+
+    /** @return iterable<array{string, string, string}> */
+    public static function refundOutcomes(): iterable
+    {
+        yield ['refund.created', 'pending', 'pending'];
+        yield ['refund.updated', 'succeeded', 'partial'];
+        yield ['refund.failed', 'failed', 'failed'];
+    }
+
+    public function testNativeRefundStructureDisplaysSafeFactsAndCannotRewriteTheSnapshot(): void
+    {
+        $refund = $this->refund();
+        $refund['reason'] = 'requested_by_customer';
+        $this->setRefunds([$refund]);
+        $this->assertResponse($this->send($this->refundEvent()), 204);
+        $this->kirby->impersonate('kirby');
+        $page = $this->orders->requirePage($this->order->pageUuid());
+        $before = $this->data();
+        $form = Form::for($page);
+        /** @var array<string, mixed> $input */
+        $input = $form->toFormValues();
+        $rows = OrderData::list($input['refunds']);
+        $row = OrderData::map($rows[0]);
+        $this->assertSame('16.00', $row['amount']);
+        $this->assertSame('EUR', $row['currency']);
+        $this->assertSame('succeeded', $row['status']);
+        $this->assertSame('re_webhook', $row['striperefundid']);
+        $this->assertSame('requested_by_customer', $row['reason']);
+        $this->assertSame((string) OrderData::integer($refund['created']), $row['createdat']);
+        $storedRefund = OrderData::map(OrderData::list($before['refunds'])[0]);
+        $this->assertSame((new DateTimeImmutable(OrderData::string($storedRefund['firstObservedAt'])))->format('Y-m-d H:i:s'), $row['firstobservedat']);
+        $this->assertStringNotContainsString('PRIVATE_REFUND', json_encode($input['refunds'], JSON_THROW_ON_ERROR));
+
+        $page->update([...$input, 'note' => 'Refund inspected']);
+        $this->assertSame($before, $this->data());
+        $page = $this->orders->requirePage($this->order->pageUuid());
+        $this->assertSame('Refund inspected', $page->version('latest')->read('default')['note'] ?? null);
+
+        $row['amount'] = '1.00';
+        $input['refunds'] = [$row];
+        $this->expectException(\Kirby\Exception\PermissionException::class);
+        $page->update($input);
+    }
+
+    public function testRefundReconciliationPreservesOpaqueProviderIdsWithoutLocalTextLengthLimits(): void
+    {
+        $refundId = 'refund.reference-' . str_repeat('r', 3000);
+        $eventId = 'event.reference-' . str_repeat('e', 3000);
+        $reason = 'future_reason_' . str_repeat('x', 3000);
+        $refund = $this->refund(id: $refundId);
+        $refund['reason'] = $reason;
+        $this->setRefunds([$refund]);
+        $body = json_encode([
+            'id' => $eventId,
+            'object' => 'event',
+            'type' => 'refund.created',
+            'created' => $this->createdAt->getTimestamp() + 3600,
+            'livemode' => false,
+            'data' => ['object' => $refund],
+        ], JSON_THROW_ON_ERROR);
+
+        $this->assertResponse($this->send($body), 204);
+        $this->assertSame($refundId, $this->entries('refunds')[0]['stripeRefundId']);
+        $this->assertSame($reason, $this->entries('refunds')[0]['reason']);
+        $this->assertSame($eventId, $this->entries('events')[0]['id']);
+        $this->assertSame($refundId, $this->entries('events')[0]['resourceId']);
+        $this->assertSame('partial', $this->data()['refundStatus']);
+        $this->assertSame($eventId, $this->delivered[2]->triggerId());
+
+        $before = $this->data();
+        $this->assertResponse($this->send($body), 204);
+        $this->assertSame($before, $this->data());
+        $this->assertCount(3, $this->delivered);
+
+        $expiresAt = OrderData::string($this->entries('lifecycleDeliveries')[0]['expiresAt']);
+        $this->kirby->impersonate('kirby');
+        $this->orders->pruneLifecycleDeliveryPayloads(
+            uuid: $this->order->pageUuid(),
+            now: (new DateTimeImmutable($expiresAt))->modify('+1 day'),
+        );
+        $pruned = OrderData::map($this->entries('lifecycleDeliveries')[2]['event']);
+        $this->assertSame($eventId, $pruned['triggerId']);
+        $this->assertArrayNotHasKey('orderSnapshot', $pruned);
+    }
+
+    public function testUnmodeledRefundFieldsDoNotParticipateInPluginValidation(): void
+    {
+        $refund = $this->refund();
+        $refund['future_provider_extension'] = ['ratio' => 0.5];
+        $this->setRefunds([$refund]);
+        $this->assertResponse($this->send($this->refundEvent()), 204);
+        $this->assertSame('partial', $this->data()['refundStatus']);
+        $this->assertArrayNotHasKey('future_provider_extension', $this->entries('refunds')[0]);
+    }
+
+    public function testRefundDuplicateAndUnchangedDifferentEventDoNotRepeatTheHook(): void
+    {
+        $this->setRefunds([$this->refund()]);
+        $body = $this->refundEvent();
+        $this->assertResponse($this->send($body), 204);
+        $before = $this->data();
+        $reads = count($this->provider->requests);
+        $this->assertResponse($this->send($body), 204);
+        $this->assertSame($before, $this->data());
+        // Parent ownership reads locate the order; processed duplication skips full Session and refund collections.
+        $this->assertSame(['https://api.stripe.com/v1/refunds/re_webhook', 'https://api.stripe.com/v1/payment_intents/pi_webhook'], array_slice($this->provider->requests, $reads));
+        $this->assertResponse($this->send($this->refundEvent(id: 'evt_refund_again')), 204);
+        $this->assertSame($before['refunds'], $this->data()['refunds']);
+        $this->assertSame($before['refundUpdatedAt'], $this->data()['refundUpdatedAt']);
+        $this->assertCount(3, $this->delivered);
+        $this->assertCount(2, $this->entries('events'));
+    }
+
+    public function testRefundStatusComesFromTheCurrentCollectionNotTheHistoricalEvent(): void
+    {
+        $this->setRefunds([$this->refund(status: 'pending')]);
+        $body = $this->refundEvent();
+        $this->setRefunds([$this->refund(status: 'succeeded', amount: 3200)]);
+        // Keep the immutable amount in the historical envelope consistent; its pending status is stale.
+        /** @var array{data: array{object: array<string, mixed>}} $event */
+        $event = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+        $event['data']['object']['amount'] = 3200;
+        $this->assertResponse($this->send(json_encode($event, JSON_THROW_ON_ERROR)), 204);
+        $this->assertSame('full', $this->data()['refundStatus']);
+        $this->assertSame('32.00', $this->data()['refundedTotal']);
+    }
+
+    public function testForeignParentIsIgnoredEvenWhenRefundMetadataClaimsOwnership(): void
+    {
+        $this->setRefunds([$this->refund()]);
+        /** @var array{created: int, data: array{object: array<string, mixed>}} $body */
+        $body = json_decode($this->refundEvent(), true, flags: JSON_THROW_ON_ERROR);
+        $body['data']['object']['metadata'] = [
+            PluginMetadata::OWNER_KEY => PluginMetadata::NAME,
+            PluginMetadata::ORDER_KEY => $this->order->pageUuid(),
+        ];
+        $this->provider->paymentIntent['metadata'] = [];
+        $before = $this->data();
+        $this->assertResponse($this->send(json_encode($body, JSON_THROW_ON_ERROR)), 204);
+        $this->assertSame($before, $this->data());
+        $this->assertCount(0, $this->delivered);
+    }
+
+    public function testChargeFallbackAndOlderSamePaymentChargeAreCorrelated(): void
+    {
+        $refund = $this->refund();
+        $refund['payment_intent'] = null;
+        $refund['charge'] = 'charge.older-reference';
+        $this->provider->charges['charge.older-reference'] = [
+            'id' => 'charge.older-reference',
+            'object' => 'charge',
+            'payment_intent' => 'pi_webhook',
+            'currency' => 'eur',
+            'livemode' => false,
+        ];
+        $this->setRefunds([$refund]);
+        $this->assertResponse($this->send($this->refundEvent()), 204);
+        $this->assertSame('charge.older-reference', $this->entries('refunds')[0]['stripeChargeId']);
+        $this->assertSame('charge.older-reference', $this->entries('events')[0]['stripeChargeId']);
+        $this->assertSame('pi_webhook', $this->entries('refunds')[0]['stripePaymentIntentId']);
+        $this->assertArrayNotHasKey('stripeChargeId', $this->data());
+    }
+
+    #[DataProvider('invalidRefundParents')]
+    public function testRefundParentContradictionsCannotMutateAnOrder(string $field, mixed $value): void
+    {
+        $this->setRefunds([$this->refund()]);
+        $this->provider->paymentIntent[$field] = $value;
+        $before = $this->data();
+        $this->assertResponse($this->send($this->refundEvent()), 500);
+        $this->assertSame($before, $this->data());
+    }
+
+    /** @return iterable<array{string, mixed}> */
+    public static function invalidRefundParents(): iterable
+    {
+        yield ['id', 'pi_other'];
+        yield ['livemode', true];
+        yield ['currency', 'usd'];
+    }
+
+    /** @param list<array<string, mixed>> $matches */
+    #[DataProvider('missingRefundSessions')]
+    public function testMissingRefundSessionLookupFailsSafely(array $matches, bool $hasMore, int $status): void
+    {
+        $this->setRefunds([$this->refund()]);
+        $this->provider->sessionMatches = $matches;
+        $this->provider->sessionLookupHasMore = $hasMore;
+        $before = $this->data();
+        $this->assertResponse($this->send($this->refundEvent()), $status);
+        $after = $this->data();
+        unset($after['events']);
+        $this->assertSame($before, $after);
+        $this->assertSame('failed', $this->entries('events')[0]['status']);
+    }
+
+    /** @return iterable<array{list<array<string, mixed>>, bool, int}> */
+    public static function missingRefundSessions(): iterable
+    {
+        yield [[], false, 503];
+        yield [[], true, 500];
+        yield [[['id' => 'cs_one'], ['id' => 'cs_two']], false, 500];
+        yield [[[
+            'id' => 'cs_other',
+            'object' => 'checkout.session',
+            'payment_intent' => 'pi_other',
+        ]], false, 500];
+    }
+
+    public function testCompleteRefundPaginationIsSortedAndMultipleRefundsReachFull(): void
+    {
+        $first = $this->refund(id: 're_webhook');
+        $second = $this->refund(id: 're_second');
+        $this->setRefunds([$first, $second]);
+        $this->provider->refundPages = [
+            '' => [
+                'object' => 'list',
+                'has_more' => true,
+                'data' => [$first],
+            ],
+            're_webhook' => [
+                'object' => 'list',
+                'has_more' => false,
+                'data' => [$second],
+            ],
+        ];
+        $this->assertResponse($this->send($this->refundEvent()), 204);
+        $this->assertSame('full', $this->data()['refundStatus']);
+        $this->assertSame(['re_second', 're_webhook'], array_column($this->entries('refunds'), 'stripeRefundId'));
+    }
+
+    public function testRepeatedRefundCursorCannotCommitAPartialCollection(): void
+    {
+        $refund = $this->refund();
+        $this->setRefunds([$refund]);
+        $page = [
+            'object' => 'list',
+            'has_more' => true,
+            'data' => [$refund],
+        ];
+        $this->provider->refundPages = [
+            '' => $page,
+            're_webhook' => $page,
+        ];
+        $this->assertResponse($this->send($this->refundEvent()), 500);
+        $this->assertArrayNotHasKey('refunds', $this->data());
+        $this->assertArrayNotHasKey('payment', $this->data());
+    }
+
+    public function testEmptyFinalRefundContinuationCannotBeTreatedAsComplete(): void
+    {
+        $refund = $this->refund();
+        $this->setRefunds([$refund]);
+        $this->provider->refundPages = [
+            '' => [
+                'object' => 'list',
+                'has_more' => true,
+                'data' => [$refund],
+            ],
+            're_webhook' => [
+                'object' => 'list',
+                'has_more' => false,
+                'data' => [],
+            ],
+        ];
+        $this->assertResponse($this->send($this->refundEvent()), 500);
+        $this->assertArrayNotHasKey('refunds', $this->data());
+        $this->assertArrayNotHasKey('payment', $this->data());
+    }
+
+    public function testLaterRefundPageFailureReturns503AndRedeliveryCommitsTheCompleteObservation(): void
+    {
+        $refund = $this->refund();
+        $this->setRefunds([$refund]);
+        $this->provider->refundPages[''] = [
+            'object' => 'list',
+            'has_more' => true,
+            'data' => [$refund],
+        ];
+        $reads = 0;
+        $this->provider->beforeRefundListRead = function () use (&$reads): void {
+            if (++$reads > 1) {
+                $this->provider->httpStatus = 500;
+            }
+        };
+        $body = $this->refundEvent();
+        $this->assertResponse($this->send($body), 503);
+        $this->assertArrayNotHasKey('refunds', $this->data());
+        $this->assertArrayNotHasKey('payment', $this->data());
+        $this->assertSame('failed', $this->entries('events')[0]['status']);
+        $this->provider->beforeRefundListRead = null;
+        $this->provider->httpStatus = 200;
+        $this->provider->refundPages = [];
+        $this->assertResponse($this->send($body), 204);
+        $this->assertSame('paid', $this->data()['paymentStatus']);
+        $this->assertSame('partial', $this->data()['refundStatus']);
+        $this->assertSame('processed', $this->entries('events')[0]['status']);
+    }
+
+    public function testFailedCombinedWritePreservesPaymentAndRefundFactsUntilRedelivery(): void
+    {
+        $this->setRefunds([$this->refund()]);
+        /** @var Closure(App, ModelWithContent): Storage $nativeStorage */
+        $nativeStorage = $this->kirby->component('storage');
+        $this->provider->beforeRefundListRead = function () use ($nativeStorage): void {
+            $this->kirby->extend(['components' => ['storage' => function (App $kirby, ModelWithContent $model) use ($nativeStorage): Storage {
+                if ($model instanceof OrderPage === false) {
+                    return $nativeStorage($kirby, $model);
+                }
+
+                return new class ($model) extends PlainTextStorage {
+                    protected function write(VersionId $versionId, Language $language, array $fields): void
+                    {
+                        throw new RuntimeException('PRIVATE_REFUND_WRITE');
+                    }
+                };
+            }]]);
+        };
+
+        try {
+            $this->assertResponse($this->send($this->refundEvent()), 503);
+        } finally {
+            $this->kirby->extend(['components' => ['storage' => $nativeStorage]]);
+            $this->provider->beforeRefundListRead = null;
+        }
+
+        $this->assertArrayNotHasKey('refunds', $this->data());
+        $this->assertArrayNotHasKey('payment', $this->data());
+        $this->assertCount(0, $this->delivered);
+        $this->assertResponse($this->send($this->refundEvent()), 204);
+        $this->assertSame('paid', $this->data()['paymentStatus']);
+        $this->assertSame('partial', $this->data()['refundStatus']);
+    }
+
+    public function testStaleCheckoutReadCannotErasePaymentSuccessButStillCommitsRefunds(): void
+    {
+        $this->assertResponse($this->send($this->event()), 204);
+        $before = $this->data();
+        $this->provider->session['payment_status'] = 'unpaid';
+        $this->provider->paymentIntent['status'] = 'processing';
+        $this->setRefunds([$this->refund()]);
+        $this->assertResponse($this->send($this->refundEvent()), 204);
+        $this->assertSame($before['paidAt'], $this->data()['paidAt']);
+        $this->assertSame($before['payment'], $this->data()['payment']);
+        $this->assertSame('partial', $this->data()['refundStatus']);
+        $this->assertSame('refund.updated', $this->delivered[2]->type()->value);
+    }
+
+    public function testCheckoutEventPreservesRefundHistoryAndReorderingDoesNotNotify(): void
+    {
+        $this->setRefunds([$this->refund(status: 'pending'), $this->refund(id: 're_other', status: 'failed')]);
+        $this->assertResponse($this->send($this->refundEvent()), 204);
+        $before = $this->data();
+        $this->provider->refunds = array_reverse($this->provider->refunds);
+        $this->assertResponse($this->send($this->refundEvent(id: 'evt_reordered')), 204);
+        $this->assertSame($before['refunds'], $this->data()['refunds']);
+        $this->assertSame($before['refundUpdatedAt'], $this->data()['refundUpdatedAt']);
+        $this->assertResponse($this->send($this->event()), 204);
+        $this->assertSame($before['refunds'], $this->data()['refunds']);
+        $this->assertCount(3, $this->delivered);
+        $this->setRefunds([$this->refund(), $this->refund(id: 're_other', status: 'failed')]);
+        $this->assertResponse($this->send($this->refundEvent(type: 'refund.updated', id: 'evt_changed')), 204);
+        $this->assertSame('partial', $this->data()['refundStatus']);
+        $this->assertTrue($this->data()['refundHasFailed']);
+        $this->assertCount(4, $this->delivered);
+        // Frozen pending facts remain restorable even after the live refund succeeds.
+        $this->assertSame('pending', $this->delivered[2]->orderSnapshot()['refundStatus']);
+    }
+
+    /** @param array<string, mixed> $page */
+    #[DataProvider('brokenRefundPages')]
+    public function testIncompleteRefundCollectionsCannotPartiallyRefreshPayment(array $page): void
+    {
+        $this->setRefunds([$this->refund()]);
+        $this->provider->refundPages[''] = $page;
+        $this->assertResponse($this->send($this->refundEvent()), 500);
+        $this->assertSame('creating', $this->data()['checkoutStatus']);
+        $this->assertArrayNotHasKey('payment', $this->data());
+        $this->assertArrayNotHasKey('refunds', $this->data());
+        $this->assertSame('failed', $this->entries('events')[0]['status']);
+    }
+
+    /** @return iterable<array{array<string, mixed>}> */
+    public static function brokenRefundPages(): iterable
+    {
+        yield 'empty continuation' => [[
+            'object' => 'list',
+            'has_more' => true,
+            'data' => [],
+        ]];
+        yield 'missing trigger' => [[
+            'object' => 'list',
+            'has_more' => false,
+            'data' => [],
+        ]];
+        yield 'wrong shape' => [[
+            'object' => 'list',
+            'has_more' => 'false',
+            'data' => [],
+        ]];
+    }
+
+    public function testRefundReadConflictRefetchesBothFamiliesBeforeCommitting(): void
+    {
+        $this->setRefunds([$this->refund(status: 'pending')]);
+        $reads = 0;
+        $this->provider->beforeRefundListRead = function () use (&$reads): void {
+            $reads++;
+
+            if ($reads === 1) {
+                $this->provider->beforeRefundListRead = null;
+                $this->setRefunds([$this->refund(status: 'succeeded')]);
+                $this->assertResponse($this->send($this->refundEvent(id: 'evt_concurrent_refund')), 204);
+                $this->provider->beforeRefundListRead = function () use (&$reads): void {
+                    $reads++;
+                };
+            }
+        };
+        $this->assertResponse($this->send($this->refundEvent()), 204);
+        $this->assertSame(2, $reads);
+        $this->assertSame('partial', $this->data()['refundStatus']);
+        $this->assertCount(3, $this->delivered);
+    }
+
+    public function testConcurrentCheckoutCommitRequiresAFreshCombinedRefundRead(): void
+    {
+        $this->setRefunds([$this->refund()]);
+        $reads = 0;
+        $this->provider->beforeRefundListRead = function () use (&$reads): void {
+            if (++$reads === 1) {
+                $this->provider->beforeRefundListRead = null;
+                $this->provider->session['customer_details'] = ['email' => 'current@example.test'];
+                $this->assertResponse($this->send($this->event()), 204);
+                $this->provider->beforeRefundListRead = function () use (&$reads): void {
+                    $reads++;
+                };
+            }
+        };
+        $this->assertResponse($this->send($this->refundEvent()), 204);
+        $this->assertSame(2, $reads);
+        $this->assertSame('current@example.test', OrderData::map($this->data()['customer'])['email']);
+        $this->assertSame('partial', $this->data()['refundStatus']);
+        $this->assertCount(3, $this->delivered);
+    }
+
+    public function testRepeatedCheckoutConflictsReturn503WithoutCommittingRefunds(): void
+    {
+        $this->setRefunds([$this->refund()]);
+        $reads = 0;
+        $this->provider->beforeRefundListRead = function () use (&$reads): void {
+            $this->provider->session['customer_details'] = ['email' => 'version' . ++$reads . '@example.test'];
+            /** @var array<string, mixed> $event */
+            $event = json_decode($this->event(), true, flags: JSON_THROW_ON_ERROR);
+            $event['id'] = 'evt_checkout_conflict_' . $reads;
+            $this->assertResponse($this->send(json_encode($event, JSON_THROW_ON_ERROR)), 204);
+        };
+        $this->assertResponse($this->send($this->refundEvent()), 503);
+        $this->assertArrayNotHasKey('refunds', $this->data());
+        $this->assertSame('failed', $this->entries('events')[0]['status']);
+        $this->assertSame('checkout.reconciliation_conflict', $this->entries('events')[0]['errorCode']);
+        $this->assertSame('paid', $this->data()['paymentStatus']);
+        $this->assertCount(2, $this->delivered);
+    }
+
+    public function testRefundReplayRestoresFrozenFactsAndKeepsTheOriginalDeadline(): void
+    {
+        $fail = true;
+        /** @var list<LifecycleEvent> $replayed */
+        $replayed = [];
+        $this->kirby->extend(['hooks' => ['programmatordev.stripe-checkout.refund.updated' => function (OrderPage $order, LifecycleEvent $lifecycleEvent) use (&$fail, &$replayed): void {
+            /** @var bool $fail Changed between delivery attempts. */
+            if ($fail) {
+                throw new RuntimeException('PRIVATE_REFUND_LISTENER');
+            }
+
+            $replayed[] = $lifecycleEvent;
+        }]]);
+        $this->setRefunds([$this->refund(status: 'pending')]);
+        $this->assertResponse($this->send($this->refundEvent()), 204);
+        $delivery = $this->entries('lifecycleDeliveries')[3];
+        $this->assertSame('failed', $delivery['status']);
+        $fail = false;
+        $this->setRefunds([$this->refund()]);
+        $this->assertResponse($this->send($this->refundEvent(type: 'refund.updated', id: 'evt_succeeded')), 204);
+        $deliveryId = OrderData::string(OrderData::map($delivery['event'])['deliveryId']);
+        $dispatcher = new OrderHookDispatcher($this->kirby);
+        $dispatcher->dispatch($this->order->pageUuid(), $deliveryId);
+        $this->assertCount(2, $replayed);
+        $this->assertSame('partial', $replayed[0]->orderSnapshot()['refundStatus']);
+        $this->assertSame('pending', $replayed[1]->orderSnapshot()['refundStatus']);
+        $this->assertSame($deliveryId, $replayed[1]->deliveryId());
+        $after = $this->entries('lifecycleDeliveries')[3];
+        $this->assertSame($delivery['expiresAt'], $after['expiresAt']);
+        $this->assertSame('delivered', $after['status']);
+        $this->assertSame('partial', $this->data()['refundStatus']);
+    }
+
+    public function testLateRefundReadFailureAcknowledgesAConcurrentProcessedEvent(): void
+    {
+        $this->setRefunds([$this->refund()]);
+        $body = $this->refundEvent();
+        $this->provider->beforeRefundListRead = function () use ($body): void {
+            $this->provider->beforeRefundListRead = null;
+            $this->assertResponse($this->send($body), 204);
+            $this->provider->httpStatus = 500;
+        };
+        $this->assertResponse($this->send($body), 204);
+        $this->assertSame('processed', $this->entries('events')[0]['status']);
+        $this->assertSame('partial', $this->data()['refundStatus']);
+        $this->assertCount(3, $this->delivered);
+    }
+
+    public function testRefundObserverFailureDoesNotRetryOnStripeRedelivery(): void
+    {
+        $this->kirby->extend(['hooks' => ['programmatordev.stripe-checkout.refund.updated' => function (): void {
+            throw new RuntimeException('PRIVATE_REFUND_LISTENER');
+        }]]);
+        $this->setRefunds([$this->refund()]);
+        $body = $this->refundEvent();
+        $this->assertResponse($this->send($body), 204);
+        $before = $this->data();
+        $this->assertResponse($this->send($body), 204);
+        $this->assertSame($before, $this->data());
+        $this->assertSame('failed', $this->entries('lifecycleDeliveries')[3]['status']);
+        $this->assertStringNotContainsString('PRIVATE_REFUND_LISTENER', json_encode($this->data(), JSON_THROW_ON_ERROR));
+    }
+
+    public function testReusedRefundEventWithAContradictoryParentOrTimestampIsRejected(): void
+    {
+        $this->setRefunds([$this->refund()]);
+        $this->assertResponse($this->send($this->refundEvent()), 204);
+        $before = $this->data();
+        /** @var array{created: int, data: array{object: array<string, mixed>}} $body */
+        $body = json_decode($this->refundEvent(), true, flags: JSON_THROW_ON_ERROR);
+        $body['created']++;
+        $this->assertResponse($this->send(json_encode($body, JSON_THROW_ON_ERROR)), 500);
+        /** @var array{created: int, data: array{object: array<string, mixed>}} $body */
+        $body = json_decode($this->refundEvent(), true, flags: JSON_THROW_ON_ERROR);
+        $body['data']['object']['payment_intent'] = 'pi_other';
+        $this->assertResponse($this->send(json_encode($body, JSON_THROW_ON_ERROR)), 500);
+        $this->assertSame($before, $this->data());
+    }
+
+    /** @param list<array<string, mixed>> $refunds */
+    private function setRefunds(array $refunds): void
+    {
+        $this->provider->refunds = $refunds;
+
+        foreach ($refunds as $refund) {
+            $this->provider->refundRecords[OrderData::string($refund['id'])] = $refund;
+        }
+    }
+
+    /** @return array<string, mixed> */
+    private function refund(string $id = 're_webhook', string $status = 'succeeded', int $amount = 1600): array
+    {
+        return [
+            'id' => $id,
+            'object' => 'refund',
+            'amount' => $amount,
+            'currency' => 'eur',
+            'payment_intent' => 'pi_webhook',
+            'charge' => null,
+            'created' => $this->createdAt->getTimestamp() + 3600,
+            'status' => $status,
+            'metadata' => [],
+            'instructions_email' => 'PRIVATE_REFUND_EMAIL',
+            'next_action' => ['secret' => 'PRIVATE_REFUND_ACTION'],
+        ];
+    }
+
+    private function refundEvent(string $type = 'refund.created', string $id = 'evt_refund'): string
+    {
+        return json_encode([
+            'id' => $id,
+            'object' => 'event',
+            'type' => $type,
+            'created' => $this->createdAt->getTimestamp() + 3600,
+            'livemode' => false,
+            'data' => ['object' => $this->provider->refundRecords['re_webhook']],
+        ], JSON_THROW_ON_ERROR);
     }
 
     private function assertResponse(Response $response, int $code): void

@@ -53,11 +53,12 @@ final class OrderBlueprint
         $members = match ($handle) {
             'stripeCheckout' => ['owner', 'schemaVersion'],
             'initiatingLineItems', 'lineItems' => ['reference', 'name', 'quantity', 'price', 'subtotal', 'currency', 'sku', 'variantId', 'stripePriceId', 'stripeProductId'],
+            'refunds' => ['stripeRefundId', 'stripePaymentIntentId', 'stripeChargeId', 'currency', 'amount', 'status', 'reason', 'failureReason', 'pendingReason', 'createdAt', 'firstObservedAt', 'updatedAt'],
             default => [],
         };
 
         if ($members !== []) {
-            $field['type'] = in_array($handle, ['initiatingLineItems', 'lineItems'], true) ? 'structure' : 'object';
+            $field['type'] = $handle === 'stripeCheckout' ? 'object' : 'structure';
             $field['fields'] = [];
 
             foreach ($members as $member) {
@@ -68,6 +69,33 @@ final class OrderBlueprint
                     'translate' => false,
                 ];
             }
+        }
+
+        if ($handle === 'refunds') {
+            $field['columns'] = [
+                'amount' => ['align' => 'right'],
+                'currency' => [],
+                'status' => [],
+                'firstObservedAt' => [],
+            ];
+            $field['limit'] = 10;
+
+            // Native date fields display the local ISO timestamps; Stripe's Unix creation time remains an exact detail.
+            $dateFields = ['firstObservedAt', 'updatedAt'];
+
+            foreach ($dateFields as $dateField) {
+                $field['fields'][$dateField]['type'] = 'date';
+                $field['fields'][$dateField]['time'] = [
+                    'display' => 'HH:mm:ss',
+                    // Kirby otherwise rounds date/time values to its default five-minute step.
+                    'step' => [
+                        'unit' => 'second',
+                        'size' => 1,
+                    ],
+                ];
+            }
+
+            $field['fields']['createdAt']['help'] = 'programmatordev.stripe-checkout.orders.refundCreatedAtHelp';
         }
 
         return $field;

@@ -44,6 +44,19 @@ final class CheckoutSessionRetriever
         private readonly CheckoutSessionFactory $sessionFactory = new CheckoutSessionFactory(),
     ) {}
 
+    public function sessionForPaymentIntent(string $paymentIntentId): ?string
+    {
+        try {
+            return $this->gateway->sessionForPaymentIntent($paymentIntentId);
+        } catch (CheckoutSessionGatewayException $error) {
+            throw new CheckoutSessionException(
+                errorCode: CheckoutErrorCode::forSessionFailure($error->failure()->type()),
+                retryable: $error->failure()->isRetryable(),
+                previous: $error,
+            );
+        }
+    }
+
     /**
      * $order and $request are the saved attempt's frozen purchase evidence,
      * not a fresh projection of the current storefront.

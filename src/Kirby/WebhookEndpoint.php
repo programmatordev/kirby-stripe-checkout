@@ -16,6 +16,7 @@ use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
+use ProgrammatorDev\StripeCheckout\Order\Internal\RefundSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\StripeEventLedger;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
@@ -105,7 +106,7 @@ final class WebhookEndpoint
             return self::HTTP_BAD_REQUEST;
         }
 
-        if (is_string($id) === false || preg_match('/\Aevt_[A-Za-z0-9_]{1,249}\z/', $id) !== 1) {
+        if (is_string($id) === false || $id === '') {
             return self::HTTP_BAD_REQUEST;
         }
 
@@ -125,6 +126,10 @@ final class WebhookEndpoint
 
         if (is_array($object) === false) {
             return self::HTTP_BAD_REQUEST;
+        }
+
+        if (in_array($type, ReconciliationEvent::REFUND_TYPES, true)) {
+            return $this->processRefund($event, $stripe);
         }
 
         $metadata = $object['metadata'] ?? [];
@@ -176,17 +181,50 @@ final class WebhookEndpoint
             (new RuntimeFactory($this->kirby))->checkoutSessionReconciler($stripe)->reconcile($pageUuid, $sessionId, $event);
 
             return self::HTTP_NO_CONTENT;
-        } catch (ConfigurationException $error) {
-            return $this->failure($event, $pageUuid, $error->errorCode() === ConfigurationErrorCode::CREDENTIAL_MISSING ? self::HTTP_SERVICE_UNAVAILABLE : self::HTTP_INTERNAL_SERVER_ERROR);
-        } catch (CheckoutSessionException $error) {
-            return $this->failure($event, $pageUuid, $error->isRetryable() ? self::HTTP_SERVICE_UNAVAILABLE : self::HTTP_INTERNAL_SERVER_ERROR);
-        } catch (OrderStorageException $error) {
+        } catch (Throwable $error) {
+            return $this->failure($event, $pageUuid, $this->httpStatusForFailure($error));
+        }
+    }
+
+    private function processRefund(Event $event, StripeConfiguration $stripe): int
+    {
+        $pageUuid = null;
+
+        try {
+            $reconciler = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler($stripe);
+            $correlation = $reconciler->refundCorrelation($event);
+
+            if ($correlation === null) {
+                return self::HTTP_NO_CONTENT;
+            }
+
+            $pageUuid = $correlation->pageUuid;
+            $reconciler->reconcileRefund($correlation);
+
+            return self::HTTP_NO_CONTENT;
+        } catch (Throwable $error) {
+            return $this->failure($event, $pageUuid, $this->httpStatusForFailure($error));
+        }
+    }
+
+    private function httpStatusForFailure(Throwable $error): int
+    {
+        if ($error instanceof ConfigurationException) {
+            return $error->errorCode() === ConfigurationErrorCode::CREDENTIAL_MISSING
+                ? self::HTTP_SERVICE_UNAVAILABLE : self::HTTP_INTERNAL_SERVER_ERROR;
+        }
+
+        if ($error instanceof CheckoutSessionException) {
+            return $error->isRetryable() ? self::HTTP_SERVICE_UNAVAILABLE : self::HTTP_INTERNAL_SERVER_ERROR;
+        }
+
+        if ($error instanceof OrderStorageException) {
             $recoverable = in_array($error->errorCode(), [PersistenceErrorCode::BUSY, PersistenceErrorCode::WRITE_FAILED, PersistenceErrorCode::VERIFY_FAILED], true);
 
-            return $this->failure($event, $pageUuid, $recoverable ? self::HTTP_SERVICE_UNAVAILABLE : self::HTTP_INTERNAL_SERVER_ERROR);
-        } catch (Throwable) {
-            return $this->failure($event, $pageUuid, self::HTTP_INTERNAL_SERVER_ERROR);
+            return $recoverable ? self::HTTP_SERVICE_UNAVAILABLE : self::HTTP_INTERNAL_SERVER_ERROR;
         }
+
+        return self::HTTP_INTERNAL_SERVER_ERROR;
     }
 
     private function failure(Event $event, ?string $pageUuid, int $httpStatus): int
@@ -220,6 +258,26 @@ final class WebhookEndpoint
             $data = $this->orders->data($page);
             $attempt = OrderData::map($data['checkoutAttempt']);
             $mode = CredentialMode::from(OrderData::string($attempt['credentialMode']));
+            $type = $event->toArray()['type'] ?? null;
+
+            if (in_array($type, ReconciliationEvent::REFUND_TYPES, true)) {
+                $envelope = ReconciliationEvent::refundEnvelope($event, $mode);
+
+                foreach (OrderData::list($data['refunds'] ?? []) as $item) {
+                    $refund = RefundSnapshot::fromArray(OrderData::map($item));
+
+                    if ($refund->stripeRefundId() === $envelope->resourceId) {
+                        $trigger = ReconciliationEvent::fromRefund($event, $refund, $mode);
+                        /** @var list<array<string, mixed>> $entries */
+                        $entries = $data['events'] ?? [];
+
+                        return StripeEventLedger::isComplete($entries, $trigger);
+                    }
+                }
+
+                return false;
+            }
+
             $eventData = $event->toArray()['data'] ?? null;
             $object = is_array($eventData) ? $eventData['object'] ?? null : null;
             $resourceId = is_array($object) ? $object['id'] ?? null : null;

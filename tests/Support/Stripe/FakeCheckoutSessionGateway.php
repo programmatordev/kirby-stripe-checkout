@@ -73,6 +73,13 @@ final class FakeCheckoutSessionGateway implements CheckoutSessionGatewayInterfac
             ?? throw new RuntimeException('No fake Checkout Session retrieval result is available.');
     }
 
+    public ?string $paymentIntentSessionId = null;
+
+    public function sessionForPaymentIntent(string $paymentIntentId): ?string
+    {
+        return $this->paymentIntentSessionId;
+    }
+
     public function retrieveForReconciliation(string $sessionId): CheckoutSessionReconciliationRecord
     {
         $this->reconciliationRetrievals[] = $sessionId;

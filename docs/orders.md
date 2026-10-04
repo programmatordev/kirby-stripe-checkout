@@ -150,6 +150,42 @@ Internal reconciliation retrieves the current Session, complete line items, and 
 
 Only selected facts cross the stripe-php boundary. The order never stores a complete Session or PaymentIntent, Stripe SDK object, payment credentials, root PaymentIntent client secret, Checkout redirect URL or raw webhook response. Customer, address, tax-ID and custom-field values are private order data. The active payment-action branch can also be retained temporarily as described below; its URLs, codes and authentication directives are private.
 
+## Refund facts
+
+Refund reconciliation retains a protected `refunds` collection with one item per Stripe refund attempt, sorted by Refund ID. It includes pending, requires-action, succeeded, failed and canceled attempts. Each item holds the latest authoritative state and local observation times; it is not a log of every past status.
+
+The default order blueprint displays refunds as a read-only native Structure on the Payment tab. The table shows amount, currency, status and first-observed date. Open a row to inspect its Stripe identifiers, reason codes, original creation timestamp and local observation times. Refund actions remain in Stripe.
+
+Refund IDs and reason codes are retained without truncation or a plugin-imposed text-length limit. Reason codes remain opaque strings; the plugin derives refund summaries from status and money, not from a locally maintained reason-code catalogue.
+
+| Item field | Meaning |
+| --- | --- |
+| `stripeRefundId` | Stable refund identity. |
+| `stripePaymentIntentId`, `stripeChargeId` | Proven parent payment; Charge may be `null`. |
+| `currency`, `amount` | Uppercase currency and exact major-unit decimal amount. |
+| `status` | Current Stripe refund status. |
+| `reason`, `failureReason`, `pendingReason` | Nullable provider codes. |
+| `createdAt` | Stripe's creation timestamp in Unix seconds. |
+| `firstObservedAt`, `updatedAt` | Local UTC timestamps of first committed observation and latest material item change. |
+
+`refundedTotal` sums succeeded amounts only. It compares against the authoritative payment amount, which must agree with the completed order total. Pending, failed and canceled amounts do not count as returned money; a successful sum exceeding the payment amount is rejected.
+
+The independent `refundStatus` summary follows this precedence:
+
+| Condition | Summary |
+| --- | --- |
+| No refunds | `none` |
+| Successful total equals payment amount | `full` |
+| Otherwise, any pending or requires-action attempt | `pending` |
+| Otherwise, positive successful total | `partial` |
+| Otherwise, inactive unsuccessful attempts | `failed` |
+
+`refundHasActive` detects pending/requires-action attempts, `refundRequiresAction` detects requires-action attempts, and `refundHasFailed` detects failed attempts. These flags are independent of the summary. A partial refund plus a failed attempt remains partial with its failure flag. A canceled-only collection has summary `failed`, but its items remain `canceled` and its failed-record flag is false.
+
+Identical reads and changes in Stripe's list order preserve item timestamps and `refundUpdatedAt`. A material collection change updates those times and emits `programmatordev.stripe-checkout.refund.updated` after the combined commit. The lifecycle event freezes the collection in `orderSnapshot()`. Checkout events preserve existing refunds, and refunds preserve historical payment success and `paidAt`.
+
+Refund actions remain in Stripe. The plugin does not create or cancel refunds, retain refund instructions or destination details, or provide a refund button. Dispute reconciliation remains under development.
+
 ## Payment facts and actions
 
 The protected `payment` snapshot retains common payment facts: status, exact amounts, method type, PaymentIntent/Charge/PaymentMethod identifiers, provider statuses, safe failure code, and provider timestamps. A free Checkout can have no PaymentIntent; missing amounts remain unknown rather than being invented as zero. A successful payment is not assumed to have been captured immediately.
@@ -224,9 +260,9 @@ Kirby stops calling listeners when one throws. Retrying the whole hook can there
 
 The controlled, single-order deletion primitive emits `programmatordev.stripe-checkout.order.deleted` with Kirby's final in-memory Page after deletion. A failed deletion hook **cannot be retried**: only the last sanitized outcome is retained, not the deleted customer's snapshot. Durable deletion integrations must enqueue successfully during the first invocation. No public deletion route or automatic cleanup runner is available yet.
 
-The Session-creation pipeline emits `programmatordev.stripe-checkout.session.created` after the Session ID is committed. Internal reconciliation can also repair an association missed locally without creating another Session. It emits new `payment.pending`, `payment.succeeded`, `payment.failed`, `payment.requiresAction`, and `checkout.expired` transitions after persistence. Duplicate or unchanged observations do not dispatch them again. Refund and dispute provider flows are not implemented yet.
+The Session-creation pipeline emits `programmatordev.stripe-checkout.session.created` after the Session ID is committed. Internal reconciliation can also repair an association missed locally without creating another Session. It emits new `payment.pending`, `payment.succeeded`, `payment.failed`, `payment.requiresAction`, and `checkout.expired` transitions after persistence. Refund reconciliation emits `refund.updated` after a material collection change. Duplicate or unchanged observations do not dispatch these hooks again. Dispute provider flows are not implemented yet.
 
-The protected `events` ledger records correlated Stripe Event identity, type, resource, provider creation time, attempts and sanitized processing outcome. It is separate from `lifecycleDeliveries`: an Event can be successfully processed while an optional hook delivery fails. Successfully processed duplicates need no new Stripe read. A failed provider read remains retryable according to its error classification; a storage failure cannot mark the canonical processing successful. Current-state reconciliation without an Event creates no invented Event entry or trigger identity.
+The protected `events` ledger records correlated Stripe Event identity, type, resource, provider creation time, attempts and sanitized processing outcome. Refund entries also retain stable parent references. It is separate from `lifecycleDeliveries`: an Event can be successfully processed while an optional hook delivery fails. Processed Checkout/action duplicates need no new Stripe read; refund duplicates can require initial parent ownership reads to locate the order, then skip complete retrieval. A failed provider read remains retryable according to its error classification; a storage failure cannot mark the canonical processing successful. Current-state reconciliation without an Event creates no invented Event entry or trigger identity.
 
 ### Event values
 

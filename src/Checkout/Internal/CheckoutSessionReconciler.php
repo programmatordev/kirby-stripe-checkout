@@ -12,10 +12,12 @@ use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\LifecycleNotification;
+use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\CheckoutSessionAssociation;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
+use ProgrammatorDev\StripeCheckout\Order\Internal\RefundCollection;
 use ProgrammatorDev\StripeCheckout\Order\Internal\StripeEventLedger;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionObservation;
 use Stripe\Event;
@@ -28,6 +30,7 @@ final class CheckoutSessionReconciler
         private readonly CheckoutSessionRetriever $retriever,
         private readonly CredentialMode $credentialMode,
         private readonly CheckoutSessionReducer $reducer = new CheckoutSessionReducer(),
+        private readonly ?RefundRetriever $refundRetriever = null,
     ) {}
 
     /**
@@ -72,6 +75,66 @@ final class CheckoutSessionReconciler
             throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE, previous: $error);
         }
 
+        return $this->reconcileOrder(
+            pageUuid: $pageUuid,
+            sessionId: $sessionId,
+            trigger: $trigger,
+            baseline: $baseline,
+            observation: $observation,
+        );
+    }
+
+    public function refundCorrelation(Event $event): ?RefundCorrelation
+    {
+        try {
+            return ($this->refundRetriever ?? throw new OrderDataException())->correlate($event, $this->credentialMode);
+        } catch (OrderDataException $error) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE, previous: $error);
+        }
+    }
+
+    public function reconcileRefund(RefundCorrelation $correlation): OrderPage
+    {
+        try {
+            $page = $this->orders->order($correlation->pageUuid) ?? throw new OrderDataException();
+            $data = $this->orders->data($page);
+            $checkoutAttempt = OrderData::map($data['checkoutAttempt']);
+
+            if (($checkoutAttempt['credentialMode'] ?? null) !== $this->credentialMode->value) {
+                throw new OrderDataException();
+            }
+
+            if (isset($data['stripePaymentIntentId']) && $data['stripePaymentIntentId'] !== $correlation->refund->stripePaymentIntentId()) {
+                throw new OrderDataException();
+            }
+
+            if ($data['currency'] !== $correlation->refund->amount()->getCurrency()->getCurrencyCode()) {
+                throw new OrderDataException();
+            }
+
+            $sessionId = isset($data['stripeCheckoutSessionId']) ? OrderData::string($data['stripeCheckoutSessionId']) : null;
+
+            return $this->reconcileOrder(
+                pageUuid: $correlation->pageUuid,
+                sessionId: $sessionId,
+                trigger: $correlation->trigger,
+                baseline: $data,
+                refundCorrelation: $correlation,
+            );
+        } catch (OrderDataException $error) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE, previous: $error);
+        }
+    }
+
+    /** @param array<string, mixed> $baseline */
+    private function reconcileOrder(
+        string $pageUuid,
+        ?string $sessionId,
+        ?ReconciliationEvent $trigger,
+        array $baseline,
+        ?CheckoutSessionObservation $observation = null,
+        ?RefundCorrelation $refundCorrelation = null,
+    ): OrderPage {
         if ($trigger !== null) {
             $recordAttempt = static function (array $data) use ($trigger): array {
                 /** @var array<string, mixed> $data */
@@ -94,6 +157,13 @@ final class CheckoutSessionReconciler
         }
 
         try {
+            if ($sessionId === null) {
+                // Parent ownership already identifies this order; record lookup failures in its Event ledger too.
+                $paymentIntentId = $refundCorrelation?->refund->stripePaymentIntentId() ?? throw new OrderDataException();
+                $sessionId = $this->retriever->sessionForPaymentIntent($paymentIntentId)
+                    ?? throw new CheckoutSessionException(CheckoutErrorCode::SESSION_UNAVAILABLE, retryable: true);
+            }
+
             // Do not hold a filesystem write lock across provider requests.
             // If commerce facts changed during the read, re-fetch rather than commit an older graph over the newer order.
             for ($read = 0; $read < 3; $read++) {
@@ -108,15 +178,20 @@ final class CheckoutSessionReconciler
                     throw new OrderDataException();
                 }
 
+                // Null means refunds were not read; Checkout-only operations must preserve the saved collection.
+                $refunds = $refundCorrelation === null ? null
+                    : ($this->refundRetriever ?? throw new OrderDataException())->retrieve($refundCorrelation, $observation);
+
                 try {
                     // These callbacks run inside the store's lock, using its freshly loaded order rather than the read baseline.
-                    $reduceOrder = function (array $data) use ($baseline, $observation, $trigger): array {
+                    $reduceOrder = function (array $data) use ($baseline, $observation, $trigger, $refunds): array {
                         /** @var array<string, mixed> $data */
                         return $this->reduceObservation(
                             data: $data,
                             baseline: $baseline,
                             observation: $observation,
                             trigger: $trigger,
+                            refunds: $refunds,
                         );
                     };
                     $selectNotifications = function (array $before, array $after) use ($observation, $trigger): array {
@@ -166,6 +241,7 @@ final class CheckoutSessionReconciler
         array $baseline,
         CheckoutSessionObservation $observation,
         ?ReconciliationEvent $trigger,
+        ?RefundCollection $refunds = null,
     ): array {
         /** @var list<array<string, mixed>> $entries */
         $entries = $data['events'] ?? [];
@@ -179,7 +255,13 @@ final class CheckoutSessionReconciler
             throw new ReconciliationConflictException();
         }
 
-        $after = $this->reducer->reduce($data, $observation, new DateTimeImmutable());
+        $now = new DateTimeImmutable();
+        $after = $this->reducer->reduce($data, $observation, $now);
+
+        if ($refunds !== null) {
+            // Refunds remain current even if a stale Checkout observation was refused by the payment guards.
+            $after = $this->reducer->reduceRefunds($after, $refunds, $now);
+        }
 
         if ($trigger !== null) {
             $after['events'] = StripeEventLedger::outcome($entries, $trigger);
@@ -211,7 +293,13 @@ final class CheckoutSessionReconciler
         $nextAction = $trigger?->type === Event::PAYMENT_INTENT_REQUIRES_ACTION
             ? $trigger->nextAction : $observation->payment()->nextAction();
 
-        return $this->reducer->notifications($before, $after, $nextAction);
+        $notifications = $this->reducer->notifications($before, $after, $nextAction);
+
+        if (($before['refunds'] ?? []) !== ($after['refunds'] ?? [])) {
+            $notifications[] = new LifecycleNotification(LifecycleEventType::RefundUpdated);
+        }
+
+        return $notifications;
     }
 
     /** @param array<string, mixed> $data */

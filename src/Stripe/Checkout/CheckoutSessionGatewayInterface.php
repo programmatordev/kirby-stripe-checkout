@@ -22,4 +22,7 @@ interface CheckoutSessionGatewayInterface
      * Failures or incomplete reads must throw, never return a partial reconciliation record.
      */
     public function retrieveForReconciliation(string $sessionId): CheckoutSessionReconciliationRecord;
+
+    /** Exact PaymentIntent lookup; no ID for no match, ambiguous/incomplete results throw. */
+    public function sessionForPaymentIntent(string $paymentIntentId): ?string;
 }

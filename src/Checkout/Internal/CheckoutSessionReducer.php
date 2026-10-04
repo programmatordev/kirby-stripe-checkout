@@ -12,6 +12,7 @@ use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\CheckoutLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Order\Internal\RefundCollection;
 use ProgrammatorDev\StripeCheckout\Order\Payment;
 use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
 use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
@@ -142,6 +143,38 @@ final class CheckoutSessionReducer
         }
 
         return $notifications;
+    }
+
+    /** @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    public function reduceRefunds(array $data, RefundCollection $refunds, DateTimeImmutable $now): array
+    {
+        $payment = Payment::fromArray(OrderData::map($data['payment'] ?? null));
+        $previous = isset($data['refunds']) ? RefundCollection::fromArray(
+            OrderData::list($data['refunds']),
+            $payment->stripePaymentIntentId() ?? throw new OrderDataException(),
+            $payment->amount() ?? throw new OrderDataException(),
+        ) : null;
+        $refunds = $refunds->observed($previous, OrderData::date(max(OrderData::timestamp($now), $data['updatedAt'])));
+        $items = $refunds->toArray();
+
+        if ($items === ($data['refunds'] ?? [])) {
+            return $data;
+        }
+
+        $total = $refunds->refundedTotal();
+
+        return [
+            ...$data,
+            'refunds' => $items,
+            'refundStatus' => $refunds->refundStatus()->value,
+            'refundedTotal' => $total->isZero() ? '0' : (string) $total->getAmount(),
+            'refundHasActive' => $refunds->refundHasActive(),
+            'refundRequiresAction' => $refunds->refundRequiresAction(),
+            'refundHasFailed' => $refunds->refundHasFailed(),
+            'refundUpdatedAt' => max(OrderData::timestamp($now), $data['updatedAt']),
+        ];
     }
 
     private function paymentStatus(CheckoutSessionObservation $observation, CheckoutStatus $checkoutStatus): PaymentStatus

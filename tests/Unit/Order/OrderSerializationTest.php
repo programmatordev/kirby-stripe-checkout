@@ -493,6 +493,116 @@ final class OrderSerializationTest extends TestCase
         OrderSerializer::decode($fields, OrderSchema::ORDER_PAGE_TEMPLATE, 'Abc123def456GHI7');
     }
 
+    /** @param list<string> $path */
+    #[DataProvider('corruptRefundContent')]
+    public function testPersistenceRejectsCorruptedRefundContent(array $path, mixed $value): void
+    {
+        $data = $this->dataWithRefund();
+
+        if (count($path) === 1) {
+            $data[$path[0]] = $value;
+        } else {
+            $refund = OrderData::map(OrderData::list($data['refunds'])[0]);
+            $refund[$path[2]] = $value;
+            $data['refunds'] = [$refund];
+        }
+
+        $this->expectException(OrderDataException::class);
+        OrderSerializer::normalize($data);
+    }
+
+    /** @return iterable<string, array{list<string>, mixed}> */
+    public static function corruptRefundContent(): iterable
+    {
+        yield 'wrong summary' => [['refundStatus'], 'full'];
+        yield 'null collection' => [['refunds'], null];
+        yield 'wrong total' => [['refundedTotal'], '17.00'];
+        yield 'wrong active flag' => [['refundHasActive'], true];
+        yield 'wrong action flag' => [['refundRequiresAction'], true];
+        yield 'wrong failed flag' => [['refundHasFailed'], true];
+        yield 'wrong parent' => [['refunds', '0', 'stripePaymentIntentId'], 'pi_other'];
+        yield 'wrong amount' => [['refunds', '0', 'amount'], '-1'];
+        yield 'unmodeled field' => [['refunds', '0', 'instructionsEmail'], 'PRIVATE'];
+        yield 'missing local timestamp' => [['refunds', '0', 'firstObservedAt'], null];
+        yield 'item before order' => [['refunds', '0', 'firstObservedAt'], '2026-01-01T00:00:00Z'];
+        yield 'future item update' => [['refunds', '0', 'updatedAt'], '2099-01-01T00:00:00Z'];
+        yield 'future aggregate update' => [['refundUpdatedAt'], '2099-01-01T00:00:00Z'];
+    }
+
+    public function testRefundCollectionRoundTripsThroughNativeKirbyStorage(): void
+    {
+        $data = OrderSerializer::normalize($this->dataWithRefund());
+        $fields = OrderData::map(Txt::decode(Txt::encode(OrderSerializer::encode($data))));
+        $decoded = OrderSerializer::decode($fields, OrderSchema::ORDER_PAGE_TEMPLATE, 'Abc123def456GHI7');
+        $this->assertSame($data, $decoded);
+        $this->assertSame('partial', $decoded['refundStatus']);
+        $this->assertSame('16.00', $decoded['refundedTotal']);
+    }
+
+    #[DataProvider('emptyRefundEventIdentities')]
+    public function testPersistenceRequiresRecordedRefundEventIdentities(string $field): void
+    {
+        $data = $this->dataWithRefund();
+        $entry = OrderData::map(OrderData::list($data['events'])[0]);
+        $entry[$field] = '';
+        $data['events'] = [$entry];
+
+        $this->expectException(OrderDataException::class);
+        OrderSerializer::normalize($data);
+    }
+
+    /** @return iterable<array{string}> */
+    public static function emptyRefundEventIdentities(): iterable
+    {
+        yield ['id'];
+        yield ['resourceId'];
+        yield ['stripePaymentIntentId'];
+        yield ['stripeChargeId'];
+    }
+
+    /** @return array<string, mixed> */
+    private function dataWithRefund(): array
+    {
+        $data = $this->dataWithCheckoutStatus(CheckoutStatus::Complete);
+        $data['stripePaymentIntentId'] = 'pi_test';
+        $data['payment'] = Payment::fromSnapshot(
+            snapshot: new PaymentSnapshot(amount: Money::of('32', 'EUR'), stripePaymentIntentId: 'pi_test'),
+            status: PaymentStatus::Pending,
+            currency: 'EUR',
+        )->toArray();
+        $data['refunds'] = [[
+            'stripeRefundId' => 'refund.reference-01',
+            'stripePaymentIntentId' => 'pi_test',
+            'stripeChargeId' => 'charge.reference-01',
+            'currency' => 'EUR',
+            'amount' => '16.00',
+            'status' => 'succeeded',
+            'reason' => null,
+            'failureReason' => null,
+            'pendingReason' => null,
+            'createdAt' => 1700000000,
+            'firstObservedAt' => $data['createdAt'],
+            'updatedAt' => $data['createdAt'],
+        ]];
+        $data['refundStatus'] = 'partial';
+        $data['refundedTotal'] = '16.00';
+        $data['refundUpdatedAt'] = $data['createdAt'];
+        $data['events'] = [[
+            'id' => 'event.reference-01',
+            'type' => 'refund.created',
+            'createdAt' => 1700000000,
+            'resourceId' => 'refund.reference-01',
+            'stripePaymentIntentId' => 'pi_test',
+            'stripeChargeId' => 'charge.reference-01',
+            'status' => 'processed',
+            'attempts' => 1,
+            'lastAttemptAt' => $data['createdAt'],
+            'errorCode' => null,
+        ]];
+
+        return $data;
+    }
+
     /** @return array<string, mixed> */
     private function dataWithCheckoutStatus(CheckoutStatus $state): array
     {

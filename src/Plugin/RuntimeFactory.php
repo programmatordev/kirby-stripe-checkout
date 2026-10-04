@@ -19,6 +19,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionCreator;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionReconciler;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionRetriever;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\RefundRetriever;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestBuilder;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestContextFactory;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestCustomizer;
@@ -58,6 +59,7 @@ use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceProviderInterface;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceResolver;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\StripeApiPriceProvider;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
+use ProgrammatorDev\StripeCheckout\Stripe\Refund\StripeApiRefundGateway;
 use ProgrammatorDev\StripeCheckout\Stripe\StripeApiClientFactory;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\StripeApiTaxProvider;
 use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeCatalogue;
@@ -272,6 +274,9 @@ final class RuntimeFactory
             orders: new OrderPageStore($this->kirby),
             retriever: new CheckoutSessionRetriever(new StripeApiCheckoutSessionGateway($client)),
             credentialMode: $stripe->secretKeyMode(),
+            refundRetriever: new RefundRetriever(
+                new StripeApiRefundGateway($client),
+            ),
         );
     }
 

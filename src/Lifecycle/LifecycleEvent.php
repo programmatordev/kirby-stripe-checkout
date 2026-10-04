@@ -47,11 +47,16 @@ final readonly class LifecycleEvent
             throw new OrderDataException();
         }
 
-        $optionalFacts = [$languageCode, $triggerType, $triggerId];
+        if ($languageCode !== null) {
+            OrderData::text($languageCode, 255);
+        }
+
+        // Provider trigger identities are opaque; their paired presence matters, not a locally chosen length limit.
+        $optionalFacts = [$triggerType, $triggerId];
 
         foreach ($optionalFacts as $value) {
-            if ($value !== null) {
-                OrderData::text($value, 255);
+            if ($value !== null && OrderData::string($value) === '') {
+                throw new OrderDataException();
             }
         }
 

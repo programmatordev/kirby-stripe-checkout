@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Support\Stripe;
 
 use Closure;
 use LogicException;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 use Stripe\HttpClient\ClientInterface;
 
@@ -24,6 +25,19 @@ final class WebhookCheckoutClient implements ClientInterface
     public int $httpStatus = 200;
 
     public ?Closure $beforeSessionRead = null;
+
+    /** @var list<array<string, mixed>> */
+    public array $refunds = [];
+    /** @var array<string, array<string, mixed>> */
+    public array $refundRecords = [];
+    /** @var array<string, array<string, mixed>> */
+    public array $refundPages = [];
+    /** @var array<string, array<string, mixed>> */
+    public array $charges = [];
+    /** @var list<array<string, mixed>>|null */
+    public ?array $sessionMatches = null;
+    public bool $sessionLookupHasMore = false;
+    public ?Closure $beforeRefundListRead = null;
 
     public function __construct(string $pageUuid, int $createdAt)
     {
@@ -95,6 +109,10 @@ final class WebhookCheckoutClient implements ClientInterface
             $this->beforeSessionRead?->__invoke();
         }
 
+        if ($path === '/v1/refunds') {
+            $this->beforeRefundListRead?->__invoke();
+        }
+
         if ($this->httpStatus !== 200) {
             return [json_encode(['error' => [
                 'message' => 'PRIVATE_PROVIDER_CANARY',
@@ -136,6 +154,32 @@ final class WebhookCheckoutClient implements ClientInterface
                     ],
                 ]],
             ];
+        } elseif ($path === '/v1/payment_intents/pi_webhook') {
+            $body = $this->paymentIntent;
+        } elseif (is_string($path) && str_starts_with($path, '/v1/charges/')) {
+            $body = $this->charges[basename($path)] ?? throw new LogicException('No Charge fixture.');
+        } elseif ($path === '/v1/checkout/sessions') {
+            if (($params['payment_intent'] ?? null) !== 'pi_webhook' || ($params['limit'] ?? null) !== 2) {
+                throw new LogicException('Session lookup must be exact and bounded.');
+            }
+
+            $body = [
+                'object' => 'list',
+                'has_more' => $this->sessionLookupHasMore,
+                'data' => $this->sessionMatches ?? [[...$this->session, 'payment_intent' => 'pi_webhook']],
+            ];
+        } elseif ($path === '/v1/refunds') {
+            if (($params['payment_intent'] ?? null) !== 'pi_webhook' || ($params['limit'] ?? null) !== 100) {
+                throw new LogicException('Refund listing must be filtered and paginated.');
+            }
+
+            $body = $this->refundPages[OrderData::string($params['starting_after'] ?? '')] ?? [
+                'object' => 'list',
+                'has_more' => false,
+                'data' => $this->refunds,
+            ];
+        } elseif (is_string($path) && str_starts_with($path, '/v1/refunds/')) {
+            $body = $this->refundRecords[basename($path)] ?? throw new LogicException('No Refund fixture.');
         } else {
             throw new LogicException('No webhook fixture exists for this provider read.');
         }

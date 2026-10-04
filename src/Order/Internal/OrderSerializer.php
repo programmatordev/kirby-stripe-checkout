@@ -252,6 +252,8 @@ final class OrderSerializer
                 $data['events'] = StripeEventLedger::normalize($data['events']);
             }
 
+            $payment = null;
+
             if (isset($data['payment'])) {
                 $payment = Payment::fromArray(OrderData::map($data['payment']));
                 $data['payment'] = $payment->toArray();
@@ -280,6 +282,8 @@ final class OrderSerializer
                     }
                 }
             }
+
+            self::validateRefunds($data, $payment);
 
             if (isset($data['lineItems'])) {
                 $data['lineItems'] = self::normalizeLineItems($data, $context);
@@ -368,6 +372,7 @@ final class OrderSerializer
                 'initiatingLineItems',
                 'lineItems',
                 'payment',
+                'refunds',
                 'events',
                 'customer',
                 'billingAddress',
@@ -805,15 +810,62 @@ final class OrderSerializer
             throw new OrderDataException();
         }
 
-        // Non-empty refund/dispute collections are accepted only with their reducers,
-        // not by trusting a caller's independently supplied financial summary.
+        // Dispute reconciliation remains deferred; its summary must still match the empty collection.
         if (
-            $data['refundStatus'] !== RefundStatus::None->value
-            || $data['disputeStatus'] !== DisputeStatus::None->value
-            || $data['refundedTotal'] !== '0'
-            || in_array(true, array_intersect_key($data, array_flip(OrderSchema::FLAGS)), true)
+            $data['disputeStatus'] !== DisputeStatus::None->value
+            || $data['disputeRequiresResponse'] || $data['disputeHasLost']
         ) {
             throw new OrderDataException();
+        }
+    }
+
+    /** @param array<string, mixed> $data */
+    private static function validateRefunds(array &$data, ?Payment $payment): void
+    {
+        $items = array_key_exists('refunds', $data) ? OrderData::list($data['refunds']) : [];
+
+        if ($items === []) {
+            if ($data['refundStatus'] !== RefundStatus::None->value || $data['refundedTotal'] !== '0') {
+                throw new OrderDataException();
+            }
+
+            if ($data['refundHasActive'] || $data['refundRequiresAction'] || $data['refundHasFailed'] || isset($data['refundUpdatedAt'])) {
+                throw new OrderDataException();
+            }
+
+            return;
+        }
+
+        if ($data['checkoutStatus'] !== CheckoutStatus::Complete->value || $payment === null) {
+            throw new OrderDataException();
+        }
+
+        $paymentIntentId = $payment->stripePaymentIntentId() ?? throw new OrderDataException();
+        $paymentAmount = $payment->amount() ?? throw new OrderDataException();
+        $refunds = RefundCollection::fromArray($items, $paymentIntentId, $paymentAmount);
+        $total = $refunds->refundedTotal();
+        // Stored summaries are projections of the item facts, not independently trusted financial state.
+        $summary = [
+            'refundStatus' => $refunds->refundStatus()->value,
+            'refundedTotal' => $total->isZero() ? '0' : (string) $total->getAmount(),
+            'refundHasActive' => $refunds->refundHasActive(),
+            'refundRequiresAction' => $refunds->refundRequiresAction(),
+            'refundHasFailed' => $refunds->refundHasFailed(),
+        ];
+
+        foreach ($summary as $field => $value) {
+            if ($data[$field] !== $value) {
+                throw new OrderDataException();
+            }
+        }
+
+        $updatedAt = OrderData::timestamp(OrderData::date($data['refundUpdatedAt'] ?? null));
+        $data['refunds'] = $refunds->toArray();
+
+        foreach ($data['refunds'] as $refund) {
+            if ($refund['firstObservedAt'] < $data['createdAt'] || $refund['updatedAt'] > $updatedAt) {
+                throw new OrderDataException();
+            }
         }
     }
 }

@@ -7,22 +7,27 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Order\Internal\RefundSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 use Stripe\Checkout\Session;
 use Stripe\Event;
 use Stripe\PaymentIntent;
+use Stripe\Refund;
 
 /** @internal Selected, order-correlated facts from a verified Event; never its raw provider graph. */
 final readonly class ReconciliationEvent
 {
+    public const REFUND_TYPES = [Event::REFUND_CREATED, Event::REFUND_UPDATED, Event::REFUND_FAILED];
+
     public const TYPES = [
         Event::CHECKOUT_SESSION_COMPLETED,
         Event::CHECKOUT_SESSION_ASYNC_PAYMENT_SUCCEEDED,
         Event::CHECKOUT_SESSION_ASYNC_PAYMENT_FAILED,
         Event::CHECKOUT_SESSION_EXPIRED,
         Event::PAYMENT_INTENT_REQUIRES_ACTION,
+        ...self::REFUND_TYPES,
     ];
 
     private function __construct(
@@ -31,7 +36,84 @@ final readonly class ReconciliationEvent
         public int $createdAt,
         public string $resourceId,
         public ?PaymentAction $nextAction,
+        public ?string $stripePaymentIntentId = null,
+        public ?string $stripeChargeId = null,
     ) {}
+
+    /** Selected refund envelope, before parent ownership can be read. No historical refund state is used. */
+    public static function refundEnvelope(Event $event, CredentialMode $mode): self
+    {
+        $data = $event->toArray();
+        $object = self::refundObject($event);
+        $id = OrderData::string($data['id'] ?? null);
+        $type = OrderData::string($data['type'] ?? null);
+        $createdAt = OrderData::integer($data['created'] ?? null);
+        $resourceId = OrderData::string($object['id'] ?? null);
+
+        if (($data['object'] ?? null) !== Event::OBJECT_NAME || ($object['object'] ?? null) !== Refund::OBJECT_NAME) {
+            throw new OrderDataException();
+        }
+
+        if (in_array($type, self::REFUND_TYPES, true) === false) {
+            throw new OrderDataException();
+        }
+
+        if ($id === '') {
+            throw new OrderDataException();
+        }
+
+        if ($resourceId === '') {
+            throw new OrderDataException();
+        }
+
+        if ($createdAt < 0) {
+            throw new OrderDataException();
+        }
+
+        if ($mode === CredentialMode::Unknown || OrderData::boolean($data['livemode'] ?? null) !== ($mode === CredentialMode::Live)) {
+            throw new OrderDataException();
+        }
+
+        return new self(
+            id: $id,
+            type: $type,
+            createdAt: $createdAt,
+            resourceId: $resourceId,
+            nextAction: null,
+        );
+    }
+
+    public static function fromRefund(Event $event, RefundSnapshot $refund, CredentialMode $mode): self
+    {
+        $trigger = self::refundEnvelope($event, $mode);
+        $object = self::refundObject($event);
+
+        if ($trigger->resourceId !== $refund->stripeRefundId()) {
+            throw new OrderDataException();
+        }
+
+        if (strtoupper(OrderData::string($object['currency'] ?? null)) !== $refund->amount()->getCurrency()->getCurrencyCode()) {
+            throw new OrderDataException();
+        }
+
+        if (isset($object['payment_intent']) && $object['payment_intent'] !== $refund->stripePaymentIntentId()) {
+            throw new OrderDataException();
+        }
+
+        if (isset($object['charge']) && $object['charge'] !== $refund->stripeChargeId()) {
+            throw new OrderDataException();
+        }
+
+        return new self(
+            id: $trigger->id,
+            type: $trigger->type,
+            createdAt: $trigger->createdAt,
+            resourceId: $trigger->resourceId,
+            nextAction: null,
+            stripePaymentIntentId: $refund->stripePaymentIntentId(),
+            stripeChargeId: $refund->stripeChargeId(),
+        );
+    }
 
     /**
      * Signature verification belongs to the HTTP edge; this boundary checks ownership, mode and purchase identity.
@@ -42,7 +124,7 @@ final readonly class ReconciliationEvent
     {
         $data = $event->toArray();
         $type = OrderData::text($data['type'] ?? null, 255);
-        $id = OrderData::text($data['id'] ?? null, 255);
+        $id = OrderData::string($data['id'] ?? null);
         $created = OrderData::integer($data['created'] ?? null);
         $eventData = $data['data'] ?? null;
 
@@ -62,11 +144,11 @@ final readonly class ReconciliationEvent
         $isAction = $type === Event::PAYMENT_INTENT_REQUIRES_ACTION;
         $resourceId = OrderData::text($object['id'] ?? null, 255);
 
-        if (in_array($type, self::TYPES, true) === false) {
+        if (in_array($type, self::TYPES, true) === false || in_array($type, self::REFUND_TYPES, true)) {
             throw new OrderDataException();
         }
 
-        if (preg_match('/\Aevt_[A-Za-z0-9_]+\z/', $id) !== 1) {
+        if ($id === '') {
             throw new OrderDataException();
         }
 
@@ -126,5 +208,24 @@ final readonly class ReconciliationEvent
         }
 
         return new self($id, $type, $created, $resourceId, PaymentAction::fromArray($action));
+    }
+
+    /** @return array<array-key, mixed> Selected fields are validated by the refund envelope/correlation rules. */
+    private static function refundObject(Event $event): array
+    {
+        $data = $event->toArray()['data'] ?? null;
+
+        if (is_array($data) === false) {
+            throw new OrderDataException();
+        }
+
+        $object = $data['object'] ?? null;
+
+        if (is_array($object) === false) {
+            throw new OrderDataException();
+        }
+
+        // The Event can contain unrelated provider graphs; only the fields used above belong to this boundary.
+        return $object;
     }
 }

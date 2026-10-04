@@ -46,7 +46,7 @@ final class StripeEventLedger
             }
         }
 
-        $entries[] = [
+        $entry = [
             'id' => $event->id,
             'type' => $event->type,
             'createdAt' => $event->createdAt,
@@ -56,6 +56,13 @@ final class StripeEventLedger
             'lastAttemptAt' => OrderData::timestamp($now),
             'errorCode' => null,
         ];
+
+        if ($event->stripePaymentIntentId !== null) {
+            $entry['stripePaymentIntentId'] = $event->stripePaymentIntentId;
+            $entry['stripeChargeId'] = $event->stripeChargeId;
+        }
+
+        $entries[] = $entry;
 
         return $entries;
     }
@@ -92,20 +99,33 @@ final class StripeEventLedger
 
         foreach (OrderData::list($value) as $entry) {
             $entry = OrderData::map($entry);
-            OrderData::validateAllowedKeys($entry, $keys);
-            OrderData::validateRequiredKeys($entry, $keys);
-            $id = OrderData::text($entry['id'], 255);
-            $type = OrderData::text($entry['type']);
-            $resourcePrefix = $type === \Stripe\Event::PAYMENT_INTENT_REQUIRES_ACTION ? 'pi_' : 'cs_';
+            $isRefund = in_array($entry['type'] ?? null, ReconciliationEvent::REFUND_TYPES, true);
+            $entryKeys = $isRefund ? [...$keys, 'stripePaymentIntentId', 'stripeChargeId'] : $keys;
+            OrderData::validateAllowedKeys($entry, $entryKeys);
+            OrderData::validateRequiredKeys($entry, $entryKeys);
+            $id = OrderData::string($entry['id']);
+            $type = OrderData::string($entry['type']);
+            $resourceId = OrderData::string($entry['resourceId']);
 
-            if (isset($ids[$id]) || preg_match('/\Aevt_[A-Za-z0-9_]+\z/', $id) !== 1) {
+            if ($id === '' || $resourceId === '') {
                 throw new OrderDataException();
             }
 
-            if (
-                in_array($type, ReconciliationEvent::TYPES, true) === false
-                || preg_match('/\A' . $resourcePrefix . '[A-Za-z0-9_]+\z/', OrderData::text($entry['resourceId'], 255)) !== 1
-            ) {
+            if ($isRefund) {
+                if (OrderData::string($entry['stripePaymentIntentId']) === '') {
+                    throw new OrderDataException();
+                }
+
+                if ($entry['stripeChargeId'] !== null && OrderData::string($entry['stripeChargeId']) === '') {
+                    throw new OrderDataException();
+                }
+            }
+
+            if (isset($ids[$id])) {
+                throw new OrderDataException();
+            }
+
+            if (in_array($type, ReconciliationEvent::TYPES, true) === false) {
                 throw new OrderDataException();
             }
 
@@ -152,12 +172,14 @@ final class StripeEventLedger
      */
     public static function validateTransition(array $before, array $after): void
     {
+        $identityKeys = array_flip(['id', 'type', 'createdAt', 'resourceId', 'stripePaymentIntentId', 'stripeChargeId']);
+
         foreach ($before as $index => $entry) {
             $updated = $after[$index] ?? throw new OrderDataException();
+            $identity = array_intersect_key($entry, $identityKeys);
+            $updatedIdentity = array_intersect_key($updated, $identityKeys);
 
-            if (
-                array_intersect_key($entry, array_flip(['id', 'type', 'createdAt', 'resourceId'])) !== array_intersect_key($updated, array_flip(['id', 'type', 'createdAt', 'resourceId']))
-            ) {
+            if ($identity !== $updatedIdentity) {
                 throw new OrderDataException();
             }
 
@@ -179,6 +201,11 @@ final class StripeEventLedger
     /** @param array<string, mixed> $entry */
     private static function assertSameEvent(array $entry, ReconciliationEvent $event): void
     {
+        // A reused Event ID must not hide a different resource or refund parent behind duplicate suppression.
+        if (($entry['stripePaymentIntentId'] ?? null) !== $event->stripePaymentIntentId || ($entry['stripeChargeId'] ?? null) !== $event->stripeChargeId) {
+            throw new OrderDataException();
+        }
+
         if ($entry['type'] !== $event->type || $entry['createdAt'] !== $event->createdAt || $entry['resourceId'] !== $event->resourceId) {
             throw new OrderDataException();
         }
