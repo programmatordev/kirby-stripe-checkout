@@ -1,6 +1,6 @@
 # Orders
 
-Orders are stored as native Kirby draft Pages under the protected `stripe-checkout-orders` container, which is initialized automatically. The package includes guarded internal creation and updates, developer queries, lifecycle hooks, and an extendable order blueprint. The internal Checkout pipeline creates an order before its Stripe Session and can reconcile current payment results. The public browser Checkout flow, signed webhook endpoint, and automatic cleanup are not implemented yet.
+Orders are stored as native Kirby draft Pages under the protected `stripe-checkout-orders` container, which is initialized automatically. The package includes guarded internal creation and updates, developer queries, lifecycle hooks, and an extendable order blueprint. The internal Checkout pipeline creates an order before its Stripe Session, and [signed webhooks](webhooks.md) reconcile current payment results. The public browser Checkout flow and automatic cleanup are not implemented yet.
 
 ## Query orders
 
@@ -146,7 +146,7 @@ A selected shipping snapshot must come from an expanded Stripe Shipping Rate. A 
 
 `stripeCustomerId` remains a separate protected provider reference. Each discount stores both its decimal `amount` and exact Stripe `providerAmount`; the sum must equal `discountTotal` in the order currency. A completed order has explicit `customFields` and `discounts` lists, including empty lists when nothing was collected or applied.
 
-Internal reconciliation retrieves the current Session, complete line items, and required payment and shipping expansions. It commits the resulting payment and capability facts together. It uses the saved purchase and Session request, not today's products, cart, or storefront Settings. Failed or contradictory reads do not partially update the order. There is no public reconciliation endpoint or signed webhook route yet.
+Internal reconciliation retrieves the current Session, complete line items, and required payment and shipping expansions. It commits the resulting payment and capability facts together. It uses the saved purchase and Session request, not today's products, cart, or storefront Settings. Failed or contradictory reads do not partially update the order. The [signed webhook route](webhooks.md) invokes this workflow; a public manual reconciliation endpoint is not implemented yet.
 
 Only selected facts cross the stripe-php boundary. The order never stores a complete Session or PaymentIntent, Stripe SDK object, payment credentials, root PaymentIntent client secret, Checkout redirect URL or raw webhook response. Customer, address, tax-ID and custom-field values are private order data. The active payment-action branch can also be retained temporarily as described below; its URLs, codes and authentication directives are private.
 

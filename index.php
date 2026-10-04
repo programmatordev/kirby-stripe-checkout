@@ -20,6 +20,7 @@ use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\StripePriceField;
 use ProgrammatorDev\StripeCheckout\Kirby\TaxCodeField;
+use ProgrammatorDev\StripeCheckout\Kirby\WebhookRoutes;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
@@ -91,7 +92,7 @@ App::plugin(
             },
         ],
         'translations' => Catalogue::bundled(),
-        'routes' => static fn(App $kirby): array => CartRoutes::definition($kirby),
+        'routes' => static fn(App $kirby): array => [...CartRoutes::definition($kirby), ...WebhookRoutes::definition($kirby)],
         'permissions' => [
             'settings.read' => false,
             'settings.update' => false,

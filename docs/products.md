@@ -368,4 +368,4 @@ A custom resolver replaces the Kirby Page resolver. The plugin still checks that
 
 ## Current boundary
 
-Kirby and Stripe Price product resolution, the [PHP cart API](cart.md), [cart HTTP routes](cart-http.md), native orders, and protected Checkout Session creation at the service layer are available. The public browser Checkout flow and webhooks are not implemented yet.
+Kirby and Stripe Price product resolution, the [PHP cart API](cart.md), [cart HTTP routes](cart-http.md), native orders, protected Checkout Session creation at the service layer, and [signed webhooks](webhooks.md) are available. The public browser Checkout flow is not implemented yet.

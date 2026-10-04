@@ -33,8 +33,12 @@ final readonly class ReconciliationEvent
         public ?PaymentAction $nextAction,
     ) {}
 
-    /** Signature verification belongs to the HTTP edge; this boundary checks ownership, mode and purchase identity. */
-    public static function fromStripe(Event $event, OrderCreationContext $order, string $sessionId, CredentialMode $mode): self
+    /**
+     * Signature verification belongs to the HTTP edge; this boundary checks ownership, mode and purchase identity.
+     * Instruction-capture envelopes can be checked before a Session ID is available;
+     * the reconciler must still prove their PaymentIntent backlink before processing them.
+     */
+    public static function fromStripe(Event $event, OrderCreationContext $order, ?string $sessionId, CredentialMode $mode): self
     {
         $data = $event->toArray();
         $type = OrderData::text($data['type'] ?? null, 255);

@@ -28,6 +28,7 @@ use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Configuration\ShippingConfiguration;
+use ProgrammatorDev\StripeCheckout\Configuration\StripeConfiguration;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
@@ -255,11 +256,16 @@ final class RuntimeFactory
     }
 
     /** Historical order reads need server credentials, not a valid current storefront or presentation key. */
-    public function checkoutSessionReconciler(): CheckoutSessionReconciler
+    public function checkoutSessionReconciler(?StripeConfiguration $stripe = null): CheckoutSessionReconciler
     {
-        /** @var array<string, mixed> $options */
-        $options = $this->kirby->options();
-        $stripe = (new ConfigurationResolver())->stripe($options);
+        // The signed HTTP edge has already resolved these credentials for verification.
+        // Reuse that immutable value within the operation instead of validating configuration twice.
+        if ($stripe === null) {
+            /** @var array<string, mixed> $options */
+            $options = $this->kirby->options();
+            $stripe = (new ConfigurationResolver())->stripe($options);
+        }
+
         $client = (new StripeApiClientFactory())->create($stripe, App::plugin(PluginMetadata::NAME)?->version());
 
         return new CheckoutSessionReconciler(

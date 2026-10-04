@@ -4,7 +4,7 @@ This guide covers the configuration behavior available in the current package. P
 
 ## Stripe credentials
 
-The future hosted Checkout flow requires a server key and webhook signing secret. Configure them with the nested plugin option in `site/config/config.php`:
+Protected Checkout operations need a server key, and the [signed webhook endpoint](webhooks.md) also needs its signing secret. Configure them with the nested plugin option in `site/config/config.php`:
 
 ```php
 <?php

@@ -165,4 +165,4 @@ The order retains the exact Session request and the generated Rate IDs. A permit
 
 The provider snapshot normalizer preserves the selected Rate, shipping address, and Stripe's shipping subtotal, tax, and final total, including free shipping. With inclusive tax, the quoted amount already includes tax; with exclusive tax, the final shipping total can be higher. These amounts are kept as returned by Stripe, not recalculated locally.
 
-Selected-shipping normalization is implemented, but automatic retrieval and commitment of those results to orders through webhooks is not yet available. A browser return is never proof of payment.
+Selected-shipping normalization and authoritative retrieval and commitment through [signed webhooks](webhooks.md) are implemented. A browser return is never proof of payment.

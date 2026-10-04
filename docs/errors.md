@@ -29,6 +29,7 @@ Each domain owns its codes. Common examples are:
 - `Money\MoneyErrorCode` for amounts, currencies, and formatting.
 - `Checkout\CheckoutErrorCode` and `Checkout\SessionRequestErrorCode` for Checkout attempts and request customization.
 - `Order\OrderErrorCode` and `Kirby\PersistenceErrorCode` for orders and native content storage.
+- `Webhook\WebhookErrorCode` for safe verification and processing log codes; webhook HTTP bodies remain empty.
 - `Tax\TaxErrorCode` for product tax classification.
 - `Shipping\ShippingErrorCode` for quote resolution and safe unavailable reasons.
 

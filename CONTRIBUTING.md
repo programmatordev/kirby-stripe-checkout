@@ -34,7 +34,7 @@ The bundled development site maps Stripe credentials from DDEV environment varia
 ddev restart
 ```
 
-The local file is ignored by Git and the complete `.ddev` and `site` directories are excluded from the Composer package. `KIRBY_STRIPE_CHECKOUT_SECRET_KEY` is sufficient for the Stripe Price catalogue, resolver, and explicit API-level Checkout Session checks. Rendering embedded Checkout also needs the publishable key; webhook checks need the signing secret. Browser Checkout and webhook integration are not yet complete.
+The local file is ignored by Git and the complete `.ddev` and `site` directories are excluded from the Composer package. `KIRBY_STRIPE_CHECKOUT_SECRET_KEY` is sufficient for the Stripe Price catalogue, resolver, and explicit API-level Checkout Session checks. Rendering embedded Checkout also needs the publishable key; [signed webhook checks](docs/webhooks.md) need the signing secret. Browser Checkout integration is not yet complete.
 
 Authenticate the operating-system Stripe CLI separately with `stripe login` when a check needs test resources or webhook forwarding. Never run repository checks against live-mode credentials or make Stripe-assisted checks part of the default offline suite.
 

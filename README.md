@@ -7,7 +7,7 @@
 Stripe Checkout integration for [Kirby CMS](https://getkirby.com).
 
 > [!CAUTION]
-> The plugin is under active development and is not ready for production use. The current package provides configuration, exact money formatting, Kirby and Stripe Price product resolution, variants, a session-backed PHP cart API and HTTP routes, native order storage, protected Session creation and payment reconciliation at the service layer, the native Stripe Checkout Page, and local Panel diagnostics. Customer-facing Checkout routes and signed webhooks are not implemented yet.
+> The plugin is under active development and is not ready for production use. The current package provides configuration, exact money formatting, Kirby and Stripe Price product resolution, variants, a session-backed PHP cart API and HTTP routes, native order storage, protected Session creation and signed webhook payment reconciliation, the native Stripe Checkout Page, and local Panel diagnostics. Customer-facing Checkout routes are not implemented yet.
 
 ## Requirements
 
@@ -27,7 +27,7 @@ Kirby discovers the Composer-installed plugin automatically. No manual plugin re
 
 ## Quick start
 
-Add the future hosted Checkout credentials to `site/config/config.php`:
+Add the server and webhook credentials to `site/config/config.php`:
 
 ```php
 <?php
@@ -52,10 +52,11 @@ See [Configuration](docs/configuration.md) for environment-specific credentials,
 - [Configuration](docs/configuration.md)
 - [Money and currency](docs/money.md)
 - [Products and variants](docs/products.md)
+- [Stripe webhooks](docs/webhooks.md)
 - [Panel and diagnostics](docs/panel.md)
 - [Translations](docs/translations.md)
 
-See the [Cart](docs/cart.md) and [Cart HTTP routes](docs/cart-http.md) guides for PHP and browser usage. Guides for Checkout, orders, webhooks, and their extension points will be added alongside those implementations.
+See the [Cart](docs/cart.md) and [Cart HTTP routes](docs/cart-http.md) guides for PHP and browser usage. Further Checkout and extension-point guides will be added alongside those implementations.
 
 ## Development
 
