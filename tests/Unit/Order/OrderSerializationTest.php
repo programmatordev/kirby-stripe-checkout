@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Unit\Order;
 use Brick\Money\Money;
 use DateTimeImmutable;
 use Kirby\Data\Txt;
+use Kirby\Data\Yaml;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
@@ -17,6 +18,8 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
+use ProgrammatorDev\StripeCheckout\Order\Internal\PaymentSnapshot;
+use ProgrammatorDev\StripeCheckout\Order\Payment;
 use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
@@ -369,10 +372,68 @@ final class OrderSerializationTest extends TestCase
         $data['discounts'] = [];
         $data['customFields'] = [];
 
+        if ($state === PaymentStatus::NoPaymentRequired) {
+            $data['payment'] = Payment::fromSnapshot(new PaymentSnapshot(), $state, 'EUR')->toArray();
+        }
+
         $this->assertSame('0', OrderSerializer::normalize($data)['total']);
         unset($data['taxTotal']);
         $this->expectException(OrderDataException::class);
         OrderSerializer::normalize($data);
+    }
+
+    #[DataProvider('invalidCompletedPaymentAmounts')]
+    public function testDecoderRejectsCompletedPaymentIntentAmountThatDoesNotMatchTheTotal(?string $amount): void
+    {
+        $data = $this->dataWithCheckoutStatus(CheckoutStatus::Complete);
+        $data['stripePaymentIntentId'] = 'pi_test';
+        $data['payment'] = Payment::fromSnapshot(
+            snapshot: new PaymentSnapshot(amount: Money::of('32', 'EUR'), stripePaymentIntentId: 'pi_test'),
+            status: PaymentStatus::Pending,
+            currency: 'EUR',
+        )->toArray();
+        $fields = OrderSerializer::encode($data);
+        $data['payment']['amount'] = $amount;
+        $fields['payment'] = Yaml::encode($data['payment']);
+
+        $this->expectException(OrderDataException::class);
+        OrderSerializer::decode($fields, OrderSchema::ORDER_PAGE_TEMPLATE, 'Abc123def456GHI7');
+    }
+
+    /** @return iterable<array{?string}> */
+    public static function invalidCompletedPaymentAmounts(): iterable
+    {
+        yield 'contradictory amount' => ['1.00'];
+        yield 'missing amount' => [null];
+    }
+
+    #[DataProvider('checkoutStatesWithPayment')]
+    public function testPaymentFactsRoundTripWithoutRequiringReceivedAmountToEqualTheTotal(CheckoutStatus $state): void
+    {
+        $data = $this->dataWithCheckoutStatus($state);
+        $data['stripePaymentIntentId'] = 'pi_test';
+        $data['payment'] = Payment::fromSnapshot(
+            snapshot: new PaymentSnapshot(
+                amount: Money::of('32', 'EUR'),
+                amountReceived: Money::of('16', 'EUR'),
+                stripePaymentIntentId: 'pi_test',
+            ),
+            status: $state === CheckoutStatus::Complete ? PaymentStatus::Pending : PaymentStatus::Unpaid,
+            currency: 'EUR',
+        )->toArray();
+        $fields = OrderSerializer::encode($data);
+        $decoded = OrderSerializer::decode($fields, OrderSchema::ORDER_PAGE_TEMPLATE, 'Abc123def456GHI7');
+
+        $this->assertSame($data['payment'], $decoded['payment']);
+        $this->assertSame($state === CheckoutStatus::Complete, isset($decoded['total']));
+    }
+
+    /** @return iterable<array{CheckoutStatus}> */
+    public static function checkoutStatesWithPayment(): iterable
+    {
+        yield [CheckoutStatus::Open];
+        yield [CheckoutStatus::Complete];
+        yield [CheckoutStatus::Expired];
     }
 
     #[DataProvider('requiredCompletedSnapshots')]

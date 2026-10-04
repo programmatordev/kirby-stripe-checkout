@@ -274,6 +274,36 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $this->assertSame($beforeExpiry, $this->entries($store->requirePage($page->id()))[0]);
     }
 
+    public function testBackwardClockMovementDoesNotPreventAnEligibleRetry(): void
+    {
+        $calls = 0;
+        $this->restart([
+            'programmatordev.stripe-checkout.order.created' => function () use (&$calls): void {
+                $calls++;
+                throw new RuntimeException('Intentional listener failure');
+            },
+        ]);
+        $page = $this->createOrder();
+        $entry = $this->entries($page)[0];
+        $deliveryId = OrderData::string(OrderData::map($entry['event'])['deliveryId']);
+        $attemptedAt = OrderData::date($entry['lastAttemptAt'])->modify('+10 seconds');
+        $dispatcher = new OrderHookDispatcher($this->kirby);
+        $store = new OrderPageStore($this->kirby);
+        $dispatcher->dispatch($page->uuid()->toString(), $deliveryId, $attemptedAt);
+        $before = $this->entries($store->requirePage($page->id()))[0];
+
+        $dispatcher->dispatch($page->uuid()->toString(), $deliveryId, $attemptedAt->modify('-5 seconds'));
+        $after = $this->entries($store->requirePage($page->id()))[0];
+
+        $this->assertSame(3, $calls);
+        $this->assertSame(3, $after['attempts']);
+        $this->assertSame($before['lastAttemptAt'], $after['lastAttemptAt']);
+        $this->assertSame($entry['createdAt'], $after['createdAt']);
+        $this->assertSame($entry['expiresAt'], $after['expiresAt']);
+        $this->assertSame($entry['event'], $after['event']);
+        $this->assertSame('failed', $after['status']);
+    }
+
     public function testDeadlineCrossedDuringReloadCannotInvokeTheHook(): void
     {
         $attempts = 0;

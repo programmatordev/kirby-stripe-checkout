@@ -189,7 +189,7 @@ Action data exists only in the `requiresAction` lifecycle payload, outside its c
 
 The delivery's fixed replay deadline uses the PHP-only `housekeeping.lifecycleDeliveryPayloadRetentionDays`, defaulting to 30 days. Retries never renew it. It is not Stripe's own action expiry: historical codes or URLs may already be unusable. Every saved delivery payload, including successful deliveries, stays until its fixed retention deadline, defaulting to 30 days from local delivery creation. The internal single-order cleanup operation can remove expired payloads regardless of delivery status. Successful deliveries remain non-retryable during retention. It removes the frozen order snapshot and private action together; automatic cleanup is not running yet. Sanitized delivery metadata, including an action fingerprint for duplicate suppression, is separate from the private payload.
 
-Current Stripe reads determine payment state. A correlated `payment_intent.requires_action` Event may additionally supply a historical action that a later read can no longer recover. This capture path is implemented at the trusted service boundary; signed HTTP delivery is not wired yet.
+Current Stripe reads determine payment state. A correlated `payment_intent.requires_action` Event may additionally supply a historical action that a later read can no longer recover. The [signed webhook endpoint](webhooks.md) passes verified Events to this trusted reconciliation boundary.
 
 ## Lifecycle hooks
 

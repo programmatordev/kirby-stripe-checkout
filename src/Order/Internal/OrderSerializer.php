@@ -263,6 +263,22 @@ final class OrderSerializer
                 ) {
                     throw new OrderDataException();
                 }
+
+                // Recheck the provider amount against the final total at the untrusted persistence boundary.
+                // Open/expired orders have no final total; a no-payment-required Session may have no PaymentIntent.
+                if ($checkoutStatus === CheckoutStatus::Complete && $payment->stripePaymentIntentId() !== null) {
+                    $paymentAmount = $payment->amount();
+
+                    if ($paymentAmount === null) {
+                        throw new OrderDataException();
+                    }
+
+                    $total = $registry->toMoney($registry->fromDecimal(OrderData::text($data['total']), $currency));
+
+                    if ($paymentAmount->isEqualTo($total) === false) {
+                        throw new OrderDataException();
+                    }
+                }
             }
 
             if (isset($data['lineItems'])) {

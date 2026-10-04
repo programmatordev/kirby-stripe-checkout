@@ -59,7 +59,12 @@ final class OrderHookDispatcher
                         // A process exit leaves the original event available for another try within its saved window.
                         $event = $candidate;
                         $entry['attempts'] = OrderData::integer($entry['attempts']) + 1;
-                        $entry['lastAttemptAt'] = max(OrderData::timestamp($attemptedAt), OrderData::timestamp($event->occurredAt()));
+                        // Keep attempt history monotonic when the clock moves backward; eligibility still uses the actual retry time.
+                        $entry['lastAttemptAt'] = max(
+                            $entry['lastAttemptAt'],
+                            OrderData::timestamp($attemptedAt),
+                            OrderData::timestamp($event->occurredAt()),
+                        );
 
                         break;
                     }
