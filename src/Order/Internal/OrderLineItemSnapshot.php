@@ -107,7 +107,7 @@ final readonly class OrderLineItemSnapshot
             // Rebuild price identity from saved evidence; even Stripe-priced lines retain their frozen amounts without a catalogue lookup.
             $priceDefinition = match ($data['priceSource']) {
                 PriceSource::Kirby->value => new Price($price),
-                PriceSource::Stripe->value => new StripePriceReference(OrderData::text($data['stripePriceId'])),
+                PriceSource::Stripe->value => new StripePriceReference(OrderData::string($data['stripePriceId'])),
                 default => throw new OrderDataException(),
             };
 
@@ -115,8 +115,8 @@ final readonly class OrderLineItemSnapshot
                 throw new OrderDataException();
             }
 
-            if ($data['stripeProductId'] !== null && (is_string($data['stripeProductId']) === false || preg_match('/\Aprod_[A-Za-z0-9]+\z/', $data['stripeProductId']) !== 1)) {
-                throw new OrderDataException();
+            if ($data['stripeProductId'] !== null) {
+                OrderData::nonEmptyString($data['stripeProductId']);
             }
 
             // Stripe-priced items use the provider's product classification; local tax overrides belong only to Kirby-priced items.
@@ -125,7 +125,7 @@ final readonly class OrderLineItemSnapshot
             }
 
             // Reuse product invariants rather than maintain a second options/image/SKU validator.
-            // Stored tax IDs need only structural validation here; catalogue membership is checked when preparing a new Checkout request, not on reads.
+            // Stored tax IDs remain opaque here; catalogue membership is checked when preparing a new Checkout request, not on reads.
             $product = new Product(
                 $request,
                 OrderData::text($data['name']),
@@ -137,7 +137,7 @@ final readonly class OrderLineItemSnapshot
                 OrderData::nullableString($data['sku']),
                 OrderData::map($data['metadata']),
                 OrderData::nullableString($data['variantId']),
-                taxCode: $data['taxCode'] === null ? null : new TaxCode(OrderData::text($data['taxCode'])),
+                taxCode: $data['taxCode'] === null ? null : new TaxCode(OrderData::string($data['taxCode'])),
             );
             // Initiating subtotals exclude later provider discounts and taxes, so they must match the frozen unit price and quantity.
             $subtotal = $price->multipliedBy($request->quantity());

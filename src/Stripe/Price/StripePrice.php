@@ -11,6 +11,7 @@ use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Product\Support\ProductData;
+use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 use Stripe\Price;
 use Throwable;
 
@@ -46,7 +47,7 @@ final readonly class StripePrice
     ) {
         $this->priceId = (new StripePriceReference($priceId))->priceId();
 
-        if (preg_match('/^prod_[A-Za-z0-9]{1,249}$/D', $productId) !== 1) {
+        if ($productId === '' || TextValidator::isUtf8($productId) === false) {
             throw new InvalidProductException(ProductErrorCode::STRIPE_PRODUCT_INELIGIBLE);
         }
 
@@ -80,7 +81,12 @@ final readonly class StripePrice
         $this->description = ProductData::optionalString($description, 5000);
         $this->images = $this->validateImages($images);
         $this->nickname = ProductData::optionalString($nickname, 500);
-        $this->taxCode = ProductData::optionalString($taxCode, 500);
+
+        if ($taxCode !== null && TextValidator::isUtf8($taxCode) === false) {
+            throw new InvalidProductException();
+        }
+
+        $this->taxCode = $taxCode === '' ? null : $taxCode;
     }
 
     public function priceId(): string

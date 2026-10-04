@@ -134,7 +134,7 @@ final class CheckoutSessionRetriever
                 createdAt: $sessionRecord->createdAt ?? throw new OrderDataException(),
                 expiresAt: $sessionRecord->expiresAt ?? throw new OrderDataException(),
                 requestId: $sessionRecord->requestId,
-                stripeInvoiceId: $sessionRecord->invoiceId === null ? null : $this->id($sessionRecord->invoiceId, 'in_'),
+                stripeInvoiceId: $sessionRecord->invoiceId === null ? null : OrderData::nonEmptyString($sessionRecord->invoiceId),
                 subtotal: $subtotal,
                 total: $total,
                 lineItems: $lineItems,
@@ -179,7 +179,7 @@ final class CheckoutSessionRetriever
 
         foreach ($lines as $line) {
             $line = $this->map($line);
-            $lineId = $this->id($line['id'] ?? null, 'li_');
+            $lineId = OrderData::nonEmptyString($line['id'] ?? null);
             $metadata = $this->map($line['metadata'] ?? null);
             $identity = OrderData::text($metadata[PluginMetadata::LINE_KEY] ?? null);
             $index = $expectedByIdentity[$identity] ?? null;
@@ -192,8 +192,8 @@ final class CheckoutSessionRetriever
             $expected = $this->map($expectedLines[$index]);
             $this->metadata($metadata, $expected['metadata'] ?? null, $order->pageUuid());
             $price = $this->map($line['price'] ?? null);
-            $priceId = $this->id($price['id'] ?? null, 'price_');
-            $productId = $this->id($price['product'] ?? null, 'prod_');
+            $priceId = OrderData::nonEmptyString($price['id'] ?? null);
+            $productId = OrderData::nonEmptyString($price['product'] ?? null);
             $initiatingLine = $initiatingLines[$index];
             $providerAmounts = $this->map($initiatingLine['providerAmounts']);
 
@@ -345,12 +345,12 @@ final class CheckoutSessionRetriever
         }
 
         $payment = $this->map($source);
-        $paymentIntentId = $this->id($payment['id'] ?? null, 'pi_');
+        $paymentIntentId = OrderData::nonEmptyString($payment['id'] ?? null);
         $this->metadata($payment['metadata'] ?? null, $this->map($parameters['payment_intent_data'] ?? null)['metadata'] ?? null, $order->pageUuid());
         $currency = $order->currency();
         $amount = $this->amount($payment['amount'] ?? null, $currency);
         $received = $this->amount($payment['amount_received'] ?? null, $currency);
-        $status = OrderData::text($payment['status'] ?? null, 255);
+        $status = OrderData::string($payment['status'] ?? null);
         $statuses = [PaymentIntent::STATUS_CANCELED, PaymentIntent::STATUS_PROCESSING, PaymentIntent::STATUS_REQUIRES_ACTION, PaymentIntent::STATUS_REQUIRES_CONFIRMATION, PaymentIntent::STATUS_REQUIRES_PAYMENT_METHOD, PaymentIntent::STATUS_SUCCEEDED];
 
         if (($payment['object'] ?? null) !== PaymentIntent::OBJECT_NAME) {
@@ -378,8 +378,8 @@ final class CheckoutSessionRetriever
         }
 
         $method = isset($payment['payment_method']) ? $this->map($payment['payment_method']) : null;
-        $methodId = $method === null ? null : $this->id($method['id'] ?? null, 'pm_');
-        $methodType = $method === null ? null : OrderData::text($method['type'] ?? null, 255);
+        $methodId = $method === null ? null : OrderData::nonEmptyString($method['id'] ?? null);
+        $methodType = $method === null ? null : OrderData::nonEmptyString($method['type'] ?? null);
 
         if ($method !== null && ($method['object'] ?? null) !== PaymentMethod::OBJECT_NAME) {
             throw new OrderDataException();
@@ -394,15 +394,15 @@ final class CheckoutSessionRetriever
         $chargePaid = null;
         $chargeCaptured = null;
         $amountCaptured = null;
-        $failureCode = OrderData::nullableSingleLine($payment['failure_code'] ?? null, 255);
+        $failureCode = OrderData::nullableString($payment['failure_code'] ?? null);
 
         if ($charge !== null) {
-            $chargeId = $this->id($charge['id'] ?? null, 'ch_');
-            $chargeStatus = OrderData::text($charge['status'] ?? null, 255);
-            $chargeMethodType = OrderData::nullableSingleLine($charge['method_type'] ?? null, 255);
+            $chargeId = OrderData::nonEmptyString($charge['id'] ?? null);
+            $chargeStatus = OrderData::string($charge['status'] ?? null);
+            $chargeMethodType = OrderData::nullableString($charge['method_type'] ?? null);
             $chargeMethodId = ($charge['payment_method'] ?? null) === null
                 ? null
-                : $this->id($charge['payment_method'], 'pm_');
+                : OrderData::nonEmptyString($charge['payment_method']);
 
             if (
                 ($charge['object'] ?? null) !== Charge::OBJECT_NAME
@@ -442,7 +442,7 @@ final class CheckoutSessionRetriever
             // https://docs.stripe.com/payments/payment-intents/asynchronous-capture
             $chargeCaptured = OrderData::boolean($charge['captured'] ?? null);
             $amountCaptured = $this->amount($charge['amount_captured'] ?? null, $currency);
-            $failureCode ??= OrderData::nullableSingleLine($charge['failure_code'] ?? null, 255);
+            $failureCode ??= OrderData::nullableString($charge['failure_code'] ?? null);
         }
 
         return new PaymentSnapshot(
@@ -482,15 +482,6 @@ final class CheckoutSessionRetriever
         $registry = new StripeCurrencyRegistry();
 
         return $registry->toMoney($registry->fromProviderAmount($amount, $currency));
-    }
-
-    private function id(mixed $value, string $prefix): string
-    {
-        $id = OrderData::text($value, 255);
-
-        return preg_match('/\A' . $prefix . '[A-Za-z0-9_]+\z/D', $id) === 1
-            ? $id
-            : throw new OrderDataException();
     }
 
     private function metadata(mixed $actual, mixed $expected, string $orderUuid): void

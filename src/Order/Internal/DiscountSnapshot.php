@@ -88,9 +88,9 @@ final readonly class DiscountSnapshot
             $products = [];
 
             foreach (OrderData::list($data['appliesToProducts']) as $productId) {
-                $productId = OrderData::text($productId, 255);
+                $productId = OrderData::nonEmptyString($productId);
 
-                if (preg_match('/\Aprod_[A-Za-z0-9_]+\z/D', $productId) !== 1 || in_array($productId, $products, true)) {
+                if (in_array($productId, $products, true)) {
                     throw new OrderDataException();
                 }
 
@@ -98,11 +98,11 @@ final readonly class DiscountSnapshot
             }
 
             $data = [
-                'discountId' => self::reference($data['discountId'], 'di_'),
-                'couponId' => self::reference($data['couponId'], null),
-                'promotionCodeId' => self::reference($data['promotionCodeId'], 'promo_'),
-                'couponName' => OrderData::nullableSingleLine($data['couponName'], 255),
-                'promotionCode' => OrderData::nullableSingleLine($data['promotionCode'], 255),
+                'discountId' => self::reference($data['discountId']),
+                'couponId' => self::reference($data['couponId']),
+                'promotionCodeId' => self::reference($data['promotionCodeId']),
+                'couponName' => OrderData::nullableString($data['couponName']),
+                'promotionCode' => OrderData::nullableString($data['promotionCode']),
                 'amount' => (string) $amount->getAmount(),
                 'currency' => $currency,
                 'providerAmount' => $providerAmount,
@@ -132,18 +132,12 @@ final readonly class DiscountSnapshot
         return $this->data;
     }
 
-    private static function reference(mixed $value, ?string $prefix): ?string
+    private static function reference(mixed $value): ?string
     {
         if ($value === null) {
             return null;
         }
 
-        $value = OrderData::text($value, 255);
-
-        if ($prefix !== null && preg_match('/\A' . $prefix . '[A-Za-z0-9_]+\z/D', $value) !== 1) {
-            throw new OrderDataException();
-        }
-
-        return $value;
+        return OrderData::nonEmptyString($value);
     }
 }

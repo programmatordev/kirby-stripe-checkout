@@ -33,13 +33,13 @@ final class ShippingContextTest extends TestCase
         );
     }
 
-    public function testRejectsAnInvalidShippingTaxCode(): void
+    public function testRejectsAnEmptyShippingTaxCode(): void
     {
         $this->expectException(InvalidArgumentException::class);
 
         new ShippingContext(
             shippingCountry: 'PT',
-            taxCode: 'shipping',
+            taxCode: '',
         );
     }
 }

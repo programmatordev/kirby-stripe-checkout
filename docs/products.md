@@ -258,6 +258,8 @@ Resolution is read-only. It does not change stock, create an order, create a Che
 
 Set the store price source to Stripe, choose the store currency, and configure a Stripe server key that can read Prices and Products. The `stripe-checkout-price` field then opens a searchable, single-value picker containing eligible active one-time Prices in that currency.
 
+Provider IDs are retained as opaque references. A saved ID is not proof that a Price exists or is eligible: preparing Checkout retrieves the exact Price and verifies its Product, currency and supported pricing behavior. Product tax classifications still require exact catalogue membership when Automatic Tax uses Kirby prices.
+
 The picker lists Stripe Products first, with their first image and number of eligible Prices. Choose a Product to see its Prices, identified by the optional nickname, amount, and currency. The saved field keeps showing the Product and Price summary after the Page reloads, but stores only the scalar `price_...` ID.
 
 ### Reading a Stripe Price

@@ -16,6 +16,26 @@ use Stripe\ShippingRate;
 
 final class CheckoutSessionShippingSnapshotTest extends TestCase
 {
+    public function testPreservesOpaqueShippingAndClassificationReferencesThroughRestoration(): void
+    {
+        $shippingRateId = 'rate.reference-' . str_repeat('r', 3000);
+        $taxCode = 'classification.reference-' . str_repeat('t', 3000);
+        $source = $this->shippingSource();
+        $shippingCost = self::map($source['shipping_cost']);
+        $shippingRate = self::map($shippingCost['shipping_rate']);
+        $shippingRate['id'] = $shippingRateId;
+        $shippingRate['tax_code'] = $taxCode;
+        $shippingCost['shipping_rate'] = $shippingRate;
+        $source['shipping_cost'] = $shippingCost;
+        $snapshot = $this->normalize($source);
+        $shipping = $snapshot->shipping()?->toArray();
+        $this->assertNotNull($shipping);
+
+        $this->assertSame($shippingRateId, $snapshot->stripeShippingRateId());
+        $this->assertSame($taxCode, $shipping['taxCode']);
+        $this->assertSame($shipping, ShippingSnapshot::fromArray($shipping)->toArray());
+    }
+
     public function testNormalizesSelectedShippingAddressRateAmountsAndTax(): void
     {
         $snapshot = $this->normalize($this->shippingSource());
@@ -178,10 +198,10 @@ final class CheckoutSessionShippingSnapshotTest extends TestCase
             $shippingCost['shipping_rate'] = 'shr_standard';
             $source['shipping_cost'] = $shippingCost;
         }];
-        yield 'selected rate reference' => [static function (array &$source): void {
+        yield 'empty selected rate reference' => [static function (array &$source): void {
             $shippingCost = self::map($source['shipping_cost']);
             $shippingRate = self::map($shippingCost['shipping_rate']);
-            $shippingRate['id'] = 'rate_standard';
+            $shippingRate['id'] = '';
             $shippingCost['shipping_rate'] = $shippingRate;
             $source['shipping_cost'] = $shippingCost;
         }];

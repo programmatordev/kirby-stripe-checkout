@@ -105,7 +105,7 @@ final class PriceCatalogueTest extends TestCase
         $cache->set('catalogue-eur', [
             'items' => [[
                 'priceId' => 'price_cached',
-                'productId' => 'invalid-product-id',
+                'productId' => '',
                 'name' => 'Cached product',
                 'currency' => 'EUR',
                 'minorAmount' => 1600,

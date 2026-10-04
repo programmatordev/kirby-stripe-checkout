@@ -17,6 +17,15 @@ use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
 
 final class StripePriceFieldTest extends KirbyTestCase
 {
+    public function testStoresAnOpaquePriceReferenceBeforeAuthoritativeResolution(): void
+    {
+        $page = $this->restartWithStripePriceField();
+        $field = Form::for($page)->fields()->field('price');
+        $priceId = 'price.reference-' . str_repeat('p', 3000);
+
+        $this->assertSame($priceId, $field->fill($priceId)->toStoredValue());
+    }
+
     public function testFieldConvertsItsStoredIdToCachedProductStripePrice(): void
     {
         $page = $this->restartWithStripePriceField();
@@ -309,13 +318,13 @@ final class StripePriceFieldTest extends KirbyTestCase
         $this->assertSame([], $response['data']);
     }
 
-    public function testInvalidPriceIdCannotBeStored(): void
+    public function testInvalidUtf8PriceIdCannotBeStored(): void
     {
         $page = $this->restartWithStripePriceField();
         $field = Form::for($page)->fields()->field('price');
 
         $this->expectException(\Kirby\Exception\InvalidArgumentException::class);
-        $field->fill('not-a-price')->toStoredValue();
+        $field->fill("invalid\xff")->toStoredValue();
     }
 
     private function restartWithStripePriceField(

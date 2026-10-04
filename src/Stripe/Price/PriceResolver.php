@@ -51,10 +51,6 @@ final class PriceResolver
             throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INELIGIBLE);
         }
 
-        if (preg_match('/^price_[A-Za-z0-9]{1,249}$/D', $record->priceId) !== 1) {
-            throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INELIGIBLE);
-        }
-
         // New purchases require active catalogue records; historical order reads use their frozen snapshots instead.
         if ($record->active === false) {
             throw new InvalidProductException(ProductErrorCode::STRIPE_PRICE_INELIGIBLE);
@@ -65,10 +61,7 @@ final class PriceResolver
         $productName = $record->productName;
         $productId = $record->productId;
 
-        if (
-            is_string($productId) === false
-            || preg_match('/^prod_[A-Za-z0-9]{1,249}$/D', $productId) !== 1
-        ) {
+        if (is_string($productId) === false) {
             throw new InvalidProductException(ProductErrorCode::STRIPE_PRODUCT_INELIGIBLE);
         }
 

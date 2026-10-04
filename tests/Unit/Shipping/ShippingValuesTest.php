@@ -89,11 +89,11 @@ final class ShippingValuesTest extends TestCase
         yield 'blank label' => [static fn(): ShippingOption => self::option(label: '')];
         yield 'multiline label' => [static fn(): ShippingOption => self::option(label: "Standard\nDelivery")];
         yield 'negative amount' => [static fn(): ShippingOption => self::option(amount: '-1')];
-        yield 'invalid tax code' => [static fn(): ShippingOption => new ShippingOption(
+        yield 'empty tax code' => [static fn(): ShippingOption => new ShippingOption(
             key: 'standard',
             label: 'Standard',
             amount: Money::of('1', 'EUR'),
-            taxCode: 'shipping',
+            taxCode: '',
         )];
         yield 'blank zone name' => [static fn(): ShippingZone => self::zone(name: '')];
         yield 'fallback with countries' => [static fn(): ShippingZone => self::zone(countries: ['PT'])];

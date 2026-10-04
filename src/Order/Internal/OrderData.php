@@ -23,6 +23,14 @@ final class OrderData
         return $value;
     }
 
+    /** Required opaque provider facts have no plugin-owned format or length limit. */
+    public static function nonEmptyString(mixed $value): string
+    {
+        $value = self::string($value);
+
+        return $value === '' ? throw new OrderDataException() : $value;
+    }
+
     public static function nullableString(mixed $value): ?string
     {
         return $value === null ? null : self::string($value);

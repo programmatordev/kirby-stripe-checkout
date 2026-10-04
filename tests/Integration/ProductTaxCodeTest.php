@@ -348,8 +348,8 @@ final class ProductTaxCodeTest extends KirbyTestCase
     /** @return iterable<string, array{mixed, bool, string}> */
     public static function invalidCodes(): iterable
     {
-        yield 'malformed ID' => ['wrong', false, 'tax.code_invalid'];
-        yield 'non-scalar content' => [['txcd_test'], false, 'tax.code_invalid'];
+        yield 'unknown opaque ID' => ['wrong', true, 'tax.code_invalid'];
+        yield 'serialized array is not a catalogue member' => [['txcd_test'], true, 'tax.code_invalid'];
         yield 'missing catalogue' => ['txcd_test', false, 'tax.catalogue_unavailable'];
         yield 'unknown exact ID' => ['txcd_unknown', true, 'tax.code_invalid'];
     }

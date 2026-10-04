@@ -16,6 +16,31 @@ use Stripe\ShippingRate;
 
 final class CheckoutSessionTaxSnapshotTest extends TestCase
 {
+    public function testPreservesOpaqueTaxReferencesAndProviderCodesThroughRestoration(): void
+    {
+        $lineItemId = 'line.reference-' . str_repeat('l', 3000);
+        $rateId = 'rate.reference-' . str_repeat('r', 3000);
+        $reason = 'future_tax_reason_' . str_repeat('t', 3000);
+        $entry = $this->taxEntry(230, $reason);
+        $rate = $entry['rate'];
+        $this->assertIsArray($rate);
+        $rate['id'] = $rateId;
+        $entry['rate'] = $rate;
+        $source = $this->source(true, 'complete', 230);
+        $source['line_items'] = [
+            'data' => [['id' => $lineItemId, 'taxes' => [$entry]]],
+            'has_more' => false,
+        ];
+        $tax = $this->normalize($source)->tax()?->toArray();
+        $this->assertNotNull($tax);
+        $breakdown = OrderData::map(OrderData::list($tax['breakdown'])[0]);
+
+        $this->assertSame($lineItemId, $breakdown['targetId']);
+        $this->assertSame($rateId, $breakdown['rateId']);
+        $this->assertSame($reason, $breakdown['taxabilityReason']);
+        $this->assertSame($tax, TaxSnapshot::fromArray($tax)->toArray());
+    }
+
     #[DataProvider('calculationOutcomes')]
     public function testPreservesCalculationOutcomesIndependentlyOfPayment(bool $enabled, ?string $status, int $amount): void
     {

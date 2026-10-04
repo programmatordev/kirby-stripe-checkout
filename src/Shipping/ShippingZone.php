@@ -45,7 +45,6 @@ final readonly class ShippingZone
         foreach ($countries as $country) {
             if (
                 is_string($country) === false
-                || preg_match('/\A[A-Z]{2}\z/D', $country) !== 1
                 || $countryRegistry->supports($country) === false
                 || isset($normalizedCountries[$country])
             ) {

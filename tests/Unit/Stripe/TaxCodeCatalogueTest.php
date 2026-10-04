@@ -16,6 +16,20 @@ use ProgrammatorDev\StripeCheckout\Test\Support\Stripe\FakeTaxProvider;
 
 final class TaxCodeCatalogueTest extends TestCase
 {
+    public function testPreservesOpaqueClassificationIdentityThroughCatalogueAndCache(): void
+    {
+        $id = 'classification.reference-' . str_repeat('t', 3000);
+        $provider = new FakeTaxProvider(pages: ['first' => new TaxCodeListResult([self::record($id)], false)]);
+        $cache = new MemoryCache();
+        $catalogue = new TaxCodeCatalogue($cache, $provider, 'test-account');
+        $catalogue->load();
+
+        $this->assertSame($id, $catalogue->find($id)?->id());
+        $this->assertSame($id, (new TaxCodeCatalogue($cache, null, 'test-account'))->cached()->items()[0]->id());
+        $this->assertNull($catalogue->find('other.reference'));
+        $this->assertSame([null], $provider->listCursors);
+    }
+
     public function testPreservesPerformanceLocationRequirementsInTheCache(): void
     {
         $provider = new FakeTaxProvider(pages: ['first' => new TaxCodeListResult([
@@ -198,7 +212,7 @@ final class TaxCodeCatalogueTest extends TestCase
             'first' => new TaxCodeListResult([self::record()], true),
             'txcd_test' => new TaxCodeListResult([self::record()], true),
         ]];
-        yield 'invalid provider ID' => [['first' => new TaxCodeListResult([self::record('wrong')], false)]];
+        yield 'empty provider ID' => [['first' => new TaxCodeListResult([self::record('')], false)]];
         yield 'blank provider name' => [['first' => new TaxCodeListResult([self::record(name: '')], false)]];
         yield 'invalid UTF-8 description' => [['first' => new TaxCodeListResult([new TaxCodeRecord('txcd_test', 'Test', "\xFF")], false)]];
     }
@@ -214,7 +228,7 @@ final class TaxCodeCatalogueTest extends TestCase
         /** @var array<string, mixed> $state */
         $state = $cache->get('first-account');
         $state['items'] = [[
-            'id' => 'wrong',
+            'id' => '',
             'name' => 'Test',
             'description' => 'Test',
             'requiresPerformanceLocation' => false,

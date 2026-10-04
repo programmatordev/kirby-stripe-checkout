@@ -148,6 +148,8 @@ A selected shipping snapshot must come from an expanded Stripe Shipping Rate. A 
 
 Internal reconciliation retrieves the current Session, complete line items, and required payment and shipping expansions. It commits the resulting payment and capability facts together. It uses the saved purchase and Session request, not today's products, cart, or storefront Settings. Failed or contradictory reads do not partially update the order. The [signed webhook route](webhooks.md) invokes this workflow; a public manual reconciliation endpoint is not implemented yet.
 
+Stripe resource IDs are opaque strings. The plugin preserves them without prefix checks or arbitrary text-length limits, and verifies exact returned identities and ownership against the saved purchase. Restoring stored content still validates required values, schemas, currency, amounts and correlations.
+
 Only selected facts cross the stripe-php boundary. The order never stores a complete Session or PaymentIntent, Stripe SDK object, payment credentials, root PaymentIntent client secret, Checkout redirect URL or raw webhook response. Customer, address, tax-ID and custom-field values are private order data. The active payment-action branch can also be retained temporarily as described below; its URLs, codes and authentication directives are private.
 
 ## Refund facts

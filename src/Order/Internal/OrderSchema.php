@@ -24,14 +24,14 @@ final class OrderSchema
     /** @var list<string> */
     public const FLAGS = ['refundHasActive', 'refundRequiresAction', 'refundHasFailed', 'disputeRequiresResponse', 'disputeHasLost'];
 
-    /** @var array<string, string> Field name to provider identifier prefix. */
+    /** @var list<string> */
     public const REFERENCES = [
-        'stripeCheckoutSessionId' => 'cs_',
-        'stripePaymentIntentId' => 'pi_',
-        'stripeChargeId' => 'ch_',
-        'stripeCustomerId' => 'cus_',
-        'stripeInvoiceId' => 'in_',
-        'stripeShippingRateId' => 'shr_',
+        'stripeCheckoutSessionId',
+        'stripePaymentIntentId',
+        'stripeChargeId',
+        'stripeCustomerId',
+        'stripeInvoiceId',
+        'stripeShippingRateId',
     ];
 
     /** @var list<string> */
@@ -46,7 +46,7 @@ final class OrderSchema
         return [
             'title', 'uuid', 'orderNumber', 'userUuid', 'languageCode', 'currency',
             'checkoutStatus', 'paymentStatus', 'refundStatus', 'disputeStatus',
-            ...self::AMOUNTS, ...self::FLAGS, ...array_keys(self::REFERENCES), ...self::TIMESTAMPS, ...self::SNAPSHOTS,
+            ...self::AMOUNTS, ...self::FLAGS, ...self::REFERENCES, ...self::TIMESTAMPS, ...self::SNAPSHOTS,
         ];
     }
 

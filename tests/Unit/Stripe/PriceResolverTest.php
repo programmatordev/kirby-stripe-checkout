@@ -13,6 +13,21 @@ use ProgrammatorDev\StripeCheckout\Test\Support\Stripe\FakePriceProvider;
 
 final class PriceResolverTest extends TestCase
 {
+    public function testPreservesOpaqueProviderIdentitiesDuringFreshResolution(): void
+    {
+        $priceId = 'price.reference-' . str_repeat('p', 3000);
+        $productId = 'product.reference-' . str_repeat('r', 3000);
+        $taxCode = 'classification.reference-' . str_repeat('t', 3000);
+        $record = self::record(priceId: $priceId, productId: $productId, productTaxCode: $taxCode);
+        $provider = new FakePriceProvider(prices: [$priceId => $record]);
+        $price = (new PriceResolver($provider))->resolve($priceId, 'EUR');
+
+        $this->assertSame([$priceId], $provider->retrievedIds);
+        $this->assertSame($priceId, $price->priceId());
+        $this->assertSame($productId, $price->productId());
+        $this->assertSame($taxCode, $price->taxCode());
+    }
+
     public function testFreshResolutionReturnsAuthoritativePriceAndProductFacts(): void
     {
         $record = self::record();
@@ -66,7 +81,8 @@ final class PriceResolverTest extends TestCase
     public static function ineligibleRecords(): iterable
     {
         yield 'inactive price' => [self::record(active: false)];
-        yield 'invalid price id' => [self::record(priceId: 'invalid')];
+        yield 'empty price id' => [self::record(priceId: '')];
+        yield 'unsafe price id' => [self::record(priceId: "price\xff")];
         yield 'recurring price' => [self::record(type: 'recurring', hasRecurring: true)];
         yield 'tiered price' => [self::record(billingScheme: 'tiered', hasTiers: true)];
         yield 'tiers mode' => [self::record(tiersMode: 'volume')];
@@ -77,7 +93,8 @@ final class PriceResolverTest extends TestCase
         yield 'fractional provider unit' => [self::record(unitAmount: null, unitAmountDecimal: '1600.5')];
         yield 'conflicting amount fields' => [self::record(unitAmount: 1600, unitAmountDecimal: '1700')];
         yield 'inactive product' => [self::record(productActive: false)];
-        yield 'invalid product id' => [self::record(productId: 'invalid')];
+        yield 'empty product id' => [self::record(productId: '')];
+        yield 'unsafe product id' => [self::record(productId: "product\xff")];
         yield 'missing product name' => [self::record(productName: null)];
         yield 'invalid product name' => [self::record(productName: ' Canvas bag')];
         yield 'invalid product image' => [self::record(productImages: ['ftp://example.com/bag.jpg'])];

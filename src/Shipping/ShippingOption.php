@@ -45,7 +45,7 @@ final readonly class ShippingOption
             throw new InvalidShippingOptionException('amount', 'A shipping option requires an exact non-negative amount.');
         }
 
-        if ($taxCode !== null && preg_match('/\Atxcd_[A-Za-z0-9]{1,249}\z/D', $taxCode) !== 1) {
+        if ($taxCode !== null && ($taxCode === '' || TextValidator::isUtf8($taxCode) === false)) {
             throw new InvalidShippingOptionException('taxCode', 'A shipping option requires a valid Stripe Tax Code.');
         }
     }

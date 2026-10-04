@@ -126,6 +126,78 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->kirby->impersonate(null);
     }
 
+    public function testCheckoutAndActionReconciliationPreserveOpaquePaymentIdentities(): void
+    {
+        $sessionId = 'session.reference-' . str_repeat('s', 3000);
+        $paymentIntentId = 'payment.reference-' . str_repeat('p', 3000);
+        $paymentMethodId = 'method.reference-' . str_repeat('m', 3000);
+        $chargeId = 'charge.reference-' . str_repeat('c', 3000);
+        $failureCode = 'future_failure_' . str_repeat('f', 3000);
+        $invoiceId = 'invoice.reference-' . str_repeat('i', 3000);
+        $customerId = 'customer.reference-' . str_repeat('c', 3000);
+        $methodType = 'future_method_' . str_repeat('m', 3000);
+        $this->provider->sessionLookupId = $sessionId;
+        $this->provider->session['id'] = $sessionId;
+        $this->provider->session['invoice'] = $invoiceId;
+        $this->provider->session['customer'] = $customerId;
+        $this->provider->session['payment_status'] = 'unpaid';
+        $this->provider->paymentIntent['id'] = $paymentIntentId;
+        $this->provider->paymentIntent['status'] = 'processing';
+        $this->provider->paymentIntent['amount_received'] = 0;
+        $this->provider->paymentIntent['payment_method'] = [
+            'id' => $paymentMethodId,
+            'object' => 'payment_method',
+            'type' => $methodType,
+        ];
+        $this->provider->paymentIntent['latest_charge'] = [
+            'id' => $chargeId,
+            'object' => 'charge',
+            'created' => $this->createdAt->getTimestamp(),
+            'livemode' => false,
+            'payment_intent' => $paymentIntentId,
+            'currency' => 'eur',
+            'amount' => 3200,
+            'amount_captured' => 0,
+            'status' => 'pending',
+            'paid' => false,
+            'captured' => false,
+            'payment_method' => $paymentMethodId,
+            'failure_code' => $failureCode,
+        ];
+        $event = OrderData::map(json_decode($this->event(), true, flags: JSON_THROW_ON_ERROR));
+        $eventData = OrderData::map($event['data']);
+        $eventObject = OrderData::map($eventData['object']);
+        $eventObject['id'] = $sessionId;
+        $eventData['object'] = $eventObject;
+        $event['data'] = $eventData;
+        $body = json_encode($event, JSON_THROW_ON_ERROR);
+
+        $this->assertResponse($this->send($body), 204);
+        $data = $this->data();
+        $this->assertSame($sessionId, $data['stripeCheckoutSessionId']);
+        $this->assertSame($paymentIntentId, $data['stripePaymentIntentId']);
+        $this->assertSame($chargeId, $data['stripeChargeId']);
+        $this->assertSame($invoiceId, $data['stripeInvoiceId']);
+        $this->assertSame($customerId, $data['stripeCustomerId']);
+        $payment = OrderData::map($data['payment']);
+        $this->assertSame($paymentMethodId, $payment['stripePaymentMethodId']);
+        $this->assertSame($methodType, $payment['methodType']);
+        $this->assertSame($failureCode, $payment['failureCode']);
+        $this->assertSame($paymentIntentId, $this->delivered[1]->payment()?->stripePaymentIntentId());
+        $this->assertResponse($this->send($body), 204);
+        $this->assertSame($data, $this->data());
+
+        $actionEvent = OrderData::map(json_decode($this->event('payment_intent.requires_action'), true, flags: JSON_THROW_ON_ERROR));
+        $actionEventData = OrderData::map($actionEvent['data']);
+        $actionEventObject = OrderData::map($actionEventData['object']);
+        $actionEventObject['id'] = $paymentIntentId;
+        $actionEventData['object'] = $actionEventObject;
+        $actionEvent['data'] = $actionEventData;
+        $this->assertResponse($this->send(json_encode($actionEvent, JSON_THROW_ON_ERROR)), 204);
+        $this->assertSame($paymentIntentId, $this->delivered[2]->payment()?->stripePaymentIntentId());
+        $this->assertSame('payment.requiresAction', $this->delivered[2]->type()->value);
+    }
+
     #[DataProvider('checkoutOutcomes')]
     public function testDispatchesTheFourCheckoutEventsThroughTheRealRuntime(string $type, string $checkoutStatus, string $paymentStatus, string $intentStatus, string $expected): void
     {

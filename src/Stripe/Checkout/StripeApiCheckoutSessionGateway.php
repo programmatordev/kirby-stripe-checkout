@@ -55,10 +55,6 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
 
     public function retrieve(string $sessionId): CheckoutSessionRecord
     {
-        if (preg_match('/\Acs_[A-Za-z0-9_]+\z/', $sessionId) !== 1) {
-            throw new InvalidArgumentException('A valid Checkout Session ID is required.');
-        }
-
         try {
             $session = $this->client->checkout->sessions->retrieve($sessionId, []);
         } catch (Throwable $error) {
@@ -73,10 +69,6 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
 
     public function retrieveForReconciliation(string $sessionId): CheckoutSessionReconciliationRecord
     {
-        if (preg_match('/\Acs_[A-Za-z0-9_]+\z/D', $sessionId) !== 1) {
-            throw new InvalidArgumentException('A valid Checkout Session ID is required.');
-        }
-
         try {
             $session = $this->client->checkout->sessions->retrieve($sessionId, [
                 'expand' => [

@@ -211,7 +211,7 @@ final class ShippingZoneFactory
                 throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $optionPath . '.key');
             }
 
-            if (preg_match('/\A[a-z0-9_-]{1,64}\z/D', $key) !== 1 || isset($globalKeys[$key])) {
+            if (isset($globalKeys[$key])) {
                 throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $optionPath . '.key');
             }
 
@@ -310,8 +310,7 @@ final class ShippingZoneFactory
             }
 
             if (
-                preg_match('/\A[A-Z]{2}\z/D', $country) !== 1
-                || $countryRegistry->supports($country) === false
+                $countryRegistry->supports($country) === false
                 || isset($normalized[$country])
             ) {
                 throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path . '.' . $index);

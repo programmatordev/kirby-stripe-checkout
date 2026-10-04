@@ -22,6 +22,8 @@ final class WebhookCheckoutClient implements ClientInterface
     /** @var array<string, mixed> */
     public array $paymentIntent;
 
+    public string $sessionLookupId = 'cs_webhook';
+
     public int $httpStatus = 200;
 
     public ?Closure $beforeSessionRead = null;
@@ -104,8 +106,9 @@ final class WebhookCheckoutClient implements ClientInterface
 
         $this->requests[] = $absUrl;
         $path = parse_url($absUrl, PHP_URL_PATH);
+        $sessionPath = '/v1/checkout/sessions/' . rawurlencode($this->sessionLookupId);
 
-        if ($path === '/v1/checkout/sessions/cs_webhook') {
+        if ($path === $sessionPath) {
             $this->beforeSessionRead?->__invoke();
         }
 
@@ -120,9 +123,9 @@ final class WebhookCheckoutClient implements ClientInterface
             ]], JSON_THROW_ON_ERROR), $this->httpStatus, ['request-id' => 'req_webhook_failure']];
         }
 
-        if ($path === '/v1/checkout/sessions/cs_webhook') {
+        if ($path === $sessionPath) {
             $body = [...$this->session, 'payment_intent' => $this->paymentIntent];
-        } elseif ($path === '/v1/checkout/sessions/cs_webhook/line_items') {
+        } elseif ($path === $sessionPath . '/line_items') {
             $body = [
                 'object' => 'list',
                 'has_more' => false,

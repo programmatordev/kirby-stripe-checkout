@@ -32,16 +32,10 @@ final readonly class CheckoutLineItemSnapshot
         $keys = ['stripeLineItemId', 'initiatingIndex', 'stripePriceId', 'stripeProductId', 'quantity', 'description', 'currency', 'price', 'subtotal', 'discount', 'tax', 'total', 'discounts'];
         OrderData::validateAllowedKeys($data, $keys);
         OrderData::validateRequiredKeys($data, $keys);
-        $references = [
-            'stripeLineItemId' => 'li_',
-            'stripePriceId' => 'price_',
-            'stripeProductId' => 'prod_',
-        ];
+        $references = ['stripeLineItemId', 'stripePriceId', 'stripeProductId'];
 
-        foreach ($references as $key => $prefix) {
-            if (preg_match('/\A' . $prefix . '[A-Za-z0-9_]+\z/', OrderData::text($data[$key])) !== 1) {
-                throw new OrderDataException();
-            }
+        foreach ($references as $key) {
+            OrderData::nonEmptyString($data[$key]);
         }
 
         $index = OrderData::integer($data['initiatingIndex']);

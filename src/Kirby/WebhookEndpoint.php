@@ -174,7 +174,7 @@ final class WebhookEndpoint
                 $sessionId = $object['id'] ?? null;
             }
 
-            if (is_string($sessionId) === false || preg_match('/\Acs_[A-Za-z0-9_]{1,249}\z/', $sessionId) !== 1) {
+            if (is_string($sessionId) === false || $sessionId === '') {
                 return $this->failure($event, $pageUuid, self::HTTP_INTERNAL_SERVER_ERROR);
             }
 

@@ -18,6 +18,25 @@ use ProgrammatorDev\StripeCheckout\Product\ProductVariant;
 
 final class ProductOptionsStorageTest extends TestCase
 {
+    public function testPreservesOpaqueVariantProviderReferences(): void
+    {
+        $priceId = 'price.reference-' . str_repeat('p', 3000);
+        $taxCode = 'classification.reference-' . str_repeat('t', 3000);
+        $canonical = (new ProductOptionsSchema())->canonical([
+            'options' => self::fixtureOptions(),
+            'variants' => [[
+                'id' => 'opaqueVariant',
+                'selectedOptions' => ['sizeOption' => 'smallValue', 'colourOption' => 'redValue'],
+                'enabled' => true,
+                'stripePriceId' => $priceId,
+                'taxCode' => $taxCode,
+            ]],
+        ]);
+
+        $this->assertSame($priceId, $canonical->variants()[0]->stripePriceId());
+        $this->assertSame($taxCode, $canonical->variants()[0]->taxCodeId());
+    }
+
     public function testReconcilesTheMatrixWithoutDiscardingExistingCommerceData(): void
     {
         $schema = new ProductOptionsSchema();

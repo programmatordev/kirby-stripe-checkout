@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Shipping;
 
 use ProgrammatorDev\StripeCheckout\Shipping\Exception\InvalidShippingQuoteException;
-use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 
 /** Contains one validated shipping outcome without exposing provider resources. */
 final readonly class ShippingQuote
@@ -114,9 +113,7 @@ final readonly class ShippingQuote
     private static function validReasonCode(?string $reasonCode): bool
     {
         return is_string($reasonCode)
-            && str_starts_with($reasonCode, 'shipping.')
             && strlen($reasonCode) <= 128
-            && TextValidator::isSingleLine($reasonCode)
             && preg_match('/\Ashipping\.[a-z0-9_.-]+\z/D', $reasonCode) === 1;
     }
 }

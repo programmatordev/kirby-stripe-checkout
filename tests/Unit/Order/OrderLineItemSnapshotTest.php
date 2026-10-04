@@ -24,6 +24,18 @@ use stdClass;
 
 final class OrderLineItemSnapshotTest extends TestCase
 {
+    public function testRestoresOpaqueProviderIdentitiesWithoutCatalogueReads(): void
+    {
+        $data = OrderFixture::lineItemData();
+        $data['priceSource'] = 'stripe';
+        $data['stripePriceId'] = 'price.reference-' . str_repeat('p', 3000);
+        $data['stripeProductId'] = 'product.reference-' . str_repeat('r', 3000);
+        $snapshot = OrderLineItemSnapshot::fromArray($data)->toArray();
+
+        $this->assertSame($data['stripePriceId'], $snapshot['stripePriceId']);
+        $this->assertSame($data['stripeProductId'], $snapshot['stripeProductId']);
+    }
+
     #[DataProvider('currencies')]
     public function testExactPriceAndProviderUnits(string $currency, string $amount, int $providerPrice): void
     {
@@ -138,7 +150,7 @@ final class OrderLineItemSnapshotTest extends TestCase
     public static function invalidStripePricingFacts(): iterable
     {
         yield 'non-string Product reference' => [['stripeProductId' => 123]];
-        yield 'wrong resource reference' => [['stripeProductId' => 'price_test']];
+        yield 'empty Product reference' => [['stripeProductId' => '']];
         yield 'local tax override' => [['taxCode' => 'txcd_33020002']];
     }
 

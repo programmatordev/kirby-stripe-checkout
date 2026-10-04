@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Shipping;
 
 use InvalidArgumentException;
+use ProgrammatorDev\StripeCheckout\Support\TextValidator;
 use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 
 /**
@@ -20,7 +21,7 @@ final readonly class ShippingContext
     ) {
         self::validateShippingCountry($this->shippingCountry);
 
-        if ($this->taxCode !== null && preg_match('/\Atxcd_[A-Za-z0-9]{1,249}\z/D', $this->taxCode) !== 1) {
+        if ($this->taxCode !== null && ($this->taxCode === '' || TextValidator::isUtf8($this->taxCode) === false)) {
             throw new InvalidArgumentException('A shipping context contains an invalid tax code.');
         }
     }

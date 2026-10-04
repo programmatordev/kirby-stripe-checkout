@@ -23,10 +23,11 @@ final readonly class TaxCode
         private bool $confirmed = false,
         private ?bool $requiresPerformanceLocation = null,
     ) {
-        // Syntax is not confirmation: the catalogue must supply the exact ID.
+        // IDs are opaque; confirmation requires the exact ID from the catalogue.
         // https://docs.stripe.com/api/tax_codes
         if (
-            preg_match('/^txcd_[A-Za-z0-9]{1,249}$/D', $this->id) !== 1
+            $this->id === ''
+            || TextValidator::isUtf8($this->id) === false
             || TextValidator::isSingleLine($this->label) === false
             || TextValidator::isSingleLine($this->providerName) === false
             || TextValidator::isUtf8($this->providerDescription) === false

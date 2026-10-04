@@ -273,10 +273,19 @@ final class StripeApiCheckoutSessionGatewayTest extends KirbyTestCase
         $this->assertArrayNotHasKey('payment_intent', $record->orderSnapshotSource);
     }
 
-    public function testRejectsAnInvalidSessionIdBeforeRetrieval(): void
+    public function testProviderRejectionOfASessionIdUsesTheSafeFailureClassification(): void
     {
         $client = $this->httpClient();
-        $client->expects($this->never())->method('request');
+        $client->expects($this->once())->method('request')->willReturn([
+            json_encode(['error' => [
+                'type' => 'invalid_request_error',
+                'code' => 'resource_missing',
+                'message' => 'PRIVATE PROVIDER DETAIL',
+                'param' => 'id',
+            ]], JSON_THROW_ON_ERROR),
+            404,
+            ['request-id' => 'req_missing'],
+        ]);
         ApiRequestor::setHttpClient($client);
         $gateway = new StripeApiCheckoutSessionGateway(
             (new StripeApiClientFactory())->create(
@@ -284,8 +293,13 @@ final class StripeApiCheckoutSessionGatewayTest extends KirbyTestCase
             ),
         );
 
-        $this->expectException(InvalidArgumentException::class);
-        $gateway->retrieve('not-a-session');
+        try {
+            $gateway->retrieve('not-a-session');
+            $this->fail('Expected the provider rejection to be classified.');
+        } catch (CheckoutSessionGatewayException $error) {
+            $this->assertSame(CheckoutSessionFailureType::Rejected, $error->failure()->type());
+            $this->assertStringNotContainsString('PRIVATE', $error->getMessage());
+        }
     }
 
     public function testRequiresAnIdempotencyKeyBeforeCallingStripe(): void

@@ -18,6 +18,39 @@ use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Internal\CheckoutSessionSnaps
 
 final class CheckoutSessionSnapshotNormalizerTest extends TestCase
 {
+    public function testPreservesOpaqueDiscountAndCustomerReferencesThroughRestoration(): void
+    {
+        $customerId = 'customer.reference-' . str_repeat('c', 3000);
+        $discountId = 'discount.reference-' . str_repeat('d', 3000);
+        $couponId = 'coupon.reference-' . str_repeat('c', 3000);
+        $promotionCodeId = 'promotion.reference-' . str_repeat('p', 3000);
+        $productId = 'product.reference-' . str_repeat('r', 3000);
+        $promotionCode = str_repeat('PROMOTION', 400);
+        $snapshot = (new CheckoutSessionSnapshotNormalizer())->normalize($this->sessionRecord([
+            'customer' => ['id' => $customerId],
+            'total_details' => [
+                'amount_discount' => 500,
+                'breakdown' => ['discounts' => [[
+                    'amount' => 500,
+                    'discount' => [
+                        'id' => $discountId,
+                        'coupon' => ['id' => $couponId, 'applies_to' => ['products' => [$productId]]],
+                        'promotion_code' => ['id' => $promotionCodeId, 'code' => $promotionCode],
+                    ],
+                ]]],
+            ],
+        ]));
+        $discount = $snapshot->discounts()[0]->toArray();
+
+        $this->assertSame($customerId, $snapshot->toArray()['stripeCustomerId']);
+        $this->assertSame($discountId, $discount['discountId']);
+        $this->assertSame($couponId, $discount['couponId']);
+        $this->assertSame($promotionCodeId, $discount['promotionCodeId']);
+        $this->assertSame($promotionCode, $discount['promotionCode']);
+        $this->assertSame([$productId], $discount['appliesToProducts']);
+        $this->assertSame($discount, DiscountSnapshot::fromArray($discount)->toArray());
+    }
+
     public function testNormalizesCurrentProviderFactsWithoutConfigurationInput(): void
     {
         $snapshot = (new CheckoutSessionSnapshotNormalizer())->normalize(

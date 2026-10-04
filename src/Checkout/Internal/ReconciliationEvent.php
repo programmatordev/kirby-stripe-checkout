@@ -123,7 +123,7 @@ final readonly class ReconciliationEvent
     public static function fromStripe(Event $event, OrderCreationContext $order, ?string $sessionId, CredentialMode $mode): self
     {
         $data = $event->toArray();
-        $type = OrderData::text($data['type'] ?? null, 255);
+        $type = OrderData::string($data['type'] ?? null);
         $id = OrderData::string($data['id'] ?? null);
         $created = OrderData::integer($data['created'] ?? null);
         $eventData = $data['data'] ?? null;
@@ -142,7 +142,7 @@ final readonly class ReconciliationEvent
         $metadata = OrderData::map($object['metadata'] ?? null);
         $liveMode = OrderData::boolean($data['livemode'] ?? null);
         $isAction = $type === Event::PAYMENT_INTENT_REQUIRES_ACTION;
-        $resourceId = OrderData::text($object['id'] ?? null, 255);
+        $resourceId = OrderData::nonEmptyString($object['id'] ?? null);
 
         if (in_array($type, self::TYPES, true) === false || in_array($type, self::REFUND_TYPES, true)) {
             throw new OrderDataException();
@@ -177,10 +177,7 @@ final readonly class ReconciliationEvent
 
         if ($isAction) {
             // The reconciler checks the PaymentIntent backlink against saved or freshly retrieved Session evidence.
-            if (
-                ($object['object'] ?? null) !== PaymentIntent::OBJECT_NAME
-                || preg_match('/\Api_[A-Za-z0-9_]+\z/', $resourceId) !== 1
-            ) {
+            if (($object['object'] ?? null) !== PaymentIntent::OBJECT_NAME) {
                 throw new OrderDataException();
             }
 

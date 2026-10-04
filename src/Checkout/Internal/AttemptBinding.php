@@ -140,7 +140,7 @@ final readonly class AttemptBinding
 
     public function assertMatchesFingerprint(string $fingerprint): void
     {
-        if (preg_match('/\A[a-f0-9]{64}\z/', $fingerprint) !== 1 || hash_equals($fingerprint, $this->fingerprint) === false) {
+        if (hash_equals($fingerprint, $this->fingerprint) === false) {
             throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
         }
     }

@@ -343,6 +343,15 @@ final class ProductOptionsSchema
             throw new InvalidArgumentException('Variant commerce values must be strings.');
         }
 
+        // Preserve provider references for exact lookup; local SKU and decimal input policies do not describe their IDs.
+        if (in_array($kind, ['stripePriceId', 'taxCode'], true)) {
+            if (TextValidator::isUtf8($value) === false) {
+                throw new InvalidArgumentException('A variant has an invalid provider reference.');
+            }
+
+            return $value;
+        }
+
         if (
             trim($value) !== $value
             || strlen($value) > 500
@@ -353,13 +362,6 @@ final class ProductOptionsSchema
 
         if ($kind === 'price' && preg_match('/^[0-9]+(?:\.[0-9]+)?$/D', $value) !== 1) {
             throw new InvalidArgumentException('A variant has an invalid price.');
-        }
-
-        if (
-            $kind === 'stripePriceId'
-            && preg_match('/^price_[A-Za-z0-9]{1,249}$/D', $value) !== 1
-        ) {
-            throw new InvalidArgumentException('A variant has an invalid Stripe Price ID.');
         }
 
         return $value;

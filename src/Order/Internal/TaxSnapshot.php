@@ -31,8 +31,8 @@ final readonly class TaxSnapshot
             OrderData::validateAllowedKeys($data, self::KEYS);
             OrderData::validateRequiredKeys($data, self::KEYS);
             OrderData::boolean($data['automaticTaxEnabled']);
-            OrderData::nullableSingleLine($data['calculationStatus'], 255);
-            OrderData::nullableSingleLine($data['provider'], 255);
+            OrderData::nullableString($data['calculationStatus']);
+            OrderData::nullableString($data['provider']);
             $currency = OrderData::nullableString($data['currency']);
             self::validateAmount($data['amount'], $data['providerAmount'], $currency);
 
@@ -52,7 +52,7 @@ final readonly class TaxSnapshot
                         throw new OrderDataException();
                     }
 
-                    OrderData::nullableSingleLine($entry['targetId'], 255);
+                    OrderData::nullableString($entry['targetId']);
                     self::validateAmount($entry['amount'], $entry['providerAmount'], $currency);
                     self::validateAmount($entry['taxableAmount'], $entry['providerTaxableAmount'], $currency);
 
@@ -78,7 +78,7 @@ final readonly class TaxSnapshot
                     $textFields = ['rateId', 'jurisdiction', 'jurisdictionLevel', 'country', 'state', 'taxType', 'rateType', 'displayName', 'taxabilityReason'];
 
                     foreach ($textFields as $field) {
-                        OrderData::nullableSingleLine($entry[$field], 255);
+                        OrderData::nullableString($entry[$field]);
                     }
 
                     $percentages = ['percentage', 'effectivePercentage'];

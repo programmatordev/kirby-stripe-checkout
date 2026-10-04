@@ -38,15 +38,9 @@ final class KirbyPageLocator
     public function canonicalReference(Page $page): string
     {
         try {
-            $uuid = $page->uuid()->toString();
+            return $page->uuid()->toString();
         } catch (Throwable $error) {
             throw new ProductNotFoundException($error);
         }
-
-        if (str_starts_with($uuid, 'page://') === false) {
-            throw new ProductNotFoundException();
-        }
-
-        return $uuid;
     }
 }

@@ -31,6 +31,27 @@ final class CheckoutSessionRetrieverTest extends KirbyTestCase
     /** @var list<array<string, mixed>> */
     private array $requests = [];
 
+    public function testReadsOpaqueLinePriceAndProductIdentitiesFromTheSdk(): void
+    {
+        $lineItemId = 'line.reference-' . str_repeat('l', 3000);
+        $priceId = 'price.reference-' . str_repeat('p', 3000);
+        $productId = 'product.reference-' . str_repeat('r', 3000);
+        $line = $this->line(0);
+        $line['id'] = $lineItemId;
+        $price = $line['price'];
+        $this->assertIsArray($price);
+        $price['id'] = $priceId;
+        $price['product'] = $productId;
+        $line['price'] = $price;
+        $this->responses([$this->session(), $this->page([$line, $this->line(1)])]);
+
+        $observation = $this->read();
+        $lineItem = $observation->lineItems()[0];
+        $this->assertSame($lineItemId, $lineItem->stripeLineItemId());
+        $this->assertSame($priceId, $lineItem->toArray()['stripePriceId']);
+        $this->assertSame($productId, $lineItem->toArray()['stripeProductId']);
+    }
+
     public function testReadsAllPagesAndRestoresInitiatingOrderWithoutPresentationOrStorefrontReads(): void
     {
         $session = $this->session();

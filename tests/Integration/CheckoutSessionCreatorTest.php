@@ -330,7 +330,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         yield 'missing' => [null];
         yield 'empty' => [[]];
         yield 'non-list' => [['option' => ['shipping_rate' => 'shr_test_option_0']]];
-        yield 'invalid reference' => [[['shipping_rate' => 'rate_invalid']]];
+        yield 'empty reference' => [[['shipping_rate' => '']]];
         yield 'unnormalized reference' => [[['shipping_rate' => ['id' => 'shr_test_option_0']]]];
         yield 'unexpected extra option' => [[
             ['shipping_rate' => 'shr_test_option_0'],

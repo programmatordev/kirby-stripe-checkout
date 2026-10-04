@@ -31,7 +31,7 @@ final readonly class PaymentAction
             return null;
         }
 
-        $type = OrderData::text($action['type'] ?? null, 255);
+        $type = OrderData::nonEmptyString($action['type'] ?? null);
         $details = $action[$type] ?? null;
 
         // The action type selects its provider branch, not a payment-method schema.

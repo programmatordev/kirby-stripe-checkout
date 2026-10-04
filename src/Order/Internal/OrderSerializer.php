@@ -215,13 +215,9 @@ final class OrderSerializer
 
             self::validateTimestamps($data, $checkoutStatus);
 
-            foreach (OrderSchema::REFERENCES as $field => $prefix) {
+            foreach (OrderSchema::REFERENCES as $field) {
                 if (isset($data[$field])) {
-                    $reference = OrderData::text($data[$field], 255);
-
-                    if (preg_match('/\A' . $prefix . '[A-Za-z0-9_]+\z/', $reference) !== 1) {
-                        throw new OrderDataException();
-                    }
+                    OrderData::nonEmptyString($data[$field]);
                 }
             }
 

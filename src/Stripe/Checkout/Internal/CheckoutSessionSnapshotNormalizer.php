@@ -74,7 +74,7 @@ final class CheckoutSessionSnapshotNormalizer
             $tax = $this->tax($sessionData, $currency);
 
             return new CheckoutSessionSnapshot(
-                stripeCustomerId: $this->referenceId($sessionData['customer'] ?? null, 'cus_'),
+                stripeCustomerId: $this->referenceId($sessionData['customer'] ?? null),
                 customer: $customer,
                 billingAddress: $billingAddress,
                 shippingAddress: $shippingAddress,
@@ -117,7 +117,7 @@ final class CheckoutSessionSnapshotNormalizer
         }
 
         $shippingRate = $shippingCost['shipping_rate'] ?? null;
-        $shippingRateId = $this->referenceId($shippingRate, 'shr_');
+        $shippingRateId = $this->referenceId($shippingRate);
         $shippingRateData = $this->referenceData($shippingRate);
 
         // A selected ID alone proves the reference but cannot provide the immutable rate details required by the final order snapshot.
@@ -187,7 +187,7 @@ final class CheckoutSessionSnapshotNormalizer
             'providerTotal' => $providerTotal,
             'deliveryEstimate' => $this->deliveryEstimate($shippingRateData['delivery_estimate'] ?? null),
             'taxBehavior' => $taxBehavior,
-            'taxCode' => $this->referenceId($shippingRateData['tax_code'] ?? null, 'txcd_'),
+            'taxCode' => $this->referenceId($shippingRateData['tax_code'] ?? null),
         ]);
 
         return CheckoutShippingSnapshot::selected($shippingRateId, $shippingSnapshot);
@@ -291,7 +291,7 @@ final class CheckoutSessionSnapshotNormalizer
                     array_push($breakdown, ...$this->taxEntries(
                         value: $lineItem['taxes'],
                         target: 'line_item',
-                        targetId: OrderData::text($lineItem['id'] ?? null, 255),
+                        targetId: OrderData::nonEmptyString($lineItem['id'] ?? null),
                         currency: $currency,
                     ));
                 }
@@ -305,7 +305,7 @@ final class CheckoutSessionSnapshotNormalizer
             array_push($breakdown, ...$this->taxEntries(
                 value: $shippingCost['taxes'],
                 target: 'shipping',
-                targetId: $this->referenceId($shippingCost['shipping_rate'] ?? null, 'shr_'),
+                targetId: $this->referenceId($shippingCost['shipping_rate'] ?? null),
                 currency: $currency,
             ));
         }
@@ -338,7 +338,7 @@ final class CheckoutSessionSnapshotNormalizer
                 'currency' => $currency === null ? null : strtoupper($currency),
                 'taxableAmount' => $this->taxAmount($tax['taxable_amount'] ?? null, $currency),
                 'providerTaxableAmount' => $tax['taxable_amount'] ?? null,
-                'rateId' => $this->referenceId($rate['id'] ?? null, 'txr_'),
+                'rateId' => $this->referenceId($rate['id'] ?? null),
                 'inclusive' => $rate['inclusive'] ?? null,
                 'percentage' => $this->percentage($rate['percentage'] ?? null),
                 'effectivePercentage' => $this->percentage($rate['effective_percentage'] ?? null),
@@ -591,8 +591,8 @@ final class CheckoutSessionSnapshotNormalizer
 
             $discounts[] = DiscountSnapshot::fromArray([
                 'discountId' => $discount['id'] ?? null,
-                'couponId' => $this->referenceId($coupon, null),
-                'promotionCodeId' => $this->referenceId($promotionCode, 'promo_'),
+                'couponId' => $this->referenceId($coupon),
+                'promotionCodeId' => $this->referenceId($promotionCode),
                 'couponName' => $couponData['name'] ?? null,
                 'promotionCode' => $promotionCodeData['code'] ?? null,
                 'amount' => (string) $registry
@@ -667,7 +667,7 @@ final class CheckoutSessionSnapshotNormalizer
         return $this->map($value);
     }
 
-    private function referenceId(mixed $value, ?string $prefix): ?string
+    private function referenceId(mixed $value): ?string
     {
         if (is_array($value)) {
             if (array_is_list($value)) {
@@ -681,13 +681,7 @@ final class CheckoutSessionSnapshotNormalizer
             return null;
         }
 
-        $value = OrderData::text($value, 255);
-
-        if ($prefix !== null && preg_match('/\A' . $prefix . '[A-Za-z0-9_]+\z/D', $value) !== 1) {
-            throw new OrderDataException();
-        }
-
-        return $value;
+        return OrderData::nonEmptyString($value);
     }
 
     /** @return array<string, mixed> */

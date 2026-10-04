@@ -21,7 +21,9 @@ final readonly class CheckoutSessionAssociation
         array $shippingRateIds,
         SessionRequest $request,
     ) {
-        if (preg_match('/\Acs_[A-Za-z0-9_]+\z/D', $sessionId) !== 1 || array_is_list($shippingRateIds) === false) {
+        OrderData::nonEmptyString($sessionId);
+
+        if (array_is_list($shippingRateIds) === false) {
             throw new OrderDataException();
         }
 
@@ -39,14 +41,7 @@ final readonly class CheckoutSessionAssociation
             throw new OrderDataException();
         }
 
-        foreach ($shippingRateIds as $shippingRateId) {
-            if (
-                is_string($shippingRateId) === false
-                || preg_match('/\Ashr_[A-Za-z0-9_]+\z/D', $shippingRateId) !== 1
-            ) {
-                throw new OrderDataException();
-            }
-        }
+        $shippingRateIds = array_map(OrderData::nonEmptyString(...), $shippingRateIds);
 
         if (count(array_unique($shippingRateIds)) !== count($shippingRateIds)) {
             throw new OrderDataException();
@@ -64,7 +59,7 @@ final readonly class CheckoutSessionAssociation
     public static function fromOrderData(array $data, SessionRequest $request): self
     {
         return new self(
-            sessionId: OrderData::text($data['stripeCheckoutSessionId'] ?? null, 255),
+            sessionId: OrderData::string($data['stripeCheckoutSessionId'] ?? null),
             shippingRateIds: is_array($data['stripeShippingRateIds'] ?? null)
                 ? $data['stripeShippingRateIds']
                 : throw new OrderDataException(),

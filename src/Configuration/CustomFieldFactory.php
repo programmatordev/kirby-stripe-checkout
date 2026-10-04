@@ -80,11 +80,11 @@ final class CustomFieldFactory
                 }
             }
 
-            $key = $this->identifier(
-                value: $field['key'],
-                maximumLength: CustomField::MAX_KEY_LENGTH,
-                path: $path . '.key',
-            );
+            $key = $field['key'];
+
+            if (is_string($key) === false) {
+                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path . '.key');
+            }
 
             if (isset($keys[$key])) {
                 throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path . '.key');
@@ -138,7 +138,7 @@ final class CustomFieldFactory
                 'options' => $optionResolution->definitions(),
             ];
 
-            // The domain constructor owns constraints that depend on several fields, such as dropdown defaults and compatible length bounds.
+            // Constructors own identifier and length rules; definitions also validate labels for unselected languages.
             try {
                 $values[] = new CustomField(
                     key: $key,
@@ -195,11 +195,11 @@ final class CustomFieldFactory
                 }
             }
 
-            $value = $this->identifier(
-                value: $option['value'],
-                maximumLength: CustomFieldOption::MAX_VALUE_LENGTH,
-                path: $optionPath . '.value',
-            );
+            $value = $option['value'];
+
+            if (is_string($value) === false) {
+                throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $optionPath . '.value');
+            }
 
             if (isset($optionValues[$value])) {
                 throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $optionPath . '.value');
@@ -234,22 +234,6 @@ final class CustomFieldFactory
             definitions: $normalized,
             items: $items,
         );
-    }
-
-    private function identifier(mixed $value, int $maximumLength, string $path): string
-    {
-        if (is_string($value) === false) {
-            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path);
-        }
-
-        if (
-            preg_match('/\A[a-z0-9]+\z/D', $value) !== 1
-            || strlen($value) > $maximumLength
-        ) {
-            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path);
-        }
-
-        return $value;
     }
 
     private function label(mixed $value, int $maximumLength, string $path): string
@@ -307,10 +291,6 @@ final class CustomFieldFactory
 
         if (is_int($value) === false) {
             throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path);
-        }
-
-        if ($value < 1 || $value > 255) {
-            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path);
         }
 
         return $value;

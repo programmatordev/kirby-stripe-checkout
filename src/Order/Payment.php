@@ -65,19 +65,7 @@ final readonly class Payment
 
         foreach (self::TEXT_FIELDS as $key) {
             if ($data[$key] !== null) {
-                OrderData::text($data[$key], 255);
-            }
-        }
-
-        $references = [
-            'stripePaymentIntentId' => 'pi_',
-            'stripeChargeId' => 'ch_',
-            'stripePaymentMethodId' => 'pm_',
-        ];
-
-        foreach ($references as $key => $prefix) {
-            if ($data[$key] !== null && preg_match('/\A' . $prefix . '[A-Za-z0-9_]+\z/', OrderData::string($data[$key])) !== 1) {
-                throw new OrderDataException();
+                OrderData::nonEmptyString($data[$key]);
             }
         }
 

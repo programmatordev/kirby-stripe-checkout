@@ -436,7 +436,7 @@ final class CheckoutSessionCreator
         SessionRequest $sessionRequest,
     ): CheckoutSessionPresentation {
         $data = $this->orderPageStore->data($page);
-        $sessionId = OrderData::text($data['stripeCheckoutSessionId'] ?? null, 255);
+        $sessionId = OrderData::string($data['stripeCheckoutSessionId'] ?? null);
 
         try {
             $sessionRecord = $this->sessionGateway->retrieve(sessionId: $sessionId);

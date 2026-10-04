@@ -43,7 +43,7 @@ final readonly class ShippingSnapshot
             $quoteFingerprint = OrderData::text($data['quoteFingerprint'], 64);
             $label = OrderData::text($data['label'], 100);
             $currency = OrderData::text($data['currency'], 3);
-            $taxBehavior = OrderData::nullableSingleLine($data['taxBehavior'], 255);
+            $taxBehavior = OrderData::nullableString($data['taxBehavior']);
 
             if (
                 preg_match('/\A[a-z0-9_-]{1,64}\z/D', $optionKey) !== 1
@@ -141,12 +141,6 @@ final readonly class ShippingSnapshot
 
     private static function taxCode(mixed $value): ?string
     {
-        $taxCode = OrderData::nullableSingleLine($value, 255);
-
-        if ($taxCode !== null && preg_match('/\Atxcd_[A-Za-z0-9]{1,249}\z/D', $taxCode) !== 1) {
-            throw new OrderDataException();
-        }
-
-        return $taxCode;
+        return $value === null ? null : OrderData::nonEmptyString($value);
     }
 }
