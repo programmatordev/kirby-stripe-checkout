@@ -130,8 +130,13 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
                 return null;
             }
 
-            $item = OrderData::map($items[0]);
+            $item = $items[0];
 
+            if (is_array($item) === false) {
+                throw new OrderDataException();
+            }
+
+            // Inspect only the lookup's correlation facts; unrelated provider fields are outside the canonical scalar contract.
             if (($item['object'] ?? null) !== Session::OBJECT_NAME || ($item['payment_intent'] ?? null) !== $paymentIntentId) {
                 throw new OrderDataException();
             }

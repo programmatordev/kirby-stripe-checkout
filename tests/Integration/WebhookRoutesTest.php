@@ -653,6 +653,26 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->assertArrayNotHasKey('future_provider_extension', $this->entries('refunds')[0]);
     }
 
+    public function testRefundSessionLookupIgnoresUnmodeledProviderFields(): void
+    {
+        $this->setRefunds([$this->refund()]);
+        // A fractional extension is valid provider JSON but would fail canonical snapshot normalization.
+        $this->provider->sessionMatches = [[
+            ...$this->provider->session,
+            'payment_intent' => 'pi_webhook',
+            'future_provider_extension' => ['ratio' => 0.5],
+        ]];
+        $this->assertArrayNotHasKey('stripeCheckoutSessionId', $this->data());
+
+        $this->assertResponse($this->send($this->refundEvent()), 204);
+        $data = $this->data();
+        $this->assertSame('cs_webhook', $data['stripeCheckoutSessionId']);
+        $this->assertSame('paid', $data['paymentStatus']);
+        $this->assertSame('partial', $data['refundStatus']);
+        $this->assertSame('processed', $this->entries('events')[0]['status']);
+        $this->assertStringNotContainsString('future_provider_extension', json_encode($data, JSON_THROW_ON_ERROR));
+    }
+
     public function testRefundDuplicateAndUnchangedDifferentEventDoNotRepeatTheHook(): void
     {
         $this->setRefunds([$this->refund()]);

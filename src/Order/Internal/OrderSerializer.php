@@ -822,7 +822,7 @@ final class OrderSerializer
     /** @param array<string, mixed> $data */
     private static function validateRefunds(array &$data, ?Payment $payment): void
     {
-        $items = array_key_exists('refunds', $data) ? OrderData::list($data['refunds']) : [];
+        $items = OrderData::list($data['refunds'] ?? []);
 
         if ($items === []) {
             if ($data['refundStatus'] !== RefundStatus::None->value || $data['refundedTotal'] !== '0') {
