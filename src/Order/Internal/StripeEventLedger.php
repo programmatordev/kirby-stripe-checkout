@@ -99,8 +99,8 @@ final class StripeEventLedger
 
         foreach (OrderData::list($value) as $entry) {
             $entry = OrderData::map($entry);
-            $isRefund = in_array($entry['type'] ?? null, ReconciliationEvent::REFUND_TYPES, true);
-            $entryKeys = $isRefund ? [...$keys, 'stripePaymentIntentId', 'stripeChargeId'] : $keys;
+            $isFinancial = in_array($entry['type'] ?? null, ReconciliationEvent::FINANCIAL_TYPES, true);
+            $entryKeys = $isFinancial ? [...$keys, 'stripePaymentIntentId', 'stripeChargeId'] : $keys;
             OrderData::validateAllowedKeys($entry, $entryKeys);
             OrderData::validateRequiredKeys($entry, $entryKeys);
             $id = OrderData::string($entry['id']);
@@ -111,7 +111,7 @@ final class StripeEventLedger
                 throw new OrderDataException();
             }
 
-            if ($isRefund) {
+            if ($isFinancial) {
                 if (OrderData::string($entry['stripePaymentIntentId']) === '') {
                     throw new OrderDataException();
                 }
@@ -119,6 +119,10 @@ final class StripeEventLedger
                 if ($entry['stripeChargeId'] !== null && OrderData::string($entry['stripeChargeId']) === '') {
                     throw new OrderDataException();
                 }
+            }
+
+            if (in_array($type, ReconciliationEvent::DISPUTE_TYPES, true) && $entry['stripeChargeId'] === null) {
+                throw new OrderDataException();
             }
 
             if (isset($ids[$id])) {
@@ -201,7 +205,7 @@ final class StripeEventLedger
     /** @param array<string, mixed> $entry */
     private static function assertSameEvent(array $entry, ReconciliationEvent $event): void
     {
-        // A reused Event ID must not hide a different resource or refund parent behind duplicate suppression.
+        // A reused Event ID must not hide a different resource or financial parent behind duplicate suppression.
         if (($entry['stripePaymentIntentId'] ?? null) !== $event->stripePaymentIntentId || ($entry['stripeChargeId'] ?? null) !== $event->stripeChargeId) {
             throw new OrderDataException();
         }

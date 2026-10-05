@@ -109,7 +109,7 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->provider = new WebhookCheckoutClient($this->order->pageUuid(), $this->createdAt->getTimestamp());
         ApiRequestor::setHttpClient($this->provider);
         $hooks = [];
-        $names = ['session.created', 'payment.pending', 'payment.succeeded', 'payment.failed', 'checkout.expired', 'payment.requiresAction', 'refund.updated'];
+        $names = ['session.created', 'payment.pending', 'payment.succeeded', 'payment.failed', 'checkout.expired', 'payment.requiresAction', 'refund.updated', 'dispute.updated'];
 
         $test = $this;
         $orders = $this->orders;
@@ -348,7 +348,7 @@ final class WebhookRoutesTest extends KirbyTestCase
     public static function ignoredEvents(): iterable
     {
         yield 'future unsupported event' => ['future.event', PluginMetadata::NAME];
-        yield 'dispute remains deferred' => ['charge.dispute.created', PluginMetadata::NAME];
+        yield 'general Charge remains unsupported' => ['charge.updated', PluginMetadata::NAME];
         yield 'foreign Checkout' => ['checkout.session.completed', 'other/plugin'];
         yield 'unowned Checkout' => ['checkout.session.completed', ''];
     }
@@ -1193,6 +1193,631 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->assertSame($before, $this->data());
     }
 
+    public function testNativeDisputeStructureDisplaysSafeFactsAndCannotRewriteTheSnapshot(): void
+    {
+        $dispute = $this->dispute();
+        $dispute['reason'] = 'fraudulent';
+        $this->setDisputes([$dispute]);
+        $this->assertResponse($this->send($this->disputeEvent()), 204);
+        $this->kirby->impersonate('kirby');
+        $page = $this->orders->requirePage($this->order->pageUuid());
+        $before = $this->data();
+        $form = Form::for($page);
+        /** @var array<string, mixed> $input */
+        $input = $form->toFormValues();
+        $rows = OrderData::list($input['disputes']);
+        $row = OrderData::map($rows[0]);
+        $this->assertSame('16.00', $row['amount']);
+        $this->assertSame('EUR', $row['currency']);
+        $this->assertSame('needs_response', $row['status']);
+        $this->assertSame('du_webhook', $row['stripedisputeid']);
+        $this->assertSame('fraudulent', $row['reason']);
+        $evidenceDetails = OrderData::map($dispute['evidence_details']);
+        $this->assertSame((string) OrderData::integer($evidenceDetails['due_by']), $row['evidencedueby']);
+        $this->assertSame((string) OrderData::integer($dispute['created']), $row['createdat']);
+        $storedDispute = OrderData::map(OrderData::list($before['disputes'])[0]);
+        $this->assertSame((new DateTimeImmutable(OrderData::string($storedDispute['firstObservedAt'])))->format('Y-m-d H:i:s'), $row['firstobservedat']);
+        $this->assertStringNotContainsString('PRIVATE_DISPUTE', json_encode($input['disputes'], JSON_THROW_ON_ERROR));
+
+        $page->update([...$input, 'note' => 'Dispute inspected']);
+        $this->assertSame($before, $this->data());
+        $page = $this->orders->requirePage($this->order->pageUuid());
+        $this->assertSame('Dispute inspected', $page->version('latest')->read('default')['note'] ?? null);
+
+        $row['amount'] = '1.00';
+        $input['disputes'] = [$row];
+        $this->expectException(\Kirby\Exception\PermissionException::class);
+        $page->update($input);
+    }
+
+    public function testUnmodeledDisputeFieldsDoNotParticipateInPluginValidation(): void
+    {
+        $dispute = $this->dispute();
+        $dispute['future_provider_extension'] = ['ratio' => 0.5];
+        $this->setDisputes([$dispute]);
+        $this->assertResponse($this->send($this->disputeEvent()), 204);
+        $this->assertSame('needs_response', $this->data()['disputeStatus']);
+        $this->assertArrayNotHasKey('future_provider_extension', $this->entries('disputes')[0]);
+    }
+
+    public function testDisputeSessionLookupIgnoresUnmodeledProviderFields(): void
+    {
+        $this->setDisputes([$this->dispute()]);
+        // A fractional extension is valid provider JSON but would fail canonical snapshot normalization.
+        $this->provider->sessionMatches = [[
+            ...$this->provider->session,
+            'payment_intent' => 'pi_webhook',
+            'future_provider_extension' => ['ratio' => 0.5],
+        ]];
+        $this->assertArrayNotHasKey('stripeCheckoutSessionId', $this->data());
+
+        $this->assertResponse($this->send($this->disputeEvent()), 204);
+        $data = $this->data();
+        $this->assertSame('cs_webhook', $data['stripeCheckoutSessionId']);
+        $this->assertSame('paid', $data['paymentStatus']);
+        $this->assertSame('needs_response', $data['disputeStatus']);
+        $this->assertSame('processed', $this->entries('events')[0]['status']);
+        $this->assertStringNotContainsString('future_provider_extension', json_encode($data, JSON_THROW_ON_ERROR));
+    }
+
+    public function testForeignParentIsIgnoredEvenWhenDisputeMetadataClaimsOwnership(): void
+    {
+        $this->setDisputes([$this->dispute()]);
+        /** @var array{created: int, data: array{object: array<string, mixed>}} $body */
+        $body = json_decode($this->disputeEvent(), true, flags: JSON_THROW_ON_ERROR);
+        $body['data']['object']['metadata'] = [
+            PluginMetadata::OWNER_KEY => PluginMetadata::NAME,
+            PluginMetadata::ORDER_KEY => $this->order->pageUuid(),
+        ];
+        $this->provider->paymentIntent['metadata'] = [];
+        $before = $this->data();
+        $this->assertResponse($this->send(json_encode($body, JSON_THROW_ON_ERROR)), 204);
+        $this->assertSame($before, $this->data());
+        $this->assertCount(0, $this->delivered);
+    }
+
+    /** @param list<array<string, mixed>> $matches */
+    #[DataProvider('missingDisputeSessions')]
+    public function testMissingDisputeSessionLookupFailsSafely(array $matches, bool $hasMore, int $status): void
+    {
+        $this->setDisputes([$this->dispute()]);
+        $this->provider->sessionMatches = $matches;
+        $this->provider->sessionLookupHasMore = $hasMore;
+        $before = $this->data();
+        $this->assertResponse($this->send($this->disputeEvent()), $status);
+        $after = $this->data();
+        unset($after['events']);
+        $this->assertSame($before, $after);
+        $this->assertSame('failed', $this->entries('events')[0]['status']);
+    }
+
+    /** @return iterable<array{list<array<string, mixed>>, bool, int}> */
+    public static function missingDisputeSessions(): iterable
+    {
+        yield [[], false, 503];
+        yield [[], true, 500];
+        yield [[
+            ['id' => 'cs_one'],
+            ['id' => 'cs_two'],
+        ], false, 500];
+        yield [[[
+            'id' => 'cs_other',
+            'object' => 'checkout.session',
+            'payment_intent' => 'pi_other',
+        ]], false, 500];
+    }
+
+    public function testRepeatedDisputeCursorCannotCommitAPartialCollection(): void
+    {
+        $dispute = $this->dispute();
+        $this->setDisputes([$dispute]);
+        $page = [
+            'object' => 'list',
+            'has_more' => true,
+            'data' => [$dispute],
+        ];
+        $this->provider->disputePages = [
+            '' => $page,
+            'du_webhook' => $page,
+        ];
+        $this->assertResponse($this->send($this->disputeEvent()), 500);
+        $this->assertArrayNotHasKey('disputes', $this->data());
+        $this->assertArrayNotHasKey('payment', $this->data());
+    }
+
+    public function testEmptyFinalDisputeContinuationCannotBeTreatedAsComplete(): void
+    {
+        $dispute = $this->dispute();
+        $this->setDisputes([$dispute]);
+        $this->provider->disputePages = [
+            '' => [
+                'object' => 'list',
+                'has_more' => true,
+                'data' => [$dispute],
+            ],
+            'du_webhook' => [
+                'object' => 'list',
+                'has_more' => false,
+                'data' => [],
+            ],
+        ];
+        $this->assertResponse($this->send($this->disputeEvent()), 500);
+        $this->assertArrayNotHasKey('disputes', $this->data());
+        $this->assertArrayNotHasKey('payment', $this->data());
+    }
+
+    public function testLaterDisputePageFailureReturns503AndRedeliveryCommitsTheCompleteObservation(): void
+    {
+        $dispute = $this->dispute();
+        $this->setDisputes([$dispute]);
+        $this->provider->disputePages[''] = [
+            'object' => 'list',
+            'has_more' => true,
+            'data' => [$dispute],
+        ];
+        $reads = 0;
+        $this->provider->beforeDisputeListRead = function () use (&$reads): void {
+            if (++$reads > 1) {
+                $this->provider->httpStatus = 500;
+            }
+        };
+        $body = $this->disputeEvent();
+        $this->assertResponse($this->send($body), 503);
+        $this->assertArrayNotHasKey('disputes', $this->data());
+        $this->assertArrayNotHasKey('payment', $this->data());
+        $this->assertSame('failed', $this->entries('events')[0]['status']);
+        $this->provider->beforeDisputeListRead = null;
+        $this->provider->httpStatus = 200;
+        $this->provider->disputePages = [];
+        $this->assertResponse($this->send($body), 204);
+        $this->assertSame('paid', $this->data()['paymentStatus']);
+        $this->assertSame('needs_response', $this->data()['disputeStatus']);
+        $this->assertSame('processed', $this->entries('events')[0]['status']);
+    }
+
+    public function testFailedCombinedWritePreservesPaymentAndDisputeFactsUntilRedelivery(): void
+    {
+        $this->setDisputes([$this->dispute()]);
+        /** @var Closure(App, ModelWithContent): Storage $nativeStorage */
+        $nativeStorage = $this->kirby->component('storage');
+        $this->provider->beforeDisputeListRead = function () use ($nativeStorage): void {
+            $this->kirby->extend(['components' => ['storage' => function (App $kirby, ModelWithContent $model) use ($nativeStorage): Storage {
+                if ($model instanceof OrderPage === false) {
+                    return $nativeStorage($kirby, $model);
+                }
+
+                return new class ($model) extends PlainTextStorage {
+                    protected function write(VersionId $versionId, Language $language, array $fields): void
+                    {
+                        throw new RuntimeException('PRIVATE_DISPUTE_WRITE');
+                    }
+                };
+            }]]);
+        };
+
+        try {
+            $this->assertResponse($this->send($this->disputeEvent()), 503);
+        } finally {
+            $this->kirby->extend(['components' => ['storage' => $nativeStorage]]);
+            $this->provider->beforeDisputeListRead = null;
+        }
+
+        $this->assertArrayNotHasKey('disputes', $this->data());
+        $this->assertArrayNotHasKey('payment', $this->data());
+        $this->assertCount(0, $this->delivered);
+        $this->assertResponse($this->send($this->disputeEvent()), 204);
+        $this->assertSame('paid', $this->data()['paymentStatus']);
+        $this->assertSame('needs_response', $this->data()['disputeStatus']);
+    }
+
+    public function testStaleCheckoutReadCannotErasePaymentSuccessButStillCommitsDisputes(): void
+    {
+        $this->assertResponse($this->send($this->event()), 204);
+        $before = $this->data();
+        $this->provider->session['payment_status'] = 'unpaid';
+        $this->provider->paymentIntent['status'] = 'processing';
+        $this->setDisputes([$this->dispute()]);
+        $this->assertResponse($this->send($this->disputeEvent()), 204);
+        $this->assertSame($before['paidAt'], $this->data()['paidAt']);
+        $this->assertSame($before['payment'], $this->data()['payment']);
+        $this->assertSame('needs_response', $this->data()['disputeStatus']);
+        $this->assertSame('dispute.updated', $this->delivered[2]->type()->value);
+    }
+
+    public function testConcurrentCheckoutCommitRequiresAFreshCombinedDisputeRead(): void
+    {
+        $this->setDisputes([$this->dispute()]);
+        $reads = 0;
+        $this->provider->beforeDisputeListRead = function () use (&$reads): void {
+            if (++$reads === 1) {
+                $this->provider->beforeDisputeListRead = null;
+                $this->provider->session['customer_details'] = ['email' => 'current@example.test'];
+                $this->assertResponse($this->send($this->event()), 204);
+                $this->provider->beforeDisputeListRead = function () use (&$reads): void {
+                    $reads++;
+                };
+            }
+        };
+        $this->assertResponse($this->send($this->disputeEvent()), 204);
+        $this->assertSame(2, $reads);
+        $this->assertSame('current@example.test', OrderData::map($this->data()['customer'])['email']);
+        $this->assertSame('needs_response', $this->data()['disputeStatus']);
+        $this->assertCount(3, $this->delivered);
+    }
+
+    public function testRepeatedCheckoutConflictsReturn503WithoutCommittingDisputes(): void
+    {
+        $this->setDisputes([$this->dispute()]);
+        $reads = 0;
+        $this->provider->beforeDisputeListRead = function () use (&$reads): void {
+            $this->provider->session['customer_details'] = ['email' => 'version' . ++$reads . '@example.test'];
+            /** @var array<string, mixed> $event */
+            $event = json_decode($this->event(), true, flags: JSON_THROW_ON_ERROR);
+            $event['id'] = 'evt_checkout_conflict_' . $reads;
+            $this->assertResponse($this->send(json_encode($event, JSON_THROW_ON_ERROR)), 204);
+        };
+        $this->assertResponse($this->send($this->disputeEvent()), 503);
+        $this->assertArrayNotHasKey('disputes', $this->data());
+        $this->assertSame('failed', $this->entries('events')[0]['status']);
+        $this->assertSame('checkout.reconciliation_conflict', $this->entries('events')[0]['errorCode']);
+        $this->assertSame('paid', $this->data()['paymentStatus']);
+        $this->assertCount(2, $this->delivered);
+    }
+
+    public function testDisputeReplayRestoresFrozenFactsAndKeepsTheOriginalDeadline(): void
+    {
+        $fail = true;
+        /** @var list<LifecycleEvent> $replayed */
+        $replayed = [];
+        $this->kirby->extend(['hooks' => ['programmatordev.stripe-checkout.dispute.updated' => function (OrderPage $order, LifecycleEvent $lifecycleEvent) use (&$fail, &$replayed): void {
+            /** @var bool $fail Changed between delivery attempts. */
+            if ($fail) {
+                throw new RuntimeException('PRIVATE_DISPUTE_LISTENER');
+            }
+
+            $replayed[] = $lifecycleEvent;
+        }]]);
+        $this->setDisputes([$this->dispute(status: 'under_review')]);
+        $this->assertResponse($this->send($this->disputeEvent()), 204);
+        $delivery = $this->entries('lifecycleDeliveries')[3];
+        $this->assertSame('failed', $delivery['status']);
+        $fail = false;
+        $this->setDisputes([$this->dispute()]);
+        $this->assertResponse($this->send($this->disputeEvent(type: 'charge.dispute.updated', id: 'evt_needs_response')), 204);
+        $deliveryId = OrderData::string(OrderData::map($delivery['event'])['deliveryId']);
+        $dispatcher = new OrderHookDispatcher($this->kirby);
+        $dispatcher->dispatch($this->order->pageUuid(), $deliveryId);
+        $this->assertCount(2, $replayed);
+        $this->assertSame('needs_response', $replayed[0]->orderSnapshot()['disputeStatus']);
+        $this->assertSame('under_review', $replayed[1]->orderSnapshot()['disputeStatus']);
+        $this->assertSame($deliveryId, $replayed[1]->deliveryId());
+        $after = $this->entries('lifecycleDeliveries')[3];
+        $this->assertSame($delivery['expiresAt'], $after['expiresAt']);
+        $this->assertSame('delivered', $after['status']);
+        $this->assertSame('needs_response', $this->data()['disputeStatus']);
+    }
+
+    public function testLateDisputeReadFailureAcknowledgesAConcurrentProcessedEvent(): void
+    {
+        $this->setDisputes([$this->dispute()]);
+        $body = $this->disputeEvent();
+        $this->provider->beforeDisputeListRead = function () use ($body): void {
+            $this->provider->beforeDisputeListRead = null;
+            $this->assertResponse($this->send($body), 204);
+            $this->provider->httpStatus = 500;
+        };
+        $this->assertResponse($this->send($body), 204);
+        $this->assertSame('processed', $this->entries('events')[0]['status']);
+        $this->assertSame('needs_response', $this->data()['disputeStatus']);
+        $this->assertCount(3, $this->delivered);
+    }
+
+    public function testDisputeObserverFailureDoesNotRetryOnStripeRedelivery(): void
+    {
+        $this->kirby->extend(['hooks' => ['programmatordev.stripe-checkout.dispute.updated' => function (): void {
+            throw new RuntimeException('PRIVATE_DISPUTE_LISTENER');
+        }]]);
+        $this->setDisputes([$this->dispute()]);
+        $body = $this->disputeEvent();
+        $this->assertResponse($this->send($body), 204);
+        $before = $this->data();
+        $this->assertResponse($this->send($body), 204);
+        $this->assertSame($before, $this->data());
+        $this->assertSame('failed', $this->entries('lifecycleDeliveries')[3]['status']);
+        $this->assertStringNotContainsString('PRIVATE_DISPUTE_LISTENER', json_encode($this->data(), JSON_THROW_ON_ERROR));
+    }
+
+    public function testReusedDisputeEventWithAContradictoryParentOrTimestampIsRejected(): void
+    {
+        $this->setDisputes([$this->dispute()]);
+        $this->assertResponse($this->send($this->disputeEvent()), 204);
+        $before = $this->data();
+        /** @var array{created: int, data: array{object: array<string, mixed>}} $body */
+        $body = json_decode($this->disputeEvent(), true, flags: JSON_THROW_ON_ERROR);
+        $body['created']++;
+        $this->assertResponse($this->send(json_encode($body, JSON_THROW_ON_ERROR)), 500);
+        /** @var array{created: int, data: array{object: array<string, mixed>}} $body */
+        $body = json_decode($this->disputeEvent(), true, flags: JSON_THROW_ON_ERROR);
+        $body['data']['object']['payment_intent'] = 'pi_other';
+        $this->assertResponse($this->send(json_encode($body, JSON_THROW_ON_ERROR)), 500);
+        $this->assertSame($before, $this->data());
+    }
+
+    #[DataProvider('disputeEvents')]
+    public function testEveryDisputeEventRetrievesCurrentStateRatherThanTrustingTheEvent(string $type): void
+    {
+        $this->setDisputes([$this->dispute()]);
+        $body = $this->disputeEvent($type);
+        $this->setDisputes([$this->dispute(status: 'prevented', amount: 5000)]);
+        $this->assertResponse($this->send($body), 204);
+        $data = $this->data();
+        $this->assertSame('paid', $data['paymentStatus']);
+        $this->assertSame('resolved_favorable', $data['disputeStatus']);
+        $this->assertSame('50.00', $this->entries('disputes')[0]['amount']);
+        $this->assertSame('ch_disputed', $this->entries('events')[0]['stripeChargeId']);
+        $this->assertSame('dispute.updated', $this->delivered[2]->type()->value);
+        $this->assertSame($data['disputes'], $this->delivered[2]->orderSnapshot()['disputes']);
+        $this->assertStringNotContainsString('PRIVATE', json_encode($data, JSON_THROW_ON_ERROR));
+    }
+
+    /** @return iterable<array{string}> */
+    public static function disputeEvents(): iterable
+    {
+        yield ['charge.dispute.created'];
+        yield ['charge.dispute.updated'];
+        yield ['charge.dispute.closed'];
+        yield ['charge.dispute.funds_withdrawn'];
+        yield ['charge.dispute.funds_reinstated'];
+    }
+
+    public function testDisputeDuplicateAndUnchangedObservationSkipNotificationsAndKeepTimes(): void
+    {
+        $this->setDisputes([$this->dispute()]);
+        $body = $this->disputeEvent();
+        $this->assertResponse($this->send($body), 204);
+        $before = $this->data();
+        $reads = count($this->provider->requests);
+        $this->assertResponse($this->send($body), 204);
+        $this->assertSame($before, $this->data());
+        $this->assertSame([
+            'https://api.stripe.com/v1/disputes/du_webhook',
+            'https://api.stripe.com/v1/charges/ch_disputed',
+            'https://api.stripe.com/v1/payment_intents/pi_webhook',
+        ], array_slice($this->provider->requests, $reads));
+        $this->assertResponse($this->send($this->disputeEvent(id: 'evt_unchanged')), 204);
+        $this->assertSame($before['disputes'], $this->data()['disputes']);
+        $this->assertSame($before['disputeUpdatedAt'], $this->data()['disputeUpdatedAt']);
+        $this->assertCount(3, $this->delivered);
+    }
+
+    public function testBalanceAndEvidenceChangesNotifyWithoutChangingTheDisputeSummary(): void
+    {
+        $dispute = $this->dispute();
+        $this->setDisputes([$dispute]);
+        $this->assertResponse($this->send($this->disputeEvent()), 204);
+        $dispute['balance_transactions'] = [[
+            'id' => 'txn_withdrawn', 'object' => 'balance_transaction', 'currency' => 'usd',
+            'amount' => -1800, 'fee' => 200, 'net' => -2000, 'created' => 100,
+            'exchange_rate' => 1.125, 'description' => 'PRIVATE_BALANCE',
+        ]];
+        $evidenceDetails = OrderData::map($dispute['evidence_details']);
+        $dispute['evidence_details'] = [
+            ...$evidenceDetails,
+            'has_evidence' => true,
+            'submission_count' => 1,
+            'future_extension' => 1.5,
+        ];
+        $this->setDisputes([$dispute]);
+        $this->assertResponse($this->send($this->disputeEvent('charge.dispute.funds_withdrawn', 'evt_balance')), 204);
+        $facts = $this->entries('disputes')[0];
+        $this->assertSame('needs_response', $this->data()['disputeStatus']);
+        $this->assertTrue($facts['evidenceHasEvidence']);
+        $this->assertSame([[
+            'amount' => -1800, 'createdAt' => 100, 'currency' => 'USD', 'fee' => 200,
+            'net' => -2000, 'stripeBalanceTransactionId' => 'txn_withdrawn',
+        ]], $facts['balanceTransactions']);
+        $this->assertCount(4, $this->delivered);
+        $this->assertStringNotContainsString('PRIVATE', json_encode($this->data(), JSON_THROW_ON_ERROR));
+
+        $this->kirby->impersonate('kirby');
+        $input = Form::for($this->orders->requirePage($this->order->pageUuid()))->toFormValues();
+        $rows = OrderData::list($input['disputes']);
+        $row = OrderData::map($rows[0]);
+        $movements = OrderData::list($row['balancetransactions']);
+        $movement = OrderData::map($movements[0]);
+        $this->assertSame('-1800', $movement['amount']);
+        $this->assertSame('USD', $movement['currency']);
+    }
+
+    public function testRefundCheckoutAndDisputeEventsPreserveTheOtherFinancialCollection(): void
+    {
+        $this->setRefunds([$this->refund()]);
+        $this->assertResponse($this->send($this->refundEvent()), 204);
+        $refunded = $this->data();
+        $this->setDisputes([$this->dispute(amount: 5000)]);
+        $this->assertResponse($this->send($this->disputeEvent()), 204);
+        $disputed = $this->data();
+        $this->assertSame($refunded['refunds'], $disputed['refunds']);
+        $this->assertSame('partial', $disputed['refundStatus']);
+        $this->assertSame($refunded['paidAt'], $disputed['paidAt']);
+        $this->provider->beforeDisputeListRead = static function (): never {
+            throw new RuntimeException('The other financial family must not be read.');
+        };
+        $this->setRefunds([$this->refund(amount: 3200)]);
+        $this->assertResponse($this->send($this->refundEvent(id: 'evt_full')), 204);
+        $this->assertResponse($this->send($this->event()), 204);
+        $this->assertSame('full', $this->data()['refundStatus']);
+        $this->assertSame($disputed['disputes'], $this->data()['disputes']);
+        $this->assertSame($disputed['disputeUpdatedAt'], $this->data()['disputeUpdatedAt']);
+    }
+
+    public function testAConcurrentRefundCommitForcesAFreshDisputeReadAndPreservesBothFamilies(): void
+    {
+        $this->setDisputes([$this->dispute()]);
+        $this->setRefunds([$this->refund()]);
+        $reads = 0;
+        $this->provider->beforeDisputeListRead = function () use (&$reads): void {
+            if (++$reads === 1) {
+                $this->provider->beforeDisputeListRead = null;
+                $this->assertResponse($this->send($this->refundEvent()), 204);
+                $this->provider->beforeDisputeListRead = static function () use (&$reads): void {
+                    $reads++;
+                };
+            }
+        };
+        $this->assertResponse($this->send($this->disputeEvent()), 204);
+        $this->assertSame(2, $reads);
+        $this->assertSame('partial', $this->data()['refundStatus']);
+        $this->assertSame('needs_response', $this->data()['disputeStatus']);
+        $this->assertSame(['session.created', 'payment.succeeded', 'refund.updated', 'dispute.updated'], array_map(static fn(LifecycleEvent $event): string => $event->type()->value, $this->delivered));
+    }
+
+    public function testDisputeChargeBacklinkResolvesANullPaymentIntentAndAcceptsAnOlderCharge(): void
+    {
+        $dispute = $this->dispute();
+        $dispute['payment_intent'] = null;
+        $this->setDisputes([$dispute]);
+        $this->assertResponse($this->send($this->disputeEvent()), 204);
+        $this->assertSame('pi_webhook', $this->entries('disputes')[0]['stripePaymentIntentId']);
+        $this->assertSame('ch_disputed', $this->entries('disputes')[0]['stripeChargeId']);
+        $this->assertNull($this->provider->paymentIntent['latest_charge']);
+    }
+
+    #[DataProvider('disputeParentContradictions')]
+    public function testDisputeParentContradictionsCannotAttachAnEventOrChangeCommerce(string $field, mixed $value): void
+    {
+        $this->setDisputes([$this->dispute()]);
+        $this->provider->charges['ch_disputed'][$field] = $value;
+        $before = $this->data();
+        $this->assertResponse($this->send($this->disputeEvent()), 500);
+        $this->assertSame($before, $this->data());
+    }
+
+    /** @return iterable<array{string, mixed}> */
+    public static function disputeParentContradictions(): iterable
+    {
+        yield ['id', 'ch_other'];
+        yield ['payment_intent', 'pi_other'];
+        yield ['currency', 'usd'];
+        yield ['livemode', true];
+    }
+
+    public function testCompleteDisputePagesProduceAMixedSummaryWithoutRepeatedChargeReads(): void
+    {
+        $first = $this->dispute(status: 'lost');
+        $second = $this->dispute(id: 'du_second', status: 'won');
+        $this->setDisputes([$first, $second]);
+        $this->provider->disputePages = [
+            '' => [
+                'object' => 'list',
+                'has_more' => true,
+                'data' => [$first],
+            ],
+            'du_webhook' => [
+                'object' => 'list',
+                'has_more' => false,
+                'data' => [$second],
+            ],
+        ];
+        $this->assertResponse($this->send($this->disputeEvent()), 204);
+        $this->assertSame('mixed', $this->data()['disputeStatus']);
+        $this->assertTrue($this->data()['disputeHasLost']);
+        $this->assertSame(['du_second', 'du_webhook'], array_column($this->entries('disputes'), 'stripeDisputeId'));
+        $this->assertCount(1, array_filter($this->provider->requests, static fn(string $url): bool => str_contains($url, '/charges/')));
+        $before = $this->data();
+        $this->provider->disputePages = [];
+        $this->provider->disputes = array_reverse($this->provider->disputes);
+        $this->assertResponse($this->send($this->disputeEvent(id: 'evt_reordered_disputes')), 204);
+        $this->assertSame($before['disputes'], $this->data()['disputes']);
+        $this->assertSame($before['disputeUpdatedAt'], $this->data()['disputeUpdatedAt']);
+        $this->assertCount(3, $this->delivered);
+    }
+
+    public function testMissingTriggeringDisputeCannotCommitAnUnrelatedCompleteCollection(): void
+    {
+        $this->setDisputes([$this->dispute()]);
+        $this->provider->disputes = [$this->dispute(id: 'du_other')];
+        $this->assertResponse($this->send($this->disputeEvent()), 500);
+        $this->assertSame('creating', $this->data()['checkoutStatus']);
+        $this->assertArrayNotHasKey('disputes', $this->data());
+        $this->assertSame('failed', $this->entries('events')[0]['status']);
+    }
+
+    #[DataProvider('contradictoryDisputeSiblings')]
+    public function testContradictorySiblingFactsCannotPartiallyCommitPayment(string $field, mixed $value): void
+    {
+        $first = $this->dispute();
+        $second = $this->dispute(id: 'du_other');
+        $second[$field] = $value;
+        $this->setDisputes([$first, $second]);
+        $this->assertResponse($this->send($this->disputeEvent()), 500);
+        $this->assertSame('creating', $this->data()['checkoutStatus']);
+        $this->assertArrayNotHasKey('disputes', $this->data());
+        $this->assertSame('failed', $this->entries('events')[0]['status']);
+    }
+
+    /** @return iterable<array{string, mixed}> */
+    public static function contradictoryDisputeSiblings(): iterable
+    {
+        yield ['payment_intent', 'pi_other'];
+        yield ['currency', 'usd'];
+        yield ['livemode', true];
+        yield ['object', 'refund'];
+    }
+
+    public function testOpaqueDisputeFactsSurviveProcessingAndExpiredPayloadPruning(): void
+    {
+        $dispute = $this->dispute(id: 'dispute.reference-01');
+        $dispute['reason'] = str_repeat('provider_reason_', 200);
+        $this->setDisputes([$dispute]);
+        $body = json_encode([
+            'id' => 'event.reference-dispute',
+            'object' => 'event',
+            'type' => 'charge.dispute.created',
+            'created' => $this->createdAt->getTimestamp() + 3600,
+            'livemode' => false,
+            'data' => ['object' => $dispute],
+        ], JSON_THROW_ON_ERROR);
+        $this->assertResponse($this->send($body), 204);
+        $this->assertSame('dispute.reference-01', $this->entries('disputes')[0]['stripeDisputeId']);
+        $this->assertSame($dispute['reason'], $this->entries('disputes')[0]['reason']);
+        $this->assertResponse($this->send($body), 204);
+        $deliveries = $this->entries('lifecycleDeliveries');
+        $delivery = $deliveries[3];
+        $expiresAt = OrderData::string($delivery['expiresAt']);
+        $this->kirby->impersonate('kirby');
+        $this->orders->pruneLifecycleDeliveryPayloads(
+            uuid: $this->order->pageUuid(),
+            now: (new DateTimeImmutable($expiresAt))->modify('+1 day'),
+        );
+        $pruned = $this->entries('lifecycleDeliveries')[3];
+        $this->assertSame($expiresAt, $pruned['expiresAt']);
+        $event = OrderData::map($pruned['event']);
+        $this->assertSame('event.reference-dispute', $event['triggerId']);
+        $this->assertArrayNotHasKey('orderSnapshot', $event);
+        $this->assertSame('dispute.reference-01', $this->entries('disputes')[0]['stripeDisputeId']);
+    }
+
+    public function testDisputeEventRestorationRequiresItsChargeCorrelation(): void
+    {
+        $this->setDisputes([$this->dispute()]);
+        $this->assertResponse($this->send($this->disputeEvent()), 204);
+        $entries = $this->entries('events');
+        $entries[0]['stripeChargeId'] = null;
+        $this->expectException(\ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException::class);
+        \ProgrammatorDev\StripeCheckout\Order\Internal\StripeEventLedger::normalize($entries);
+    }
+
+    public function testDisputeRestorationRejectsContradictoryDerivedSummary(): void
+    {
+        $this->setDisputes([$this->dispute()]);
+        $this->assertResponse($this->send($this->disputeEvent()), 204);
+        $data = $this->data();
+        $data['disputeHasLost'] = true;
+        $this->expectException(\ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException::class);
+        \ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer::normalize($data);
+    }
+
     /** @param list<array<string, mixed>> $refunds */
     private function setRefunds(array $refunds): void
     {
@@ -1230,6 +1855,61 @@ final class WebhookRoutesTest extends KirbyTestCase
             'created' => $this->createdAt->getTimestamp() + 3600,
             'livemode' => false,
             'data' => ['object' => $this->provider->refundRecords['re_webhook']],
+        ], JSON_THROW_ON_ERROR);
+    }
+
+    /** @param list<array<string, mixed>> $disputes */
+    private function setDisputes(array $disputes): void
+    {
+        $this->provider->disputes = $disputes;
+        $this->provider->charges['ch_disputed'] = [
+            'id' => 'ch_disputed',
+            'object' => 'charge',
+            'payment_intent' => 'pi_webhook',
+            'currency' => 'eur',
+            'livemode' => false,
+        ];
+
+        foreach ($disputes as $dispute) {
+            $this->provider->disputeRecords[OrderData::string($dispute['id'])] = $dispute;
+        }
+    }
+
+    /** @return array<string, mixed> */
+    private function dispute(string $id = 'du_webhook', string $status = 'needs_response', int $amount = 1600): array
+    {
+        return [
+            'id' => $id,
+            'object' => 'dispute',
+            'amount' => $amount,
+            'currency' => 'eur',
+            'payment_intent' => 'pi_webhook',
+            'charge' => 'ch_disputed',
+            'livemode' => false,
+            'created' => $this->createdAt->getTimestamp() + 3600,
+            'status' => $status,
+            'reason' => 'fraudulent',
+            'evidence_details' => [
+                'due_by' => $this->createdAt->getTimestamp() + 86400,
+                'has_evidence' => false,
+                'past_due' => false,
+                'submission_count' => 0,
+            ],
+            'balance_transactions' => [],
+            'metadata' => [],
+            'evidence' => ['customer_email_address' => 'PRIVATE_DISPUTE_EMAIL'],
+        ];
+    }
+
+    private function disputeEvent(string $type = 'charge.dispute.created', string $id = 'evt_dispute'): string
+    {
+        return json_encode([
+            'id' => $id,
+            'object' => 'event',
+            'type' => $type,
+            'created' => $this->createdAt->getTimestamp() + 3600,
+            'livemode' => false,
+            'data' => ['object' => $this->provider->disputeRecords['du_webhook']],
         ], JSON_THROW_ON_ERROR);
     }
 

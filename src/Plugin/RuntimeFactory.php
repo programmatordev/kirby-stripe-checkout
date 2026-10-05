@@ -18,6 +18,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutResolver;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionCreator;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionReconciler;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionRetriever;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\DisputeRetriever;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\RefundRetriever;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestBuilder;
@@ -54,6 +55,7 @@ use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingZoneResolver;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingResolverInterface;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionGatewayInterface;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\StripeApiCheckoutSessionGateway;
+use ProgrammatorDev\StripeCheckout\Stripe\Dispute\StripeApiDisputeGateway;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogue;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceProviderInterface;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceResolver;
@@ -277,6 +279,7 @@ final class RuntimeFactory
             refundRetriever: new RefundRetriever(
                 new StripeApiRefundGateway($client),
             ),
+            disputeRetriever: new DisputeRetriever(new StripeApiDisputeGateway($client)),
         );
     }
 

@@ -6,12 +6,14 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
+use ProgrammatorDev\StripeCheckout\Order\Internal\DisputeSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\RefundSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 use Stripe\Checkout\Session;
+use Stripe\Dispute;
 use Stripe\Event;
 use Stripe\PaymentIntent;
 use Stripe\Refund;
@@ -21,13 +23,17 @@ final readonly class ReconciliationEvent
 {
     public const REFUND_TYPES = [Event::REFUND_CREATED, Event::REFUND_UPDATED, Event::REFUND_FAILED];
 
+    public const DISPUTE_TYPES = [Event::CHARGE_DISPUTE_CREATED, Event::CHARGE_DISPUTE_UPDATED, Event::CHARGE_DISPUTE_CLOSED, Event::CHARGE_DISPUTE_FUNDS_WITHDRAWN, Event::CHARGE_DISPUTE_FUNDS_REINSTATED];
+
+    public const FINANCIAL_TYPES = [...self::REFUND_TYPES, ...self::DISPUTE_TYPES];
+
     public const TYPES = [
         Event::CHECKOUT_SESSION_COMPLETED,
         Event::CHECKOUT_SESSION_ASYNC_PAYMENT_SUCCEEDED,
         Event::CHECKOUT_SESSION_ASYNC_PAYMENT_FAILED,
         Event::CHECKOUT_SESSION_EXPIRED,
         Event::PAYMENT_INTENT_REQUIRES_ACTION,
-        ...self::REFUND_TYPES,
+        ...self::FINANCIAL_TYPES,
     ];
 
     private function __construct(
@@ -40,21 +46,32 @@ final readonly class ReconciliationEvent
         public ?string $stripeChargeId = null,
     ) {}
 
-    /** Selected refund envelope, before parent ownership can be read. No historical refund state is used. */
+    /** Selected financial envelopes establish identity before current parent ownership can be read. */
     public static function refundEnvelope(Event $event, CredentialMode $mode): self
     {
+        return self::resourceEnvelope($event, $mode, Refund::OBJECT_NAME, self::REFUND_TYPES);
+    }
+
+    public static function disputeEnvelope(Event $event, CredentialMode $mode): self
+    {
+        return self::resourceEnvelope($event, $mode, Dispute::OBJECT_NAME, self::DISPUTE_TYPES);
+    }
+
+    /** @param list<string> $types */
+    private static function resourceEnvelope(Event $event, CredentialMode $mode, string $objectName, array $types): self
+    {
         $data = $event->toArray();
-        $object = self::refundObject($event);
+        $object = self::financialObject($event);
         $id = OrderData::string($data['id'] ?? null);
         $type = OrderData::string($data['type'] ?? null);
         $createdAt = OrderData::integer($data['created'] ?? null);
         $resourceId = OrderData::string($object['id'] ?? null);
 
-        if (($data['object'] ?? null) !== Event::OBJECT_NAME || ($object['object'] ?? null) !== Refund::OBJECT_NAME) {
+        if (($data['object'] ?? null) !== Event::OBJECT_NAME || ($object['object'] ?? null) !== $objectName) {
             throw new OrderDataException();
         }
 
-        if (in_array($type, self::REFUND_TYPES, true) === false) {
+        if (in_array($type, $types, true) === false) {
             throw new OrderDataException();
         }
 
@@ -86,7 +103,7 @@ final readonly class ReconciliationEvent
     public static function fromRefund(Event $event, RefundSnapshot $refund, CredentialMode $mode): self
     {
         $trigger = self::refundEnvelope($event, $mode);
-        $object = self::refundObject($event);
+        $object = self::financialObject($event);
 
         if ($trigger->resourceId !== $refund->stripeRefundId()) {
             throw new OrderDataException();
@@ -112,6 +129,39 @@ final readonly class ReconciliationEvent
             nextAction: null,
             stripePaymentIntentId: $refund->stripePaymentIntentId(),
             stripeChargeId: $refund->stripeChargeId(),
+        );
+    }
+
+    /** Historical payloads establish identity and parents; current reads supply status, amount, evidence and balance facts. */
+    public static function fromDispute(Event $event, DisputeSnapshot $dispute, CredentialMode $mode): self
+    {
+        $trigger = self::disputeEnvelope($event, $mode);
+        $object = self::financialObject($event);
+
+        if ($trigger->resourceId !== $dispute->stripeDisputeId()) {
+            throw new OrderDataException();
+        }
+
+        if (strtoupper(OrderData::string($object['currency'] ?? null)) !== $dispute->amount()->getCurrency()->getCurrencyCode()) {
+            throw new OrderDataException();
+        }
+
+        if (isset($object['payment_intent']) && $object['payment_intent'] !== $dispute->stripePaymentIntentId()) {
+            throw new OrderDataException();
+        }
+
+        if (isset($object['charge']) && $object['charge'] !== $dispute->stripeChargeId()) {
+            throw new OrderDataException();
+        }
+
+        return new self(
+            id: $trigger->id,
+            type: $trigger->type,
+            createdAt: $trigger->createdAt,
+            resourceId: $trigger->resourceId,
+            nextAction: null,
+            stripePaymentIntentId: $dispute->stripePaymentIntentId(),
+            stripeChargeId: $dispute->stripeChargeId(),
         );
     }
 
@@ -144,7 +194,7 @@ final readonly class ReconciliationEvent
         $isAction = $type === Event::PAYMENT_INTENT_REQUIRES_ACTION;
         $resourceId = OrderData::nonEmptyString($object['id'] ?? null);
 
-        if (in_array($type, self::TYPES, true) === false || in_array($type, self::REFUND_TYPES, true)) {
+        if (in_array($type, self::TYPES, true) === false || in_array($type, self::FINANCIAL_TYPES, true)) {
             throw new OrderDataException();
         }
 
@@ -207,8 +257,8 @@ final readonly class ReconciliationEvent
         return new self($id, $type, $created, $resourceId, PaymentAction::fromArray($action));
     }
 
-    /** @return array<array-key, mixed> Selected fields are validated by the refund envelope/correlation rules. */
-    private static function refundObject(Event $event): array
+    /** @return array<array-key, mixed> Selected fields are validated by the financial envelope/correlation rules. */
+    private static function financialObject(Event $event): array
     {
         $data = $event->toArray()['data'] ?? null;
 

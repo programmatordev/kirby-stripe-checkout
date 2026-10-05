@@ -15,6 +15,7 @@ use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\LifecycleNotification;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\CheckoutSessionAssociation;
+use ProgrammatorDev\StripeCheckout\Order\Internal\DisputeCollection;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
 use ProgrammatorDev\StripeCheckout\Order\Internal\RefundCollection;
@@ -31,6 +32,7 @@ final class CheckoutSessionReconciler
         private readonly CredentialMode $credentialMode,
         private readonly CheckoutSessionReducer $reducer = new CheckoutSessionReducer(),
         private readonly ?RefundRetriever $refundRetriever = null,
+        private readonly ?DisputeRetriever $disputeRetriever = null,
     ) {}
 
     /**
@@ -126,6 +128,48 @@ final class CheckoutSessionReconciler
         }
     }
 
+    public function disputeCorrelation(Event $event): ?DisputeCorrelation
+    {
+        try {
+            return ($this->disputeRetriever ?? throw new OrderDataException())->correlate($event, $this->credentialMode);
+        } catch (OrderDataException $error) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE, previous: $error);
+        }
+    }
+
+    public function reconcileDispute(DisputeCorrelation $correlation): OrderPage
+    {
+        try {
+            $page = $this->orders->order($correlation->pageUuid) ?? throw new OrderDataException();
+            $data = $this->orders->data($page);
+            $checkoutAttempt = OrderData::map($data['checkoutAttempt']);
+
+            if (($checkoutAttempt['credentialMode'] ?? null) !== $this->credentialMode->value) {
+                throw new OrderDataException();
+            }
+
+            if (isset($data['stripePaymentIntentId']) && $data['stripePaymentIntentId'] !== $correlation->dispute->stripePaymentIntentId()) {
+                throw new OrderDataException();
+            }
+
+            if ($data['currency'] !== $correlation->dispute->amount()->getCurrency()->getCurrencyCode()) {
+                throw new OrderDataException();
+            }
+
+            $sessionId = isset($data['stripeCheckoutSessionId']) ? OrderData::string($data['stripeCheckoutSessionId']) : null;
+
+            return $this->reconcileOrder(
+                pageUuid: $correlation->pageUuid,
+                sessionId: $sessionId,
+                trigger: $correlation->trigger,
+                baseline: $data,
+                disputeCorrelation: $correlation,
+            );
+        } catch (OrderDataException $error) {
+            throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE, previous: $error);
+        }
+    }
+
     /** @param array<string, mixed> $baseline */
     private function reconcileOrder(
         string $pageUuid,
@@ -134,6 +178,7 @@ final class CheckoutSessionReconciler
         array $baseline,
         ?CheckoutSessionObservation $observation = null,
         ?RefundCorrelation $refundCorrelation = null,
+        ?DisputeCorrelation $disputeCorrelation = null,
     ): OrderPage {
         if ($trigger !== null) {
             $recordAttempt = static function (array $data) use ($trigger): array {
@@ -159,7 +204,7 @@ final class CheckoutSessionReconciler
         try {
             if ($sessionId === null) {
                 // Parent ownership already identifies this order; record lookup failures in its Event ledger too.
-                $paymentIntentId = $refundCorrelation?->refund->stripePaymentIntentId() ?? throw new OrderDataException();
+                $paymentIntentId = $refundCorrelation?->refund->stripePaymentIntentId() ?? $disputeCorrelation?->dispute->stripePaymentIntentId() ?? throw new OrderDataException();
                 $sessionId = $this->retriever->sessionForPaymentIntent($paymentIntentId)
                     ?? throw new CheckoutSessionException(CheckoutErrorCode::SESSION_UNAVAILABLE, retryable: true);
             }
@@ -178,13 +223,15 @@ final class CheckoutSessionReconciler
                     throw new OrderDataException();
                 }
 
-                // Null means refunds were not read; Checkout-only operations must preserve the saved collection.
+                // Null means a family was not read; preserve its saved collection independently of the other family.
                 $refunds = $refundCorrelation === null ? null
                     : ($this->refundRetriever ?? throw new OrderDataException())->retrieve($refundCorrelation, $observation);
+                $disputes = $disputeCorrelation === null ? null
+                    : ($this->disputeRetriever ?? throw new OrderDataException())->retrieve($disputeCorrelation, $observation);
 
                 try {
                     // These callbacks run inside the store's lock, using its freshly loaded order rather than the read baseline.
-                    $reduceOrder = function (array $data) use ($baseline, $observation, $trigger, $refunds): array {
+                    $reduceOrder = function (array $data) use ($baseline, $observation, $trigger, $refunds, $disputes): array {
                         /** @var array<string, mixed> $data */
                         return $this->reduceObservation(
                             data: $data,
@@ -192,6 +239,7 @@ final class CheckoutSessionReconciler
                             observation: $observation,
                             trigger: $trigger,
                             refunds: $refunds,
+                            disputes: $disputes,
                         );
                     };
                     $selectNotifications = function (array $before, array $after) use ($observation, $trigger): array {
@@ -242,6 +290,7 @@ final class CheckoutSessionReconciler
         CheckoutSessionObservation $observation,
         ?ReconciliationEvent $trigger,
         ?RefundCollection $refunds = null,
+        ?DisputeCollection $disputes = null,
     ): array {
         /** @var list<array<string, mixed>> $entries */
         $entries = $data['events'] ?? [];
@@ -258,9 +307,13 @@ final class CheckoutSessionReconciler
         $now = new DateTimeImmutable();
         $after = $this->reducer->reduce($data, $observation, $now);
 
+        // Financial collections remain current even if the payment guards refused a stale Checkout observation.
         if ($refunds !== null) {
-            // Refunds remain current even if a stale Checkout observation was refused by the payment guards.
             $after = $this->reducer->reduceRefunds($after, $refunds, $now);
+        }
+
+        if ($disputes !== null) {
+            $after = $this->reducer->reduceDisputes($after, $disputes, $now);
         }
 
         if ($trigger !== null) {
@@ -297,6 +350,11 @@ final class CheckoutSessionReconciler
 
         if (($before['refunds'] ?? []) !== ($after['refunds'] ?? [])) {
             $notifications[] = new LifecycleNotification(LifecycleEventType::RefundUpdated);
+        }
+
+        // Evidence or balance movements can change while the dispute summary stays the same.
+        if (($before['disputes'] ?? []) !== ($after['disputes'] ?? [])) {
+            $notifications[] = new LifecycleNotification(LifecycleEventType::DisputeUpdated);
         }
 
         return $notifications;

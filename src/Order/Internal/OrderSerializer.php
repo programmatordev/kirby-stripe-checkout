@@ -280,6 +280,7 @@ final class OrderSerializer
             }
 
             self::validateRefunds($data, $payment);
+            self::validateDisputes($data, $payment);
 
             if (isset($data['lineItems'])) {
                 $data['lineItems'] = self::normalizeLineItems($data, $context);
@@ -369,6 +370,7 @@ final class OrderSerializer
                 'lineItems',
                 'payment',
                 'refunds',
+                'disputes',
                 'events',
                 'customer',
                 'billingAddress',
@@ -805,14 +807,6 @@ final class OrderSerializer
         if ($paymentStatus === PaymentStatus::NoPaymentRequired && $data['total'] !== '0') {
             throw new OrderDataException();
         }
-
-        // Dispute reconciliation remains deferred; its summary must still match the empty collection.
-        if (
-            $data['disputeStatus'] !== DisputeStatus::None->value
-            || $data['disputeRequiresResponse'] || $data['disputeHasLost']
-        ) {
-            throw new OrderDataException();
-        }
     }
 
     /** @param array<string, mixed> $data */
@@ -860,6 +854,53 @@ final class OrderSerializer
 
         foreach ($data['refunds'] as $refund) {
             if ($refund['firstObservedAt'] < $data['createdAt'] || $refund['updatedAt'] > $updatedAt) {
+                throw new OrderDataException();
+            }
+        }
+    }
+
+    /** @param array<string, mixed> $data */
+    private static function validateDisputes(array &$data, ?Payment $payment): void
+    {
+        $items = OrderData::list($data['disputes'] ?? []);
+
+        if ($items === []) {
+            if ($data['disputeStatus'] !== DisputeStatus::None->value) {
+                throw new OrderDataException();
+            }
+
+            if ($data['disputeRequiresResponse'] || $data['disputeHasLost'] || isset($data['disputeUpdatedAt'])) {
+                throw new OrderDataException();
+            }
+
+            return;
+        }
+
+        if ($data['checkoutStatus'] !== CheckoutStatus::Complete->value || $payment === null) {
+            throw new OrderDataException();
+        }
+
+        $paymentIntentId = $payment->stripePaymentIntentId() ?? throw new OrderDataException();
+        $paymentAmount = $payment->amount() ?? throw new OrderDataException();
+        $disputes = DisputeCollection::fromArray($items, $paymentIntentId, $paymentAmount);
+        // Stored summaries are projections of the item facts, not independently trusted financial state.
+        $summary = [
+            'disputeStatus' => $disputes->disputeStatus()->value,
+            'disputeRequiresResponse' => $disputes->disputeRequiresResponse(),
+            'disputeHasLost' => $disputes->disputeHasLost(),
+        ];
+
+        foreach ($summary as $field => $value) {
+            if ($data[$field] !== $value) {
+                throw new OrderDataException();
+            }
+        }
+
+        $updatedAt = OrderData::timestamp(OrderData::date($data['disputeUpdatedAt'] ?? null));
+        $data['disputes'] = $disputes->toArray();
+
+        foreach ($data['disputes'] as $dispute) {
+            if ($dispute['firstObservedAt'] < $data['createdAt'] || $dispute['updatedAt'] > $updatedAt) {
                 throw new OrderDataException();
             }
         }

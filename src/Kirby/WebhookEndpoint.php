@@ -14,6 +14,7 @@ use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Configuration\StripeConfiguration;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
+use ProgrammatorDev\StripeCheckout\Order\Internal\DisputeSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
 use ProgrammatorDev\StripeCheckout\Order\Internal\RefundSnapshot;
@@ -132,6 +133,10 @@ final class WebhookEndpoint
             return $this->processRefund($event, $stripe);
         }
 
+        if (in_array($type, ReconciliationEvent::DISPUTE_TYPES, true)) {
+            return $this->processDispute($event, $stripe);
+        }
+
         $metadata = $object['metadata'] ?? [];
 
         if (is_array($metadata) === false) {
@@ -207,6 +212,27 @@ final class WebhookEndpoint
         }
     }
 
+    private function processDispute(Event $event, StripeConfiguration $stripe): int
+    {
+        $pageUuid = null;
+
+        try {
+            $reconciler = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler($stripe);
+            $correlation = $reconciler->disputeCorrelation($event);
+
+            if ($correlation === null) {
+                return self::HTTP_NO_CONTENT;
+            }
+
+            $pageUuid = $correlation->pageUuid;
+            $reconciler->reconcileDispute($correlation);
+
+            return self::HTTP_NO_CONTENT;
+        } catch (Throwable $error) {
+            return $this->failure($event, $pageUuid, $this->httpStatusForFailure($error));
+        }
+    }
+
     private function httpStatusForFailure(Throwable $error): int
     {
         if ($error instanceof ConfigurationException) {
@@ -268,6 +294,24 @@ final class WebhookEndpoint
 
                     if ($refund->stripeRefundId() === $envelope->resourceId) {
                         $trigger = ReconciliationEvent::fromRefund($event, $refund, $mode);
+                        /** @var list<array<string, mixed>> $entries */
+                        $entries = $data['events'] ?? [];
+
+                        return StripeEventLedger::isComplete($entries, $trigger);
+                    }
+                }
+
+                return false;
+            }
+
+            if (in_array($type, ReconciliationEvent::DISPUTE_TYPES, true)) {
+                $envelope = ReconciliationEvent::disputeEnvelope($event, $mode);
+
+                foreach (OrderData::list($data['disputes'] ?? []) as $item) {
+                    $dispute = DisputeSnapshot::fromArray(OrderData::map($item));
+
+                    if ($dispute->stripeDisputeId() === $envelope->resourceId) {
+                        $trigger = ReconciliationEvent::fromDispute($event, $dispute, $mode);
                         /** @var list<array<string, mixed>> $entries */
                         $entries = $data['events'] ?? [];
 

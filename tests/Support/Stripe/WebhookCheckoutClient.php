@@ -34,6 +34,14 @@ final class WebhookCheckoutClient implements ClientInterface
     public array $refundRecords = [];
     /** @var array<string, array<string, mixed>> */
     public array $refundPages = [];
+    /** @var list<array<string, mixed>> */
+    public array $disputes = [];
+    /** @var array<string, array<string, mixed>> */
+    public array $disputeRecords = [];
+    /** @var array<string, array<string, mixed>> */
+    public array $disputePages = [];
+    public ?Closure $beforeDisputeListRead = null;
+
     /** @var array<string, array<string, mixed>> */
     public array $charges = [];
     /** @var list<array<string, mixed>>|null */
@@ -116,6 +124,10 @@ final class WebhookCheckoutClient implements ClientInterface
             $this->beforeRefundListRead?->__invoke();
         }
 
+        if ($path === '/v1/disputes') {
+            $this->beforeDisputeListRead?->__invoke();
+        }
+
         if ($this->httpStatus !== 200) {
             return [json_encode(['error' => [
                 'message' => 'PRIVATE_PROVIDER_CANARY',
@@ -183,6 +195,18 @@ final class WebhookCheckoutClient implements ClientInterface
             ];
         } elseif (is_string($path) && str_starts_with($path, '/v1/refunds/')) {
             $body = $this->refundRecords[basename($path)] ?? throw new LogicException('No Refund fixture.');
+        } elseif ($path === '/v1/disputes') {
+            if (($params['payment_intent'] ?? null) !== 'pi_webhook' || ($params['limit'] ?? null) !== 100) {
+                throw new LogicException('Dispute listing must be filtered and paginated.');
+            }
+
+            $body = $this->disputePages[OrderData::string($params['starting_after'] ?? '')] ?? [
+                'object' => 'list',
+                'has_more' => false,
+                'data' => $this->disputes,
+            ];
+        } elseif (is_string($path) && str_starts_with($path, '/v1/disputes/')) {
+            $body = $this->disputeRecords[basename($path)] ?? throw new LogicException('No Dispute fixture.');
         } else {
             throw new LogicException('No webhook fixture exists for this provider read.');
         }

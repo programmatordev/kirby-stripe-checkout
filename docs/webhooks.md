@@ -14,7 +14,7 @@ https://your-site.example/stripe-checkout/webhook
 
 Use snapshot events and the API version pinned by the installed Stripe PHP SDK. The current dependency baseline uses `2026-09-30.endive`; after an SDK upgrade, check `Stripe\Util\ApiVersion::CURRENT` and update the destination deliberately.
 
-Select these eight events:
+Select these thirteen events for all supported features:
 
 - `checkout.session.completed`
 - `checkout.session.async_payment_succeeded`
@@ -24,6 +24,13 @@ Select these eight events:
 - `refund.created`
 - `refund.updated`
 - `refund.failed`
+- `charge.dispute.created`
+- `charge.dispute.updated`
+- `charge.dispute.closed`
+- `charge.dispute.funds_withdrawn`
+- `charge.dispute.funds_reinstated`
+
+The five Checkout/payment events keep Checkout and payment facts synchronized. The three Refund events enable refund synchronization, and the five Dispute events enable dispute synchronization. Omitting a financial family does not prevent Checkout/payment processing, but its local collection receives no webhook refresh and can become stale.
 
 The destination must be publicly reachable over HTTPS. Select your own account rather than connected accounts. Copy its `whsec_…` signing secret into deployment configuration. See [Stripe's endpoint setup](https://docs.stripe.com/webhooks#set-up-your-endpoint).
 
@@ -53,6 +60,10 @@ Refund events establish ownership through the current parent PaymentIntent, incl
 
 When a refund's local Session association is missing, the reconciler looks up Checkout Sessions by that exact PaymentIntent. No match returns `503`; multiple or truncated results return `500`. It accepts only one fully correlated Session. A processed refund duplicate can still require initial Refund/parent reads to locate the order, then skips the complete Checkout/refund refresh and hooks.
 
+Dispute events establish ownership through their current PaymentIntent and Charge backlink. The reconciler retrieves every current dispute for that payment and commits its selected facts together with current Checkout/payment facts. Status, evidence deadlines and balance movements come from current reads; a funds event does not itself determine the dispute outcome. Missing-Session lookup and duplicate handling follow the same policy as refunds.
+
+Checkout/action events preserve both financial collections. Refund events refresh refunds and preserve disputes; Dispute events refresh disputes and preserve refunds. The other family’s saved facts are not presented as having been freshly retrieved.
+
 Every handled POST returns an empty body with `Cache-Control: no-store`:
 
 | Status | Meaning |
@@ -68,7 +79,7 @@ A successful commit remains acknowledged even if an optional lifecycle hook fail
 
 Order-correlated failures use the order's Event ledger. Failures that cannot safely attach to an order return the appropriate failure status and log only a stable error code through PHP's configured error log; no separate incident file is written. Inspect Event payloads and delivery attempts in [Stripe Workbench](https://docs.stripe.com/workbench/event-destinations#view-event-deliveries). Raw webhook bodies, signatures and private provider messages are not retained locally. Operator retry tools are not implemented yet.
 
-Dispute events, `charge.refunded` and `charge.refund.updated` remain unsupported and are acknowledged without changing orders. Use the three dedicated refund events above to update the [saved refund collection](orders.md#refund-facts).
+`charge.refunded`, `charge.refund.updated` and other general Charge events remain unsupported and are acknowledged without changing orders. Use the three dedicated refund events above to update the [saved refund collection](orders.md#refund-facts).
 
 ## Optional local forwarding
 
@@ -77,7 +88,7 @@ You can test a local endpoint before registering a public destination. Authentic
 ```bash
 stripe login
 stripe listen \
-  --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,checkout.session.expired,payment_intent.requires_action,refund.created,refund.updated,refund.failed \
+  --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,checkout.session.expired,payment_intent.requires_action,refund.created,refund.updated,refund.failed,charge.dispute.created,charge.dispute.updated,charge.dispute.closed,charge.dispute.funds_withdrawn,charge.dispute.funds_reinstated \
   --forward-to https://your-project.ddev.site/stripe-checkout/webhook
 ```
 

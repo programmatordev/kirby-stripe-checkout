@@ -53,6 +53,7 @@ final class OrderBlueprint
         $members = match ($handle) {
             'stripeCheckout' => ['owner', 'schemaVersion'],
             'initiatingLineItems', 'lineItems' => ['reference', 'name', 'quantity', 'price', 'subtotal', 'currency', 'sku', 'variantId', 'stripePriceId', 'stripeProductId'],
+            'disputes' => ['stripeDisputeId', 'stripePaymentIntentId', 'stripeChargeId', 'currency', 'amount', 'status', 'reason', 'evidenceDueBy', 'evidenceHasEvidence', 'evidencePastDue', 'evidenceSubmissionCount', 'balanceTransactions', 'createdAt', 'firstObservedAt', 'updatedAt'],
             'refunds' => ['stripeRefundId', 'stripePaymentIntentId', 'stripeChargeId', 'currency', 'amount', 'status', 'reason', 'failureReason', 'pendingReason', 'createdAt', 'firstObservedAt', 'updatedAt'],
             default => [],
         };
@@ -71,7 +72,7 @@ final class OrderBlueprint
             }
         }
 
-        if ($handle === 'refunds') {
+        if (in_array($handle, ['refunds', 'disputes'], true)) {
             $field['columns'] = [
                 'amount' => ['align' => 'right'],
                 'currency' => [],
@@ -96,6 +97,38 @@ final class OrderBlueprint
             }
 
             $field['fields']['createdAt']['help'] = 'programmatordev.stripe-checkout.orders.refundCreatedAtHelp';
+        }
+
+        if ($handle === 'disputes') {
+            $evidenceFlags = ['evidenceHasEvidence', 'evidencePastDue'];
+
+            foreach ($evidenceFlags as $evidenceFlag) {
+                $field['fields'][$evidenceFlag]['type'] = 'toggle';
+            }
+
+            // Structure inputs stringify integer facts; the provider deadline remains an exact Unix value in details.
+            $field['fields']['evidenceDueBy']['help'] = 'programmatordev.stripe-checkout.orders.disputeEvidenceDueByHelp';
+            $balanceFields = ['stripeBalanceTransactionId', 'currency', 'amount', 'fee', 'net', 'createdAt'];
+            $balanceTransactions = $field['fields']['balanceTransactions'];
+            $balanceTransactions['type'] = 'structure';
+            $balanceTransactions['columns'] = [
+                'amount' => ['align' => 'right'],
+                'currency' => [],
+                'net' => ['align' => 'right'],
+            ];
+            $balanceTransactions['help'] = 'programmatordev.stripe-checkout.orders.disputeBalanceHelp';
+            $balanceTransactions['fields'] = [];
+
+            foreach ($balanceFields as $balanceField) {
+                $balanceTransactions['fields'][$balanceField] = [
+                    'label' => 'programmatordev.stripe-checkout.orders.fields.' . $balanceField,
+                    'type' => 'text',
+                    'disabled' => true,
+                    'translate' => false,
+                ];
+            }
+
+            $field['fields']['balanceTransactions'] = $balanceTransactions;
         }
 
         return $field;

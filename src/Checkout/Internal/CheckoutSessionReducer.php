@@ -11,6 +11,7 @@ use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\CheckoutLineItemSnapshot;
+use ProgrammatorDev\StripeCheckout\Order\Internal\DisputeCollection;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\RefundCollection;
 use ProgrammatorDev\StripeCheckout\Order\Payment;
@@ -174,6 +175,34 @@ final class CheckoutSessionReducer
             'refundRequiresAction' => $refunds->refundRequiresAction(),
             'refundHasFailed' => $refunds->refundHasFailed(),
             'refundUpdatedAt' => max(OrderData::timestamp($now), $data['updatedAt']),
+        ];
+    }
+
+    /** @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    public function reduceDisputes(array $data, DisputeCollection $disputes, DateTimeImmutable $now): array
+    {
+        $payment = Payment::fromArray(OrderData::map($data['payment'] ?? null));
+        $previous = isset($data['disputes']) ? DisputeCollection::fromArray(
+            OrderData::list($data['disputes']),
+            $payment->stripePaymentIntentId() ?? throw new OrderDataException(),
+            $payment->amount() ?? throw new OrderDataException(),
+        ) : null;
+        $disputes = $disputes->observed($previous, OrderData::date(max(OrderData::timestamp($now), $data['updatedAt'])));
+        $items = $disputes->toArray();
+
+        if ($items === ($data['disputes'] ?? [])) {
+            return $data;
+        }
+
+        return [
+            ...$data,
+            'disputes' => $items,
+            'disputeStatus' => $disputes->disputeStatus()->value,
+            'disputeRequiresResponse' => $disputes->disputeRequiresResponse(),
+            'disputeHasLost' => $disputes->disputeHasLost(),
+            'disputeUpdatedAt' => max(OrderData::timestamp($now), $data['updatedAt']),
         ];
     }
 

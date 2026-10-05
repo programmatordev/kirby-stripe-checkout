@@ -186,7 +186,44 @@ The independent `refundStatus` summary follows this precedence:
 
 Identical reads and changes in Stripe's list order preserve item timestamps and `refundUpdatedAt`. A material collection change updates those times and emits `programmatordev.stripe-checkout.refund.updated` after the combined commit. The lifecycle event freezes the collection in `orderSnapshot()`. Checkout events preserve existing refunds, and refunds preserve historical payment success and `paidAt`.
 
-Refund actions remain in Stripe. The plugin does not create or cancel refunds, retain refund instructions or destination details, or provide a refund button. Dispute reconciliation remains under development.
+Refund actions remain in Stripe. The plugin does not create or cancel refunds, retain refund instructions or destination details, or provide a refund button.
+
+## Dispute facts
+
+A dispute is a customer challenge through their bank, separate from a merchant-initiated refund. The original successful payment remains paid; a dispute does not clear `paidAt` or count toward `refundedTotal`.
+
+The protected `disputes` collection contains one current item per Stripe Dispute ID, sorted by ID. It includes inquiries, active disputes and terminal outcomes. The Payment tab displays a separate read-only native Structure, with amount, currency, status and first-observed date columns. Open a row to inspect selected facts; evidence submission and dispute actions remain in Stripe.
+
+| Item facts | Meaning |
+| --- | --- |
+| `stripeDisputeId`, `stripePaymentIntentId`, `stripeChargeId` | Stable dispute and payment correlation. |
+| `currency`, `amount` | Exact disputed amount in the purchase currency, as a major-unit decimal. |
+| `status`, `reason` | Current modeled Stripe status and opaque reason code. |
+| `evidenceDueBy` | Nullable Stripe deadline in Unix seconds. |
+| `evidenceHasEvidence`, `evidencePastDue`, `evidenceSubmissionCount` | Selected current evidence submission facts; no evidence content. |
+| `balanceTransactions` | Current returned balance movements, sorted by Balance Transaction ID. |
+| `createdAt`, `firstObservedAt`, `updatedAt` | Stripe creation time in Unix seconds and committed local UTC observation times. |
+
+Each balance movement retains `stripeBalanceTransactionId`, its own `currency`, signed integer `amount`, `fee`, `net`, and Unix `createdAt`. These are exact Stripe provider units, unlike the dispute’s decimal `amount`. Settlement currency can differ from the purchase currency; the plugin preserves the returned facts without converting currency or reconstructing fees. Nested native row details explain these units. See [Stripe’s Balance Transaction reference](https://docs.stripe.com/api/balance_transactions/object).
+
+A disputed amount can exceed the original charge or overlap a partial refund. The plugin does not cap it at the payment total, add it to refunded money or infer an accounting balance. See [Stripe’s disputed amounts](https://docs.stripe.com/disputes/how-disputes-work#disputed-amount).
+
+The independent `disputeStatus` follows this precedence:
+
+| Condition | Summary |
+| --- | --- |
+| No items | `none` |
+| Any `needs_response` or `warning_needs_response` | `needs_response` |
+| Otherwise, any `under_review` or `warning_under_review` | `under_review` |
+| All terminal with no loss (`won`, `prevented`, `warning_closed`) | `resolved_favorable` |
+| All terminal and lost | `resolved_lost` |
+| Terminal lost and favorable outcomes coexist | `mixed` |
+
+`disputeRequiresResponse` detects either needs-response status. `disputeHasLost` independently detects a lost item, including while another dispute remains active. Raw item statuses distinguish inquiries, prevented disputes and wins. Unknown statuses require adapter review rather than guessed summaries.
+
+Status, evidence, amount or balance changes emit `programmatordev.stripe-checkout.dispute.updated` after the combined commit, even if the summary stays the same. Unchanged reads and list reordering preserve item timestamps and `disputeUpdatedAt`. The lifecycle snapshot freezes the selected facts for later hook retry, with the original payload expiry unchanged.
+
+Checkout events preserve both financial collections. Refund and Dispute events refresh their own family and preserve the other’s saved facts. These are current-state collections with local observation times, not histories of every past status. The Event ledger records processed triggers separately. Full evidence, files, communications, descriptions, payment-method details and raw provider graphs are excluded.
 
 ## Payment facts and actions
 
@@ -262,9 +299,9 @@ Kirby stops calling listeners when one throws. Retrying the whole hook can there
 
 The controlled, single-order deletion primitive emits `programmatordev.stripe-checkout.order.deleted` with Kirby's final in-memory Page after deletion. A failed deletion hook **cannot be retried**: only the last sanitized outcome is retained, not the deleted customer's snapshot. Durable deletion integrations must enqueue successfully during the first invocation. No public deletion route or automatic cleanup runner is available yet.
 
-The Session-creation pipeline emits `programmatordev.stripe-checkout.session.created` after the Session ID is committed. Internal reconciliation can also repair an association missed locally without creating another Session. It emits new `payment.pending`, `payment.succeeded`, `payment.failed`, `payment.requiresAction`, and `checkout.expired` transitions after persistence. Refund reconciliation emits `refund.updated` after a material collection change. Duplicate or unchanged observations do not dispatch these hooks again. Dispute provider flows are not implemented yet.
+The Session-creation pipeline emits `programmatordev.stripe-checkout.session.created` after the Session ID is committed. Internal reconciliation can also repair an association missed locally without creating another Session. It emits new `payment.pending`, `payment.succeeded`, `payment.failed`, `payment.requiresAction`, and `checkout.expired` transitions after persistence. Refund reconciliation emits `refund.updated` after a material collection change. Dispute reconciliation emits `dispute.updated` after a material collection change. Duplicate or unchanged observations do not dispatch these hooks again.
 
-The protected `events` ledger records correlated Stripe Event identity, type, resource, provider creation time, attempts and sanitized processing outcome. Refund entries also retain stable parent references. It is separate from `lifecycleDeliveries`: an Event can be successfully processed while an optional hook delivery fails. Processed Checkout/action duplicates need no new Stripe read; refund duplicates can require initial parent ownership reads to locate the order, then skip complete retrieval. A failed provider read remains retryable according to its error classification; a storage failure cannot mark the canonical processing successful. Current-state reconciliation without an Event creates no invented Event entry or trigger identity.
+The protected `events` ledger records correlated Stripe Event identity, type, resource, provider creation time, attempts and sanitized processing outcome. Refund and Dispute entries also retain stable parent references. It is separate from `lifecycleDeliveries`: an Event can be successfully processed while an optional hook delivery fails. Processed Checkout/action duplicates need no new Stripe read; refund and dispute duplicates can require initial parent ownership reads to locate the order, then skip complete retrieval. A failed provider read remains retryable according to its error classification; a storage failure cannot mark the canonical processing successful. Current-state reconciliation without an Event creates no invented Event entry or trigger identity.
 
 ### Event values
 
