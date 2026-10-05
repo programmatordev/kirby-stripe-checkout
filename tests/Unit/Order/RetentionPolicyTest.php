@@ -52,22 +52,47 @@ final class RetentionPolicyTest extends TestCase
     {
         $failure = $this->data('creation_failed', 'unpaid');
         $expired = $this->data('expired', 'unpaid');
+        $completedFailure = $this->data('complete', 'failed');
         $this->assertFalse($this->policy()->isEligible($failure, new DateTimeImmutable('2026-09-07T23:59:59Z')));
         $this->assertTrue($this->policy()->isEligible($failure, new DateTimeImmutable('2026-09-08T01:00:00+01:00')));
-        $this->assertFalse($this->policy()->isEligible($expired, new DateTimeImmutable('2026-09-30T23:59:59Z')));
-        $this->assertTrue($this->policy()->isEligible($expired, new DateTimeImmutable('2026-10-01T00:00:00Z')));
+        $this->assertFalse($this->policy()->isEligible($expired, new DateTimeImmutable('2026-09-07T23:59:59Z')));
+        $this->assertTrue($this->policy()->isEligible($expired, new DateTimeImmutable('2026-09-08T00:00:00Z')));
+        $this->assertFalse($this->policy()->isEligible($completedFailure, new DateTimeImmutable('2026-09-30T23:59:59Z')));
+        $this->assertTrue($this->policy()->isEligible($completedFailure, new DateTimeImmutable('2026-10-01T00:00:00Z')));
         $now = new DateTimeImmutable('2026-12-01T00:00:00Z');
-        $this->assertFalse($this->policy(['cleanupCreationFailures' => false])->isEligible($failure, $now));
-        $this->assertTrue($this->policy(['cleanupCreationFailures' => false])->isEligible($expired, $now));
-        $this->assertFalse($this->policy(['cleanupUnpaidOrders' => false])->isEligible($expired, $now));
+        $this->assertFalse($this->policy(['cleanupIncompleteOrders' => false])->isEligible($failure, $now));
+        $this->assertFalse($this->policy(['cleanupIncompleteOrders' => false])->isEligible($expired, $now));
+        $this->assertTrue($this->policy(['cleanupIncompleteOrders' => false])->isEligible($completedFailure, $now));
+        $this->assertFalse($this->policy(['cleanupUnpaidOrders' => false])->isEligible($completedFailure, $now));
+        $this->assertTrue($this->policy(['cleanupUnpaidOrders' => false])->isEligible($expired, $now));
         $this->assertTrue($this->policy(['cleanupUnpaidOrders' => false])->isEligible($failure, $now));
-        $this->assertFalse($this->policy(['creationFailureRetentionDays' => PHP_INT_MAX])->isEligible($failure, $now));
+        $this->assertFalse($this->policy(['incompleteOrderRetentionDays' => PHP_INT_MAX])->isEligible($failure, $now));
+    }
+
+    #[DataProvider('incompleteTerminalStates')]
+    public function testLaterTerminalObservationDoesNotRestartIncompleteRetention(
+        string $checkoutStatus,
+        string $timestampField,
+        string $terminalObservedAt,
+    ): void {
+        $data = $this->data($checkoutStatus, 'unpaid');
+        $data['updatedAt'] = $data[$timestampField] = $terminalObservedAt;
+        $now = new DateTimeImmutable('2026-09-08T00:00:00Z');
+        $this->assertTrue($this->policy()->isEligible($data, $now));
+        $this->assertFalse($this->policy(['incompleteOrderRetentionDays' => 14])->isEligible($data, $now));
+    }
+
+    /** @return iterable<string, array{string, string, string}> */
+    public static function incompleteTerminalStates(): iterable
+    {
+        yield 'creation failure' => ['creation_failed', 'creationFailedAt', '2026-09-01T01:00:00Z'];
+        yield 'expired Session' => ['expired', 'checkoutExpiredAt', '2026-09-08T00:00:00Z'];
     }
 
     public function testManualEligibilityIgnoresCleanupConfigurationAndAgeButProtectsAnAssociatedSession(): void
     {
         $data = $this->data('creation_failed', 'unpaid');
-        $policy = $this->policy(['cleanupCreationFailures' => false, 'cleanupUnpaidOrders' => false]);
+        $policy = $this->policy(['cleanupIncompleteOrders' => false, 'cleanupUnpaidOrders' => false]);
         $this->assertFalse($policy->isEligible($data, new DateTimeImmutable('2026-09-01T00:00:00Z')));
         $this->assertTrue(RetentionPolicy::isTerminalUnpaid($data));
         $data['stripeCheckoutSessionId'] = 'opaque-session';

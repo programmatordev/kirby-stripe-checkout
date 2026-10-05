@@ -34,7 +34,7 @@ final class RetentionSettingsTest extends KirbyTestCase
                 'currency' => 'USD',
                 'defaultRequiresShipping' => false,
                 'cleanupUnpaidOrders' => false,
-                'creationFailureRetentionDays' => 21,
+                'incompleteOrderRetentionDays' => 21,
             ],
         ], languages: $multilang ? [
             [
@@ -49,18 +49,18 @@ final class RetentionSettingsTest extends KirbyTestCase
         ] : null, beforeApp: static fn(TestWorkspace $workspace) => self::seedExistingSettings($workspace, [
             'currency' => 'EUR',
             'defaultRequiresShipping' => 'yes',
-            'cleanupCreationFailures' => 'true',
+            'cleanupIncompleteOrders' => 'true',
             ...($storedToggle ? ['cleanupUnpaidOrders' => 'true'] : []),
         ], $multilang));
         $this->kirby = $this->environment->app();
         $store = new StripeCheckoutPageStore($this->kirby);
         $page = $store->initialize();
         $input = $fullPayload ? $this->viewVersions()['changes'] : [];
-        Changes::publish($page, [...$input, 'cleanupcreationfailures' => false]);
+        Changes::publish($page, [...$input, 'cleanupincompleteorders' => false]);
         $settings = $store->settings();
-        $this->assertFalse($settings->value('cleanupCreationFailures'));
+        $this->assertFalse($settings->value('cleanupIncompleteOrders'));
         $this->assertSame($storedToggle ? true : null, $settings->value('cleanupUnpaidOrders'));
-        $this->assertNull($settings->value('creationFailureRetentionDays'));
+        $this->assertNull($settings->value('incompleteOrderRetentionDays'));
         $this->assertSame('kirby', $settings->priceSource());
         $this->assertSame('EUR', $settings->currency());
         $this->assertTrue($settings->defaultRequiresShipping());
@@ -146,9 +146,9 @@ final class RetentionSettingsTest extends KirbyTestCase
         $before = $page->version('latest')->read('default');
         $versions = $this->viewVersions();
         $this->assertSame($versions['latest'], $versions['changes']);
-        $this->assertSame(7.0, $versions['latest']['creationfailureretentiondays']);
+        $this->assertSame(7.0, $versions['latest']['incompleteorderretentiondays']);
         $this->assertSame(30.0, $versions['latest']['unpaidorderretentiondays']);
-        $this->assertTrue($versions['latest']['cleanupcreationfailures']);
+        $this->assertTrue($versions['latest']['cleanupincompleteorders']);
         $this->assertTrue($versions['latest']['cleanupunpaidorders']);
         $this->assertSame('hosted', $versions['latest']['uimode']);
         $this->assertFalse($versions['latest']['automatictax']);
@@ -170,7 +170,7 @@ final class RetentionSettingsTest extends KirbyTestCase
             'currency' => 'EUR',
             'defaultrequiresshipping' => 'no',
         ]);
-        $this->assertSame(7, $store->settings()->value('creationFailureRetentionDays'));
+        $this->assertSame(7, $store->settings()->value('incompleteOrderRetentionDays'));
         $this->assertSame(30, $store->settings()->value('unpaidOrderRetentionDays'));
 
         if ($multilang) {
@@ -194,17 +194,17 @@ final class RetentionSettingsTest extends KirbyTestCase
         $latest = $page->version('latest')->read('default') ?? [];
         $page->version('changes')->save([
             ...$latest,
-            'creationfailureretentiondays' => '',
+            'incompleteorderretentiondays' => '',
             'unpaidorderretentiondays' => '45',
-            'cleanupcreationfailures' => 'false',
+            'cleanupincompleteorders' => 'false',
         ], 'default');
         $before = $page->version('changes')->read('default');
         $versions = $this->viewVersions();
         $this->assertSame(90.0, $versions['latest']['unpaidorderretentiondays']);
         $this->assertFalse($versions['latest']['cleanupunpaidorders']);
-        $this->assertSame('', $versions['changes']['creationfailureretentiondays']);
+        $this->assertSame('', $versions['changes']['incompleteorderretentiondays']);
         $this->assertSame(45.0, $versions['changes']['unpaidorderretentiondays']);
-        $this->assertFalse($versions['changes']['cleanupcreationfailures']);
+        $this->assertFalse($versions['changes']['cleanupincompleteorders']);
         $this->assertSame($before, $page->version('changes')->read('default'));
         $this->assertSame($latest, $page->version('latest')->read('default'));
     }
@@ -215,14 +215,14 @@ final class RetentionSettingsTest extends KirbyTestCase
         $this->environment = KirbyTestEnvironment::start(options: [
             'programmatordev.stripe-checkout' => [
                 'settings' => [
-                    'cleanupCreationFailures' => true,
+                    'cleanupIncompleteOrders' => true,
                     'cleanupUnpaidOrders' => false,
                     'defaultRequiresShipping' => false,
-                    'creationFailureRetentionDays' => 21,
+                    'incompleteOrderRetentionDays' => 21,
                 ],
             ],
         ], beforeApp: static fn(TestWorkspace $workspace) => self::seedExistingSettings($workspace, [
-            'cleanupCreationFailures' => 'false',
+            'cleanupIncompleteOrders' => 'false',
             'cleanupUnpaidOrders' => 'true',
             'defaultRequiresShipping' => 'yes',
         ]));
@@ -233,21 +233,21 @@ final class RetentionSettingsTest extends KirbyTestCase
         $versions = $this->viewVersions();
 
         foreach ($versions as $content) {
-            $this->assertTrue($content['cleanupcreationfailures']);
+            $this->assertTrue($content['cleanupincompleteorders']);
             $this->assertFalse($content['cleanupunpaidorders']);
             $this->assertSame('no', $content['defaultrequiresshipping']);
-            $this->assertSame(21.0, $content['creationfailureretentiondays']);
+            $this->assertSame(21.0, $content['incompleteorderretentiondays']);
             $fields = Fields::for($page)->fill($content);
-            $this->assertTrue($fields->field('cleanupCreationFailures')->toFormValue());
+            $this->assertTrue($fields->field('cleanupIncompleteOrders')->toFormValue());
             $this->assertFalse($fields->field('cleanupUnpaidOrders')->toFormValue());
         }
 
         $this->assertSame($before, $page->version('latest')->read('default'));
         Changes::publish($page, [...$versions['changes'], 'currency' => 'EUR']);
-        $this->assertFalse($store->settings()->value('cleanupCreationFailures'));
+        $this->assertFalse($store->settings()->value('cleanupIncompleteOrders'));
         $this->assertTrue($store->settings()->value('cleanupUnpaidOrders'));
         $this->assertTrue($store->settings()->defaultRequiresShipping());
-        $this->assertNull($store->settings()->value('creationFailureRetentionDays'));
+        $this->assertNull($store->settings()->value('incompleteOrderRetentionDays'));
     }
 
     /** @return array<string, array<string, mixed>> */
@@ -285,19 +285,19 @@ final class RetentionSettingsTest extends KirbyTestCase
     {
         $store = new StripeCheckoutPageStore($this->kirby);
         $page = $store->initialize();
-        $this->assertTrue($store->settings()->value('cleanupCreationFailures'));
-        $this->assertSame(7, $store->settings()->value('creationFailureRetentionDays'));
+        $this->assertTrue($store->settings()->value('cleanupIncompleteOrders'));
+        $this->assertSame(7, $store->settings()->value('incompleteOrderRetentionDays'));
         Changes::publish($page, [
             'currency' => 'EUR',
             'defaultRequiresShipping' => 'no',
-            'cleanupCreationFailures' => false,
-            'creationFailureRetentionDays' => '14',
+            'cleanupIncompleteOrders' => false,
+            'incompleteOrderRetentionDays' => '14',
             'cleanupUnpaidOrders' => true,
             'unpaidOrderRetentionDays' => '45',
         ]);
         $settings = (new ConfigurationResolver())->resolve([], $store->settings())->configurationOrFail()->settings();
-        $this->assertFalse($settings->cleanupCreationFailures());
-        $this->assertSame(14, $settings->creationFailureRetentionDays());
+        $this->assertFalse($settings->cleanupIncompleteOrders());
+        $this->assertSame(14, $settings->incompleteOrderRetentionDays());
         $this->assertTrue($settings->cleanupUnpaidOrders());
         $this->assertSame(45, $settings->unpaidOrderRetentionDays());
     }
@@ -306,19 +306,19 @@ final class RetentionSettingsTest extends KirbyTestCase
     {
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start(options: [
-            'programmatordev.stripe-checkout.settings.creationFailureRetentionDays' => 21,
+            'programmatordev.stripe-checkout.settings.incompleteOrderRetentionDays' => 21,
         ]);
         $this->kirby = $this->environment->app();
         $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
         /** @var array<string, array<string, mixed>> $fields */
         $fields = $page->blueprint()->fields();
-        $this->assertTrue($fields['creationFailureRetentionDays']['disabled']);
-        $this->assertIsString($fields['creationFailureRetentionDays']['help']);
-        $this->assertStringContainsString('settings.creationFailureRetentionDays', $fields['creationFailureRetentionDays']['help']);
+        $this->assertTrue($fields['incompleteOrderRetentionDays']['disabled']);
+        $this->assertIsString($fields['incompleteOrderRetentionDays']['help']);
+        $this->assertStringContainsString('settings.incompleteOrderRetentionDays', $fields['incompleteOrderRetentionDays']['help']);
         $this->assertFalse($fields['unpaidOrderRetentionDays']['disabled'] ?? false);
         $page = $page->update(['unpaidOrderRetentionDays' => 60]);
         $this->expectException(PermissionException::class);
-        $page->update(['creationFailureRetentionDays' => 1]);
+        $page->update(['incompleteOrderRetentionDays' => 1]);
     }
 
     public function testRetentionFieldsStayInDefaultLanguage(): void

@@ -96,8 +96,8 @@ final class LocalDiagnostics
                 'lifecycleDeliveryPayloadRetentionDays' => (string) $housekeeping->lifecycleDeliveryPayloadRetentionDays(),
             ]);
             $checks[] = $this->check('retention', self::PASS, 'retention.configured', [
-                'creationDays' => (string) $settings->creationFailureRetentionDays(),
-                'unpaidDays' => (string) $settings->unpaidOrderRetentionDays(),
+                'incompleteOrderRetentionDays' => (string) $settings->incompleteOrderRetentionDays(),
+                'unpaidOrderRetentionDays' => (string) $settings->unpaidOrderRetentionDays(),
             ]);
             $checks[] = $settings->currency() === null
                 ? $this->check('currency', self::WARNING, 'setting.missing')

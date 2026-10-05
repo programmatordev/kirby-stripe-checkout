@@ -19,8 +19,8 @@ use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 final class Defaults
 {
     public const RETENTION = [
-        'cleanupCreationFailures' => true,
-        'creationFailureRetentionDays' => 7,
+        'cleanupIncompleteOrders' => true,
+        'incompleteOrderRetentionDays' => 7,
         'cleanupUnpaidOrders' => true,
         'unpaidOrderRetentionDays' => 30,
     ];

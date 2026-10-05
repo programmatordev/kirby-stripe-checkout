@@ -54,7 +54,7 @@ The Settings tab currently contains:
 - customer-entered promotion codes;
 - Automatic Tax and the tax inclusion policy for Kirby prices;
 - country-based shipping zones with fixed whole-order options, and shipping tax defaults;
-- [order retention preferences](#order-retention), with separate controls for failed attempts and unpaid orders.
+- [order retention preferences](#order-retention), with separate controls for incomplete orders and completed orders with failed payment.
 
 The protected Page is created with `kirby` as its saved price source, so a fresh installation does not require an initial save for that deterministic default. The plugin does not guess a currency or whether products are physical. It can boot with those two fields empty so the Panel and diagnostics remain available, but the Settings tab asks the operator to select both values.
 
@@ -240,14 +240,18 @@ The Settings tab provides four policy values. All follow the same Page/PHP prece
 
 | Setting / typed accessor | Default | Meaning |
 | --- | --- | --- |
-| `cleanupCreationFailures()` | `true` | Allow cleanup of definite creation failures without a Session. |
-| `creationFailureRetentionDays()` | `7` | Whole days to keep those attempts after failure. |
-| `cleanupUnpaidOrders()` | `true` | Allow cleanup of expired or completed-failed unpaid orders. |
-| `unpaidOrderRetentionDays()` | `30` | Whole days to keep those terminal unpaid orders. |
+| `cleanupIncompleteOrders()` | `true` | Allow cleanup of definite creation failures without a Session and confirmed expired unpaid checkouts. |
+| `incompleteOrderRetentionDays()` | `7` | Whole days from order creation before confirmed incomplete orders can be deleted. |
+| `cleanupUnpaidOrders()` | `true` | Allow cleanup of completed checkouts whose payment failed. |
+| `unpaidOrderRetentionDays()` | `30` | Whole days after both Checkout completion and payment failure are known. |
 
 For example, `$site->stripeCheckout()->settings()->unpaidOrderRetentionDays()` returns the effective number. The same names without parentheses are available through `setting()` and `all()`, and under `settings` in PHP configuration. PHP booleans must be actual booleans; day counts must be positive integers. `null` leaves the Page/default value in control. Use the category toggle to disable cleanup, not `0` days.
 
-Shortening a period can make existing records eligible for cleanup. Pending and paid orders are never automatically eligible. **Automatic cleanup is not running yet**; these settings currently define the tested eligibility policy.
+Incomplete means Checkout never completed; it does not mean an unresolved attempt can be deleted by age alone. Still-creating, uncertain and open orders remain protected until a safe terminal outcome is established. A later expiry observation does not restart the incomplete order's creation-based retention period. Pending, paid and no-payment-required orders are protected; refunds and disputes do not erase historical payment success.
+
+Shortening a period can make existing records eligible for cleanup. **Automatic cleanup is not running yet**; these settings currently define the tested eligibility policy.
+
+For existing development installations, rename `cleanupCreationFailures` to `cleanupIncompleteOrders` and `creationFailureRetentionDays` to `incompleteOrderRetentionDays` in PHP configuration and saved Settings content, retaining their values. The old names have been replaced.
 
 Request-load controls are separate, PHP-only values:
 

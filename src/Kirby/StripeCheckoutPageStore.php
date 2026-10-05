@@ -109,8 +109,8 @@ final class StripeCheckoutPageStore
             shippingZones: $this->shippingZoneDefinitions($page),
             shippingTaxBehavior: $this->fieldValue($page, 'shippingTaxBehavior'),
             shippingTaxCode: $this->fieldValue($page, 'shippingTaxCode'),
-            cleanupCreationFailures: $this->fieldValue($page, 'cleanupCreationFailures'),
-            creationFailureRetentionDays: $this->fieldValue($page, 'creationFailureRetentionDays'),
+            cleanupIncompleteOrders: $this->fieldValue($page, 'cleanupIncompleteOrders'),
+            incompleteOrderRetentionDays: $this->fieldValue($page, 'incompleteOrderRetentionDays'),
             cleanupUnpaidOrders: $this->fieldValue($page, 'cleanupUnpaidOrders'),
             unpaidOrderRetentionDays: $this->fieldValue($page, 'unpaidOrderRetentionDays'),
         );

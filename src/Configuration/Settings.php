@@ -205,21 +205,24 @@ final class Settings
         return $this->settings[$path] ?? null;
     }
 
-    public function cleanupCreationFailures(): bool
+    public function cleanupIncompleteOrders(): bool
     {
-        return $this->settings['cleanupCreationFailures']->value() === true;
+        return $this->settings['cleanupIncompleteOrders']->value() === true;
     }
 
-    public function creationFailureRetentionDays(): int
+    /** Whole days from order creation; deletion still requires a confirmed safe terminal outcome. */
+    public function incompleteOrderRetentionDays(): int
     {
-        return $this->retentionDays('creationFailureRetentionDays');
+        return $this->retentionDays('incompleteOrderRetentionDays');
     }
 
+    /** Controls cleanup of completed Checkout orders whose payment ultimately failed. */
     public function cleanupUnpaidOrders(): bool
     {
         return $this->settings['cleanupUnpaidOrders']->value() === true;
     }
 
+    /** Whole days from the later observation of Checkout completion and payment failure. */
     public function unpaidOrderRetentionDays(): int
     {
         return $this->retentionDays('unpaidOrderRetentionDays');

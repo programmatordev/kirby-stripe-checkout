@@ -19,9 +19,11 @@ final readonly class RetentionPolicy
             return false;
         }
 
-        if ($data['checkoutStatus'] === 'creation_failed') {
-            return $this->settings->cleanupCreationFailures()
-                && $this->oldEnough($data['creationFailedAt'], $this->settings->creationFailureRetentionDays(), $now);
+        if ($data['checkoutStatus'] !== 'complete') {
+            // Terminal eligibility is established above; age alone cannot resolve an open or uncertain Checkout.
+            // Recovery may observe expiry later, but it must not restart an incomplete order's retention clock.
+            return $this->settings->cleanupIncompleteOrders()
+                && $this->oldEnough($data['createdAt'], $this->settings->incompleteOrderRetentionDays(), $now);
         }
 
         if ($this->settings->cleanupUnpaidOrders() === false) {
@@ -30,14 +32,9 @@ final readonly class RetentionPolicy
 
         // A delayed payment can fail after Checkout completes.
         // Start retention only once both facts are terminal, not while payment was still pending.
-        $terminalAt = match (true) {
-            $data['checkoutStatus'] === 'expired' => $data['checkoutExpiredAt'],
-            $data['checkoutStatus'] === 'complete'
-                => max(OrderData::string($data['checkoutCompletedAt']), OrderData::string($data['paymentFailedAt'])),
-            default => null,
-        };
+        $terminalAt = max(OrderData::string($data['checkoutCompletedAt']), OrderData::string($data['paymentFailedAt']));
 
-        return $terminalAt !== null && $this->oldEnough($terminalAt, $this->settings->unpaidOrderRetentionDays(), $now);
+        return $this->oldEnough($terminalAt, $this->settings->unpaidOrderRetentionDays(), $now);
     }
 
     /** @param array<string, mixed> $data Validated, freshly loaded canonical facts. */

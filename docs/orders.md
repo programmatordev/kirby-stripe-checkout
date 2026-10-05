@@ -331,9 +331,9 @@ Snapshots can contain customer information and custom fields. Treat them as priv
 
 ## Retention policy
 
-The Settings tab contains cleanup preferences with defaults of **7 days for definitely failed creation attempts** and **30 days for terminal unpaid orders**. Both categories are enabled by default. These preferences prepare the policy; automatic cleanup is not running yet. See [retention configuration](configuration.md#order-retention).
+The Settings tab contains cleanup preferences with defaults of **7 days for confirmed incomplete orders** and **30 days for completed orders with failed payment**. Both categories are enabled by default. These preferences prepare the policy; automatic cleanup is not running yet. See [retention configuration](configuration.md#order-retention).
 
-Only definitely failed creation without a Session, expired Checkout, or completed Checkout with a failed payment can become eligible. Completed failures are aged from the later of completion and payment failure. Still-creating, uncertain, open, pending, paid and no-payment-required orders are never eligible merely because they are old. Shortening a retention period can make existing records eligible.
+Incomplete orders become eligible only after definite creation failure without a Session or confirmed expired unpaid Checkout, and are aged from order creation. A late expiry observation does not restart their retention period. Completed failures are aged from the later of completion and payment failure. Still-creating, uncertain, open, pending, paid and no-payment-required orders are never eligible merely because they are old. Shortening a retention period can make existing records eligible.
 
 Reaching the creation retry deadline stops further Session-creation calls without changing the Order's state or timestamps. It does not prove that Stripe rejected the request. Unresolved attempts remain protected from both automatic and manual deletion until their outcome is established.
 

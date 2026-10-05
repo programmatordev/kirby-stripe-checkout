@@ -444,7 +444,7 @@ final class PanelAreaTest extends KirbyTestCase
         $allowPromotionCodes = $fields['allowPromotionCodes'];
         $automaticTax = $fields['automaticTax'];
         $taxBehavior = $fields['taxBehavior'];
-        $creationFailureRetentionDays = $fields['creationFailureRetentionDays'];
+        $incompleteOrderRetentionDays = $fields['incompleteOrderRetentionDays'];
         $unpaidOrderRetentionDays = $fields['unpaidOrderRetentionDays'];
         $this->assertIsArray($priceSource);
         $this->assertIsArray($uiMode);
@@ -462,7 +462,7 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertIsArray($allowPromotionCodes);
         $this->assertIsArray($automaticTax);
         $this->assertIsArray($taxBehavior);
-        $this->assertIsArray($creationFailureRetentionDays);
+        $this->assertIsArray($incompleteOrderRetentionDays);
         $this->assertIsArray($unpaidOrderRetentionDays);
         $this->assertTrue($priceSource['required']);
         $this->assertSame('kirby', $priceSource['default']);
@@ -496,8 +496,8 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertSame(['uiMode' => 'hosted'], $cancelDestination['when']);
         $this->assertSame(['uiMode' => 'embedded'], $returnDestination['when']);
         $this->assertSame(
-            ['cleanupCreationFailures' => true],
-            $creationFailureRetentionDays['when'],
+            ['cleanupIncompleteOrders' => true],
+            $incompleteOrderRetentionDays['when'],
         );
         $this->assertSame(
             ['cleanupUnpaidOrders' => true],

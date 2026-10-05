@@ -32,22 +32,22 @@ final class ConfigurationResolverTest extends TestCase
     {
         $resolver = new ConfigurationResolver();
         $defaults = $resolver->resolve([])->configurationOrFail()->settings();
-        $this->assertTrue($defaults->cleanupCreationFailures());
-        $this->assertSame(7, $defaults->creationFailureRetentionDays());
+        $this->assertTrue($defaults->cleanupIncompleteOrders());
+        $this->assertSame(7, $defaults->incompleteOrderRetentionDays());
         $this->assertTrue($defaults->cleanupUnpaidOrders());
         $this->assertSame(30, $defaults->unpaidOrderRetentionDays());
-        $page = new PageSettings(cleanupCreationFailures: 'false', creationFailureRetentionDays: '14', cleanupUnpaidOrders: 'false', unpaidOrderRetentionDays: '60');
+        $page = new PageSettings(cleanupIncompleteOrders: 'false', incompleteOrderRetentionDays: '14', cleanupUnpaidOrders: 'false', unpaidOrderRetentionDays: '60');
         $settings = $resolver->resolve([
-            self::PREFIX . '.settings.cleanupCreationFailures' => true,
+            self::PREFIX . '.settings.cleanupIncompleteOrders' => true,
             self::PREFIX . '.settings.unpaidOrderRetentionDays' => 90,
         ], $page)->configurationOrFail()->settings();
-        $this->assertTrue($settings->cleanupCreationFailures());
-        $this->assertSame(14, $settings->creationFailureRetentionDays());
+        $this->assertTrue($settings->cleanupIncompleteOrders());
+        $this->assertSame(14, $settings->incompleteOrderRetentionDays());
         $this->assertFalse($settings->cleanupUnpaidOrders());
         $this->assertSame(90, $settings->unpaidOrderRetentionDays());
-        $this->assertTrue($settings->setting('cleanupCreationFailures')?->isLocked());
-        $this->assertFalse($settings->setting('cleanupCreationFailures')->shadowedValue());
-        $this->assertSame(SettingSource::Page, $settings->setting('creationFailureRetentionDays')?->source());
+        $this->assertTrue($settings->setting('cleanupIncompleteOrders')?->isLocked());
+        $this->assertFalse($settings->setting('cleanupIncompleteOrders')->shadowedValue());
+        $this->assertSame(SettingSource::Page, $settings->setting('incompleteOrderRetentionDays')?->source());
         $this->assertNull($settings->setting('housekeeping'));
     }
 
@@ -62,13 +62,13 @@ final class ConfigurationResolverTest extends TestCase
     /** @return iterable<string, array{string, mixed, bool|int|null}> */
     public static function pageRetentionValues(): iterable
     {
-        yield 'native toggle' => ['cleanupCreationFailures', true, true];
+        yield 'native toggle' => ['cleanupIncompleteOrders', true, true];
         yield 'native false toggle' => ['cleanupUnpaidOrders', false, false];
-        yield 'text toggle' => ['cleanupCreationFailures', 'true', true];
+        yield 'text toggle' => ['cleanupIncompleteOrders', 'true', true];
         yield 'text false toggle' => ['cleanupUnpaidOrders', 'false', false];
-        yield 'native retention days' => ['creationFailureRetentionDays', 14, 14];
+        yield 'native retention days' => ['incompleteOrderRetentionDays', 14, 14];
         yield 'text retention days' => ['unpaidOrderRetentionDays', '60', 60];
-        yield 'empty toggle remains unset' => ['cleanupCreationFailures', '', null];
+        yield 'empty toggle remains unset' => ['cleanupIncompleteOrders', '', null];
         yield 'null retention remains unset' => ['unpaidOrderRetentionDays', null, null];
     }
 
@@ -87,13 +87,13 @@ final class ConfigurationResolverTest extends TestCase
     /** @return iterable<string, array{string, mixed}> */
     public static function invalidPageRetentionValues(): iterable
     {
-        yield 'numeric toggle' => ['cleanupCreationFailures', 1];
+        yield 'numeric toggle' => ['cleanupIncompleteOrders', 1];
         yield 'numeric text toggle' => ['cleanupUnpaidOrders', '0'];
-        yield 'boolean days' => ['creationFailureRetentionDays', true];
+        yield 'boolean days' => ['incompleteOrderRetentionDays', true];
         yield 'whole-valued float days' => ['unpaidOrderRetentionDays', 1.0];
-        yield 'fractional text days' => ['creationFailureRetentionDays', '1.5'];
+        yield 'fractional text days' => ['incompleteOrderRetentionDays', '1.5'];
         yield 'zero days' => ['unpaidOrderRetentionDays', 0];
-        yield 'negative days' => ['creationFailureRetentionDays', '-1'];
+        yield 'negative days' => ['incompleteOrderRetentionDays', '-1'];
     }
 
     public function testHousekeepingIsPhpOnlyAndValidatesIntegerBounds(): void
@@ -147,11 +147,11 @@ final class ConfigurationResolverTest extends TestCase
     /** @return iterable<array{string, mixed}> */
     public static function invalidRetentionSettings(): iterable
     {
-        yield ['cleanupCreationFailures', 'true'];
+        yield ['cleanupIncompleteOrders', 'true'];
         yield ['cleanupUnpaidOrders', 0];
-        yield ['creationFailureRetentionDays', 0];
-        yield ['creationFailureRetentionDays', -1];
-        yield ['creationFailureRetentionDays', '7'];
+        yield ['incompleteOrderRetentionDays', 0];
+        yield ['incompleteOrderRetentionDays', -1];
+        yield ['incompleteOrderRetentionDays', '7'];
         yield ['unpaidOrderRetentionDays', 2.5];
         yield ['unpaidOrderRetentionDays', true];
     }
@@ -958,8 +958,8 @@ final class ConfigurationResolverTest extends TestCase
                 'shippingZones',
                 'shippingTaxBehavior',
                 'shippingTaxCode',
-                'cleanupCreationFailures',
-                'creationFailureRetentionDays',
+                'cleanupIncompleteOrders',
+                'incompleteOrderRetentionDays',
                 'cleanupUnpaidOrders',
                 'unpaidOrderRetentionDays',
             ],

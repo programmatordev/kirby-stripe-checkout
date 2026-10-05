@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Brick\Money\Money;
 use Closure;
+use DateInterval;
 use DateTimeImmutable;
 use Kirby\Cms\App;
 use Kirby\Cms\Language;
@@ -848,11 +849,38 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         yield 'outcome' => [true, 2, 2];
     }
 
+    public function testExpiredOrderUsesIncompleteRetentionWhenCompletedUnpaidCleanupIsDisabled(): void
+    {
+        $this->restart([], options: ['programmatordev.stripe-checkout' => ['settings' => [
+            'cleanupIncompleteOrders' => true,
+            'cleanupUnpaidOrders' => false,
+        ]]]);
+        $page = $this->createOrder();
+        $store = new OrderPageStore($this->kirby);
+        $pageUuid = $page->uuid()->toString();
+        $createdAt = OrderData::date($store->data($page)['createdAt']);
+        $store->update($pageUuid, static fn(array $data): array => [
+            ...$data,
+            'checkoutStatus' => 'expired',
+            'checkoutExpiredAt' => $data['createdAt'],
+            'stripeCheckoutSessionId' => 'opaque-session',
+            'stripeShippingRateIds' => [],
+        ]);
+        /** @var array<string, mixed> $options */
+        $options = $this->kirby->options();
+        $policy = new RetentionPolicy((new ConfigurationResolver())->resolve($options)->configurationOrFail()->settings());
+        $eligibleAt = $createdAt->add(new DateInterval('P7D'));
+        $this->assertFalse($store->deleteEligible(uuid: $pageUuid, policy: $policy, now: $eligibleAt->sub(new DateInterval('PT1S'))));
+        $this->assertNotNull($store->order($pageUuid));
+        $this->assertTrue($store->deleteEligible(uuid: $pageUuid, policy: $policy, now: $eligibleAt));
+        $this->assertNull($store->order($pageUuid));
+    }
+
     #[DataProvider('manualDeletionStates')]
     public function testManualDeletionBypassesCleanupSettingsAndAgeForTerminalUnpaidOrders(string $checkoutStatus, string $paymentStatus): void
     {
         $this->restart([], options: ['programmatordev.stripe-checkout' => ['settings' => [
-            'cleanupCreationFailures' => false,
+            'cleanupIncompleteOrders' => false,
             'cleanupUnpaidOrders' => false,
         ]]]);
         $page = $this->createOrder();

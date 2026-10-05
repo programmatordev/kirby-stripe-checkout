@@ -98,21 +98,21 @@ tabs:
             options:
               - page
               - url
-          cleanupCreationFailures:
-            label: programmatordev.stripe-checkout.settings.cleanupCreationFailures.label
-            help: programmatordev.stripe-checkout.settings.cleanupCreationFailures.help
+          cleanupIncompleteOrders:
+            label: programmatordev.stripe-checkout.settings.cleanupIncompleteOrders.label
+            help: programmatordev.stripe-checkout.settings.cleanupIncompleteOrders.help
             type: toggle
             translate: false
-          creationFailureRetentionDays:
-            label: programmatordev.stripe-checkout.settings.creationFailureRetentionDays.label
-            help: programmatordev.stripe-checkout.settings.creationFailureRetentionDays.help
+          incompleteOrderRetentionDays:
+            label: programmatordev.stripe-checkout.settings.incompleteOrderRetentionDays.label
+            help: programmatordev.stripe-checkout.settings.incompleteOrderRetentionDays.help
             type: number
             translate: false
             required: true
             min: 1
             step: 1
             when:
-              cleanupCreationFailures: true
+              cleanupIncompleteOrders: true
           cleanupUnpaidOrders:
             label: programmatordev.stripe-checkout.settings.cleanupUnpaidOrders.label
             help: programmatordev.stripe-checkout.settings.cleanupUnpaidOrders.help

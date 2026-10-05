@@ -48,8 +48,8 @@ final class PageSettings
         mixed $shippingZones = null,
         mixed $shippingTaxBehavior = null,
         mixed $shippingTaxCode = null,
-        mixed $cleanupCreationFailures = null,
-        mixed $creationFailureRetentionDays = null,
+        mixed $cleanupIncompleteOrders = null,
+        mixed $incompleteOrderRetentionDays = null,
         mixed $cleanupUnpaidOrders = null,
         mixed $unpaidOrderRetentionDays = null,
     ) {
@@ -143,7 +143,7 @@ final class PageSettings
             array_column(ShippingTaxCode::cases(), 'value'),
             'shippingTaxCode',
         );
-        $retentionInput = compact('cleanupCreationFailures', 'creationFailureRetentionDays', 'cleanupUnpaidOrders', 'unpaidOrderRetentionDays');
+        $retentionInput = compact('cleanupIncompleteOrders', 'incompleteOrderRetentionDays', 'cleanupUnpaidOrders', 'unpaidOrderRetentionDays');
         $retention = [];
 
         foreach (Defaults::RETENTION as $name => $default) {
