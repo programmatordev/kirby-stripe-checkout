@@ -797,7 +797,7 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
         $reconciler->reconcile($this->order->pageUuid(), 'cs_current');
         $before = $this->data();
         // No financial retriever is supplied: absence of a PaymentIntent requires no list operation.
-        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $result = $reconciler->syncOrder($this->order->pageUuid());
         $this->assertSame(ReconciliationOutcome::NoChange, $result->outcome());
         $this->assertSame($before, $this->data());
         $this->assertArrayNotHasKey('stripePaymentIntentId', $before);
@@ -820,13 +820,13 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
             refundRetriever: new RefundRetriever($this->createMock(RefundGatewayInterface::class)),
             disputeRetriever: new DisputeRetriever($this->createMock(DisputeGatewayInterface::class)),
         );
-        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->syncOrder($this->order->pageUuid())->outcome());
         $after = $this->data();
         $this->assertSame($before['updatedAt'], $after['updatedAt']);
         $this->assertSame($before['payment'], $after['payment']);
         $this->assertArrayNotHasKey('events', $after);
         $this->assertCount(2, $this->deliveries());
-        $this->assertSame(ReconciliationOutcome::NoChange, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame(ReconciliationOutcome::NoChange, $reconciler->syncOrder($this->order->pageUuid())->outcome());
         $this->assertSame($after, $this->data());
     }
 
@@ -836,7 +836,7 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
         $before = $this->data();
         $record = $this->record('open', 'unpaid');
         $reconciler = $this->reconciler($this->gateway(new CheckoutSessionReconciliationRecord($record->session, $record->lineItems, null, null)));
-        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $result = $reconciler->syncOrder($this->order->pageUuid());
         $this->assertSame(CheckoutErrorCode::SESSION_INCOMPATIBLE, $result->errorCode());
         $this->assertSame($before, $this->data());
     }
@@ -921,7 +921,7 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
         $this->assertSame('0', $data['total']);
         $this->assertNull(Payment::fromArray(OrderData::map($data['payment']))->stripePaymentIntentId());
         $this->assertNull(Payment::fromArray(OrderData::map($data['payment']))->amount());
-        $this->assertSame(ReconciliationOutcome::NoChange, $reconciler->reconcileCurrent($freeOrder->pageUuid())->outcome());
+        $this->assertSame(ReconciliationOutcome::NoChange, $reconciler->syncOrder($freeOrder->pageUuid())->outcome());
         $this->assertSame($data, $this->data($this->store->order($freeOrder->pageUuid())));
     }
 

@@ -307,7 +307,7 @@ The protected `events` ledger records correlated Stripe Event identity, type, re
 
 ### Manual reconciliation
 
-The internal `CheckoutSessionReconciler::reconcileCurrent($pageUuid)` operation refreshes one existing order using its saved Checkout Session. It reads current Checkout, payment, customer capabilities, refunds and disputes directly from Stripe, including complete financial pagination. Refund and dispute webhook subscriptions are not required for this refresh; without those Events, financial updates appear when reconciliation runs.
+The internal `CheckoutSessionReconciler::syncOrder($pageUuid)` operation refreshes one existing order using its saved Checkout Session. It reads current Checkout, payment, customer capabilities, refunds and disputes directly from Stripe, including complete financial pagination. Refund and dispute webhook subscriptions are not required for this refresh; without those Events, financial updates appear when reconciliation runs.
 
 The operation returns a typed `ReconciliationResult` with an `Updated`, `NoChange` or `Failed` outcome, a committed Page on success, and a safe error code and retryability on failure. A new action-only lifecycle delivery also counts as an update. It creates no Stripe resource or Event ledger entry, and only newly committed transitions emit lifecycle hooks. Unchanged reads preserve timestamps and do not repeat hooks. Optional listener failure remains separate from successful canonical persistence.
 

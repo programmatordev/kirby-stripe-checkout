@@ -147,7 +147,7 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->setRefunds([$this->refund()]);
         $this->setDisputes([$this->dispute()]);
 
-        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $result = $reconciler->syncOrder($this->order->pageUuid());
         $this->assertSame(ReconciliationOutcome::Updated, $result->outcome());
         $this->assertSame($this->order->pageUuid(), $result->orderPageOrFail()->uuid()->toString());
         $this->assertNull($result->errorCode());
@@ -165,12 +165,12 @@ final class WebhookRoutesTest extends KirbyTestCase
         }
 
         $before = $this->data();
-        $this->assertSame(ReconciliationOutcome::NoChange, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame(ReconciliationOutcome::NoChange, $reconciler->syncOrder($this->order->pageUuid())->outcome());
         $this->assertSame($before, $this->data());
         $this->assertCount(4, $this->delivered);
         $this->assertResponse($this->send($this->refundEvent()), 204);
         $this->assertResponse($this->send($this->disputeEvent()), 204);
-        $this->assertSame(ReconciliationOutcome::NoChange, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame(ReconciliationOutcome::NoChange, $reconciler->syncOrder($this->order->pageUuid())->outcome());
         $this->assertCount(4, $this->delivered);
     }
 
@@ -181,13 +181,13 @@ final class WebhookRoutesTest extends KirbyTestCase
         $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
         $this->setRefunds([$this->refund()]);
         $this->setDisputes([$this->dispute()]);
-        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->syncOrder($this->order->pageUuid())->outcome());
         $snapshot = ($this->delivered[array_key_last($this->delivered)] ?? $this->fail('Missing lifecycle delivery.'))->orderSnapshot();
         $this->setRefunds([]);
         $this->setDisputes([]);
         unset($this->provider->session['customer_details']);
 
-        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->syncOrder($this->order->pageUuid())->outcome());
         $data = $this->data();
         $this->assertSame('paid', $data['paymentStatus']);
         $this->assertSame('none', $data['refundStatus']);
@@ -202,17 +202,17 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->assertArrayNotHasKey('customer', $data);
         $this->assertSame('partial', $snapshot['refundStatus']);
         $this->assertSame('needs_response', $snapshot['disputeStatus']);
-        $this->assertSame(ReconciliationOutcome::NoChange, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame(ReconciliationOutcome::NoChange, $reconciler->syncOrder($this->order->pageUuid())->outcome());
     }
 
     public function testManualReconciliationRequiresAnExistingOrderAndSavedSessionBeforeProviderReads(): void
     {
         $reconciler = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler();
-        $missing = $reconciler->reconcileCurrent('page://missingorder001');
+        $missing = $reconciler->syncOrder('page://missingorder001');
         $this->assertSame(ReconciliationOutcome::Failed, $missing->outcome());
         $this->assertSame(PersistenceErrorCode::ORDER_UNAVAILABLE, $missing->errorCode());
         $this->assertNull($missing->orderPage());
-        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $result = $reconciler->syncOrder($this->order->pageUuid());
         $this->assertSame(CheckoutErrorCode::SESSION_MISSING, $result->errorCode());
         $this->assertFalse($result->isRetryable());
         $this->assertSame([], $this->provider->requests);
@@ -250,7 +250,7 @@ final class WebhookRoutesTest extends KirbyTestCase
             $this->provider->beforeDisputeListRead = $fail;
         }
 
-        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $result = $reconciler->syncOrder($this->order->pageUuid());
         $this->assertSame(ReconciliationOutcome::Failed, $result->outcome());
         $this->assertSame(CheckoutErrorCode::SESSION_UNAVAILABLE, $result->errorCode());
         $this->assertTrue($result->isRetryable());
@@ -300,7 +300,7 @@ final class WebhookRoutesTest extends KirbyTestCase
             ],
         ];
 
-        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->syncOrder($this->order->pageUuid())->outcome());
         $this->assertSame('full', $this->data()['refundStatus']);
         $this->assertSame(['re_second', 're_webhook'], array_column($this->entries('refunds'), 'stripeRefundId'));
         $this->assertSame(['du_second', 'du_webhook'], array_column($this->entries('disputes'), 'stripeDisputeId'));
@@ -322,7 +322,7 @@ final class WebhookRoutesTest extends KirbyTestCase
             $this->provider->disputes[0][$field] = $value;
         }
 
-        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $result = $reconciler->syncOrder($this->order->pageUuid());
         $this->assertSame(CheckoutErrorCode::SESSION_INCOMPATIBLE, $result->errorCode());
         $this->assertFalse($result->isRetryable());
         $this->assertSame($before, $this->data());
@@ -353,7 +353,7 @@ final class WebhookRoutesTest extends KirbyTestCase
             }
         };
 
-        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->syncOrder($this->order->pageUuid())->outcome());
         $this->assertSame(2, $reads);
         $this->assertSame('full', $this->data()['refundStatus']);
         $this->assertSame('needs_response', $this->data()['disputeStatus']);
@@ -374,7 +374,7 @@ final class WebhookRoutesTest extends KirbyTestCase
             $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
         };
 
-        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $result = $reconciler->syncOrder($this->order->pageUuid());
         $this->assertSame(CheckoutErrorCode::RECONCILIATION_CONFLICT, $result->errorCode());
         $this->assertTrue($result->isRetryable());
         $this->assertSame(3, $reads);
@@ -396,7 +396,7 @@ final class WebhookRoutesTest extends KirbyTestCase
             throw new RuntimeException('PRIVATE_LISTENER');
         }]]);
 
-        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->syncOrder($this->order->pageUuid())->outcome());
         $this->assertSame('partial', $this->data()['refundStatus']);
         $refundDeliveries = array_filter($this->entries('lifecycleDeliveries'), static fn(array $delivery): bool => OrderData::map($delivery['event'])['type'] === 'refund.updated');
         $this->assertCount(1, $refundDeliveries);
@@ -405,7 +405,7 @@ final class WebhookRoutesTest extends KirbyTestCase
             $this->assertSame('failed', $delivery['status']);
         }
 
-        $this->assertSame(ReconciliationOutcome::NoChange, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame(ReconciliationOutcome::NoChange, $reconciler->syncOrder($this->order->pageUuid())->outcome());
         $this->assertSame(1, $attempts);
     }
 
@@ -417,10 +417,10 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->setDisputes([$this->dispute()]);
         $this->provider->beforeDisputeListRead = function () use ($reconciler): void {
             $this->provider->beforeDisputeListRead = null;
-            $this->assertSame(ReconciliationOutcome::Updated, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+            $this->assertSame(ReconciliationOutcome::Updated, $reconciler->syncOrder($this->order->pageUuid())->outcome());
         };
 
-        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $result = $reconciler->syncOrder($this->order->pageUuid());
         $this->assertSame(ReconciliationOutcome::NoChange, $result->outcome());
         $this->assertSame('partial', $this->data()['refundStatus']);
         $this->assertSame('needs_response', $this->data()['disputeStatus']);
@@ -447,7 +447,7 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->setRefunds([$refund]);
         $reconciler = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler();
         $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
-        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->syncOrder($this->order->pageUuid())->outcome());
         $this->assertSame('partial', $this->data()['refundStatus']);
         $this->assertSame('needs_response', $this->data()['disputeStatus']);
         $this->assertSame([], array_filter($this->provider->requests, static fn(string $url): bool => str_contains($url, '/charges/')));
@@ -459,7 +459,7 @@ final class WebhookRoutesTest extends KirbyTestCase
         $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
         $before = $this->data();
         $this->provider->httpStatus = 500;
-        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $result = $reconciler->syncOrder($this->order->pageUuid());
         $this->assertSame(ReconciliationOutcome::Failed, $result->outcome());
         $this->assertSame(CheckoutErrorCode::SESSION_UNAVAILABLE, $result->errorCode());
         $this->assertTrue($result->isRetryable());
@@ -493,7 +493,7 @@ final class WebhookRoutesTest extends KirbyTestCase
         };
 
         try {
-            $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+            $result = $reconciler->syncOrder($this->order->pageUuid());
         } finally {
             $this->kirby->extend(['components' => ['storage' => $nativeStorage]]);
             $this->provider->beforeDisputeListRead = null;
@@ -520,7 +520,7 @@ final class WebhookRoutesTest extends KirbyTestCase
             $page->version('latest')->update(['subtotal' => 'invalid'], 'default');
         };
 
-        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $result = $reconciler->syncOrder($this->order->pageUuid());
         $this->assertSame(ReconciliationOutcome::Failed, $result->outcome());
         $this->assertSame(PersistenceErrorCode::CONTENT_INVALID, $result->errorCode());
         $this->assertFalse($result->isRetryable());
@@ -541,11 +541,11 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->setRefunds([$this->refund()]);
         $this->setDisputes([$this->dispute()]);
 
-        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->syncOrder($this->order->pageUuid())->outcome());
         $this->assertSame($events, $this->entries('events'));
         $before = $this->data();
         $this->provider->httpStatus = 500;
-        $this->assertSame(ReconciliationOutcome::Failed, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame(ReconciliationOutcome::Failed, $reconciler->syncOrder($this->order->pageUuid())->outcome());
         $this->assertSame($before, $this->data());
     }
 
@@ -555,7 +555,7 @@ final class WebhookRoutesTest extends KirbyTestCase
         $before = $this->data();
         $this->provider->requests = [];
         $stripe = new StripeConfiguration(secretKey: 'sk_live_fixture', publishableKey: null, webhookSecret: null);
-        $result = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler($stripe)->reconcileCurrent($this->order->pageUuid());
+        $result = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler($stripe)->syncOrder($this->order->pageUuid());
         $this->assertSame(CheckoutErrorCode::SESSION_INCOMPATIBLE, $result->errorCode());
         $this->assertFalse($result->isRetryable());
         $this->assertSame([], $this->provider->requests);

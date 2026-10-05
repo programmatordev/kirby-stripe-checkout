@@ -42,7 +42,7 @@ final class CheckoutSessionReconciler
      * Refreshes the saved Session and both financial collections as one order-wide operation.
      * Financial webhook subscriptions are not required, and no provider Event is invented.
      */
-    public function reconcileCurrent(string $pageUuid): ReconciliationResult
+    public function syncOrder(string $pageUuid): ReconciliationResult
     {
         try {
             $page = $this->orders->order($pageUuid);
