@@ -40,6 +40,7 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
+use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Price;
@@ -766,19 +767,40 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         yield 'malformed presentation secret' => [UiMode::Embedded, ['clientSecret' => ' secret']];
     }
 
-    public function testRetryDeadlineClosesAnUncertainAttemptWithoutAnotherProviderCall(): void
-    {
+    #[DataProvider('retryDeadlineFailureTypes')]
+    public function testRetryDeadlinePreservesUnresolvedCreationAndPreventsDeletion(
+        CheckoutSessionFailureType $failureType,
+        CheckoutStatus $checkoutStatus,
+        string $errorCode,
+    ): void {
         $now = new DateTimeImmutable('2026-09-11T12:00:00Z');
         $configuration = $this->configure(UiMode::Hosted);
         $checkout = $this->checkout();
         $order = $this->order($checkout);
-        $this->persistUncertainAttempt(
-            configuration: $configuration,
-            checkout: $checkout,
-            now: $now,
-            retryable: true,
+        $gateway = new FakeCheckoutSessionGateway();
+        $gateway->creationFailure = new CheckoutSessionGatewayException(
+            failure: new CheckoutSessionFailure(type: $failureType, retryable: true),
+            error: new RuntimeException('private'),
         );
 
+        try {
+            $this->creator($configuration, $gateway)->create(
+                checkout: $checkout,
+                shipping: new ShippingContext('PT'),
+                binding: $this->binding(),
+                token: $this->token(),
+                guestReference: 'guest-browser',
+                now: $now,
+            );
+            $this->fail('Expected the initial provider failure.');
+        } catch (CheckoutSessionException $error) {
+            $this->assertSame($errorCode, $error->errorCode());
+        }
+
+        $store = new OrderPageStore($this->kirby);
+        $page = $store->order($order->pageUuid()) ?? $this->fail('Order was not persisted.');
+        $before = $store->data($page);
+        $this->assertSame($checkoutStatus->value, $before['checkoutStatus']);
         $retryGateway = new FakeCheckoutSessionGateway();
 
         try {
@@ -790,16 +812,33 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
                 guestReference: 'guest-browser',
                 now: $now->add(new DateInterval('PT23H')),
             );
-            $this->fail('Expected the retry deadline to close the attempt.');
+            $this->fail('Expected the retry deadline to prevent another mutation.');
         } catch (CheckoutSessionException $error) {
             $this->assertSame('checkout.attempt_retry_expired', $error->errorCode());
+            $this->assertFalse($error->isRetryable());
         }
 
-        $data = (new OrderPageStore($this->kirby))->data(
-            (new OrderPageStore($this->kirby))->order($order->pageUuid()) ?? $this->fail('Order was not persisted.'),
-        );
-        $this->assertSame(CheckoutStatus::CreationFailed->value, $data['checkoutStatus']);
+        $this->assertSame($before, $store->data($page));
         $this->assertSame([], $retryGateway->requests);
+        $policy = new RetentionPolicy($configuration->settings());
+        $this->assertFalse($store->deleteEligible($order->pageUuid(), $policy, new DateTimeImmutable('+40 days')));
+        $this->assertFalse($store->deleteManually($order->pageUuid()));
+        $this->assertNotNull($store->order($order->pageUuid()));
+    }
+
+    /** @return iterable<string, array{CheckoutSessionFailureType, CheckoutStatus, string}> */
+    public static function retryDeadlineFailureTypes(): iterable
+    {
+        yield 'creating after unavailable provider' => [
+            CheckoutSessionFailureType::Unavailable,
+            CheckoutStatus::Creating,
+            'checkout.session_unavailable',
+        ];
+        yield 'uncertain provider outcome' => [
+            CheckoutSessionFailureType::Uncertain,
+            CheckoutStatus::CreationUncertain,
+            'checkout.session_uncertain',
+        ];
     }
 
     public function testChangedSelectionCannotReuseAnExistingAttempt(): void

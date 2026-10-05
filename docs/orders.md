@@ -335,6 +335,8 @@ The Settings tab contains cleanup preferences with defaults of **7 days for defi
 
 Only definitely failed creation without a Session, expired Checkout, or completed Checkout with a failed payment can become eligible. Completed failures are aged from the later of completion and payment failure. Still-creating, uncertain, open, pending, paid and no-payment-required orders are never eligible merely because they are old. Shortening a retention period can make existing records eligible.
 
+Reaching the creation retry deadline stops further Session-creation calls without changing the Order's state or timestamps. It does not prove that Stripe rejected the request. Unresolved attempts remain protected from both automatic and manual deletion until their outcome is established.
+
 The internal `OrderPageStore::deleteEligible()` operation applies these automatic cleanup switches and age thresholds. `OrderPageStore::deleteManually($pageUuid)` uses the same deletion path but ignores automatic enablement and retention age. It allows only failed creation without a Session and unpaid/failed payment, expired Checkout with unpaid/failed payment, or completed Checkout with failed payment. It does not contact Stripe or resolve current storefront settings.
 
 Both operations reload and recheck current persisted eligibility under the existing per-order write lock. They return `false` for an ineligible order, `true` once deletion commits, and throw a safe storage exception for lookup/write failures. A deletion listener failure cannot undo committed deletion or make its discarded payload retryable. Ordinary Page deletion remains forbidden, including for administrators. These are internal services; no Panel deletion action or public mutation route is available yet.

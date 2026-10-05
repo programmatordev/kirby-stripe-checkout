@@ -209,7 +209,8 @@ final class CheckoutSessionCreator
         }
 
         if ($now >= OrderData::date($checkoutAttempt['retryUntil'])) {
-            $page = $this->markRetryExpired($page, $now);
+            // The deadline closes mutation retries, not the provider outcome.
+            // Preserve unresolved creation so retention cannot delete an unconfirmed Session or payment.
             $presentation = $this->presentationFromConcurrentAssociation(
                 page: $page,
                 requestContext: $requestContext,
@@ -579,29 +580,6 @@ final class CheckoutSessionCreator
         }
 
         return $data;
-    }
-
-    private function markRetryExpired(OrderPage $page, DateTimeImmutable $now): OrderPage
-    {
-        $expireRetry = static function (array $data) use ($now): array {
-            /** @var array<string, mixed> $data */
-            $status = CheckoutStatus::from(OrderData::text($data['checkoutStatus']));
-
-            if (in_array($status, [CheckoutStatus::Creating, CheckoutStatus::CreationUncertain], true) === false) {
-                return $data;
-            }
-
-            $data['checkoutStatus'] = CheckoutStatus::CreationFailed->value;
-            $data['creationFailedAt'] ??= OrderData::timestamp($now);
-            $data['updatedAt'] = max($data['updatedAt'], OrderData::timestamp($now));
-
-            return $data;
-        };
-
-        return $this->orderPageStore->update(
-            uuid: $page->uuid()->toString(),
-            reduce: $expireRetry,
-        );
     }
 
     /** Returns the presentation established by a concurrent successful observer. */
