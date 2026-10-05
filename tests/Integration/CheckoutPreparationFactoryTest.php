@@ -79,7 +79,6 @@ final class CheckoutPreparationFactoryTest extends KirbyTestCase
             ['reference' => 'shirt', 'quantity' => 2, 'selectedOptions' => ['size' => 'large']],
             ['reference' => 'digital'],
         ]);
-        $resolvedCalls = $productCalls;
         $uuid = Uuid::generate();
         $preparation = $runtime->checkoutPreparationFactory()->create(
             uuid: $uuid,
@@ -88,8 +87,7 @@ final class CheckoutPreparationFactoryTest extends KirbyTestCase
         );
         $order = $preparation->order();
 
-        $this->assertSame($resolvedCalls, $productCalls);
-        $this->assertContains(3, $productCalls);
+        $this->assertSame([1, 2, 3, 1], $productCalls);
         $this->assertSame(1, $quoteCalls);
         $this->assertSame($checkout, $quotedCheckout);
         $this->assertCount(1, $checkout->shippableItems());

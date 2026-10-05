@@ -133,7 +133,7 @@ final class ProductRequestDataTest extends TestCase
         $this->assertSame(0, $calls);
         $merged = $requestNormalizer->normalizeDirectInput(array_fill(0, 100, ['reference' => 'shirt']));
         $this->assertCount(1, $merged);
-        $this->assertSame(100, $merged[0]->quantity());
+        $this->assertSame(100, $merged[0]->request()->quantity());
 
         $distinct = array_map(static fn(int $i): array => ['reference' => 'product-' . $i], range(1, 100));
         $this->assertCount(100, $requestNormalizer->normalizeDirectInput($distinct));
@@ -195,6 +195,23 @@ final class ProductRequestDataTest extends TestCase
         $this->requestNormalizer($calls)->normalizeDirectInput([
             ['reference' => 'shirt', 'quantity' => PHP_INT_MAX],
             ['reference' => 'shirt'],
+        ]);
+    }
+
+    public function testDirectMergingCannotChangeTheCanonicalProduct(): void
+    {
+        $requestNormalizer = new ProductRequestNormalizer(static fn(ProductRequest $request): Product => new Product(
+            request: new ProductRequest($request->quantity() > 1 ? 'different-product' : 'canonical-product', $request->quantity()),
+            name: 'Product',
+            requiresShipping: false,
+            price: new StripePriceReference('price_fixture'),
+        ));
+
+        $this->expectException(CheckoutInputException::class);
+        $this->expectExceptionMessage('selection.invalid');
+        $requestNormalizer->normalizeDirectInput([
+            ['reference' => 'product-alias'],
+            ['reference' => 'canonical-product'],
         ]);
     }
 

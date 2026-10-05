@@ -10,6 +10,7 @@ use ProgrammatorDev\StripeCheckout\Cart\Internal\CartEntry;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutator;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartSnapshot;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
+use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 use ProgrammatorDev\StripeCheckout\Test\Support\Cart\InMemoryCartStore;
@@ -40,6 +41,10 @@ final class CartSelectionTest extends KirbyTestCase
         $cart = new CartMutator($store, $requestNormalizer, Uuid::generate(...));
         $first = $cart->add(new ProductRequest($page->id(), 2));
         $merged = $cart->add(new ProductRequest($page->uuid()->toString(), 3));
+        $products = $requestNormalizer->normalizeDirectInput([
+            ['reference' => $page->id(), 'quantity' => 2],
+            ['reference' => $page->uuid()->toString(), 'quantity' => 3],
+        ]);
 
         $this->assertCount(1, $merged->entries());
         $this->assertSame($first->entries()[0]->id(), $merged->entries()[0]->id());
@@ -50,10 +55,7 @@ final class CartSelectionTest extends KirbyTestCase
         $this->assertNotSame($first->revision(), $merged->revision());
         $this->assertEquals(
             array_map(static fn(CartEntry $entry): ProductRequest => $entry->request(), $merged->entries()),
-            $requestNormalizer->normalizeDirectInput([
-                ['reference' => $page->id(), 'quantity' => 2],
-                ['reference' => $page->uuid()->toString(), 'quantity' => 3],
-            ]),
+            array_map(static fn(Product $product): ProductRequest => $product->request(), $products),
         );
     }
 

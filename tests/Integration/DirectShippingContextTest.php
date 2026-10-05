@@ -13,6 +13,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Exception\MoneyException;
 use ProgrammatorDev\StripeCheckout\Money\MoneyErrorCode;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
+use ProgrammatorDev\StripeCheckout\Product\Exception\ProductUnavailableException;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
@@ -72,6 +73,64 @@ final class DirectShippingContextTest extends KirbyTestCase
         $this->assertNotNull($quote);
         $this->assertSame(ShippingQuoteStatus::CountryRequired, $quote->status());
         $this->assertSame(ShippingErrorCode::COUNTRY_REQUIRED, $quote->reasonCode());
+    }
+
+    public function testDirectCheckoutRetainsFactsResolvedForMergedCanonicalLines(): void
+    {
+        $requests = [];
+        $this->restart(['programmatordev.stripe-checkout' => [
+            'products' => ['resolver' => static function (ProductRequest $request) use (&$requests): Product {
+                $requests[] = $request;
+
+                return new Product(
+                    request: new ProductRequest('canonical-product', $request->quantity()),
+                    name: 'Product for quantity ' . $request->quantity(),
+                    requiresShipping: false,
+                    price: new Price(Money::of($request->quantity() >= 3 ? '8' : '10', 'EUR')),
+                );
+            }],
+        ]]);
+        $checkout = (new RuntimeFactory($this->kirby))->checkoutResolver()->directCheckoutContext([
+            ['reference' => 'product-alias'],
+            ['reference' => 'canonical-product', 'quantity' => 2],
+        ]);
+
+        $this->assertEquals([
+            new ProductRequest('product-alias'),
+            new ProductRequest('canonical-product', 2),
+            new ProductRequest('canonical-product', 3),
+        ], $requests);
+        $this->assertCount(1, $checkout->items());
+        $lineItem = $checkout->items()[0];
+        $this->assertSame('canonical-product', $lineItem->productReference());
+        $this->assertSame(3, $lineItem->quantity());
+        $this->assertSame('Product for quantity 3', $lineItem->name());
+        $this->assertSame('8.00', (string) $lineItem->price()->getAmount());
+        $this->assertSame('24.00', (string) $checkout->subtotal()->getAmount());
+    }
+
+    public function testDirectCheckoutRejectsAStoreLimitExceededByMerging(): void
+    {
+        $this->restart(['programmatordev.stripe-checkout' => [
+            'products' => ['resolver' => static function (ProductRequest $request): Product {
+                if ($request->quantity() > 2) {
+                    throw new ProductUnavailableException();
+                }
+
+                return new Product(
+                    request: $request,
+                    name: 'Limited product',
+                    requiresShipping: false,
+                    price: new Price(Money::of('10', 'EUR')),
+                );
+            }],
+        ]]);
+
+        $this->expectException(ProductUnavailableException::class);
+        (new RuntimeFactory($this->kirby))->checkoutResolver()->directCheckoutContext([
+            ['reference' => 'limited-product'],
+            ['reference' => 'limited-product', 'quantity' => 2],
+        ]);
     }
 
     #[DataProvider('invalidShippingCountries')]

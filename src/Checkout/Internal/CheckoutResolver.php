@@ -14,11 +14,9 @@ use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
-use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Internal\GuardedProductResolver;
 use ProgrammatorDev\StripeCheckout\Product\Internal\TaxCodeValidator;
 use ProgrammatorDev\StripeCheckout\Product\Product;
-use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\ProductResolutionContext;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
@@ -77,20 +75,11 @@ final class CheckoutResolver
     /** Resolves untrusted cartless product input into the shared trusted context. */
     public function directCheckoutContext(mixed $items): CheckoutContext
     {
-        $requests = (new ProductRequestNormalizer($this->resolveProduct(...)))
+        $products = (new ProductRequestNormalizer($this->resolveProduct(...)))
             ->normalizeDirectInput($items);
         $lineItems = [];
 
-        foreach ($requests as $request) {
-            // Normalization can merge duplicate lines.
-            // Resolve the resulting request so quantity limits and product facts reflect the final quantity.
-            $product = $this->resolveProduct($request);
-
-            // Canonicalization may change a locator, never the selected product.
-            if (ProductRequestData::sameItem($request, $product->request()) === false) {
-                throw new InvalidProductException(ProductErrorCode::RESOLVER_CHANGED_REQUEST);
-            }
-
+        foreach ($products as $product) {
             $lineItems[] = $this->checkoutLineItem($product);
         }
 
