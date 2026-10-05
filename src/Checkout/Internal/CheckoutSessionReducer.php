@@ -166,7 +166,7 @@ final class CheckoutSessionReducer
 
         $total = $refunds->refundedTotal();
 
-        return [
+        $after = [
             ...$data,
             'refunds' => $items,
             'refundStatus' => $refunds->refundStatus()->value,
@@ -176,6 +176,13 @@ final class CheckoutSessionReducer
             'refundHasFailed' => $refunds->refundHasFailed(),
             'refundUpdatedAt' => max(OrderData::timestamp($now), $data['updatedAt']),
         ];
+
+        // Empty collections have no observation timestamp in the canonical schema.
+        if ($items === []) {
+            unset($after['refundUpdatedAt']);
+        }
+
+        return $after;
     }
 
     /** @param array<string, mixed> $data
@@ -196,7 +203,7 @@ final class CheckoutSessionReducer
             return $data;
         }
 
-        return [
+        $after = [
             ...$data,
             'disputes' => $items,
             'disputeStatus' => $disputes->disputeStatus()->value,
@@ -204,6 +211,12 @@ final class CheckoutSessionReducer
             'disputeHasLost' => $disputes->disputeHasLost(),
             'disputeUpdatedAt' => max(OrderData::timestamp($now), $data['updatedAt']),
         ];
+
+        if ($items === []) {
+            unset($after['disputeUpdatedAt']);
+        }
+
+        return $after;
     }
 
     private function paymentStatus(CheckoutSessionObservation $observation, CheckoutStatus $checkoutStatus): PaymentStatus

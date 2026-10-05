@@ -303,6 +303,16 @@ The Session-creation pipeline emits `programmatordev.stripe-checkout.session.cre
 
 The protected `events` ledger records correlated Stripe Event identity, type, resource, provider creation time, attempts and sanitized processing outcome. Refund and Dispute entries also retain stable parent references. It is separate from `lifecycleDeliveries`: an Event can be successfully processed while an optional hook delivery fails. Processed Checkout/action duplicates need no new Stripe read; refund and dispute duplicates can require initial parent ownership reads to locate the order, then skip complete retrieval. A failed provider read remains retryable according to its error classification; a storage failure cannot mark the canonical processing successful. Current-state reconciliation without an Event creates no invented Event entry or trigger identity.
 
+### Manual reconciliation
+
+The internal `CheckoutSessionReconciler::reconcileCurrent($pageUuid)` operation refreshes one existing order using its saved Checkout Session. It reads current Checkout, payment, customer capabilities, refunds and disputes directly from Stripe, including complete financial pagination. Refund and dispute webhook subscriptions are not required for this refresh; without those Events, financial updates appear when reconciliation runs.
+
+The operation returns a typed `ReconciliationResult` with an `Updated`, `NoChange` or `Failed` outcome, a committed Page on success, and a safe error code and retryability on failure. A new action-only lifecycle delivery also counts as an update. It creates no Stripe resource or Event ledger entry, and only newly committed transitions emit lifecycle hooks. Unchanged reads preserve timestamps and do not repeat hooks. Optional listener failure remains separate from successful canonical persistence.
+
+All required provider reads must succeed before a combined local update. A complete empty financial list clears that collection and its summary; a failed or unread list cannot clear saved facts. No-cost or pre-payment Sessions without a PaymentIntent require no financial list request. Existing payment success and completed Checkout remain protected from stale observations, and a missing or contradictory established PaymentIntent cannot be used to erase financial facts.
+
+An order without a saved Session is ineligible for this operation; recovery is separate. This is an internal service for the later operator interface. No Panel reconciliation action or public mutation route is available yet.
+
 ### Event values
 
 `Lifecycle\LifecycleEvent` describes a committed change. Its enum type, delivery ID, time, revision, order identity and states are separate from its immutable `orderSnapshot()`.

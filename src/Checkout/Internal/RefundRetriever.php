@@ -86,11 +86,12 @@ final class RefundRetriever
         );
     }
 
-    public function retrieve(RefundCorrelation $correlation, CheckoutSessionObservation $observation): RefundCollection
+    /** Null correlation reads current facts without requiring a triggering Refund. */
+    public function retrieve(?RefundCorrelation $correlation, CheckoutSessionObservation $observation): RefundCollection
     {
-        $paymentIntentId = $correlation->refund->stripePaymentIntentId();
+        $paymentIntentId = $observation->payment()->stripePaymentIntentId() ?? throw new OrderDataException();
 
-        if ($observation->payment()->stripePaymentIntentId() !== $paymentIntentId) {
+        if ($correlation !== null && $correlation->refund->stripePaymentIntentId() !== $paymentIntentId) {
             throw new OrderDataException();
         }
 
@@ -100,7 +101,12 @@ final class RefundRetriever
         $refunds = [];
         $found = false;
 
-        if ($correlation->refund->stripeChargeId() !== null) {
+        if ($observation->payment()->stripeChargeId() !== null) {
+            // The complete Checkout read already proved the latest Charge's parent, currency and mode.
+            $validatedChargeIds[$observation->payment()->stripeChargeId()] = true;
+        }
+
+        if ($correlation?->refund->stripeChargeId() !== null) {
             // Initial correlation already proved this Charge's parent; sibling refunds can reuse that proof within this operation.
             $validatedChargeIds[$correlation->refund->stripeChargeId()] = true;
         }
@@ -132,7 +138,7 @@ final class RefundRetriever
 
             $refund = RefundSnapshot::fromStripe($data, $paymentIntentId);
 
-            if ($refund->stripeRefundId() === $correlation->refund->stripeRefundId()) {
+            if ($correlation !== null && $refund->stripeRefundId() === $correlation->refund->stripeRefundId()) {
                 // Status/reason can change between reads; immutable purchase identities cannot.
                 if ($refund->stripeChargeId() !== $correlation->refund->stripeChargeId() || $refund->amount()->isEqualTo($correlation->refund->amount()) === false) {
                     throw new OrderDataException();
@@ -144,7 +150,7 @@ final class RefundRetriever
             $refunds[] = $refund;
         }
 
-        if ($found === false) {
+        if ($correlation !== null && $found === false) {
             throw new OrderDataException();
         }
 

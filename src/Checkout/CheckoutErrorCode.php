@@ -21,6 +21,8 @@ final class CheckoutErrorCode
 
     public const SESSION_INCOMPATIBLE = 'checkout.session_incompatible';
 
+    public const SESSION_MISSING = 'checkout.session_missing';
+
     public const SESSION_REJECTED = 'checkout.session_rejected';
 
     public const SESSION_UNAVAILABLE = 'checkout.session_unavailable';

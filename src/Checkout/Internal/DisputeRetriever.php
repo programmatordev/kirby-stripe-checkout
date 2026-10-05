@@ -88,11 +88,12 @@ final class DisputeRetriever
         );
     }
 
-    public function retrieve(DisputeCorrelation $correlation, CheckoutSessionObservation $observation): DisputeCollection
+    /** Null correlation reads current facts without requiring a triggering Dispute. */
+    public function retrieve(?DisputeCorrelation $correlation, CheckoutSessionObservation $observation): DisputeCollection
     {
-        $paymentIntentId = $correlation->dispute->stripePaymentIntentId();
+        $paymentIntentId = $observation->payment()->stripePaymentIntentId() ?? throw new OrderDataException();
 
-        if ($observation->payment()->stripePaymentIntentId() !== $paymentIntentId) {
+        if ($correlation !== null && $correlation->dispute->stripePaymentIntentId() !== $paymentIntentId) {
             throw new OrderDataException();
         }
 
@@ -102,8 +103,15 @@ final class DisputeRetriever
         $disputes = [];
         $found = false;
 
-        // Reuse the triggering Charge's proven parent within this operation.
-        $validatedChargeIds[$correlation->dispute->stripeChargeId()] = true;
+        if ($observation->payment()->stripeChargeId() !== null) {
+            // The complete Checkout read already proved the latest Charge's parent, currency and mode.
+            $validatedChargeIds[$observation->payment()->stripeChargeId()] = true;
+        }
+
+        if ($correlation !== null) {
+            // Reuse the triggering Charge's proven parent within this operation.
+            $validatedChargeIds[$correlation->dispute->stripeChargeId()] = true;
+        }
 
         foreach ($this->gateway->allForPaymentIntent($paymentIntentId) as $data) {
             $chargeId = OrderData::nonEmptyString($data['charge'] ?? null);
@@ -132,7 +140,7 @@ final class DisputeRetriever
 
             $dispute = DisputeSnapshot::fromStripe($data, $paymentIntentId);
 
-            if ($dispute->stripeDisputeId() === $correlation->dispute->stripeDisputeId()) {
+            if ($correlation !== null && $dispute->stripeDisputeId() === $correlation->dispute->stripeDisputeId()) {
                 // Current status, amount and evidence can change between reads; stable parent identity cannot.
                 if ($dispute->stripeChargeId() !== $correlation->dispute->stripeChargeId()) {
                     throw new OrderDataException();
@@ -144,7 +152,7 @@ final class DisputeRetriever
             $disputes[] = $dispute;
         }
 
-        if ($found === false) {
+        if ($correlation !== null && $found === false) {
             throw new OrderDataException();
         }
 

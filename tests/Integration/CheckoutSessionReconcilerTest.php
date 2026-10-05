@@ -17,6 +17,9 @@ use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutSessionException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionReconciler;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionRetriever;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\DisputeRetriever;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\ReconciliationOutcome;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\RefundRetriever;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderHookDispatcher;
@@ -41,6 +44,8 @@ use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionGatewayInterfa
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionReconciliationRecord;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Exception\CheckoutSessionGatewayException;
+use ProgrammatorDev\StripeCheckout\Stripe\Dispute\DisputeGatewayInterface;
+use ProgrammatorDev\StripeCheckout\Stripe\Refund\RefundGatewayInterface;
 use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\OrderFixture;
@@ -779,6 +784,58 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
         $this->assertCount(1, $this->entries('events'));
     }
 
+    public function testManualOpenCheckoutWithoutPaymentIntentMakesNoFinancialReads(): void
+    {
+        $record = $this->record('open', 'unpaid');
+        $gateway = $this->gateway(new CheckoutSessionReconciliationRecord($record->session, $record->lineItems, null, null));
+        $reconciler = $this->reconciler($gateway);
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_current');
+        $before = $this->data();
+        // No financial retriever is supplied: absence of a PaymentIntent requires no list operation.
+        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $this->assertSame(ReconciliationOutcome::NoChange, $result->outcome());
+        $this->assertSame($before, $this->data());
+        $this->assertArrayNotHasKey('stripePaymentIntentId', $before);
+        $this->assertArrayNotHasKey('events', $before);
+    }
+
+    public function testManualActionOnlyDeliveryCountsAsAnUpdateAndIsDeduplicated(): void
+    {
+        $reconciler = $this->reconciler($this->gateway($this->record('open', 'unpaid', 'requires_action')));
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_current');
+        $before = $this->data();
+        $action = PaymentAction::fromArray([
+            'type' => 'future_action',
+            'future_action' => ['instruction' => 'Follow provider instructions'],
+        ]);
+        $reconciler = new CheckoutSessionReconciler(
+            orders: $this->store,
+            retriever: new CheckoutSessionRetriever($this->gateway($this->record('open', 'unpaid', 'requires_action', $action))),
+            credentialMode: CredentialMode::Test,
+            refundRetriever: new RefundRetriever($this->createMock(RefundGatewayInterface::class)),
+            disputeRetriever: new DisputeRetriever($this->createMock(DisputeGatewayInterface::class)),
+        );
+        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $after = $this->data();
+        $this->assertSame($before['updatedAt'], $after['updatedAt']);
+        $this->assertSame($before['payment'], $after['payment']);
+        $this->assertArrayNotHasKey('events', $after);
+        $this->assertCount(2, $this->deliveries());
+        $this->assertSame(ReconciliationOutcome::NoChange, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame($after, $this->data());
+    }
+
+    public function testManualStaleReadWithoutEstablishedPaymentCannotEraseFinancialFacts(): void
+    {
+        $this->reconciler($this->gateway($this->record('complete', 'paid', 'succeeded')))->reconcile($this->order->pageUuid(), 'cs_current');
+        $before = $this->data();
+        $record = $this->record('open', 'unpaid');
+        $reconciler = $this->reconciler($this->gateway(new CheckoutSessionReconciliationRecord($record->session, $record->lineItems, null, null)));
+        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $this->assertSame(CheckoutErrorCode::SESSION_INCOMPATIBLE, $result->errorCode());
+        $this->assertSame($before, $this->data());
+    }
+
     public function testCompletedFreeCheckoutHasNoInventedPaymentIntent(): void
     {
         // The saved purchase itself must be free, not just a contradictory zero returned by Stripe.
@@ -852,12 +909,15 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
         $lines[0]['price'] = array_replace(OrderData::map($lines[0]['price']), ['unit_amount' => 0]);
         $lines[0]['amount_subtotal'] = 0;
         $lines[0]['amount_total'] = 0;
-        $page = $this->reconciler($this->gateway(new CheckoutSessionReconciliationRecord($freeSession, $lines, null, null)))->reconcile($freeOrder->pageUuid(), 'cs_current');
+        $reconciler = $this->reconciler($this->gateway(new CheckoutSessionReconciliationRecord($freeSession, $lines, null, null)));
+        $page = $reconciler->reconcile($freeOrder->pageUuid(), 'cs_current');
         $data = $this->data($page);
         $this->assertSame('no_payment_required', $data['paymentStatus']);
         $this->assertSame('0', $data['total']);
         $this->assertNull(Payment::fromArray(OrderData::map($data['payment']))->stripePaymentIntentId());
         $this->assertNull(Payment::fromArray(OrderData::map($data['payment']))->amount());
+        $this->assertSame(ReconciliationOutcome::NoChange, $reconciler->reconcileCurrent($freeOrder->pageUuid())->outcome());
+        $this->assertSame($data, $this->data($this->store->order($freeOrder->pageUuid())));
     }
 
     /** @return array<string, mixed> */

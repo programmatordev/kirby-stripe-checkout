@@ -18,17 +18,22 @@ use Kirby\Http\Environment;
 use Kirby\Http\Request;
 use Kirby\Http\Response;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\ReconciliationOutcome;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Configuration\StripeConfiguration;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderHookDispatcher;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
+use ProgrammatorDev\StripeCheckout\Kirby\PersistenceErrorCode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEvent;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
+use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
@@ -124,6 +129,395 @@ final class WebhookRoutesTest extends KirbyTestCase
 
         $this->kirby->extend(['hooks' => $hooks]);
         $this->kirby->impersonate(null);
+    }
+
+    public function testManualReconciliationRefreshesTheWholeGraphWithoutFinancialWebhookEvents(): void
+    {
+        $reconciler = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler();
+        $this->provider->session['status'] = 'open';
+        $this->provider->session['payment_status'] = 'unpaid';
+        $this->provider->paymentIntent['status'] = 'processing';
+        $this->provider->paymentIntent['amount_received'] = 0;
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
+        $this->provider->session['status'] = 'complete';
+        $this->provider->session['payment_status'] = 'paid';
+        $this->provider->session['customer_details'] = ['email' => 'buyer@example.test'];
+        $this->provider->paymentIntent['status'] = 'succeeded';
+        $this->provider->paymentIntent['amount_received'] = 3200;
+        $this->setRefunds([$this->refund()]);
+        $this->setDisputes([$this->dispute()]);
+
+        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $this->assertSame(ReconciliationOutcome::Updated, $result->outcome());
+        $this->assertSame($this->order->pageUuid(), $result->orderPageOrFail()->uuid()->toString());
+        $this->assertNull($result->errorCode());
+        $this->assertFalse($result->isRetryable());
+        $this->assertSame('paid', $this->data()['paymentStatus']);
+        $this->assertSame('partial', $this->data()['refundStatus']);
+        $this->assertSame('needs_response', $this->data()['disputeStatus']);
+        $this->assertSame('buyer@example.test', OrderData::map($this->data()['customer'])['email']);
+        $this->assertArrayNotHasKey('events', $this->data());
+        $this->assertSame(['session.created', 'payment.succeeded', 'refund.updated', 'dispute.updated'], array_map(static fn(LifecycleEvent $event): string => $event->type()->value, $this->delivered));
+
+        foreach ($this->delivered as $event) {
+            $this->assertNull($event->triggerType());
+            $this->assertNull($event->triggerId());
+        }
+
+        $before = $this->data();
+        $this->assertSame(ReconciliationOutcome::NoChange, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame($before, $this->data());
+        $this->assertCount(4, $this->delivered);
+        $this->assertResponse($this->send($this->refundEvent()), 204);
+        $this->assertResponse($this->send($this->disputeEvent()), 204);
+        $this->assertSame(ReconciliationOutcome::NoChange, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertCount(4, $this->delivered);
+    }
+
+    public function testManualCompleteEmptyCollectionsAndAbsentCapabilitiesReplaceSavedFacts(): void
+    {
+        $reconciler = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler();
+        $this->provider->session['customer_details'] = ['email' => 'buyer@example.test'];
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
+        $this->setRefunds([$this->refund()]);
+        $this->setDisputes([$this->dispute()]);
+        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $snapshot = ($this->delivered[array_key_last($this->delivered)] ?? $this->fail('Missing lifecycle delivery.'))->orderSnapshot();
+        $this->setRefunds([]);
+        $this->setDisputes([]);
+        unset($this->provider->session['customer_details']);
+
+        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $data = $this->data();
+        $this->assertSame('paid', $data['paymentStatus']);
+        $this->assertSame('none', $data['refundStatus']);
+        $this->assertSame('0', $data['refundedTotal']);
+        $this->assertFalse($data['refundHasActive']);
+        $this->assertFalse($data['disputeRequiresResponse']);
+        $this->assertSame('none', $data['disputeStatus']);
+        $this->assertSame([], $data['refunds']);
+        $this->assertSame([], $data['disputes']);
+        $this->assertArrayNotHasKey('refundUpdatedAt', $data);
+        $this->assertArrayNotHasKey('disputeUpdatedAt', $data);
+        $this->assertArrayNotHasKey('customer', $data);
+        $this->assertSame('partial', $snapshot['refundStatus']);
+        $this->assertSame('needs_response', $snapshot['disputeStatus']);
+        $this->assertSame(ReconciliationOutcome::NoChange, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+    }
+
+    public function testManualReconciliationRequiresAnExistingOrderAndSavedSessionBeforeProviderReads(): void
+    {
+        $reconciler = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler();
+        $missing = $reconciler->reconcileCurrent('page://missingorder001');
+        $this->assertSame(ReconciliationOutcome::Failed, $missing->outcome());
+        $this->assertSame(PersistenceErrorCode::ORDER_UNAVAILABLE, $missing->errorCode());
+        $this->assertNull($missing->orderPage());
+        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $this->assertSame(CheckoutErrorCode::SESSION_MISSING, $result->errorCode());
+        $this->assertFalse($result->isRetryable());
+        $this->assertSame([], $this->provider->requests);
+        $this->assertSame('creating', $this->data()['checkoutStatus']);
+        $this->assertArrayNotHasKey('events', $this->data());
+    }
+
+    #[DataProvider('manualFinancialFamilies')]
+    public function testManualLateFinancialReadFailureCannotCommitAPartialRefresh(string $family): void
+    {
+        $reconciler = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler();
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
+        $before = $this->data();
+        $this->provider->session['customer_details'] = ['email' => 'new@example.test'];
+        $this->setRefunds([$this->refund()]);
+        $this->setDisputes([$this->dispute()]);
+        $items = $family === 'refund' ? $this->provider->refunds : $this->provider->disputes;
+        $page = [
+            'object' => 'list',
+            'has_more' => true,
+            'data' => $items,
+        ];
+        $reads = 0;
+        $fail = function () use (&$reads): void {
+            if (++$reads === 2) {
+                $this->provider->httpStatus = 500;
+            }
+        };
+
+        if ($family === 'refund') {
+            $this->provider->refundPages[''] = $page;
+            $this->provider->beforeRefundListRead = $fail;
+        } else {
+            $this->provider->disputePages[''] = $page;
+            $this->provider->beforeDisputeListRead = $fail;
+        }
+
+        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $this->assertSame(ReconciliationOutcome::Failed, $result->outcome());
+        $this->assertSame(CheckoutErrorCode::SESSION_UNAVAILABLE, $result->errorCode());
+        $this->assertTrue($result->isRetryable());
+        $this->assertNull($result->orderPage());
+        $this->assertSame($before, $this->data());
+        $this->assertCount(2, $this->delivered);
+    }
+
+    /** @return iterable<array{string}> */
+    public static function manualFinancialFamilies(): iterable
+    {
+        yield ['refund'];
+        yield ['dispute'];
+    }
+
+    public function testManualReconciliationCompletesBothPaginatedCollections(): void
+    {
+        $reconciler = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler();
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
+        $firstRefund = $this->refund();
+        $secondRefund = $this->refund(id: 're_second');
+        $firstDispute = $this->dispute();
+        $secondDispute = $this->dispute(id: 'du_second', status: 'won');
+        $this->setDisputes([$firstDispute, $secondDispute]);
+        $this->provider->refundPages = [
+            '' => [
+                'object' => 'list',
+                'has_more' => true,
+                'data' => [$firstRefund],
+            ],
+            're_webhook' => [
+                'object' => 'list',
+                'has_more' => false,
+                'data' => [$secondRefund],
+            ],
+        ];
+        $this->provider->disputePages = [
+            '' => [
+                'object' => 'list',
+                'has_more' => true,
+                'data' => [$firstDispute],
+            ],
+            'du_webhook' => [
+                'object' => 'list',
+                'has_more' => false,
+                'data' => [$secondDispute],
+            ],
+        ];
+
+        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame('full', $this->data()['refundStatus']);
+        $this->assertSame(['re_second', 're_webhook'], array_column($this->entries('refunds'), 'stripeRefundId'));
+        $this->assertSame(['du_second', 'du_webhook'], array_column($this->entries('disputes'), 'stripeDisputeId'));
+        $this->assertCount(1, array_filter($this->provider->requests, static fn(string $url): bool => $url === 'https://api.stripe.com/v1/charges/ch_disputed'));
+    }
+
+    #[DataProvider('manualParentContradictions')]
+    public function testManualFinancialParentContradictionsLeaveSavedCommerceUnchanged(string $family, string $field, mixed $value): void
+    {
+        $reconciler = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler();
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
+        $before = $this->data();
+        $this->setRefunds([$this->refund()]);
+        $this->setDisputes([$this->dispute()]);
+
+        if ($family === 'refund') {
+            $this->provider->refunds[0][$field] = $value;
+        } else {
+            $this->provider->disputes[0][$field] = $value;
+        }
+
+        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $this->assertSame(CheckoutErrorCode::SESSION_INCOMPATIBLE, $result->errorCode());
+        $this->assertFalse($result->isRetryable());
+        $this->assertSame($before, $this->data());
+    }
+
+    /** @return iterable<array{string, string, mixed}> */
+    public static function manualParentContradictions(): iterable
+    {
+        yield ['refund', 'payment_intent', 'pi_foreign'];
+        yield ['refund', 'currency', 'usd'];
+        yield ['dispute', 'payment_intent', 'pi_foreign'];
+        yield ['dispute', 'livemode', true];
+    }
+
+    public function testManualConflictRefetchesBothFinancialFamiliesAndKeepsConcurrentCustomFields(): void
+    {
+        $reconciler = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler();
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
+        $this->setRefunds([$this->refund()]);
+        $this->setDisputes([$this->dispute()]);
+        $reads = 0;
+        $this->provider->beforeDisputeListRead = function () use (&$reads, $reconciler): void {
+            if (++$reads === 1) {
+                $this->provider->session['customer_details'] = ['email' => 'fresh@example.test'];
+                $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
+                $this->setRefunds([$this->refund(amount: 3200)]);
+                $this->orders->updateCustomFields($this->orders->requirePage($this->order->pageUuid())->id(), ['note' => 'Concurrent note'], null);
+            }
+        };
+
+        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame(2, $reads);
+        $this->assertSame('full', $this->data()['refundStatus']);
+        $this->assertSame('needs_response', $this->data()['disputeStatus']);
+        $this->assertSame('fresh@example.test', OrderData::map($this->data()['customer'])['email']);
+        $this->assertSame('Concurrent note', $this->orders->requirePage($this->order->pageUuid())->content()->toArray()['note']);
+        $this->assertCount(2, array_filter($this->provider->requests, static fn(string $url): bool => $url === 'https://api.stripe.com/v1/refunds'));
+        $this->assertCount(4, $this->delivered);
+    }
+
+    public function testManualRepeatedConflictsReturnASafeFailureWithoutFinancialWrites(): void
+    {
+        $reconciler = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler();
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
+        $this->setRefunds([$this->refund()]);
+        $reads = 0;
+        $this->provider->beforeDisputeListRead = function () use (&$reads, $reconciler): void {
+            $this->provider->session['customer_details'] = ['email' => 'version' . ++$reads . '@example.test'];
+            $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
+        };
+
+        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $this->assertSame(CheckoutErrorCode::RECONCILIATION_CONFLICT, $result->errorCode());
+        $this->assertTrue($result->isRetryable());
+        $this->assertSame(3, $reads);
+        $this->assertSame('version3@example.test', OrderData::map($this->data()['customer'])['email']);
+        $this->assertArrayNotHasKey('refunds', $this->data());
+        $this->assertArrayNotHasKey('events', $this->data());
+        $this->assertCount(2, $this->delivered);
+    }
+
+    public function testManualObserverFailureKeepsTheCommittedResultAndDoesNotRepeatDelivery(): void
+    {
+        $reconciler = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler();
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
+        $this->setRefunds([$this->refund()]);
+        $attempts = 0;
+        $this->kirby->extend(['hooks' => ['programmatordev.stripe-checkout.refund.updated' => function () use (&$attempts): void {
+            $attempts++;
+
+            throw new RuntimeException('PRIVATE_LISTENER');
+        }]]);
+
+        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame('partial', $this->data()['refundStatus']);
+        $refundDeliveries = array_filter($this->entries('lifecycleDeliveries'), static fn(array $delivery): bool => OrderData::map($delivery['event'])['type'] === 'refund.updated');
+        $this->assertCount(1, $refundDeliveries);
+
+        foreach ($refundDeliveries as $delivery) {
+            $this->assertSame('failed', $delivery['status']);
+        }
+
+        $this->assertSame(ReconciliationOutcome::NoChange, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame(1, $attempts);
+    }
+
+    public function testManualConcurrentCompletionReturnsNoChangeWithoutRepeatingTransitions(): void
+    {
+        $reconciler = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler();
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
+        $this->setRefunds([$this->refund()]);
+        $this->setDisputes([$this->dispute()]);
+        $this->provider->beforeDisputeListRead = function () use ($reconciler): void {
+            $this->provider->beforeDisputeListRead = null;
+            $this->assertSame(ReconciliationOutcome::Updated, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        };
+
+        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $this->assertSame(ReconciliationOutcome::NoChange, $result->outcome());
+        $this->assertSame('partial', $this->data()['refundStatus']);
+        $this->assertSame('needs_response', $this->data()['disputeStatus']);
+        $this->assertCount(4, $this->delivered);
+        $this->assertArrayNotHasKey('events', $this->data());
+    }
+
+    public function testManualCollectionReadsReuseTheLatestChargesCompleteCheckoutProof(): void
+    {
+        $this->setDisputes([$this->dispute()]);
+        $this->provider->paymentIntent['latest_charge'] = [
+            ...$this->provider->charges['ch_disputed'],
+            'amount' => 3200,
+            'created' => $this->createdAt->getTimestamp(),
+            'status' => 'succeeded',
+            'paid' => true,
+            'captured' => true,
+            'amount_captured' => 3200,
+            'payment_method' => 'pm_webhook',
+        ];
+        $refund = $this->refund();
+        $refund['charge'] = 'ch_disputed';
+        $refund['payment_intent'] = null;
+        $this->setRefunds([$refund]);
+        $reconciler = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler();
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
+        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame('partial', $this->data()['refundStatus']);
+        $this->assertSame('needs_response', $this->data()['disputeStatus']);
+        $this->assertSame([], array_filter($this->provider->requests, static fn(string $url): bool => str_contains($url, '/charges/')));
+    }
+
+    public function testManualInitialProviderFailurePreservesTheOrderAndReturnsOnlySafeDetails(): void
+    {
+        $reconciler = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler();
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
+        $before = $this->data();
+        $this->provider->httpStatus = 500;
+        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $this->assertSame(ReconciliationOutcome::Failed, $result->outcome());
+        $this->assertSame(CheckoutErrorCode::SESSION_UNAVAILABLE, $result->errorCode());
+        $this->assertTrue($result->isRetryable());
+        $this->assertNull($result->orderPage());
+        $this->assertSame($before, $this->data());
+        $this->assertCount(2, $this->delivered);
+    }
+
+    public function testManualStorageFailureReturnsNoCommittedResultOrPartialFinancialUpdate(): void
+    {
+        $reconciler = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler();
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
+        $before = $this->data();
+        $this->setRefunds([$this->refund()]);
+        $this->setDisputes([$this->dispute()]);
+        /** @var Closure(App, ModelWithContent): Storage $nativeStorage */
+        $nativeStorage = $this->kirby->component('storage');
+        $this->provider->beforeDisputeListRead = function () use ($nativeStorage): void {
+            $this->kirby->extend(['components' => ['storage' => static function (App $kirby, ModelWithContent $model) use ($nativeStorage): Storage {
+                if ($model instanceof OrderPage === false) {
+                    return $nativeStorage($kirby, $model);
+                }
+
+                return new class ($model) extends PlainTextStorage {
+                    protected function write(VersionId $versionId, Language $language, array $fields): void
+                    {
+                        throw new RuntimeException('PRIVATE_WRITE_CANARY');
+                    }
+                };
+            }]]);
+        };
+
+        try {
+            $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        } finally {
+            $this->kirby->extend(['components' => ['storage' => $nativeStorage]]);
+            $this->provider->beforeDisputeListRead = null;
+        }
+
+        $this->assertSame(ReconciliationOutcome::Failed, $result->outcome());
+        $this->assertSame(PersistenceErrorCode::WRITE_FAILED, $result->errorCode());
+        $this->assertTrue($result->isRetryable());
+        $this->assertNull($result->orderPage());
+        $this->assertSame($before, $this->data());
+        $this->assertCount(2, $this->delivered);
+    }
+
+    public function testManualCredentialMismatchFailsBeforeAnyProviderRequest(): void
+    {
+        (new RuntimeFactory($this->kirby))->checkoutSessionReconciler()->reconcile($this->order->pageUuid(), 'cs_webhook');
+        $before = $this->data();
+        $this->provider->requests = [];
+        $stripe = new StripeConfiguration(secretKey: 'sk_live_fixture', publishableKey: null, webhookSecret: null);
+        $result = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler($stripe)->reconcileCurrent($this->order->pageUuid());
+        $this->assertSame(CheckoutErrorCode::SESSION_INCOMPATIBLE, $result->errorCode());
+        $this->assertFalse($result->isRetryable());
+        $this->assertSame([], $this->provider->requests);
+        $this->assertSame($before, $this->data());
     }
 
     public function testCheckoutAndActionReconciliationPreserveOpaquePaymentIdentities(): void

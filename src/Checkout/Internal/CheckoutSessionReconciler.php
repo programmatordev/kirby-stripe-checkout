@@ -11,9 +11,12 @@ use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
+use ProgrammatorDev\StripeCheckout\Kirby\PersistenceErrorCode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\LifecycleNotification;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
+use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
+use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\CheckoutSessionAssociation;
 use ProgrammatorDev\StripeCheckout\Order\Internal\DisputeCollection;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
@@ -34,6 +37,48 @@ final class CheckoutSessionReconciler
         private readonly ?RefundRetriever $refundRetriever = null,
         private readonly ?DisputeRetriever $disputeRetriever = null,
     ) {}
+
+    /**
+     * Refreshes the saved Session and both financial collections as one order-wide operation.
+     * Financial webhook subscriptions are not required, and no provider Event is invented.
+     */
+    public function reconcileCurrent(string $pageUuid): ReconciliationResult
+    {
+        try {
+            $page = $this->orders->order($pageUuid);
+
+            if ($page === null) {
+                return ReconciliationResult::failed(PersistenceErrorCode::ORDER_UNAVAILABLE);
+            }
+
+            $data = $this->orders->data($page);
+            $sessionId = $data['stripeCheckoutSessionId'] ?? null;
+
+            if ($sessionId === null) {
+                return ReconciliationResult::failed(CheckoutErrorCode::SESSION_MISSING);
+            }
+
+            $checkoutAttempt = OrderData::map($data['checkoutAttempt']);
+
+            if ($this->credentialMode === CredentialMode::Unknown || $checkoutAttempt['credentialMode'] !== $this->credentialMode->value) {
+                return ReconciliationResult::failed(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+            }
+
+            return $this->reconcileOrder(
+                pageUuid: $pageUuid,
+                sessionId: OrderData::string($sessionId),
+                trigger: null,
+                baseline: $data,
+                refreshFinancials: true,
+            );
+        } catch (CheckoutSessionException $error) {
+            return ReconciliationResult::failed($error->errorCode(), $error->isRetryable());
+        } catch (OrderDataException $error) {
+            return ReconciliationResult::failed($error->errorCode());
+        } catch (OrderStorageException|OrderQueryException $error) {
+            return ReconciliationResult::failed(errorCode: $error->errorCode(), retryable: true);
+        }
+    }
 
     /**
      * $event must come from a verified HTTP edge or an explicit trusted provider read.
@@ -83,7 +128,7 @@ final class CheckoutSessionReconciler
             trigger: $trigger,
             baseline: $baseline,
             observation: $observation,
-        );
+        )->orderPageOrFail();
     }
 
     public function refundCorrelation(Event $event): ?RefundCorrelation
@@ -122,7 +167,7 @@ final class CheckoutSessionReconciler
                 trigger: $correlation->trigger,
                 baseline: $data,
                 refundCorrelation: $correlation,
-            );
+            )->orderPageOrFail();
         } catch (OrderDataException $error) {
             throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE, previous: $error);
         }
@@ -164,7 +209,7 @@ final class CheckoutSessionReconciler
                 trigger: $correlation->trigger,
                 baseline: $data,
                 disputeCorrelation: $correlation,
-            );
+            )->orderPageOrFail();
         } catch (OrderDataException $error) {
             throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE, previous: $error);
         }
@@ -179,7 +224,8 @@ final class CheckoutSessionReconciler
         ?CheckoutSessionObservation $observation = null,
         ?RefundCorrelation $refundCorrelation = null,
         ?DisputeCorrelation $disputeCorrelation = null,
-    ): OrderPage {
+        bool $refreshFinancials = false,
+    ): ReconciliationResult {
         if ($trigger !== null) {
             $recordAttempt = static function (array $data) use ($trigger): array {
                 /** @var array<string, mixed> $data */
@@ -197,7 +243,7 @@ final class CheckoutSessionReconciler
             $entries = $data['events'];
 
             if (StripeEventLedger::isComplete($entries, $trigger)) {
-                return $page;
+                return ReconciliationResult::committed(orderPage: $page, updated: false);
             }
         }
 
@@ -229,6 +275,22 @@ final class CheckoutSessionReconciler
                 $disputes = $disputeCorrelation === null ? null
                     : ($this->disputeRetriever ?? throw new OrderDataException())->retrieve($disputeCorrelation, $observation);
 
+                if ($refreshFinancials) {
+                    $paymentIntentId = $observation->payment()->stripePaymentIntentId();
+
+                    // A stale read without the established PaymentIntent cannot prove financial absence.
+                    if (isset($baseline['stripePaymentIntentId']) && $baseline['stripePaymentIntentId'] !== $paymentIntentId) {
+                        throw new OrderDataException();
+                    }
+
+                    // No-cost and pre-payment Sessions can have no PaymentIntent to query financial collections for.
+                    if ($paymentIntentId !== null) {
+                        // Both lists must complete before the protected write; a read failure leaves commerce facts unchanged.
+                        $refunds = ($this->refundRetriever ?? throw new OrderDataException())->retrieve(correlation: null, observation: $observation);
+                        $disputes = ($this->disputeRetriever ?? throw new OrderDataException())->retrieve(correlation: null, observation: $observation);
+                    }
+                }
+
                 try {
                     // These callbacks run inside the store's lock, using its freshly loaded order rather than the read baseline.
                     $reduceOrder = function (array $data) use ($baseline, $observation, $trigger, $refunds, $disputes): array {
@@ -242,24 +304,32 @@ final class CheckoutSessionReconciler
                             disputes: $disputes,
                         );
                     };
-                    $selectNotifications = function (array $before, array $after) use ($observation, $trigger): array {
+                    $updated = false;
+                    $selectNotifications = function (array $before, array $after) use ($observation, $trigger, &$updated): array {
                         /** @var array<string, mixed> $before */
                         /** @var array<string, mixed> $after */
-                        return $this->notificationsForObservation(
+                        $notifications = $this->notificationsForObservation(
                             before: $before,
                             after: $after,
                             observation: $observation,
                             trigger: $trigger,
                         );
+
+                        // Attribute the result to this locked commit, including action-only deliveries, not another writer's later changes.
+                        $updated = $this->commerceHash($before) !== $this->commerceHash($after) || $notifications !== [];
+
+                        return $notifications;
                     };
 
-                    return $this->orders->update(
+                    $page = $this->orders->update(
                         uuid: $pageUuid,
                         reduce: $reduceOrder,
                         notifications: $selectNotifications,
                         triggerType: $trigger?->type,
                         triggerId: $trigger?->id,
                     );
+
+                    return ReconciliationResult::committed(orderPage: $page, updated: $updated);
                 } catch (ReconciliationConflictException) {
                     // A new complete provider read follows the fresh local state; no mutation is replayed.
                     $observation = null;
