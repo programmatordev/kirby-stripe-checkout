@@ -11,6 +11,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
@@ -100,20 +101,15 @@ final class CheckoutPreparationFactoryTest extends KirbyTestCase
         $this->assertTrue($preparation->shipping()?->matches($order));
         $this->assertSame(['PT'], $preparation->shipping()->allowedCountries());
         $line = $order->lineItems()[0];
-        $this->assertSame('Camisola', $line['name']);
-        $this->assertSame('Local description', $line['description']);
-        $this->assertSame(['https://example.test/local.jpg'], $line['images']);
-        $this->assertSame('SHIRT-L', $line['sku']);
-        $this->assertSame('large-variant', $line['variantId']);
-        $this->assertSame([[
-            'optionId' => 'size',
-            'optionName' => 'Tamanho',
-            'valueId' => 'large',
-            'valueName' => 'Grande',
-        ]], $line['options']);
-        $this->assertSame('txcd_99999999', $line['taxCode']);
-        $this->assertSame(['shipping_class' => 'parcel'], $line['metadata']);
-        $this->assertSame('48.00', $line['subtotal']);
+        $this->assertSame('Camisola', $line->name());
+        $this->assertSame('Local description', $line->description());
+        $this->assertSame(['https://example.test/local.jpg'], $line->imageUrls());
+        $this->assertSame('SHIRT-L', $line->sku());
+        $this->assertSame('large-variant', $line->variantId());
+        $this->assertEquals([new SelectedOption('size', 'Tamanho', 'large', 'Grande')], $line->options());
+        $this->assertSame('txcd_99999999', $line->taxCode()?->id());
+        $this->assertSame(['shipping_class' => 'parcel'], $line->metadata());
+        $this->assertSame('48.00', (string) $line->subtotal()->getAmount());
     }
 
     public function testStripeLineIsRetrievedOnceThenReusedWithoutReplacingLocalDescriptions(): void
@@ -174,15 +170,15 @@ final class CheckoutPreparationFactoryTest extends KirbyTestCase
                 shipping: $resolver->shippingContext('PT'),
             );
             $line = $preparation->order()->lineItems()[0];
-            $this->assertSame('price_preparation', $line['stripePriceId']);
-            $this->assertSame('prod_preparation', $line['stripeProductId']);
-            $this->assertSame('stripe', $line['priceSource']);
-            $this->assertSame('25.00', $line['price']);
-            $this->assertSame('50.00', $line['subtotal']);
-            $this->assertSame('Local name', $line['name']);
-            $this->assertSame('Local description', $line['description']);
-            $this->assertSame(['https://example.test/local.jpg'], $line['images']);
-            $this->assertNull($line['taxCode']);
+            $this->assertSame('price_preparation', $line->stripePriceId());
+            $this->assertSame('prod_preparation', $line->stripeProductId());
+            $this->assertSame(PriceSource::Stripe, $line->priceSource());
+            $this->assertSame('25.00', (string) $line->price()->getAmount());
+            $this->assertSame('50.00', (string) $line->subtotal()->getAmount());
+            $this->assertSame('Local name', $line->name());
+            $this->assertSame('Local description', $line->description());
+            $this->assertSame(['https://example.test/local.jpg'], $line->imageUrls());
+            $this->assertNull($line->taxCode());
             $this->assertTrue($preparation->shipping()?->matches($preparation->order()));
         }
     }

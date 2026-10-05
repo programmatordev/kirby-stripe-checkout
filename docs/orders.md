@@ -116,11 +116,13 @@ Completing Checkout does not mean a delayed payment has succeeded. A refund also
 - `currency()` — the store currency.
 - `subtotal()` — an exact Brick Money value.
 - `requiresShipping()` — whether at least one initiating line requires shipping.
-- `lineItems()` — the frozen initiating product, option, quantity and price facts.
+- `lineItems()` — a list of immutable initiating line snapshots with named accessors.
 
-Each line retains its name, selected `options`, SKU, images and shipping requirement. `price` and `subtotal` are exact decimal strings; `currency` is uppercase. Stripe-backed lines also retain their Price reference and any supplied Product reference. The protected `providerAmounts` map retains Stripe's exact integer units. These are not always the same as a currency's ISO minor units.
+Each line exposes `productReference()`, `quantity()`, `variantId()`, `name()`, `description()`, `sku()`, `imageUrls()`, `requiresShipping()` and `metadata()`. `options()` returns typed `SelectedOption` values. `price()` and `subtotal()` return exact Brick Money values; `currency()` returns the uppercase code, and `priceSource()` returns the `PriceSource` enum. `stripePriceId()` and `stripeProductId()` expose nullable provider references. `providerPriceAmount()` and `providerSubtotalAmount()` return Stripe's exact integer units, which can differ from a currency's ISO minor units.
 
-Kirby-priced lines also freeze their effective nullable `taxCode` ID. This initiating classification describes what was submitted, not the tax later calculated by Stripe.
+Kirby-priced lines also freeze their effective nullable `taxCode()` value. This initiating classification describes what was submitted, not the tax later calculated by Stripe. Use `taxCode()?->id()` for the provider ID.
+
+`toArray()` exposes the persisted representation: `price` and `subtotal` are decimal strings, `options` contains serialized selections, and `providerAmounts` contains the exact integer units. The protected order schema remains version 1.
 
 The initiating snapshot contains no live product Page, File, cart, credentials or raw attempt token. Reading it does not re-fetch product information. Customer-facing text keeps the language used when the purchase began. A single-language site uses `null` for `languageCode`; a locale is not duplicated alongside it.
 

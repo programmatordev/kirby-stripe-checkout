@@ -195,7 +195,6 @@ final class CheckoutSessionRetriever
             $priceId = OrderData::nonEmptyString($price['id'] ?? null);
             $productId = OrderData::nonEmptyString($price['product'] ?? null);
             $initiatingLine = $initiatingLines[$index];
-            $providerAmounts = $this->map($initiatingLine['providerAmounts']);
 
             $this->validateLinePrice($price);
 
@@ -212,8 +211,8 @@ final class CheckoutSessionRetriever
 
             // The initiating price and subtotal are fixed; discounts and taxes are retained from the returned allocations below.
             if (
-                ($price['unit_amount'] ?? null) !== $providerAmounts['price']
-                || ($line['amount_subtotal'] ?? null) !== $providerAmounts['subtotal']
+                ($price['unit_amount'] ?? null) !== $initiatingLine->providerPriceAmount()
+                || ($line['amount_subtotal'] ?? null) !== $initiatingLine->providerSubtotalAmount()
             ) {
                 throw new OrderDataException();
             }
@@ -223,7 +222,7 @@ final class CheckoutSessionRetriever
                 throw new OrderDataException();
             }
 
-            if ($initiatingLine['stripeProductId'] !== null && $productId !== $initiatingLine['stripeProductId']) {
+            if ($initiatingLine->stripeProductId() !== null && $productId !== $initiatingLine->stripeProductId()) {
                 throw new OrderDataException();
             }
 

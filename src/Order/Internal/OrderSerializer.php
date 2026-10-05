@@ -68,7 +68,7 @@ final class OrderSerializer
             'checkoutExpiresAt' => OrderData::timestamp($checkoutAttempt->expiresAt()),
             // Keep provider-neutral product/variant facts independently from the exact Stripe request,
             // whose Price lines may contain only an ID and quantity.
-            'initiatingLineItems' => $context->lineItems(),
+            'initiatingLineItems' => array_map(static fn(OrderLineItemSnapshot $lineItem): array => $lineItem->toArray(), $context->lineItems()),
         ]);
     }
 
@@ -232,7 +232,7 @@ final class OrderSerializer
                 data: $data,
                 checkoutAttempt: $checkoutAttempt,
             );
-            $data['initiatingLineItems'] = $context->lineItems();
+            $data['initiatingLineItems'] = array_map(static fn(OrderLineItemSnapshot $lineItem): array => $lineItem->toArray(), $context->lineItems());
 
             $subtotal = $registry->toMoney($registry->fromDecimal(OrderData::text($data['subtotal']), $currency));
 
@@ -459,7 +459,7 @@ final class OrderSerializer
             // Snapshot construction validates the line itself; these checks bind it to the order's frozen purchase.
             $initiatingLineItem = $initiatingLineItems[$index];
 
-            if ($line->quantity() !== $initiatingLineItem['quantity']) {
+            if ($line->quantity() !== $initiatingLineItem->quantity()) {
                 throw new OrderDataException();
             }
 
@@ -467,7 +467,7 @@ final class OrderSerializer
                 throw new OrderDataException();
             }
 
-            if ($line->price()->isEqualTo(Money::of(OrderData::string($initiatingLineItem['price']), $context->currency())) === false) {
+            if ($line->price()->isEqualTo($initiatingLineItem->price()) === false) {
                 throw new OrderDataException();
             }
 
@@ -475,11 +475,11 @@ final class OrderSerializer
                 throw new OrderDataException();
             }
 
-            if ($initiatingLineItem['stripePriceId'] !== null && $line->stripePriceId() !== $initiatingLineItem['stripePriceId']) {
+            if ($initiatingLineItem->stripePriceId() !== null && $line->stripePriceId() !== $initiatingLineItem->stripePriceId()) {
                 throw new OrderDataException();
             }
 
-            if ($initiatingLineItem['stripeProductId'] !== null && $line->stripeProductId() !== $initiatingLineItem['stripeProductId']) {
+            if ($initiatingLineItem->stripeProductId() !== null && $line->stripeProductId() !== $initiatingLineItem->stripeProductId()) {
                 throw new OrderDataException();
             }
 

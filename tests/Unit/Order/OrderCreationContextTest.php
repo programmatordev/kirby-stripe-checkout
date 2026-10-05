@@ -36,13 +36,12 @@ final class OrderCreationContextTest extends TestCase
         $this->assertSame('EUR', $context->currency());
         $this->assertSame('32.00', (string) $context->subtotal()->getAmount());
         $this->assertTrue($context->requiresShipping());
-        $lineItems = $context->lineItems();
-        $this->assertIsArray($lineItems[0]['options']);
-        $this->assertIsArray($lineItems[0]['options'][0]);
-        $this->assertSame('Large', $lineItems[0]['options'][0]['valueName']);
-        $this->assertSame('SHIRT-L', $lineItems[0]['sku']);
-        $lineItems[0]['name'] = 'Changed';
-        $this->assertSame('T-shirt', $context->lineItems()[0]['name']);
+        $lineItem = $context->lineItems()[0];
+        $this->assertSame('Large', $lineItem->options()[0]->valueName());
+        $this->assertSame('SHIRT-L', $lineItem->sku());
+        $data = $lineItem->toArray();
+        $data['name'] = 'Changed';
+        $this->assertSame('T-shirt', $context->lineItems()[0]->name());
     }
 
     public function testContextRejectsMixedSources(): void

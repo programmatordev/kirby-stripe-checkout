@@ -47,6 +47,10 @@ final class OrderLineItemSnapshotTest extends TestCase
             price: new Price($price),
         );
         $lineItem = OrderLineItemSnapshot::fromCheckoutLineItem(new CheckoutLineItem($product));
+        $this->assertTrue($price->isEqualTo($lineItem->price()));
+        $this->assertSame($currency, $lineItem->currency());
+        $this->assertSame($providerPrice, $lineItem->providerPriceAmount());
+        $this->assertSame($providerPrice * 2, $lineItem->providerSubtotalAmount());
         $data = $lineItem->toArray();
         $this->assertSame([
             'price' => $providerPrice,

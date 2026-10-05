@@ -47,6 +47,10 @@ final class OrderSerializationTest extends TestCase
         $this->assertSame('2026-09-05T10:20:30Z', $data['createdAt']);
         $this->assertSame('creating', $data['checkoutStatus']);
         $this->assertSame('unpaid', $data['paymentStatus']);
+        $this->assertSame(1, OrderData::map($data['stripeCheckout'])['schemaVersion']);
+        $expectedLineItem = OrderFixture::lineItemData();
+        ksort($expectedLineItem);
+        $this->assertSame([$expectedLineItem], $data['initiatingLineItems']);
     }
 
     public function testUnicodeProductTextSurvivesOrderSerialization(): void

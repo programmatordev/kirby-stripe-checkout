@@ -25,7 +25,7 @@ final readonly class OrderCreationContext
 
     private string $pageUuid;
 
-    /** @var list<array<string, mixed>> */
+    /** @var list<OrderLineItemSnapshot> */
     private array $lineItems;
 
     private bool $requiresShipping;
@@ -77,32 +77,28 @@ final readonly class OrderCreationContext
 
         $registry = new StripeCurrencyRegistry();
         $subtotal = $registry->toMoney($registry->fromDecimal('0', $currency));
-        $snapshots = [];
         $priceSource = null;
         $requiresShipping = false;
 
         // Each line owns its product and amount invariants; this context enforces consistency across the purchase.
         foreach ($lineItems as $lineItem) {
-            $snapshot = $lineItem->toArray();
-
-            if ($snapshot['currency'] !== $currency) {
+            if ($lineItem->currency() !== $currency) {
                 throw new OrderDataException();
             }
 
-            if ($priceSource !== null && $priceSource !== $snapshot['priceSource']) {
+            if ($priceSource !== null && $priceSource !== $lineItem->priceSource()) {
                 throw new OrderDataException();
             }
 
-            $priceSource = $snapshot['priceSource'];
+            $priceSource = $lineItem->priceSource();
             $subtotal = $subtotal->plus($lineItem->subtotal());
-            $snapshots[] = $snapshot;
-            $requiresShipping = $requiresShipping || $snapshot['requiresShipping'] === true;
+            $requiresShipping = $requiresShipping || $lineItem->requiresShipping();
         }
 
         // Individually valid line amounts can sum beyond the snapshot's provider-unit integer range.
         $registry->fromMoney($subtotal);
         $this->subtotal = $subtotal;
-        $this->lineItems = $snapshots;
+        $this->lineItems = $lineItems;
         $this->requiresShipping = $requiresShipping;
     }
 
@@ -158,7 +154,7 @@ final readonly class OrderCreationContext
         return $this->subtotal;
     }
 
-    /** @return list<array<string, mixed>> */
+    /** @return list<OrderLineItemSnapshot> */
     public function lineItems(): array
     {
         return $this->lineItems;

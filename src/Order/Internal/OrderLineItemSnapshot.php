@@ -20,8 +20,16 @@ use Throwable;
 /** @internal Frozen initiating order line item; never re-resolves a product or retains Kirby Files. */
 final readonly class OrderLineItemSnapshot
 {
-    /** @param array<string, mixed> $data */
-    private function __construct(private array $data, private Money $subtotal) {}
+    /** @param array<string, mixed> $data Canonical persistence projection, kept separate from typed access. */
+    private function __construct(
+        private array $data,
+        private Product $product,
+        private Money $price,
+        private Money $subtotal,
+        private ?string $stripeProductId,
+        private int $providerPriceAmount,
+        private int $providerSubtotalAmount,
+    ) {}
 
     /** Snapshotting consumes the same completed resolution as shipping; no provider lookup. */
     public static function fromCheckoutLineItem(CheckoutLineItem $lineItem): self
@@ -115,9 +123,7 @@ final readonly class OrderLineItemSnapshot
                 throw new OrderDataException();
             }
 
-            if ($data['stripeProductId'] !== null) {
-                OrderData::nonEmptyString($data['stripeProductId']);
-            }
+            $stripeProductId = $data['stripeProductId'] === null ? null : OrderData::nonEmptyString($data['stripeProductId']);
 
             // Stripe-priced items use the provider's product classification; local tax overrides belong only to Kirby-priced items.
             if ($data['priceSource'] === PriceSource::Stripe->value && $data['taxCode'] !== null) {
@@ -147,9 +153,12 @@ final readonly class OrderLineItemSnapshot
                 throw new OrderDataException();
             }
 
+            $providerPriceAmount = $registry->fromMoney($price)->minorAmount();
+            $providerSubtotalAmount = $registry->fromMoney($subtotal)->minorAmount();
+
             if ($data['providerAmounts'] !== [
-                'price' => $registry->fromMoney($price)->minorAmount(),
-                'subtotal' => $registry->fromMoney($subtotal)->minorAmount(),
+                'price' => $providerPriceAmount,
+                'subtotal' => $providerSubtotalAmount,
             ]) {
                 throw new OrderDataException();
             }
@@ -159,15 +168,120 @@ final readonly class OrderLineItemSnapshot
             $data['description'] = $product->description();
             $data['sku'] = $product->sku();
 
-            return new self($data, $subtotal);
+            // This rebuilt Product contains no Kirby File handle, so typed access cannot retain live content.
+            return new self(
+                data: $data,
+                product: $product,
+                price: $price,
+                subtotal: $subtotal,
+                stripeProductId: $stripeProductId,
+                providerPriceAmount: $providerPriceAmount,
+                providerSubtotalAmount: $providerSubtotalAmount,
+            );
         } catch (Throwable) {
             throw new OrderDataException();
         }
     }
 
+    public function productReference(): string
+    {
+        return $this->product->request()->reference();
+    }
+
+    public function quantity(): int
+    {
+        return $this->product->request()->quantity();
+    }
+
+    public function variantId(): ?string
+    {
+        return $this->product->variantId();
+    }
+
+    public function name(): string
+    {
+        return $this->product->name();
+    }
+
+    public function description(): ?string
+    {
+        return $this->product->description();
+    }
+
+    /** @return list<string> */
+    public function imageUrls(): array
+    {
+        return $this->product->imageUrls();
+    }
+
+    public function sku(): ?string
+    {
+        return $this->product->sku();
+    }
+
+    public function requiresShipping(): bool
+    {
+        return $this->product->requiresShipping();
+    }
+
+    /** @return list<SelectedOption> */
+    public function options(): array
+    {
+        return $this->product->selectedOptions();
+    }
+
+    /** @return array<string, bool|int|string> */
+    public function metadata(): array
+    {
+        return $this->product->metadata();
+    }
+
+    public function priceSource(): PriceSource
+    {
+        return $this->product->priceSource();
+    }
+
+    public function stripePriceId(): ?string
+    {
+        $price = $this->product->price();
+
+        return $price instanceof StripePriceReference ? $price->priceId() : null;
+    }
+
+    public function stripeProductId(): ?string
+    {
+        return $this->stripeProductId;
+    }
+
+    public function taxCode(): ?TaxCode
+    {
+        return $this->product->taxCode();
+    }
+
+    public function currency(): string
+    {
+        return $this->price->getCurrency()->getCurrencyCode();
+    }
+
+    public function price(): Money
+    {
+        return $this->price;
+    }
+
     public function subtotal(): Money
     {
         return $this->subtotal;
+    }
+
+    /** Stripe's units can differ from the currency's ISO minor-unit exponent. */
+    public function providerPriceAmount(): int
+    {
+        return $this->providerPriceAmount;
+    }
+
+    public function providerSubtotalAmount(): int
+    {
+        return $this->providerSubtotalAmount;
     }
 
     /** @return array<string, mixed> */

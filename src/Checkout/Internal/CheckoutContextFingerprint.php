@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 
@@ -63,24 +64,34 @@ final class CheckoutContextFingerprint
 
     public static function fromOrder(OrderCreationContext $context): string
     {
+        // Match fromCheckout's purchase projection.
+        // Including persistence-only fields would invalidate the same shipping quote after snapshotting.
         $items = array_map(
-            static fn(array $item): array => [
-                'reference' => $item['reference'],
-                'variantId' => $item['variantId'],
-                'sku' => $item['sku'],
-                'quantity' => $item['quantity'],
-                'price' => $item['price'],
-                'subtotal' => $item['subtotal'],
-                'requiresShipping' => $item['requiresShipping'],
-                'options' => $item['options'],
-                'metadata' => $item['metadata'],
-                'name' => $item['name'],
-                'description' => $item['description'],
-                'images' => $item['images'],
-                'priceSource' => $item['priceSource'],
-                'stripePriceId' => $item['stripePriceId'],
-                'stripeProductId' => $item['stripeProductId'],
-                'taxCode' => $item['taxCode'],
+            static fn(OrderLineItemSnapshot $item): array => [
+                'reference' => $item->productReference(),
+                'variantId' => $item->variantId(),
+                'sku' => $item->sku(),
+                'quantity' => $item->quantity(),
+                'price' => (string) $item->price()->getAmount(),
+                'subtotal' => (string) $item->subtotal()->getAmount(),
+                'requiresShipping' => $item->requiresShipping(),
+                'options' => array_map(
+                    static fn(SelectedOption $option): array => [
+                        'optionId' => $option->optionId(),
+                        'optionName' => $option->optionName(),
+                        'valueId' => $option->valueId(),
+                        'valueName' => $option->valueName(),
+                    ],
+                    $item->options(),
+                ),
+                'metadata' => $item->metadata(),
+                'name' => $item->name(),
+                'description' => $item->description(),
+                'images' => $item->imageUrls(),
+                'priceSource' => $item->priceSource()->value,
+                'stripePriceId' => $item->stripePriceId(),
+                'stripeProductId' => $item->stripeProductId(),
+                'taxCode' => $item->taxCode()?->id(),
             ],
             $context->lineItems(),
         );

@@ -18,6 +18,7 @@ use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 use ProgrammatorDev\StripeCheckout\Shipping\DeliveryEstimate;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingOption;
@@ -275,15 +276,13 @@ final class SessionRequestBuilder
             ];
             $requestLine = [
                 'metadata' => $metadata,
-                'quantity' => $lineItem['quantity'],
+                'quantity' => $lineItem->quantity(),
             ];
 
-            if ($lineItem['priceSource'] === PriceSource::Stripe->value) {
-                $requestLine['price'] = $lineItem['stripePriceId'];
-            } elseif ($lineItem['priceSource'] === PriceSource::Kirby->value) {
-                $requestLine['price_data'] = $this->inlinePrice($lineItem);
+            if ($lineItem->priceSource() === PriceSource::Stripe) {
+                $requestLine['price'] = $lineItem->stripePriceId();
             } else {
-                throw new LogicException('The order contains an unsupported price source.');
+                $requestLine['price_data'] = $this->inlinePrice($lineItem);
             }
 
             $lineItems[] = $requestLine;
@@ -292,39 +291,25 @@ final class SessionRequestBuilder
         return $lineItems;
     }
 
-    /**
-     * @param array<string, mixed> $lineItem
-     * @return array<string, mixed>
-     */
-    private function inlinePrice(array $lineItem): array
+    /** @return array<string, mixed> */
+    private function inlinePrice(OrderLineItemSnapshot $lineItem): array
     {
-        $providerAmounts = $lineItem['providerAmounts'];
-        $currency = $lineItem['currency'];
-
-        if (
-            is_array($providerAmounts) === false
-            || is_int($providerAmounts['price'] ?? null) === false
-            || is_string($currency) === false
-        ) {
-            throw new LogicException('The order contains invalid provider price units.');
-        }
-
         $productData = [
-            'name' => $lineItem['name'],
+            'name' => $lineItem->name(),
         ];
 
-        if (is_string($lineItem['description'])) {
-            $productData['description'] = $lineItem['description'];
+        if ($lineItem->description() !== null) {
+            $productData['description'] = $lineItem->description();
         }
 
-        if (is_array($lineItem['images']) && $lineItem['images'] !== []) {
-            $productData['images'] = $lineItem['images'];
+        if ($lineItem->imageUrls() !== []) {
+            $productData['images'] = $lineItem->imageUrls();
         }
 
         $priceData = [
-            'currency' => strtolower($currency),
+            'currency' => strtolower($lineItem->currency()),
             'product_data' => $productData,
-            'unit_amount' => $providerAmounts['price'],
+            'unit_amount' => $lineItem->providerPriceAmount(),
         ];
 
         if ($this->settings->automaticTax() && $this->settings->priceSource() === PriceSource::Kirby) {
@@ -334,10 +319,10 @@ final class SessionRequestBuilder
                 $priceData['tax_behavior'] = $this->settings->taxBehavior()->value;
             }
 
-            if (is_string($lineItem['taxCode'] ?? null)) {
+            if ($lineItem->taxCode() !== null) {
                 // Categories needing an event location use product tax_details through the complete-request filter; Stripe enforces that need.
                 // https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-line_items-price_data-product_data-tax_details
-                $priceData['product_data']['tax_code'] = $lineItem['taxCode'];
+                $priceData['product_data']['tax_code'] = $lineItem->taxCode()->id();
             }
         }
 

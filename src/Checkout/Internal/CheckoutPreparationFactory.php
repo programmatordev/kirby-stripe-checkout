@@ -14,7 +14,6 @@ use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuoteStatus;
-use ProgrammatorDev\StripeCheckout\Tax\TaxCode;
 
 /** @internal Freezes one resolved purchase into matching order, shipping and request evidence. */
 final readonly class CheckoutPreparationFactory
@@ -62,10 +61,12 @@ final readonly class CheckoutPreparationFactory
         ?InitiatingShippingSnapshot $initiatingShipping,
     ): SessionRequest {
         foreach ($context->order()->lineItems() as $lineItem) {
-            if (is_string($lineItem['taxCode'])) {
+            $taxCode = $lineItem->taxCode();
+
+            if ($taxCode !== null) {
                 // Frozen local classifications are checked before a new attempt is persisted.
                 // Exact saved retries bypass request preparation entirely.
-                $this->resolver->validateTaxCode(new TaxCode($lineItem['taxCode']));
+                $this->resolver->validateTaxCode($taxCode);
             }
         }
 
