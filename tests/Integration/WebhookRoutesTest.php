@@ -507,6 +507,48 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->assertCount(2, $this->delivered);
     }
 
+    public function testManualInvalidStoredContentIsNotRetryableAndCannotCommitTheProviderObservation(): void
+    {
+        $reconciler = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler();
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
+        $page = $this->orders->order($this->order->pageUuid()) ?? $this->fail('Missing order.');
+        $before = $page->version('latest')->read('default') ?? $this->fail('Missing order content.');
+        $this->setRefunds([$this->refund()]);
+        $this->setDisputes([$this->dispute()]);
+        $this->provider->beforeDisputeListRead = static function () use ($page): void {
+            // Corruption after the provider read must still be rejected by the locked storage reload.
+            $page->version('latest')->update(['subtotal' => 'invalid'], 'default');
+        };
+
+        $result = $reconciler->reconcileCurrent($this->order->pageUuid());
+        $this->assertSame(ReconciliationOutcome::Failed, $result->outcome());
+        $this->assertSame(PersistenceErrorCode::CONTENT_INVALID, $result->errorCode());
+        $this->assertFalse($result->isRetryable());
+        $this->assertNull($result->orderPage());
+        $this->assertSame([...$before, 'subtotal' => 'invalid'], $page->version('latest')->read('default'));
+        $this->assertCount(2, $this->delivered);
+    }
+
+    public function testManualSuccessAndFailureLeaveExistingEventAttemptsAndOutcomesUntouched(): void
+    {
+        $reconciler = (new RuntimeFactory($this->kirby))->checkoutSessionReconciler();
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_webhook');
+        $this->provider->httpStatus = 500;
+        $this->assertResponse($this->send($this->event()), 503);
+        $events = $this->entries('events');
+        $this->assertSame('failed', ($events[array_key_first($events)] ?? $this->fail('Missing Event.'))['status']);
+        $this->provider->httpStatus = 200;
+        $this->setRefunds([$this->refund()]);
+        $this->setDisputes([$this->dispute()]);
+
+        $this->assertSame(ReconciliationOutcome::Updated, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame($events, $this->entries('events'));
+        $before = $this->data();
+        $this->provider->httpStatus = 500;
+        $this->assertSame(ReconciliationOutcome::Failed, $reconciler->reconcileCurrent($this->order->pageUuid())->outcome());
+        $this->assertSame($before, $this->data());
+    }
+
     public function testManualCredentialMismatchFailsBeforeAnyProviderRequest(): void
     {
         (new RuntimeFactory($this->kirby))->checkoutSessionReconciler()->reconcile($this->order->pageUuid(), 'cs_webhook');

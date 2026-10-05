@@ -52,6 +52,7 @@ final readonly class ReconciliationResult
         return $this->errorCode;
     }
 
+    /** A temporary failure can warrant another explicit invocation; this does not schedule a retry. */
     public function isRetryable(): bool
     {
         return $this->retryable;

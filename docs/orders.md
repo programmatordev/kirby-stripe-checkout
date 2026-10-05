@@ -309,6 +309,8 @@ The internal `CheckoutSessionReconciler::reconcileCurrent($pageUuid)` operation 
 
 The operation returns a typed `ReconciliationResult` with an `Updated`, `NoChange` or `Failed` outcome, a committed Page on success, and a safe error code and retryability on failure. A new action-only lifecycle delivery also counts as an update. It creates no Stripe resource or Event ledger entry, and only newly committed transitions emit lifecycle hooks. Unchanged reads preserve timestamps and do not repeat hooks. Optional listener failure remains separate from successful canonical persistence.
 
+Manual reconciliation does not schedule automatic retries or increment existing Stripe Event attempt counters, on either success or failure. Failure retryability only indicates whether another explicit invocation could succeed after a temporary problem; invalid stored content requires correction first. Bounded re-reads within the current operation resolve concurrent commerce changes without replaying provider mutations.
+
 All required provider reads must succeed before a combined local update. A complete empty financial list clears that collection and its summary; a failed or unread list cannot clear saved facts. No-cost or pre-payment Sessions without a PaymentIntent require no financial list request. Existing payment success and completed Checkout remain protected from stale observations, and a missing or contradictory established PaymentIntent cannot be used to erase financial facts.
 
 An order without a saved Session is ineligible for this operation; recovery is separate. This is an internal service for the later operator interface. No Panel reconciliation action or public mutation route is available yet.

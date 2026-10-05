@@ -75,7 +75,12 @@ final class CheckoutSessionReconciler
             return ReconciliationResult::failed($error->errorCode(), $error->isRetryable());
         } catch (OrderDataException $error) {
             return ReconciliationResult::failed($error->errorCode());
-        } catch (OrderStorageException|OrderQueryException $error) {
+        } catch (OrderStorageException $error) {
+            // Match the webhook's recoverable storage categories; invalid content needs repair before another sync.
+            $retryable = in_array($error->errorCode(), [PersistenceErrorCode::BUSY, PersistenceErrorCode::WRITE_FAILED, PersistenceErrorCode::VERIFY_FAILED], true);
+
+            return ReconciliationResult::failed(errorCode: $error->errorCode(), retryable: $retryable);
+        } catch (OrderQueryException $error) {
             return ReconciliationResult::failed(errorCode: $error->errorCode(), retryable: true);
         }
     }
@@ -226,6 +231,7 @@ final class CheckoutSessionReconciler
         ?DisputeCorrelation $disputeCorrelation = null,
         bool $refreshFinancials = false,
     ): ReconciliationResult {
+        // Attempts belong to a specific provider Event, not manual refreshes or conflict re-reads.
         if ($trigger !== null) {
             $recordAttempt = static function (array $data) use ($trigger): array {
                 /** @var array<string, mixed> $data */
