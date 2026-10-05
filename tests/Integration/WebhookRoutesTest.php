@@ -1596,9 +1596,15 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->setDisputes([$dispute]);
         $this->assertResponse($this->send($this->disputeEvent()), 204);
         $dispute['balance_transactions'] = [[
-            'id' => 'txn_withdrawn', 'object' => 'balance_transaction', 'currency' => 'usd',
-            'amount' => -1800, 'fee' => 200, 'net' => -2000, 'created' => 100,
-            'exchange_rate' => 1.125, 'description' => 'PRIVATE_BALANCE',
+            'id' => 'txn_withdrawn',
+            'object' => 'balance_transaction',
+            'currency' => 'usd',
+            'amount' => -1800,
+            'fee' => 200,
+            'net' => -2000,
+            'created' => 100,
+            'exchange_rate' => 1.125,
+            'description' => 'PRIVATE_BALANCE',
         ]];
         $evidenceDetails = OrderData::map($dispute['evidence_details']);
         $dispute['evidence_details'] = [
@@ -1613,8 +1619,12 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->assertSame('needs_response', $this->data()['disputeStatus']);
         $this->assertTrue($facts['evidenceHasEvidence']);
         $this->assertSame([[
-            'amount' => -1800, 'createdAt' => 100, 'currency' => 'USD', 'fee' => 200,
-            'net' => -2000, 'stripeBalanceTransactionId' => 'txn_withdrawn',
+            'amount' => -1800,
+            'createdAt' => 100,
+            'currency' => 'USD',
+            'fee' => 200,
+            'net' => -2000,
+            'stripeBalanceTransactionId' => 'txn_withdrawn',
         ]], $facts['balanceTransactions']);
         $this->assertCount(4, $this->delivered);
         $this->assertStringNotContainsString('PRIVATE', json_encode($this->data(), JSON_THROW_ON_ERROR));
@@ -1730,6 +1740,61 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->assertResponse($this->send($this->disputeEvent(id: 'evt_reordered_disputes')), 204);
         $this->assertSame($before['disputes'], $this->data()['disputes']);
         $this->assertSame($before['disputeUpdatedAt'], $this->data()['disputeUpdatedAt']);
+        $this->assertCount(3, $this->delivered);
+    }
+
+    public function testDistinctSiblingDisputeChargeIsCorrelatedOnceAndReused(): void
+    {
+        $first = $this->dispute();
+        $second = $this->dispute(id: 'du_second', status: 'won');
+        $second['charge'] = 'ch_sibling';
+        $second['payment_intent'] = null;
+        $third = $this->dispute(id: 'du_third', status: 'lost');
+        $third['charge'] = 'ch_sibling';
+        $this->setDisputes([$first, $second, $third]);
+        $this->provider->charges['ch_sibling'] = [
+            'id' => 'ch_sibling',
+            'object' => 'charge',
+            'payment_intent' => 'pi_webhook',
+            'currency' => 'eur',
+            'livemode' => false,
+        ];
+
+        $this->assertResponse($this->send($this->disputeEvent()), 204);
+        $disputes = $this->entries('disputes');
+        $this->assertSame(['du_second', 'du_third', 'du_webhook'], array_column($disputes, 'stripeDisputeId'));
+        $this->assertSame(['ch_sibling', 'ch_sibling', 'ch_disputed'], array_column($disputes, 'stripeChargeId'));
+        $this->assertSame(['pi_webhook', 'pi_webhook', 'pi_webhook'], array_column($disputes, 'stripePaymentIntentId'));
+        $this->assertSame('needs_response', $this->data()['disputeStatus']);
+        $this->assertTrue($this->data()['disputeHasLost']);
+        $this->assertCount(1, array_filter($this->provider->requests, static fn(string $url): bool => $url === 'https://api.stripe.com/v1/charges/ch_sibling'));
+        $this->assertCount(3, $this->delivered);
+    }
+
+    public function testSiblingDisputeChargeForAnotherPaymentCannotChangeSavedCommerce(): void
+    {
+        $first = $this->dispute();
+        $this->setDisputes([$first]);
+        $this->assertResponse($this->send($this->disputeEvent()), 204);
+        $before = $this->data();
+        $second = $this->dispute(id: 'du_other');
+        $second['charge'] = 'ch_other_payment';
+        $second['payment_intent'] = null;
+        $this->setDisputes([$first, $second]);
+        $this->provider->charges['ch_other_payment'] = [
+            'id' => 'ch_other_payment',
+            'object' => 'charge',
+            'payment_intent' => 'pi_other',
+            'currency' => 'eur',
+            'livemode' => false,
+        ];
+
+        $this->assertResponse($this->send($this->disputeEvent(id: 'evt_invalid_sibling')), 500);
+        $after = $this->data();
+        unset($before['events'], $after['events']);
+        $this->assertSame($before, $after);
+        $this->assertSame('failed', $this->entries('events')[1]['status']);
+        $this->assertSame('checkout.session_incompatible', $this->entries('events')[1]['errorCode']);
         $this->assertCount(3, $this->delivered);
     }
 
