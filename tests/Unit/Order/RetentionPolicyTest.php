@@ -29,6 +29,7 @@ final class RetentionPolicyTest extends TestCase
         $policy = $this->policy();
         $data = $this->data($checkout, $payment);
         $this->assertSame($eligible, $policy->isEligible($data, new DateTimeImmutable('2026-12-01T00:00:00Z')));
+        $this->assertSame($eligible, RetentionPolicy::isTerminalUnpaid($data));
     }
 
     /** @return iterable<string, array{string, string, bool}> */
@@ -39,6 +40,8 @@ final class RetentionPolicyTest extends TestCase
         yield 'open' => ['open', 'unpaid', false];
         yield 'creation failure' => ['creation_failed', 'unpaid', true];
         yield 'expired' => ['expired', 'unpaid', true];
+        yield 'expired failed' => ['expired', 'failed', true];
+        yield 'completed unpaid' => ['complete', 'unpaid', false];
         yield 'failed' => ['complete', 'failed', true];
         yield 'pending' => ['complete', 'pending', false];
         yield 'paid' => ['complete', 'paid', false];
@@ -59,6 +62,16 @@ final class RetentionPolicyTest extends TestCase
         $this->assertFalse($this->policy(['cleanupUnpaidOrders' => false])->isEligible($expired, $now));
         $this->assertTrue($this->policy(['cleanupUnpaidOrders' => false])->isEligible($failure, $now));
         $this->assertFalse($this->policy(['creationFailureRetentionDays' => PHP_INT_MAX])->isEligible($failure, $now));
+    }
+
+    public function testManualEligibilityIgnoresCleanupConfigurationAndAgeButProtectsAnAssociatedSession(): void
+    {
+        $data = $this->data('creation_failed', 'unpaid');
+        $policy = $this->policy(['cleanupCreationFailures' => false, 'cleanupUnpaidOrders' => false]);
+        $this->assertFalse($policy->isEligible($data, new DateTimeImmutable('2026-09-01T00:00:00Z')));
+        $this->assertTrue(RetentionPolicy::isTerminalUnpaid($data));
+        $data['stripeCheckoutSessionId'] = 'opaque-session';
+        $this->assertFalse(RetentionPolicy::isTerminalUnpaid($data));
     }
 
     public function testLaterPaymentFailureControlsTheCompletedFailureRetentionClock(): void

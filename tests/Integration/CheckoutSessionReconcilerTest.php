@@ -391,7 +391,12 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
         $this->assertNull(Payment::fromArray(OrderData::map($this->data()['payment']))->nextAction());
 
         $this->reconciler($this->gateway($this->record('complete', 'paid', 'succeeded')))->reconcile($this->order->pageUuid(), 'cs_current');
-        (new OrderHookDispatcher($this->kirby))->dispatch($this->order->pageUuid(), $observed[0]->deliveryId());
+        $before = $this->data();
+        $result = (new OrderHookDispatcher($this->kirby))->retryFailed($this->order->pageUuid(), $observed[0]->deliveryId());
+        $this->assertTrue($result->isDelivered());
+        $after = $this->data();
+        unset($before['lifecycleDeliveries'], $after['lifecycleDeliveries']);
+        $this->assertSame($before, $after);
         $this->assertCount(2, $observed);
         $this->assertSame(['pending', 'paid'], $orderStatuses);
         $this->assertSame($observed[0]->toArray(), $observed[1]->toArray());

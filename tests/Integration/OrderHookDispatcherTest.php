@@ -29,6 +29,7 @@ use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\PersistenceErrorCode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\LifecycleNotification;
+use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleErrorCode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEvent;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
@@ -92,8 +93,8 @@ final class OrderHookDispatcherTest extends KirbyTestCase
 
         $deliveryId = OrderData::string(OrderData::map($originalDelivery['event'])['deliveryId']);
         $dispatcher = new OrderHookDispatcher($this->kirby);
-        $dispatcher->dispatch($page->uuid()->toString(), $deliveryId, $originalDeadline->modify('-1 second'));
-        $dispatcher->dispatch($page->uuid()->toString(), $deliveryId, $originalDeadline);
+        $dispatcher->dispatch(uuid: $page->uuid()->toString(), deliveryId: $deliveryId, attemptedAt: $originalDeadline->modify('-1 second'));
+        $dispatcher->dispatch(uuid: $page->uuid()->toString(), deliveryId: $deliveryId, attemptedAt: $originalDeadline);
         $page = $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $originalDeadline);
         $afterCleanup = [];
 
@@ -233,7 +234,7 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $entry = $this->entries($page)[0];
         $deliveryId = OrderData::string(OrderData::map($entry['event'])['deliveryId']);
         $dispatcher = new OrderHookDispatcher($this->kirby);
-        $dispatcher->dispatch($page->uuid()->toString(), $deliveryId);
+        $dispatcher->retryFailed($page->uuid()->toString(), $deliveryId);
         $page = (new OrderPageStore($this->kirby))->requirePage($page->id());
         $pruned = $this->entries($page)[0];
         $this->assertSame('delivered', $pruned['status']);
@@ -241,7 +242,7 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $this->assertNull($pruned['errorCode']);
         $this->assertArrayNotHasKey('orderSnapshot', OrderData::map($pruned['event']));
         $this->assertNotNull($pruned['payloadPrunedAt']);
-        $dispatcher->dispatch($page->uuid()->toString(), $deliveryId);
+        $dispatcher->retryFailed($page->uuid()->toString(), $deliveryId);
         $this->assertSame(2, $calls);
     }
 
@@ -263,13 +264,15 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $store = new OrderPageStore($this->kirby);
         $deliveryId = OrderData::string(OrderData::map($entry['event'])['deliveryId']);
 
-        $dispatcher->dispatch($page->uuid()->toString(), $deliveryId, $expiresAt->modify('-1 second'));
+        $result = $dispatcher->retryFailed(uuid: $page->uuid()->toString(), deliveryId: $deliveryId, attemptedAt: $expiresAt->modify('-1 second'));
+        $this->assertFalse($result->isDelivered());
+        $this->assertSame(LifecycleErrorCode::LISTENER_FAILED, $result->errorCode());
         $beforeExpiry = $this->entries($store->requirePage($page->id()))[0];
         $this->assertSame(2, $beforeExpiry['attempts']);
         $this->assertSame($entry['expiresAt'], $beforeExpiry['expiresAt']);
 
-        $dispatcher->dispatch($page->uuid()->toString(), $deliveryId, $expiresAt);
-        $dispatcher->dispatch($page->uuid()->toString(), $deliveryId, $expiresAt->modify('+1 day'));
+        $this->assertSame(LifecycleErrorCode::DELIVERY_NOT_RETRYABLE, $dispatcher->retryFailed(uuid: $page->uuid()->toString(), deliveryId: $deliveryId, attemptedAt: $expiresAt)->errorCode());
+        $dispatcher->retryFailed(uuid: $page->uuid()->toString(), deliveryId: $deliveryId, attemptedAt: $expiresAt->modify('+1 day'));
         $this->assertSame(2, $attempts);
         $this->assertSame($beforeExpiry, $this->entries($store->requirePage($page->id()))[0]);
     }
@@ -289,10 +292,10 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $attemptedAt = OrderData::date($entry['lastAttemptAt'])->modify('+10 seconds');
         $dispatcher = new OrderHookDispatcher($this->kirby);
         $store = new OrderPageStore($this->kirby);
-        $dispatcher->dispatch($page->uuid()->toString(), $deliveryId, $attemptedAt);
+        $dispatcher->retryFailed(uuid: $page->uuid()->toString(), deliveryId: $deliveryId, attemptedAt: $attemptedAt);
         $before = $this->entries($store->requirePage($page->id()))[0];
 
-        $dispatcher->dispatch($page->uuid()->toString(), $deliveryId, $attemptedAt->modify('-5 seconds'));
+        $dispatcher->retryFailed(uuid: $page->uuid()->toString(), deliveryId: $deliveryId, attemptedAt: $attemptedAt->modify('-5 seconds'));
         $after = $this->entries($store->requirePage($page->id()))[0];
 
         $this->assertSame(3, $calls);
@@ -336,7 +339,8 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         }]]);
         $this->assertLessThan($expiresAt, new DateTimeImmutable());
         $deliveryId = OrderData::string(OrderData::map($entries[0]['event'])['deliveryId']);
-        (new OrderHookDispatcher($this->kirby))->dispatch($page->uuid()->toString(), $deliveryId);
+        $result = (new OrderHookDispatcher($this->kirby))->retryFailed($page->uuid()->toString(), $deliveryId);
+        $this->assertSame(LifecycleErrorCode::DELIVERY_NOT_RETRYABLE, $result->errorCode());
 
         $this->assertTrue($delayed);
         $this->assertSame(1, $attempts);
@@ -506,7 +510,7 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $cache->set('order-summary', 'unchanged');
         $fail = false;
         $event = OrderData::map($entry['event']);
-        (new OrderHookDispatcher($this->kirby))->dispatch($page->uuid()->toString(), OrderData::text($event['deliveryId']));
+        (new OrderHookDispatcher($this->kirby))->retryFailed($page->uuid()->toString(), OrderData::text($event['deliveryId']));
         $page = $store->requirePage($page->id());
         $after = $store->data($page);
         $retried = $this->entries($page)[0];
@@ -581,14 +585,16 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $dispatcher = new OrderHookDispatcher($this->kirby);
         $event = OrderData::map($entry['event']);
         $deliveryId = OrderData::text($event['deliveryId']);
-        $dispatcher->dispatch($first->uuid()->toString(), $deliveryId);
-        $dispatcher->dispatch($first->uuid()->toString(), $deliveryId);
+        $this->assertTrue($dispatcher->retryFailed($first->uuid()->toString(), $deliveryId)->isDelivered());
+        $this->assertSame(LifecycleErrorCode::DELIVERY_NOT_RETRYABLE, $dispatcher->retryFailed($first->uuid()->toString(), $deliveryId)->errorCode());
         $this->assertCount(3, $observed);
         $this->assertSame($observed[0][0], $observed[2][0]);
         $this->assertSame('open', $observed[2][1]);
         $retried = $this->entries($store->requirePage($first->id()))[0];
         $this->assertSame(2, $retried['attempts']);
         $this->assertSame('delivered', $retried['status']);
+        $this->assertSame($entry['event'], $retried['event']);
+        $this->assertSame($entry['expiresAt'], $retried['expiresAt']);
     }
 
     public function testTransitionDeliveryIsAtomicDeduplicatedAndKeepsTriggerContext(): void
@@ -641,10 +647,15 @@ final class OrderHookDispatcherTest extends KirbyTestCase
             ],
         ];
         $observed = [];
+        $fail = true;
         $this->restart([
-            'programmatordev.stripe-checkout.order.created' => function (Page $order) use (&$observed): void {
+            'programmatordev.stripe-checkout.order.created' => function (Page $order) use (&$observed, &$fail): void {
                 $observed[] = $order->kirby()->languageCode();
-                throw new RuntimeException('Failed');
+
+                /** @var bool $fail Changed between delivery attempts. */
+                if ($fail) {
+                    throw new RuntimeException('Failed');
+                }
             },
         ], $languages);
         $this->kirby->setCurrentLanguage('en');
@@ -652,13 +663,249 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $this->assertSame('en', $this->kirby->languageCode());
         $entry = $this->entries($page)[0];
         $event = OrderData::map($entry['event']);
-        (new OrderHookDispatcher($this->kirby))->dispatch($page->uuid()->toString(), OrderData::text($event['deliveryId']));
-        $this->assertSame(['pt', 'pt'], $observed);
+        (new OrderHookDispatcher($this->kirby))->retryFailed($page->uuid()->toString(), OrderData::text($event['deliveryId']));
+        $initialLanguages = $observed;
+        $this->assertSame(['pt', 'pt'], $initialLanguages);
         $this->assertSame('en', $this->kirby->languageCode());
         $this->assertNull($page->version('latest')->read('pt'));
+        $this->kirby->languages(false)->remove('pt');
+        $fail = false;
+        $result = (new OrderHookDispatcher($this->kirby))->retryFailed($page->uuid()->toString(), OrderData::text($event['deliveryId']));
+        $this->assertTrue($result->isDelivered());
+        $this->assertSame(['pt', 'pt', 'en'], $observed);
+        $this->assertSame('en', $this->kirby->languageCode());
     }
 
-    public function testEligibleDeletionUsesNativePageAndKeepsOnlySanitizedOutcome(): void
+    public function testManualRetryRejectsPendingDeliveredMissingAndPrunedDeliveriesWithoutChangingHistory(): void
+    {
+        $pending = [];
+        $this->restart([
+            'page.create:after' => function (Page $page) use (&$pending): void {
+                if ($page instanceof OrderPage) {
+                    $pending = (new OrderPageStore($page->kirby()))->data($page)['lifecycleDeliveries'];
+                }
+            },
+        ]);
+        $page = $this->createOrder();
+        $store = new OrderPageStore($this->kirby);
+        $dispatcher = new OrderHookDispatcher($this->kirby);
+        $entry = $this->entries($page)[0];
+        $deliveryId = OrderData::string(OrderData::map($entry['event'])['deliveryId']);
+        $this->assertSame(LifecycleErrorCode::DELIVERY_NOT_RETRYABLE, $dispatcher->retryFailed($page->uuid()->toString(), $deliveryId)->errorCode());
+        $this->assertSame(LifecycleErrorCode::DELIVERY_NOT_FOUND, $dispatcher->retryFailed($page->uuid()->toString(), 'missing-delivery')->errorCode());
+        $this->assertSame([$entry], $this->entries($store->requirePage($page->id())));
+
+        // Restore the actual initial intent in disposable storage to represent a process exit before automatic admission.
+        $page->version('latest')->update(['lifecycleDeliveries' => Yaml::encode($pending)], 'default');
+        $before = $store->data($store->requirePage($page->id()));
+        $this->assertSame(LifecycleErrorCode::DELIVERY_NOT_RETRYABLE, $dispatcher->retryFailed($page->uuid()->toString(), $deliveryId)->errorCode());
+        $this->assertSame($before, $store->data($store->requirePage($page->id())));
+        $dispatcher->dispatch($page->uuid()->toString(), $deliveryId);
+        $this->assertSame('delivered', $this->entries($store->requirePage($page->id()))[0]['status']);
+
+        $page = $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), OrderData::date($entry['expiresAt']));
+        $before = $store->data($page);
+        $this->assertSame(LifecycleErrorCode::DELIVERY_NOT_RETRYABLE, $dispatcher->retryFailed($page->uuid()->toString(), $deliveryId)->errorCode());
+        $this->assertSame($before, $store->data($store->requirePage($page->id())));
+    }
+
+    public function testManualRetryRunsOutsideTheLockAndRejectsRecursiveInvocation(): void
+    {
+        $calls = 0;
+        $recursiveErrorCode = null;
+        $user = null;
+        $this->restart([
+            'programmatordev.stripe-checkout.order.created' => function (OrderPage $order, LifecycleEvent $lifecycleEvent) use (&$calls, &$recursiveErrorCode, &$user): void {
+                $calls++;
+
+                if ($calls === 1) {
+                    throw new RuntimeException('Initial failure');
+                }
+
+                $user = $order->kirby()->user();
+                $recursiveErrorCode = (new OrderHookDispatcher($order->kirby()))->retryFailed($order->uuid()->toString(), $lifecycleEvent->deliveryId())->errorCode();
+                (new OrderPageStore($order->kirby()))->updateCustomFields($order->id(), ['note' => 'Manual retry'], null);
+            },
+        ]);
+        $page = $this->createOrder();
+        $entry = $this->entries($page)[0];
+        $deliveryId = OrderData::string(OrderData::map($entry['event'])['deliveryId']);
+        $result = (new OrderHookDispatcher($this->kirby))->retryFailed($page->uuid()->toString(), $deliveryId);
+        $page = (new OrderPageStore($this->kirby))->requirePage($page->id());
+        $this->assertTrue($result->isDelivered());
+        $this->assertNull($result->errorCode());
+        $this->assertSame(LifecycleErrorCode::DELIVERY_NOT_RETRYABLE, $recursiveErrorCode);
+        $this->assertNull($user);
+        $this->assertSame(2, $calls);
+        $this->assertSame(2, $this->entries($page)[0]['attempts']);
+        $this->assertSame('Manual retry', $page->content('default')->data()['note']);
+    }
+
+    public function testConcurrentRecordedSuccessWinsOverTheManualListenerFailure(): void
+    {
+        $calls = 0;
+        $this->restart([
+            'programmatordev.stripe-checkout.order.created' => function (OrderPage $order, LifecycleEvent $lifecycleEvent) use (&$calls): void {
+                $calls++;
+
+                if ($calls === 2) {
+                    // Another admitted process can commit its successful outcome while this listener is still running.
+                    (new OrderPageStore($order->kirby()))->update($order->uuid()->toString(), static function (array $data) use ($lifecycleEvent): array {
+                        /** @var list<array<string, mixed>> $entries */
+                        $entries = $data['lifecycleDeliveries'];
+
+                        foreach ($entries as &$entry) {
+                            if (OrderData::map($entry['event'])['deliveryId'] === $lifecycleEvent->deliveryId()) {
+                                $entry['status'] = 'delivered';
+                                $entry['errorCode'] = null;
+                            }
+                        }
+
+                        $data['lifecycleDeliveries'] = $entries;
+
+                        return $data;
+                    });
+                }
+
+                throw new RuntimeException('Listener failed');
+            },
+        ]);
+        $page = $this->createOrder();
+        $entry = $this->entries($page)[0];
+        $deliveryId = OrderData::string(OrderData::map($entry['event'])['deliveryId']);
+        $result = (new OrderHookDispatcher($this->kirby))->retryFailed($page->uuid()->toString(), $deliveryId);
+        $this->assertTrue($result->isDelivered());
+        $this->assertNull($result->errorCode());
+        $page = (new OrderPageStore($this->kirby))->requirePage($page->id());
+        $this->assertSame('delivered', $this->entries($page)[0]['status']);
+        $this->assertNull($this->entries($page)[0]['errorCode']);
+    }
+
+    #[DataProvider('retryWriteFailures')]
+    public function testManualRetryReportsStorageFailureWithoutClaimingRecordedSuccess(bool $failAfterInvocation, int $expectedCalls, int $expectedAttempts): void
+    {
+        $calls = 0;
+        $this->restart([
+            'programmatordev.stripe-checkout.order.created' => function () use (&$calls): void {
+                $calls++;
+
+                if ($calls === 1) {
+                    throw new RuntimeException('Initial failure');
+                }
+            },
+        ]);
+        $page = $this->createOrder();
+        $store = new OrderPageStore($this->kirby);
+        $entry = $this->entries($page)[0];
+        $deliveryId = OrderData::string(OrderData::map($entry['event'])['deliveryId']);
+        /** @var Closure(App, ModelWithContent): Storage $nativeStorage */
+        $nativeStorage = $this->kirby->component('storage');
+        $beforeWrite = static function () use (&$calls, $failAfterInvocation): void {
+            if ($failAfterInvocation === false || $calls === 2) {
+                throw new RuntimeException('PRIVATE_FAILURE_CANARY');
+            }
+        };
+        $this->kirby->extend(['components' => ['storage' => static function (App $kirby, ModelWithContent $model) use ($nativeStorage, $beforeWrite): Storage {
+            if ($model instanceof OrderPage === false) {
+                return $nativeStorage($kirby, $model);
+            }
+
+            // Kirby reconstructs storage by class when cloning a model; retain the failure callback across those instances.
+            $storage = new class ($model) extends PlainTextStorage {
+                public static Closure $beforeWrite;
+
+                protected function write(VersionId $versionId, Language $language, array $fields): void
+                {
+                    (self::$beforeWrite)();
+                    parent::write($versionId, $language, $fields);
+                }
+            };
+            $storage::$beforeWrite = $beforeWrite;
+
+            return $storage;
+        }]]);
+
+        try {
+            $result = (new OrderHookDispatcher($this->kirby))->retryFailed($page->uuid()->toString(), $deliveryId);
+        } finally {
+            $this->kirby->extend(['components' => ['storage' => $nativeStorage]]);
+        }
+
+        $this->assertFalse($result->isDelivered());
+        $this->assertSame(PersistenceErrorCode::WRITE_FAILED, $result->errorCode());
+        $this->assertSame($expectedCalls, $calls);
+        $after = $this->entries($store->requirePage($page->id()))[0];
+        $this->assertSame($expectedAttempts, $after['attempts']);
+        $this->assertSame('failed', $after['status']);
+        $this->assertSame($entry['event'], $after['event']);
+        $this->assertSame($entry['expiresAt'], $after['expiresAt']);
+    }
+
+    /** @return iterable<string, array{bool, int, int}> */
+    public static function retryWriteFailures(): iterable
+    {
+        yield 'admission' => [false, 1, 1];
+        yield 'outcome' => [true, 2, 2];
+    }
+
+    #[DataProvider('manualDeletionStates')]
+    public function testManualDeletionBypassesCleanupSettingsAndAgeForTerminalUnpaidOrders(string $checkoutStatus, string $paymentStatus): void
+    {
+        $this->restart([], options: ['programmatordev.stripe-checkout' => ['settings' => [
+            'cleanupCreationFailures' => false,
+            'cleanupUnpaidOrders' => false,
+        ]]]);
+        $page = $this->createOrder();
+        $store = new OrderPageStore($this->kirby);
+        $page = $store->update($page->uuid()->toString(), static function (array $data) use ($checkoutStatus, $paymentStatus): array {
+            $data['checkoutStatus'] = $checkoutStatus;
+            $data['paymentStatus'] = $paymentStatus;
+            $timestamp = match ($checkoutStatus) {
+                'creation_failed' => 'creationFailedAt',
+                'expired' => 'checkoutExpiredAt',
+                'complete' => 'checkoutCompletedAt',
+                default => throw new \LogicException('Unknown test status.'),
+            };
+            $data[$timestamp] = $data['createdAt'];
+
+            if ($checkoutStatus !== 'creation_failed') {
+                $data['stripeCheckoutSessionId'] = 'cs_test';
+                $data['stripeShippingRateIds'] = [];
+            }
+
+            if ($checkoutStatus === 'complete') {
+                $data = [
+                    ...$data,
+                    'paymentFailedAt' => $data['createdAt'],
+                    'discountTotal' => '0',
+                    'customFields' => [],
+                    'discounts' => [],
+                    'shippingTotal' => '0',
+                    'taxTotal' => '0',
+                    'total' => '16.00',
+                ];
+            }
+
+            return $data;
+        });
+        /** @var array<string, mixed> $options */
+        $options = $this->kirby->options();
+        $policy = new RetentionPolicy((new ConfigurationResolver())->resolve($options)->configurationOrFail()->settings());
+        $this->assertFalse($store->deleteEligible($page->uuid()->toString(), $policy, new DateTimeImmutable()));
+        $this->assertTrue($store->deleteManually($page->uuid()->toString()));
+        $this->assertNull($store->order($page->uuid()->toString()));
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function manualDeletionStates(): iterable
+    {
+        yield 'creation failed' => ['creation_failed', 'unpaid'];
+        yield 'expired' => ['expired', 'unpaid'];
+        yield 'complete failed' => ['complete', 'failed'];
+    }
+
+    #[DataProvider('deletionModes')]
+    public function testEligibleDeletionUsesNativePageAndKeepsOnlySanitizedOutcome(bool $manual): void
     {
         $observed = [];
         $this->restart([
@@ -684,7 +931,10 @@ final class OrderHookDispatcherTest extends KirbyTestCase
             'creationFailedAt' => $data['createdAt'],
         ]);
         $this->assertFalse($store->deleteEligible($page->uuid()->toString(), $policy, new DateTimeImmutable()));
-        $this->assertTrue($store->deleteEligible($page->uuid()->toString(), $policy, $future));
+        $deleted = $manual
+            ? $store->deleteManually($page->uuid()->toString())
+            : $store->deleteEligible($page->uuid()->toString(), $policy, $future);
+        $this->assertTrue($deleted);
         $this->assertNull($observed['found']);
         $this->assertNull($observed['user']);
         $this->assertSame('Private customer note', $observed['note']);
@@ -696,6 +946,54 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $this->assertStringNotContainsString('Private', json_encode($outcome, JSON_THROW_ON_ERROR));
         $this->assertTrue((new OrderHookDispatcher($this->kirby))->hasFailedDeletionDelivery());
         $this->assertCount(0, $store->orders());
+    }
+
+    /** @return iterable<string, array{bool}> */
+    public static function deletionModes(): iterable
+    {
+        yield 'manual' => [true];
+        yield 'automatic policy' => [false];
+    }
+
+    #[DataProvider('nativeDeletionFailureStages')]
+    public function testManualDeletionDistinguishesNativeFailureBeforeAndAfterCommit(string $stage, bool $committed): void
+    {
+        $deletedNotifications = 0;
+        $this->restart([
+            'programmatordev.stripe-checkout.order.deleted' => function () use (&$deletedNotifications): void {
+                $deletedNotifications++;
+            },
+        ]);
+        $store = new OrderPageStore($this->kirby);
+        $page = $this->createOrder();
+        $store->update($page->uuid()->toString(), static fn(array $data): array => [
+            ...$data,
+            'checkoutStatus' => 'creation_failed',
+            'creationFailedAt' => $data['createdAt'],
+        ]);
+        $this->kirby->extend(['hooks' => [
+            'page.delete:' . $stage => function (): void {
+                throw new RuntimeException('PRIVATE_FAILURE_CANARY');
+            },
+        ]]);
+
+        try {
+            $this->assertTrue($store->deleteManually($page->uuid()->toString()));
+            $this->assertTrue($committed);
+        } catch (OrderStorageException $error) {
+            $this->assertFalse($committed);
+            $this->assertSame(PersistenceErrorCode::WRITE_FAILED, $error->errorCode());
+        }
+
+        $this->assertSame($committed ? 1 : 0, $deletedNotifications);
+        $this->assertSame($committed, $store->order($page->uuid()->toString()) === null);
+    }
+
+    /** @return iterable<string, array{string, bool}> */
+    public static function nativeDeletionFailureStages(): iterable
+    {
+        yield 'before commit' => ['before', false];
+        yield 'after commit' => ['after', true];
     }
 
     public function testOrdinaryDeletionStillCannotUseTheInternalOperation(): void
@@ -734,6 +1032,7 @@ final class OrderHookDispatcherTest extends KirbyTestCase
             'paidAt' => $data['createdAt'],
         ]);
         $this->assertFalse($store->deleteEligible($page->uuid()->toString(), $policy, $future));
+        $this->assertFalse($store->deleteManually($page->uuid()->toString()));
         $this->assertNotNull($store->order($page->uuid()->toString()));
     }
 

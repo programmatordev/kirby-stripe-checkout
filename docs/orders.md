@@ -287,7 +287,9 @@ Keep the argument names `order` and `lifecycleEvent`: Kirby supplies them by nam
 
 `order` is freshly read before delivery; `lifecycleEvent` keeps the original event-time facts. Hooks run after the write, outside the order lock and internal impersonation. The initiating content language is active during the hook, then the caller's language is restored—even if a listener throws. If that language was removed from Kirby, its normal default-language fallback applies.
 
-Failed listeners do not undo the order or its payment state. A protected `lifecycleDeliveries` field records pending, delivered or failed status, attempt count, safe error code, delivery identity, the retained event payload and a fixed local expiry deadline. After cleanup, sanitized identity/outcome metadata and action fingerprints remain, with an immutable pruning timestamp; the payload cannot be restored or retried. Diagnostics show pending/failed counts. A retry keeps the same delivery ID and snapshot, but receives the current Page; it is refused at or after the deadline, even before physical cleanup runs. The internal retry primitive exists; there is no Panel retry action or automatic retry runner yet.
+Failed listeners do not undo the order or its payment state. A protected `lifecycleDeliveries` field records pending, delivered or failed status, attempt count, safe error code, delivery identity, the retained event payload and a fixed local expiry deadline. After cleanup, sanitized identity/outcome metadata and action fingerprints remain, with an immutable pruning timestamp; the payload cannot be restored or retried. Diagnostics show pending/failed counts. A retry keeps the same delivery ID and snapshot, but receives the current Page; it is refused at or after the deadline, even before physical cleanup runs.
+
+The internal `OrderHookDispatcher::retryFailed($pageUuid, $deliveryId)` operation retries one failed delivery. Pending, delivered, missing, expired and pruned deliveries are rejected without changing attempt history. Its `DeliveryResult` exposes `isDelivered()` and a safe `errorCode()`; storage failure cannot report a durably recorded success. Only lifecycle delivery attempts change, not Stripe Event attempts. The optional `$attemptedAt` argument supplies an explicit attempt time; when omitted, the current time is resolved after the locked reload so waiting cannot admit an expired delivery. There is no Panel retry action or automatic retry runner yet.
 
 Recording a hook attempt or result does not advance the order's `updatedAt` or invalidate the storefront page cache. Business-state changes still invalidate that cache.
 
@@ -295,7 +297,7 @@ A failing native `page.create:after` hook does not make a verified, saved order 
 
 The creation event includes native blueprint defaults and custom-field changes from `page.create:before`. Later edits, including those from `page.create:after`, appear on the live Page but do not rewrite the creation snapshot.
 
-Kirby stops calling listeners when one throws. Retrying the whole hook can therefore call listeners that already succeeded. Make external effects idempotent using `deliveryId`, or enqueue `toArray()` into your own durable queue. A process can stop between an external effect and saving its outcome; exactly-once delivery is not promised.
+Kirby stops calling listeners when one throws. Retrying the whole hook can therefore call listeners that already succeeded. Make external effects idempotent using `deliveryId`, or enqueue `toArray()` into your own durable queue. A process can stop between an external effect and saving its outcome; exactly-once delivery is not promised. The request-local recursion guard prevents nested invocation of the same delivery; independent processes can still deliver it concurrently. A concurrently recorded success takes precedence over a later failure.
 
 The controlled, single-order deletion primitive emits `programmatordev.stripe-checkout.order.deleted` with Kirby's final in-memory Page after deletion. A failed deletion hook **cannot be retried**: only the last sanitized outcome is retained, not the deleted customer's snapshot. Durable deletion integrations must enqueue successfully during the first invocation. No public deletion route or automatic cleanup runner is available yet.
 
@@ -331,7 +333,9 @@ The Settings tab contains cleanup preferences with defaults of **7 days for defi
 
 Only definitely failed creation without a Session, expired Checkout, or completed Checkout with a failed payment can become eligible. Completed failures are aged from the later of completion and payment failure. Still-creating, uncertain, open, pending, paid and no-payment-required orders are never eligible merely because they are old. Shortening a retention period can make existing records eligible.
 
-The internal deletion operation reloads and rechecks eligibility under the existing per-order write lock. Ordinary Page deletion remains forbidden, including for administrators. This is not a new public manual-order API.
+The internal `OrderPageStore::deleteEligible()` operation applies these automatic cleanup switches and age thresholds. `OrderPageStore::deleteManually($pageUuid)` uses the same deletion path but ignores automatic enablement and retention age. It allows only failed creation without a Session and unpaid/failed payment, expired Checkout with unpaid/failed payment, or completed Checkout with failed payment. It does not contact Stripe or resolve current storefront settings.
+
+Both operations reload and recheck current persisted eligibility under the existing per-order write lock. They return `false` for an ineligible order, `true` once deletion commits, and throw a safe storage exception for lookup/write failures. A deletion listener failure cannot undo committed deletion or make its discarded payload retryable. Ordinary Page deletion remains forbidden, including for administrators. These are internal services; no Panel deletion action or public mutation route is available yet.
 
 ## Internal content format
 

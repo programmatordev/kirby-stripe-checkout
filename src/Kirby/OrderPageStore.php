@@ -474,22 +474,41 @@ final class OrderPageStore
     /** Internal single-order primitive; no scan, route or automatic execution. */
     public function deleteEligible(string $uuid, RetentionPolicy $policy, DateTimeImmutable $now): bool
     {
+        return $this->deleteWhenEligible(
+            uuid: $uuid,
+            isEligible: static fn(array $data): bool => $policy->isEligible($data, $now),
+            now: $now,
+        );
+    }
+
+    /**
+     * Explicit terminal unpaid deletion; ignores automatic cleanup enablement and retention age.
+     * Returns false for an ineligible order; true means deletion committed even if its optional notification failed.
+     */
+    public function deleteManually(string $uuid): bool
+    {
+        return $this->deleteWhenEligible(uuid: $uuid, isEligible: RetentionPolicy::isTerminalUnpaid(...), now: null);
+    }
+
+    /** @param Closure(array<string, mixed>): bool $isEligible Checked against current persisted facts under the lock. */
+    private function deleteWhenEligible(string $uuid, Closure $isEligible, ?DateTimeImmutable $now): bool
+    {
         OrderData::uuid($uuid);
         $pageId = OrderSchema::ORDERS_PAGE_ID . '/' . (new Uri($uuid))->host();
-        $deletion = OrderWriteLock::run($this->kirby, $pageId, function () use ($pageId, $policy, $now): ?OrderDeletion {
+        $deletion = OrderWriteLock::run($this->kirby, $pageId, function () use ($pageId, $isEligible, $now): ?OrderDeletion {
             // An earlier cleanup candidate may since have been paid.
             // Eligibility must be checked again against the record protected by this lock.
             $page = $this->requirePage($pageId);
             $data = $this->data($page);
 
-            if ($policy->isEligible($data, $now) === false) {
+            if ($isEligible($data) === false) {
                 return null;
             }
 
             $customFields = array_filter($page->version('latest')->read('default') ?? [], static fn(string $field): bool => OrderSchema::isReserved($field) === false, ARRAY_FILTER_USE_KEY);
             /** @var list<array<string, mixed>> $entries */
             $entries = $data['lifecycleDeliveries'] ?? [];
-            $data['updatedAt'] = OrderData::timestamp($now);
+            $data['updatedAt'] = OrderData::timestamp($now ?? new DateTimeImmutable());
             $event = HookDeliveryLedger::event($data, $customFields, LifecycleEventType::OrderDeleted, HookDeliveryLedger::nextRevision($entries));
 
             try {

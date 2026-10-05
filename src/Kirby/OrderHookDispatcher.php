@@ -9,9 +9,11 @@ use Kirby\Cms\App;
 use Kirby\Cms\Events;
 use Kirby\Cms\Page;
 use Kirby\Data\Data;
+use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\DeliveryResult;
 use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleErrorCode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEvent;
+use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use Throwable;
 
@@ -23,13 +25,32 @@ final class OrderHookDispatcher
 
     public function __construct(private readonly App $kirby) {}
 
-    /** Attempts pending/failed deliveries before their saved deadline; expired deliveries are unchanged. Not a public retry route. */
-    public function dispatch(string $uuid, string $deliveryId, ?DateTimeImmutable $now = null): void
+    /**
+     * Attempts pending/failed deliveries after canonical commits; observer failures remain isolated.
+     * An explicit attempt time supports deterministic checks; otherwise it is resolved after the locked reload.
+     */
+    public function dispatch(string $uuid, string $deliveryId, ?DateTimeImmutable $attemptedAt = null): void
+    {
+        $this->attempt(uuid: $uuid, deliveryId: $deliveryId, attemptedAt: $attemptedAt, failedOnly: false);
+    }
+
+    /**
+     * Explicit failed-delivery retry; preserves the original event and deadline. No retry scheduling.
+     * An omitted attempt time is resolved after the locked reload.
+     * Later order transitions do not invalidate a retained historical event.
+     * Retrying can invoke listeners that succeeded before another listener failed.
+     */
+    public function retryFailed(string $uuid, string $deliveryId, ?DateTimeImmutable $attemptedAt = null): DeliveryResult
+    {
+        return $this->attempt(uuid: $uuid, deliveryId: $deliveryId, attemptedAt: $attemptedAt, failedOnly: true);
+    }
+
+    private function attempt(string $uuid, string $deliveryId, ?DateTimeImmutable $attemptedAt, bool $failedOnly): DeliveryResult
     {
         $key = $uuid . ':' . $deliveryId;
 
         if (isset(self::$active[$key])) {
-            return;
+            return DeliveryResult::failed(LifecycleErrorCode::DELIVERY_NOT_RETRYABLE);
         }
 
         self::$active[$key] = true;
@@ -37,37 +58,51 @@ final class OrderHookDispatcher
         try {
             $store = new OrderPageStore($this->kirby);
             $event = null;
-            $page = $store->update($uuid, static function (array $data) use ($deliveryId, $now, &$event): array {
+            $errorCode = LifecycleErrorCode::DELIVERY_NOT_FOUND;
+            $page = $store->update($uuid, static function (array $data) use ($deliveryId, $attemptedAt, $failedOnly, &$event, &$errorCode): array {
                 /** @var list<array<string, mixed>> $entries */
                 $entries = $data['lifecycleDeliveries'] ?? [];
 
                 foreach ($entries as &$entry) {
                     $eventData = OrderData::map($entry['event']);
 
-                    // Pruned entries retain identity metadata but cannot restore a replayable event.
-                    if ($eventData['deliveryId'] !== $deliveryId || $entry['status'] === 'delivered' || $entry['payloadPrunedAt'] !== null) {
+                    if ($eventData['deliveryId'] !== $deliveryId) {
                         continue;
                     }
 
-                    // Resolve the default clock after lock acquisition and reload; waiting must not admit an expired retry.
-                    $attemptedAt = $now ?? new DateTimeImmutable();
+                    $errorCode = LifecycleErrorCode::DELIVERY_NOT_RETRYABLE;
 
-                    // Check the persisted deadline under the order lock, independently of whether physical cleanup has run.
-                    if (HookDeliveryLedger::isExpired($entry, $attemptedAt) === false) {
-                        $candidate = HookDeliveryLedger::restoreEvent($eventData);
-                        // Record the attempt before invoking listeners.
-                        // A process exit leaves the original event available for another try within its saved window.
-                        $event = $candidate;
-                        $entry['attempts'] = OrderData::integer($entry['attempts']) + 1;
-                        // Keep attempt history monotonic when the clock moves backward; eligibility still uses the actual retry time.
-                        $entry['lastAttemptAt'] = max(
-                            $entry['lastAttemptAt'],
-                            OrderData::timestamp($attemptedAt),
-                            OrderData::timestamp($event->occurredAt()),
-                        );
-
+                    if ($entry['status'] === 'delivered') {
                         break;
                     }
+
+                    if ($failedOnly && $entry['status'] !== 'failed') {
+                        break;
+                    }
+
+                    // Pruned entries retain identity metadata but cannot restore a replayable event.
+                    if ($entry['payloadPrunedAt'] !== null) {
+                        break;
+                    }
+
+                    // Resolve the clock after lock acquisition and reload; waiting must not admit an expired retry.
+                    $attemptedAt ??= new DateTimeImmutable();
+
+                    if (HookDeliveryLedger::isExpired($entry, $attemptedAt)) {
+                        break;
+                    }
+
+                    $event = HookDeliveryLedger::restoreEvent($eventData);
+                    // Persist admission before invoking listeners. Retries never renew the payload deadline.
+                    $entry['attempts'] = OrderData::integer($entry['attempts']) + 1;
+                    // Keep history monotonic when the clock moves backward; eligibility uses the actual attempt time.
+                    $entry['lastAttemptAt'] = max(
+                        $entry['lastAttemptAt'],
+                        OrderData::timestamp($attemptedAt),
+                        OrderData::timestamp($event->occurredAt()),
+                    );
+
+                    break;
                 }
 
                 if ($event !== null) {
@@ -78,12 +113,12 @@ final class OrderHookDispatcher
             });
 
             if ($event === null) {
-                return;
+                return DeliveryResult::failed($errorCode);
             }
 
             // The write lock and virtual Kirby identity have both ended.
             $delivered = $this->invoke($page, $event);
-            $store->update($uuid, static function (array $data) use ($deliveryId, $delivered): array {
+            $store->update($uuid, static function (array $data) use ($deliveryId, &$delivered): array {
                 /** @var list<array<string, mixed>> $entries */
                 $entries = $data['lifecycleDeliveries'] ?? [];
 
@@ -91,9 +126,11 @@ final class OrderHookDispatcher
                     $eventData = OrderData::map($entry['event']);
 
                     if ($eventData['deliveryId'] === $deliveryId) {
-                        // A successful concurrent attempt wins over a later failure.
+                        // A successful concurrent attempt wins over a later failure, including in the returned outcome.
                         // Native hook consumers still deduplicate effects.
-                        if ($entry['status'] !== 'delivered') {
+                        if ($entry['status'] === 'delivered') {
+                            $delivered = true;
+                        } else {
                             $entry['status'] = $delivered ? 'delivered' : 'failed';
                             $entry['errorCode'] = $delivered ? null : LifecycleErrorCode::LISTENER_FAILED;
                         }
@@ -106,10 +143,17 @@ final class OrderHookDispatcher
 
                 return $data;
             });
-        } catch (Throwable) {
-            // Even a failure to record the outcome must not turn a committed payment into an apparent failure.
-            // Pending intent remains replayable.
+
+            return $delivered ? DeliveryResult::delivered() : DeliveryResult::failed(LifecycleErrorCode::LISTENER_FAILED);
+        } catch (OrderStorageException $error) {
             error_log('Stripe Checkout: ' . LifecycleErrorCode::DELIVERY_RECORD_FAILED);
+
+            return DeliveryResult::failed($error->errorCode());
+        } catch (Throwable) {
+            // Bookkeeping failure cannot undo canonical success or expose private listener/storage exceptions.
+            error_log('Stripe Checkout: ' . LifecycleErrorCode::DELIVERY_RECORD_FAILED);
+
+            return DeliveryResult::failed(LifecycleErrorCode::DELIVERY_RECORD_FAILED);
         } finally {
             unset(self::$active[$key]);
         }

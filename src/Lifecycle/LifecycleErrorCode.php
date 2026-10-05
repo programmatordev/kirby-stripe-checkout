@@ -9,6 +9,10 @@ final class LifecycleErrorCode
 {
     public const CREATION_HOOK_FAILED = 'lifecycle.creation_hook_failed';
 
+    public const DELIVERY_NOT_FOUND = 'lifecycle.delivery_not_found';
+
+    public const DELIVERY_NOT_RETRYABLE = 'lifecycle.delivery_not_retryable';
+
     public const DELIVERY_RECORD_FAILED = 'lifecycle.delivery_record_failed';
 
     public const LISTENER_FAILED = 'lifecycle.listener_failed';
