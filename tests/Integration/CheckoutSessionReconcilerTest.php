@@ -21,6 +21,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\Internal\DisputeRetriever;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ReconciliationOutcome;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\RefundRetriever;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
+use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderHookDispatcher;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
@@ -33,6 +34,7 @@ use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSerializer;
+use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Order\Payment;
 use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
@@ -787,6 +789,105 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
         $reconciler->reconcile($this->order->pageUuid(), 'cs_current');
         $this->assertCount(2, $this->deliveries());
         $this->assertCount(1, $this->entries('events'));
+    }
+
+    #[DataProvider('incompleteOrderRecoveryOutcomes')]
+    public function testKnownSessionReadEstablishesIncompleteRetentionEligibility(
+        string $status,
+        string $sessionPayment,
+        string $intentStatus,
+        string $paymentStatus,
+        bool $eligible,
+    ): void {
+        $open = $this->record('open', 'unpaid');
+        $this->reconciler($this->gateway(new CheckoutSessionReconciliationRecord($open->session, $open->lineItems, null, null)))
+            ->reconcile($this->order->pageUuid(), 'cs_current');
+        $before = $this->data();
+        $sessionId = OrderData::string($before['stripeCheckoutSessionId']);
+        $policy = new RetentionPolicy((new ConfigurationResolver())->resolve([])->configurationOrFail()->settings());
+        $eligibleAt = $this->createdAt->modify('+7 days');
+        $this->assertFalse($this->store->deleteEligible(uuid: $this->order->pageUuid(), policy: $policy, now: $eligibleAt));
+
+        $gateway = $this->gateway($this->record($status, $sessionPayment, $intentStatus));
+        $this->reconciler($gateway)->reconcile($this->order->pageUuid(), $sessionId);
+        $after = $this->data();
+
+        $this->assertSame($status, $after['checkoutStatus']);
+        $this->assertSame($paymentStatus, $after['paymentStatus']);
+        $this->assertSame($before['createdAt'], $after['createdAt']);
+        $this->assertSame($before['checkoutAttempt'], $after['checkoutAttempt']);
+        $this->assertArrayNotHasKey('events', $after);
+        $this->assertSame([$sessionId], $gateway->reconciliationRetrievals);
+        $this->assertSame([], $gateway->requests);
+        $this->assertSame($eligible, $policy->isEligible($after, $eligibleAt));
+        $this->assertSame($eligible, $this->store->deleteEligible(uuid: $this->order->pageUuid(), policy: $policy, now: $eligibleAt));
+        $this->assertSame($eligible, $this->store->order($this->order->pageUuid()) === null);
+    }
+
+    /** @return iterable<string, array{string, string, string, string, bool}> */
+    public static function incompleteOrderRecoveryOutcomes(): iterable
+    {
+        yield 'confirmed expiry' => ['expired', 'unpaid', 'canceled', 'unpaid', true];
+        yield 'missed payment success' => ['complete', 'paid', 'succeeded', 'paid', false];
+        yield 'completed payment still pending' => ['complete', 'unpaid', 'processing', 'pending', false];
+    }
+
+    public function testFailedKnownSessionRecoveryPreservesUnresolvedOrderAndDeletionProtection(): void
+    {
+        $open = $this->record('open', 'unpaid');
+        $this->reconciler($this->gateway(new CheckoutSessionReconciliationRecord($open->session, $open->lineItems, null, null)))
+            ->reconcile($this->order->pageUuid(), 'cs_current');
+        $before = $this->data();
+        $gateway = new FakeCheckoutSessionGateway();
+        $gateway->retrievalFailure = new CheckoutSessionGatewayException(
+            new CheckoutSessionFailure(CheckoutSessionFailureType::Unavailable, true),
+            new RuntimeException('SECRET_CANARY'),
+        );
+
+        try {
+            $this->reconciler($gateway)->reconcile($this->order->pageUuid(), OrderData::string($before['stripeCheckoutSessionId']));
+            $this->fail('An unavailable provider cannot establish the Checkout outcome.');
+        } catch (CheckoutSessionException $error) {
+            $this->assertSame(CheckoutErrorCode::SESSION_UNAVAILABLE, $error->errorCode());
+        }
+
+        $this->assertSame($before, $this->data());
+        $this->assertSame([], $gateway->requests);
+        $policy = new RetentionPolicy((new ConfigurationResolver())->resolve([])->configurationOrFail()->settings());
+        $this->assertFalse($this->store->deleteEligible(uuid: $this->order->pageUuid(), policy: $policy, now: $this->createdAt->modify('+40 days')));
+    }
+
+    public function testConcurrentWebhookPaymentDefeatsAnExpiredRecoveryRead(): void
+    {
+        $open = $this->record('open', 'unpaid');
+        $this->reconciler($this->gateway(new CheckoutSessionReconciliationRecord($open->session, $open->lineItems, null, null)))
+            ->reconcile($this->order->pageUuid(), 'cs_current');
+        $paid = $this->record(status: 'complete', sessionPayment: 'paid', intentStatus: 'succeeded');
+        $expired = $this->record(status: 'expired', sessionPayment: 'unpaid', intentStatus: 'canceled');
+        $reads = 0;
+        $gateway = $this->createMock(CheckoutSessionGatewayInterface::class);
+        $gateway->expects($this->never())->method('create');
+        $gateway->expects($this->exactly(2))->method('retrieveForReconciliation')->willReturnCallback(function () use ($paid, $expired, &$reads): CheckoutSessionReconciliationRecord {
+            $reads++;
+
+            if ($reads === 1) {
+                $this->reconciler($this->gateway($paid))->reconcile($this->order->pageUuid(), 'cs_current', $this->event());
+
+                return $expired;
+            }
+
+            return $paid;
+        });
+        $reconciler = new CheckoutSessionReconciler($this->store, new CheckoutSessionRetriever($gateway), CredentialMode::Test);
+        $reconciler->reconcile($this->order->pageUuid(), 'cs_current');
+
+        $this->assertSame('complete', $this->data()['checkoutStatus']);
+        $this->assertSame('paid', $this->data()['paymentStatus']);
+        $this->assertCount(1, $this->entries('events'));
+        $this->assertSame(1, $this->entries('events')[0]['attempts']);
+        $this->assertSame(['session.created', 'payment.succeeded'], array_map(static fn(LifecycleEvent $event): string => $event->type()->value, $this->deliveries()));
+        $policy = new RetentionPolicy((new ConfigurationResolver())->resolve([])->configurationOrFail()->settings());
+        $this->assertFalse($this->store->deleteEligible(uuid: $this->order->pageUuid(), policy: $policy, now: $this->createdAt->modify('+40 days')));
     }
 
     public function testManualOpenCheckoutWithoutPaymentIntentMakesNoFinancialReads(): void

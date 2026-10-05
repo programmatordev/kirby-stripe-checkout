@@ -88,6 +88,8 @@ final class CheckoutSessionReconciler
     /**
      * $event must come from a verified HTTP edge or an explicit trusted provider read.
      * Null is a current-state reconciliation, not an invented Stripe Event.
+     * This read establishes Checkout/payment facts for incomplete-order recovery;
+     * unlike syncOrder(), it preserves financial collections that were not read.
      */
     public function reconcile(string $pageUuid, string $sessionId, ?Event $event = null): OrderPage
     {
