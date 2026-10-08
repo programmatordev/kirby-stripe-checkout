@@ -10,6 +10,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
+use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Exception\CheckoutSessionGatewayException;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Internal\CheckoutSessionFailureClassifier;
 use Stripe\Charge;
@@ -135,6 +136,73 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
 
             // The subsequent Session read validates the full result against the saved purchase.
             return OrderData::string($item['id'] ?? null);
+        } catch (OrderDataException $error) {
+            throw new CheckoutSessionGatewayException(new CheckoutSessionFailure(CheckoutSessionFailureType::Incompatible, false), $error);
+        } catch (Throwable $error) {
+            throw new CheckoutSessionGatewayException($this->failures->classify($error, mutation: false), $error);
+        }
+    }
+
+    public function discoverForOrder(
+        string $pageUuid,
+        int $createdFrom,
+        int $createdBefore,
+        ?string $startingAfter = null,
+    ): CheckoutSessionDiscoveryPage {
+        try {
+            // The list API has no metadata filter. Inspect one bounded page and expose its cursor,
+            // so a busy account's creation window need not be scanned in one PHP request.
+            // https://docs.stripe.com/api/checkout/sessions/list
+            $parameters = [
+                'created' => [
+                    'gte' => $createdFrom,
+                    'lt' => $createdBefore,
+                ],
+                'limit' => 100,
+            ];
+
+            if ($startingAfter !== null) {
+                $parameters['starting_after'] = $startingAfter;
+            }
+
+            $collection = $this->client->checkout->sessions->all($parameters)->toArray();
+            $items = OrderData::list($collection['data'] ?? null);
+            $hasMore = OrderData::boolean($collection['has_more'] ?? null);
+            $sessionIds = [];
+            $lastId = null;
+            $seen = [];
+
+            foreach ($items as $item) {
+                if (is_array($item) === false || ($item['object'] ?? null) !== Session::OBJECT_NAME) {
+                    throw new OrderDataException();
+                }
+
+                $id = OrderData::nonEmptyString($item['id'] ?? null);
+
+                if ($id === $startingAfter || isset($seen[$id])) {
+                    throw new OrderDataException();
+                }
+
+                $seen[$id] = true;
+                // Advance past every provider result, including unrelated Sessions.
+                // Using only a matching ID would repeat or stall pages that contain no matches.
+                $lastId = $id;
+                $metadata = $item['metadata'] ?? null;
+
+                if (
+                    is_array($metadata)
+                    && ($metadata[PluginMetadata::OWNER_KEY] ?? null) === PluginMetadata::NAME
+                    && ($metadata[PluginMetadata::ORDER_KEY] ?? null) === $pageUuid
+                ) {
+                    $sessionIds[] = $id;
+                }
+            }
+
+            if ($hasMore && $lastId === null) {
+                throw new OrderDataException();
+            }
+
+            return new CheckoutSessionDiscoveryPage($sessionIds, $hasMore ? $lastId : null);
         } catch (OrderDataException $error) {
             throw new CheckoutSessionGatewayException(new CheckoutSessionFailure(CheckoutSessionFailureType::Incompatible, false), $error);
         } catch (Throwable $error) {

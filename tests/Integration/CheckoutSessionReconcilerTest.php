@@ -18,6 +18,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutSessionException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionReconciler;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionRetriever;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\DisputeRetriever;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\IncompleteOrderRecovery;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ReconciliationOutcome;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\RefundRetriever;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
@@ -40,6 +41,7 @@ use ProgrammatorDev\StripeCheckout\Order\Payment;
 use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
+use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionDiscoveryPage;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailure;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailureType;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionGatewayInterface;
@@ -890,6 +892,180 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
         $this->assertFalse($this->store->deleteEligible(uuid: $this->order->pageUuid(), policy: $policy, now: $this->createdAt->modify('+40 days')));
     }
 
+    public function testDiscoveryWaitsForTheCompleteWindowBeforeRepairingAnAssociation(): void
+    {
+        $before = $this->data();
+        $checkedAt = $this->createdAt->modify('+7 days');
+        $gateway = $this->createMock(CheckoutSessionGatewayInterface::class);
+        $gateway->expects($this->never())->method('create');
+        $gateway->expects($this->exactly(2))->method('discoverForOrder')->willReturnOnConsecutiveCalls(
+            new CheckoutSessionDiscoveryPage(['cs_current'], 'cursor_next'),
+            new CheckoutSessionDiscoveryPage([], null),
+        );
+        $gateway->expects($this->once())->method('retrieveForReconciliation')->with('cs_current')->willReturn($this->record('complete', 'paid', 'succeeded'));
+        $recovery = $this->recovery($gateway);
+
+        $progress = $recovery->recover($this->order->pageUuid(), $checkedAt) ?? $this->fail('Expected discovery progress.');
+        $this->assertFalse($progress->complete);
+        $this->assertSame('cursor_next', $progress->startingAfter);
+        $this->assertSame('cs_current', $progress->candidateSessionId);
+        $this->assertSame($before, $this->data());
+        $progress = $recovery->recover($this->order->pageUuid(), $checkedAt, $progress) ?? $this->fail('Expected completed progress.');
+
+        $this->assertTrue($progress->complete);
+        $this->assertSame('cs_current', $this->data()['stripeCheckoutSessionId']);
+        $this->assertSame('paid', $this->data()['paymentStatus']);
+        $this->assertSame($before['checkoutAttempt'], $this->data()['checkoutAttempt']);
+        $this->assertArrayNotHasKey('events', $this->data());
+        $this->assertFalse(RetentionPolicy::isTerminalUnpaid($this->data()));
+        $this->assertNull($recovery->recover($this->order->pageUuid(), $checkedAt, $progress));
+    }
+
+    public function testEmptyDiscoveryPreservesUnresolvedCreationAndDeletionProtection(): void
+    {
+        $before = $this->data();
+        $gateway = $this->createMock(CheckoutSessionGatewayInterface::class);
+        $gateway->expects($this->once())->method('discoverForOrder')->willReturn(new CheckoutSessionDiscoveryPage([], null));
+        $gateway->expects($this->never())->method('retrieveForReconciliation');
+        $checkedAt = $this->createdAt->modify('+40 days');
+        $progress = $this->recovery($gateway)->recover($this->order->pageUuid(), $checkedAt) ?? $this->fail('Expected completed discovery.');
+
+        $this->assertTrue($progress->complete);
+        $this->assertNull($progress->candidateSessionId);
+        $this->assertSame($before, $this->data());
+        $policy = new RetentionPolicy((new ConfigurationResolver())->resolve([])->configurationOrFail()->settings());
+        $this->assertFalse($this->store->deleteEligible(uuid: $this->order->pageUuid(), policy: $policy, now: $checkedAt));
+    }
+
+    public function testAmbiguousDiscoveryAcrossPagesDoesNotChooseTheFirstSession(): void
+    {
+        $before = $this->data();
+        $gateway = $this->createMock(CheckoutSessionGatewayInterface::class);
+        $gateway->expects($this->exactly(2))->method('discoverForOrder')->willReturnOnConsecutiveCalls(
+            new CheckoutSessionDiscoveryPage(['cs_current'], 'cursor_next'),
+            new CheckoutSessionDiscoveryPage(['cs_other'], null),
+        );
+        $gateway->expects($this->never())->method('retrieveForReconciliation');
+        $recovery = $this->recovery($gateway);
+        $checkedAt = $this->createdAt->modify('+7 days');
+        $progress = $recovery->recover($this->order->pageUuid(), $checkedAt) ?? $this->fail('Expected discovery progress.');
+
+        try {
+            $recovery->recover($this->order->pageUuid(), $checkedAt, $progress);
+            $this->fail('Ambiguous references must remain unresolved.');
+        } catch (CheckoutSessionException $error) {
+            $this->assertSame(CheckoutErrorCode::SESSION_INCOMPATIBLE, $error->errorCode());
+        }
+
+        $this->assertSame($before, $this->data());
+    }
+
+    public function testDiscoveryFailureCanResumeWithoutLosingItsCandidateOrChangingTheOrder(): void
+    {
+        $before = $this->data();
+        $gateway = $this->createMock(CheckoutSessionGatewayInterface::class);
+        $gateway->expects($this->exactly(2))->method('discoverForOrder')->willReturnCallback(static function (string $pageUuid, int $createdFrom, int $createdBefore, ?string $startingAfter): CheckoutSessionDiscoveryPage {
+            if ($startingAfter === null) {
+                return new CheckoutSessionDiscoveryPage(['cs_current'], 'cursor_next');
+            }
+
+            throw new CheckoutSessionGatewayException(
+                new CheckoutSessionFailure(CheckoutSessionFailureType::Unavailable, true),
+                new RuntimeException('SECRET_CANARY'),
+            );
+        });
+        $gateway->expects($this->never())->method('retrieveForReconciliation');
+        $recovery = $this->recovery($gateway);
+        $checkedAt = $this->createdAt->modify('+7 days');
+        $progress = $recovery->recover($this->order->pageUuid(), $checkedAt) ?? $this->fail('Expected discovery progress.');
+
+        try {
+            $recovery->recover($this->order->pageUuid(), $checkedAt, $progress);
+            $this->fail('Provider failure cannot complete discovery.');
+        } catch (CheckoutSessionException $error) {
+            $this->assertSame(CheckoutErrorCode::SESSION_UNAVAILABLE, $error->errorCode());
+            $this->assertTrue($error->isRetryable());
+            $this->assertStringNotContainsString('SECRET_CANARY', $error->getMessage());
+        }
+
+        $this->assertSame($before, $this->data());
+        $resumedGateway = $this->createMock(CheckoutSessionGatewayInterface::class);
+        $resumedGateway->expects($this->once())->method('discoverForOrder')
+            ->with($this->order->pageUuid(), $this->createdAt->getTimestamp(), $this->createdAt->modify('+1 day')->getTimestamp(), 'cursor_next')
+            ->willReturn(new CheckoutSessionDiscoveryPage([], null));
+        $resumedGateway->expects($this->once())->method('retrieveForReconciliation')->willReturn($this->record('expired', 'unpaid', 'canceled'));
+        $completed = $this->recovery($resumedGateway)->recover($this->order->pageUuid(), $checkedAt, $progress) ?? $this->fail('Expected completed discovery.');
+
+        $this->assertTrue($completed->complete);
+        $this->assertSame('expired', $this->data()['checkoutStatus']);
+        $policy = new RetentionPolicy((new ConfigurationResolver())->resolve([])->configurationOrFail()->settings());
+        $this->assertTrue($policy->isEligible($this->data(), $checkedAt));
+    }
+
+    public function testDiscoveryReferenceStillRequiresCompletePurchaseCorrelation(): void
+    {
+        $before = $this->data();
+        $record = $this->record('complete', 'paid', 'succeeded');
+        $gateway = $this->createMock(CheckoutSessionGatewayInterface::class);
+        $gateway->expects($this->once())->method('discoverForOrder')->willReturn(new CheckoutSessionDiscoveryPage(['cs_current'], null));
+        $gateway->expects($this->once())->method('retrieveForReconciliation')->willReturn(new CheckoutSessionReconciliationRecord($record->session, [], $record->paymentSource, null));
+
+        try {
+            $this->recovery($gateway)->recover($this->order->pageUuid(), $this->createdAt->modify('+7 days'));
+            $this->fail('Matching metadata cannot authorize an incomplete purchase read.');
+        } catch (CheckoutSessionException $error) {
+            $this->assertSame(CheckoutErrorCode::SESSION_INCOMPATIBLE, $error->errorCode());
+        }
+
+        $this->assertSame($before, $this->data());
+    }
+
+    public function testCredentialRotationRequiresFreshDiscoveryProgress(): void
+    {
+        $gateway = $this->createMock(CheckoutSessionGatewayInterface::class);
+        $gateway->expects($this->once())->method('discoverForOrder')->willReturn(new CheckoutSessionDiscoveryPage(['cs_current'], 'cursor_next'));
+        $checkedAt = $this->createdAt->modify('+7 days');
+        $progress = $this->recovery($gateway)->recover($this->order->pageUuid(), $checkedAt) ?? $this->fail('Expected discovery progress.');
+        $rotatedGateway = $this->createMock(CheckoutSessionGatewayInterface::class);
+        $rotatedGateway->expects($this->never())->method('discoverForOrder');
+        $rotatedGateway->expects($this->never())->method('retrieveForReconciliation');
+
+        $this->expectException(CheckoutSessionException::class);
+        $this->recovery($rotatedGateway, credentialFingerprint: 'rotated-credential')->recover($this->order->pageUuid(), $checkedAt, $progress);
+    }
+
+    public function testDiscoveryCannotReplaceAnAssociationCommittedByAConcurrentWebhook(): void
+    {
+        $gateway = $this->createMock(CheckoutSessionGatewayInterface::class);
+        $gateway->expects($this->once())->method('discoverForOrder')->willReturnCallback(function (): CheckoutSessionDiscoveryPage {
+            $this->reconciler($this->gateway($this->record('complete', 'paid', 'succeeded')))
+                ->reconcile($this->order->pageUuid(), 'cs_current', $this->event());
+
+            return new CheckoutSessionDiscoveryPage(['cs_other'], null);
+        });
+        $gateway->expects($this->never())->method('retrieveForReconciliation');
+
+        try {
+            $this->recovery($gateway)->recover($this->order->pageUuid(), $this->createdAt->modify('+7 days'));
+            $this->fail('Discovery cannot replace a concurrently established Session.');
+        } catch (CheckoutSessionException $error) {
+            $this->assertSame(CheckoutErrorCode::SESSION_INCOMPATIBLE, $error->errorCode());
+        }
+
+        $this->assertSame('cs_current', $this->data()['stripeCheckoutSessionId']);
+        $this->assertSame('paid', $this->data()['paymentStatus']);
+        $this->assertCount(1, $this->entries('events'));
+        $this->assertSame(1, $this->entries('events')[0]['attempts']);
+        $this->assertSame(['session.created', 'payment.succeeded'], array_map(static fn(LifecycleEvent $event): string => $event->type()->value, $this->deliveries()));
+    }
+
+    public function testDiscoveryDoesNotReadStripeBeforeTheRetentionThreshold(): void
+    {
+        $gateway = $this->createMock(CheckoutSessionGatewayInterface::class);
+        $gateway->expects($this->never())->method('discoverForOrder');
+        $this->assertNull($this->recovery($gateway)->recover($this->order->pageUuid(), $this->createdAt->modify('+7 days -1 second')));
+    }
+
     public function testManualOpenCheckoutWithoutPaymentIntentMakesNoFinancialReads(): void
     {
         $record = $this->record('open', 'unpaid');
@@ -1045,6 +1221,18 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
     private function deliveries(): array
     {
         return $this->delivered;
+    }
+
+    private function recovery(CheckoutSessionGatewayInterface $gateway, string $credentialFingerprint = 'credential'): IncompleteOrderRecovery
+    {
+        return new IncompleteOrderRecovery(
+            orders: $this->store,
+            gateway: $gateway,
+            reconciler: new CheckoutSessionReconciler($this->store, new CheckoutSessionRetriever($gateway), CredentialMode::Test),
+            retentionPolicy: new RetentionPolicy((new ConfigurationResolver())->resolve([])->configurationOrFail()->settings()),
+            credentialMode: CredentialMode::Test,
+            credentialFingerprint: $credentialFingerprint,
+        );
     }
 
     private function reconciler(FakeCheckoutSessionGateway $gateway): CheckoutSessionReconciler

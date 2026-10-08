@@ -33,6 +33,7 @@ use ProgrammatorDev\StripeCheckout\Configuration\Configuration;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderWriteLock;
+use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
@@ -620,6 +621,57 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $this->assertSame(0, $this->numberCalls);
         $this->assertCount(0, $gateway->requests);
         $this->assertCount(0, (new OrderPageStore($this->kirby))->orders());
+    }
+
+    public function testDiscoveryAfterUncertainCreationDoesNotReplayOrInferFailureFromNoMatch(): void
+    {
+        $createdAt = new DateTimeImmutable('2026-09-11T12:00:00Z');
+        $configuration = $this->configure(UiMode::Hosted);
+        $gateway = new FakeCheckoutSessionGateway();
+        $gateway->creationFailure = new CheckoutSessionGatewayException(
+            new CheckoutSessionFailure(CheckoutSessionFailureType::Uncertain, true),
+            new RuntimeException('PRIVATE_CREATION_ERROR'),
+        );
+
+        try {
+            $this->creator($configuration, $gateway)->create(
+                checkout: $this->checkout(),
+                shipping: new ShippingContext('PT'),
+                binding: $this->binding(),
+                token: $this->token(),
+                guestReference: 'guest-browser',
+                now: $createdAt,
+            );
+            $this->fail('Expected uncertain creation.');
+        } catch (CheckoutSessionException $error) {
+            $this->assertSame('checkout.session_uncertain', $error->errorCode());
+        }
+
+        $pageUuid = 'page://' . self::ORDER_UUID;
+        $store = new OrderPageStore($this->kirby);
+        $before = $store->data($store->order($pageUuid) ?? $this->fail('Missing uncertain order.'));
+        $this->kirby->impersonate('kirby', fn() => (new StripeCheckoutPageStore($this->kirby))->initialize()->update([
+            'incompleteOrderRetentionDays' => '14',
+        ]));
+        $http = $this->createMock(ClientInterface::class);
+        $http->expects($this->once())->method('request')->willReturnCallback(function (string $method, string $url): array {
+            $this->assertSame('get', $method);
+            $this->assertSame('https://api.stripe.com/v1/checkout/sessions', $url);
+
+            return ['{"object":"list","has_more":false,"data":[]}', 200, []];
+        });
+        ApiRequestor::setHttpClient($http);
+        $recovery = (new RuntimeFactory($this->kirby))->incompleteOrderRecovery();
+        $this->assertNull($recovery->recover($pageUuid, $createdAt->modify('+7 days')));
+        $progress = $recovery->recover($pageUuid, $createdAt->modify('+14 days'))
+            ?? $this->fail('Expected completed discovery.');
+
+        $this->assertTrue($progress->complete);
+        $this->assertNull($progress->candidateSessionId);
+        $this->assertSame($before, $store->data($store->order($pageUuid) ?? $this->fail('Discovery removed an unresolved order.')));
+        $this->assertSame(CheckoutStatus::CreationUncertain->value, $before['checkoutStatus']);
+        $this->assertCount(1, $gateway->requests);
+        $this->assertFalse($store->deleteEligible(uuid: $pageUuid, policy: new RetentionPolicy($configuration->settings()), now: $createdAt->modify('+40 days')));
     }
 
     public function testAnUncertainFailurePersistsTheExactAttemptBeforeItCanBeRetried(): void

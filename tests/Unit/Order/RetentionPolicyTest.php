@@ -48,6 +48,33 @@ final class RetentionPolicyTest extends TestCase
         yield 'free' => ['complete', 'no_payment_required', false];
     }
 
+    #[DataProvider('discoveryStates')]
+    public function testDiscoveryOnlySelectsUnresolvedCreationWithoutAnAssociation(string $checkout, string $payment, bool $expected): void
+    {
+        $data = $this->data($checkout, $payment);
+        $checkedAt = new DateTimeImmutable('2026-09-08T00:00:00Z');
+        $this->assertSame($expected, $this->policy()->needsSessionDiscovery($data, $checkedAt));
+        $this->assertFalse($this->policy(['cleanupIncompleteOrders' => false])->needsSessionDiscovery($data, $checkedAt));
+
+        if ($expected) {
+            $this->assertFalse($this->policy()->needsSessionDiscovery($data, new DateTimeImmutable('2026-09-07T23:59:59Z')));
+            $this->assertFalse($this->policy(['incompleteOrderRetentionDays' => 14])->needsSessionDiscovery($data, $checkedAt));
+            $this->assertTrue($this->policy(['cleanupUnpaidOrders' => false])->needsSessionDiscovery($data, $checkedAt));
+        }
+    }
+
+    /** @return iterable<string, array{string, string, bool}> */
+    public static function discoveryStates(): iterable
+    {
+        yield 'creating' => ['creating', 'unpaid', true];
+        yield 'uncertain' => ['creation_uncertain', 'unpaid', true];
+        yield 'definite failure' => ['creation_failed', 'unpaid', false];
+        yield 'saved open Session' => ['open', 'unpaid', false];
+        yield 'expired' => ['expired', 'unpaid', false];
+        yield 'paid' => ['complete', 'paid', false];
+        yield 'pending' => ['complete', 'pending', false];
+    }
+
     public function testAgeBoundaryUsesWholeUtcDaysAndDisabledCategoriesRemainIndependent(): void
     {
         $failure = $this->data('creation_failed', 'unpaid');

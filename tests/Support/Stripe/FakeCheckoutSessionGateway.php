@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Support\Stripe;
 
 use Closure;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
+use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionDiscoveryPage;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionGatewayInterface;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionReconciliationRecord;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionRecord;
@@ -90,5 +91,14 @@ final class FakeCheckoutSessionGateway implements CheckoutSessionGatewayInterfac
 
         return $this->reconciliationResults[$sessionId]
             ?? throw new RuntimeException('No fake Checkout Session reconciliation result is available.');
+    }
+
+    public function discoverForOrder(
+        string $pageUuid,
+        int $createdFrom,
+        int $createdBefore,
+        ?string $startingAfter = null,
+    ): CheckoutSessionDiscoveryPage {
+        throw new RuntimeException('No fake Checkout Session discovery page is available.');
     }
 }

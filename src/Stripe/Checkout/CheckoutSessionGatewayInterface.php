@@ -6,7 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Stripe\Checkout;
 
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 
-/** @internal Focused Stripe Checkout Session creation and retrieval boundary. */
+/** @internal Focused Stripe Checkout Session creation, discovery and retrieval boundary. */
 interface CheckoutSessionGatewayInterface
 {
     public function create(
@@ -25,4 +25,12 @@ interface CheckoutSessionGatewayInterface
 
     /** Exact PaymentIntent lookup; no ID for no match, ambiguous/incomplete results throw. */
     public function sessionForPaymentIntent(string $paymentIntentId): ?string;
+
+    /** Reads one creation-window page, selecting ownership-matched IDs without certifying purchase correlation. */
+    public function discoverForOrder(
+        string $pageUuid,
+        int $createdFrom,
+        int $createdBefore,
+        ?string $startingAfter = null,
+    ): CheckoutSessionDiscoveryPage;
 }

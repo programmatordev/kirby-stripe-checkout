@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\MockObject;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Configuration\StripeConfiguration;
+use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailureType;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Exception\CheckoutSessionGatewayException;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\StripeApiCheckoutSessionGateway;
@@ -412,6 +414,111 @@ final class StripeApiCheckoutSessionGatewayTest extends KirbyTestCase
             ['shipping_rate' => 123],
             'unexpected',
         ], $record->shippingOptions);
+    }
+
+    public function testDiscoveryFiltersOwnershipAndReturnsTheWholePagesCursor(): void
+    {
+        $pageUuid = 'page://Abc123def456GHI7';
+        $requests = [];
+        $http = $this->httpClient();
+        $http->expects($this->once())->method('request')->willReturnCallback(static function (...$arguments) use (&$requests, $pageUuid): array {
+            $requests[] = $arguments;
+
+            return [json_encode([
+                'object' => 'list',
+                'has_more' => true,
+                'data' => [
+                    [
+                        'id' => 'opaque-session',
+                        'object' => 'checkout.session',
+                        'metadata' => [
+                            PluginMetadata::OWNER_KEY => PluginMetadata::NAME,
+                            PluginMetadata::ORDER_KEY => $pageUuid,
+                        ],
+                        'url' => 'PRIVATE_URL',
+                        'client_secret' => 'PRIVATE_SECRET',
+                    ],
+                    [
+                        'id' => 'other-owner',
+                        'object' => 'checkout.session',
+                        'metadata' => [
+                            PluginMetadata::OWNER_KEY => 'another-plugin',
+                            PluginMetadata::ORDER_KEY => $pageUuid,
+                        ],
+                    ],
+                    [
+                        'id' => 'other-order',
+                        'object' => 'checkout.session',
+                        'metadata' => [
+                            PluginMetadata::OWNER_KEY => PluginMetadata::NAME,
+                            PluginMetadata::ORDER_KEY => 'page://anotherOrder',
+                        ],
+                    ],
+                ],
+            ], JSON_THROW_ON_ERROR), 200, []];
+        });
+        ApiRequestor::setHttpClient($http);
+        $gateway = new StripeApiCheckoutSessionGateway((new StripeApiClientFactory())->create(new StripeConfiguration('sk_test_discovery', null, null)));
+        $page = $gateway->discoverForOrder(pageUuid: $pageUuid, createdFrom: 1_789_084_800, createdBefore: 1_789_171_200, startingAfter: 'previous-page');
+
+        $this->assertSame(['opaque-session'], $page->sessionIds);
+        $this->assertSame('other-order', $page->nextCursor);
+        $this->assertSame('get', $requests[0][0]);
+        $this->assertSame('https://api.stripe.com/v1/checkout/sessions', $requests[0][1]);
+        $this->assertSame([
+            'created' => [
+                'gte' => 1_789_084_800,
+                'lt' => 1_789_171_200,
+            ],
+            'limit' => 100,
+            'starting_after' => 'previous-page',
+        ], $requests[0][3]);
+        $serialized = json_encode($page, JSON_THROW_ON_ERROR);
+        $this->assertStringNotContainsString('PRIVATE_URL', $serialized);
+        $this->assertStringNotContainsString('PRIVATE_SECRET', $serialized);
+    }
+
+    #[DataProvider('invalidDiscoveryPages')]
+    public function testDiscoveryRejectsIncompleteOrNonAdvancingPages(string $response): void
+    {
+        $http = $this->httpClient();
+        $http->method('request')->willReturn([$response, 200, []]);
+        ApiRequestor::setHttpClient($http);
+        $gateway = new StripeApiCheckoutSessionGateway((new StripeApiClientFactory())->create(new StripeConfiguration('sk_test_discovery', null, null)));
+
+        try {
+            $gateway->discoverForOrder(pageUuid: 'page://Abc123def456GHI7', createdFrom: 10, createdBefore: 100, startingAfter: 'previous-page');
+            $this->fail('An incomplete or non-advancing list cannot complete discovery.');
+        } catch (CheckoutSessionGatewayException $error) {
+            $this->assertSame(CheckoutSessionFailureType::Incompatible, $error->failure()->type());
+        }
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function invalidDiscoveryPages(): iterable
+    {
+        yield 'missing completeness flag' => ['{"object":"list","data":[]}'];
+        yield 'empty page claiming more' => ['{"object":"list","has_more":true,"data":[]}'];
+        yield 'empty ID' => ['{"object":"list","has_more":false,"data":[{"object":"checkout.session","id":""}]}'];
+        yield 'repeated cursor' => ['{"object":"list","has_more":true,"data":[{"object":"checkout.session","id":"previous-page"}]}'];
+        yield 'duplicate IDs' => ['{"object":"list","has_more":false,"data":[{"object":"checkout.session","id":"same"},{"object":"checkout.session","id":"same"}]}'];
+    }
+
+    public function testDiscoveryWrapsDeniedProviderReadsWithoutExposingTheProviderMessage(): void
+    {
+        $http = $this->httpClient();
+        $http->method('request')->willReturn(['{"error":{"type":"invalid_request_error","message":"PRIVATE_PROVIDER_MESSAGE"}}', 403, []]);
+        ApiRequestor::setHttpClient($http);
+        $gateway = new StripeApiCheckoutSessionGateway((new StripeApiClientFactory())->create(new StripeConfiguration('sk_test_discovery', null, null)));
+
+        try {
+            $gateway->discoverForOrder(pageUuid: 'page://Abc123def456GHI7', createdFrom: 10, createdBefore: 100);
+            $this->fail('A denied read cannot complete discovery.');
+        } catch (CheckoutSessionGatewayException $error) {
+            $this->assertSame(CheckoutSessionFailureType::Rejected, $error->failure()->type());
+            $this->assertFalse($error->failure()->isRetryable());
+            $this->assertStringNotContainsString('PRIVATE_PROVIDER_MESSAGE', $error->getMessage());
+        }
     }
 
     /** @return ClientInterface&MockObject */

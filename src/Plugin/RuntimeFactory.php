@@ -19,6 +19,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionCreator;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionReconciler;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionRetriever;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\DisputeRetriever;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\IncompleteOrderRecovery;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\RefundRetriever;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestBuilder;
@@ -35,6 +36,7 @@ use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
+use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Internal\ClosureProductResolver;
 use ProgrammatorDev\StripeCheckout\Product\Internal\GuardedProductResolver;
@@ -305,6 +307,28 @@ final class RuntimeFactory
         return $this->configurationReport = $resolver->resolve(
             $options,
             $pageSettings,
+        );
+    }
+
+    public function incompleteOrderRecovery(): IncompleteOrderRecovery
+    {
+        $configuration = $this->configurationReport()->configurationOrFail();
+        $stripe = $configuration->stripe();
+        $orders = new OrderPageStore($this->kirby);
+        $gateway = $this->checkoutSessionGateway();
+
+        return new IncompleteOrderRecovery(
+            orders: $orders,
+            gateway: $gateway,
+            // Recovery refreshes Checkout/payment facts; refund and dispute retrieval belongs to full-order sync.
+            reconciler: new CheckoutSessionReconciler(
+                orders: $orders,
+                retriever: new CheckoutSessionRetriever($gateway),
+                credentialMode: $stripe->secretKeyMode(),
+            ),
+            retentionPolicy: new RetentionPolicy($configuration->settings()),
+            credentialMode: $stripe->secretKeyMode(),
+            credentialFingerprint: $stripe->secretKeyFingerprint('checkout-discovery'),
         );
     }
 
