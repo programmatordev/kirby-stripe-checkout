@@ -1002,6 +1002,59 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
         $this->assertTrue($policy->isEligible($this->data(), $checkedAt));
     }
 
+    public function testFinalDiscoveryReadFailureCanResumeFromThePreviousContinuation(): void
+    {
+        $before = $this->data();
+        $checkedAt = $this->createdAt->modify('+7 days');
+        $gateway = $this->createMock(CheckoutSessionGatewayInterface::class);
+        $gateway->expects($this->never())->method('create');
+        $gateway->expects($this->exactly(2))->method('discoverForOrder')->willReturnOnConsecutiveCalls(
+            new CheckoutSessionDiscoveryPage(['cs_current'], 'cursor_next'),
+            new CheckoutSessionDiscoveryPage([], null),
+        );
+        $gateway->expects($this->once())->method('retrieveForReconciliation')->with('cs_current')->willThrowException(
+            new CheckoutSessionGatewayException(
+                new CheckoutSessionFailure(CheckoutSessionFailureType::Unavailable, true),
+                new RuntimeException('SECRET_CANARY'),
+            ),
+        );
+        $recovery = $this->recovery($gateway);
+        $progress = $recovery->recover($this->order->pageUuid(), $checkedAt) ?? $this->fail('Expected discovery progress.');
+
+        try {
+            $recovery->recover($this->order->pageUuid(), $checkedAt, $progress);
+            $this->fail('A failed final Session read cannot complete recovery.');
+        } catch (CheckoutSessionException $error) {
+            $this->assertSame(CheckoutErrorCode::SESSION_UNAVAILABLE, $error->errorCode());
+            $this->assertTrue($error->isRetryable());
+            $this->assertStringNotContainsString('SECRET_CANARY', $error->getMessage());
+        }
+
+        $this->assertFalse($progress->complete);
+        $this->assertSame('cursor_next', $progress->startingAfter);
+        $this->assertSame('cs_current', $progress->candidateSessionId);
+        $this->assertSame($before, $this->data());
+        $policy = new RetentionPolicy((new ConfigurationResolver())->resolve([])->configurationOrFail()->settings());
+        $this->assertFalse($policy->isEligible($this->data(), $checkedAt));
+
+        // Retry the final listing page because its completed continuation was not returned after the Session read failed.
+        $resumedGateway = $this->createMock(CheckoutSessionGatewayInterface::class);
+        $resumedGateway->expects($this->never())->method('create');
+        $resumedGateway->expects($this->once())->method('discoverForOrder')
+            ->with($this->order->pageUuid(), $this->createdAt->getTimestamp(), $this->createdAt->modify('+1 day')->getTimestamp(), 'cursor_next')
+            ->willReturn(new CheckoutSessionDiscoveryPage([], null));
+        $resumedGateway->expects($this->once())->method('retrieveForReconciliation')->with('cs_current')
+            ->willReturn($this->record('complete', 'paid', 'succeeded'));
+        $completed = $this->recovery($resumedGateway)->recover($this->order->pageUuid(), $checkedAt, $progress) ?? $this->fail('Expected completed discovery.');
+
+        $this->assertTrue($completed->complete);
+        $this->assertSame('cs_current', $this->data()['stripeCheckoutSessionId']);
+        $this->assertSame('paid', $this->data()['paymentStatus']);
+        $this->assertSame($before['checkoutAttempt'], $this->data()['checkoutAttempt']);
+        $this->assertArrayNotHasKey('events', $this->data());
+        $this->assertSame(['session.created', 'payment.succeeded'], array_map(static fn(LifecycleEvent $event): string => $event->type()->value, $this->deliveries()));
+    }
+
     public function testDiscoveryReferenceStillRequiresCompletePurchaseCorrelation(): void
     {
         $before = $this->data();
