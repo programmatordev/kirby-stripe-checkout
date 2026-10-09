@@ -131,17 +131,19 @@ final class BrowserAttemptStore
                 $issuedAt = $data['issuedAt'] ?? null;
                 $boundAt = $data['boundAt'] ?? null;
 
-                if (is_int($issuedAt) === false || $issuedAt < 0 || $issuedAt > $checkedAt) {
+                if (is_int($issuedAt) === false || $issuedAt < 0) {
                     continue;
                 }
 
-                if ($boundAt !== null && (is_int($boundAt) === false || $boundAt < $issuedAt || $boundAt > $checkedAt)) {
+                if ($boundAt !== null && (is_int($boundAt) === false || $boundAt < $issuedAt)) {
                     continue;
                 }
 
                 // Retain accepted action state from first binding rather than form rendering.
                 // This browser retention is independent of the creator's retry deadline and native session expiry;
                 // duplicates cannot renew it because the first binding time is immutable.
+                // Another request may commit after this request captured checkedAt but before it acquired the lock.
+                // A newer stored timestamp is not corruption and must not cause pruning.
                 if ($checkedAt - ($boundAt ?? $issuedAt) >= self::RETENTION_SECONDS) {
                     continue;
                 }

@@ -20,6 +20,61 @@ use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 
 final class BrowserAttemptStoreTest extends KirbyTestCase
 {
+    public function testEarlierStartedIssuancePreservesTheActionCommittedByALaterRequest(): void
+    {
+        $sessions = new Sessions($this->environment->workspace()->roots()['sessions'], ['mode' => 'manual', 'gcInterval' => false]);
+        $session = $sessions->create();
+        $store = new BrowserAttemptStore($session);
+        $context = $this->context();
+        $earlierIssuedAt = new DateTimeImmutable('2026-10-09T10:00:00Z');
+        $laterIssuedAt = $earlierIssuedAt->modify('+1 second');
+        $laterAttempt = $store->issue($context, 'https://shop.test/later', $laterIssuedAt);
+        $nativeToken = $session->token();
+        $this->assertNotNull($nativeToken);
+        $earlierRequestSession = $sessions->get($nativeToken);
+        $earlierRequestStore = new BrowserAttemptStore($earlierRequestSession);
+
+        try {
+            // The earlier request reaches the session lock after the later request has committed.
+            $earlierAttempt = $earlierRequestStore->issue($context, 'https://shop.test/earlier', $earlierIssuedAt);
+            $checkedAt = $laterIssuedAt->modify('+1 second');
+            $this->assertSame($laterAttempt->token()->value(), $store->load($laterAttempt->token(), $context, $checkedAt)->token()->value());
+            $this->assertSame($earlierAttempt->token()->value(), $store->load($earlierAttempt->token(), $context, $checkedAt)->token()->value());
+        } finally {
+            $session->destroy();
+            $earlierRequestSession->destroy();
+        }
+    }
+
+    public function testEarlierStartedBindingPreservesTheFirstAcceptanceCommittedByALaterRequest(): void
+    {
+        $sessions = new Sessions($this->environment->workspace()->roots()['sessions'], ['mode' => 'manual', 'gcInterval' => false]);
+        $session = $sessions->create();
+        $store = new BrowserAttemptStore($session);
+        $context = $this->context();
+        $issuedAt = new DateTimeImmutable('2026-10-09T10:00:00Z');
+        $attempt = $store->issue($context, 'https://shop.test/product', $issuedAt);
+        $nativeToken = $session->token();
+        $this->assertNotNull($nativeToken);
+        $earlierRequestSession = $sessions->get($nativeToken);
+        $earlierRequestStore = new BrowserAttemptStore($earlierRequestSession);
+        $earlierBoundAt = $issuedAt->modify('+1 second');
+        $boundAt = $issuedAt->modify('+2 seconds');
+        $binding = AttemptBinding::direct([new ProductRequest('shirt')], str_repeat('a', 64), guestReference: $context->guestReference());
+
+        try {
+            $earlierRequestStore->load($attempt->token(), $context, $earlierBoundAt);
+            $store->bind($attempt->token(), $context, $binding, $boundAt);
+            // Reload must retain the newer first binding even when this request captured an earlier time.
+            $duplicate = $earlierRequestStore->bind($attempt->token(), $context, $binding, $earlierBoundAt);
+            $this->assertSame($boundAt->getTimestamp(), $duplicate->boundAt());
+            $this->assertSame($boundAt->getTimestamp(), $store->load($attempt->token(), $context, $boundAt->modify('+1 second'))->boundAt());
+        } finally {
+            $session->destroy();
+            $earlierRequestSession->destroy();
+        }
+    }
+
     public function testIndependentRequestsPreserveBothActionsAndBindOnlyTheFirstPurchase(): void
     {
         $sessions = new Sessions($this->environment->workspace()->roots()['sessions'], ['mode' => 'manual', 'gcInterval' => false]);
