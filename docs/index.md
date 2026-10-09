@@ -1,6 +1,6 @@
 # Documentation
 
-Kirby Stripe Checkout is under active development and is not ready for production use. The current package provides its configuration foundation, exact money formatting, Kirby and Stripe Price product resolution, variants, a session-backed PHP cart API and HTTP routes, native order storage and queries, protected Checkout Session creation and signed webhook payment reconciliation, a native Panel area, and local diagnostics. The public browser Checkout flow is not implemented yet.
+Kirby Stripe Checkout is under active development and is not ready for production use. The current package provides its configuration foundation, exact money formatting, Kirby and Stripe Price product resolution, variants, a session-backed PHP cart API and HTTP routes, private Checkout bootstrap data, native order storage and queries, protected Checkout Session creation and signed webhook payment reconciliation, a native Panel area, and local diagnostics. Browser Checkout submission and return flows are not implemented yet.
 
 ## Current guides
 
@@ -9,6 +9,7 @@ Kirby Stripe Checkout is under active development and is not ready for productio
 - [Products and variants](products.md) — reusable fields, existing-schema mapping, options, variants, and product resolution.
 - [Cart](cart.md) — adding and changing items in PHP, exact totals, errors, and session behavior.
 - [Cart HTTP routes](cart-http.md) — browser requests, CSRF, revisions, JSON and HTML fragments.
+- [Checkout bootstrap](checkout.md) — private browser-action data; submission and return flows remain pending.
 - [Checkout Session requests](session-requests.md) — the protected standard request and safe project customization.
 - [Shipping quotes](shipping.md) — built-in destination zones, replacement resolvers, trusted context, and quote outcomes.
 - [Orders](orders.md) — native Pages, scoped queries, custom fields, separate states and immutable snapshots.

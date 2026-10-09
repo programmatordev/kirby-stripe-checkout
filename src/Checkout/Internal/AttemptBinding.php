@@ -150,6 +150,15 @@ final readonly class AttemptBinding
         $this->assertCompatibleActorAndSource($checkout->checkoutSource(), $checkout->userUuid(), $guestReference);
     }
 
+    public function assertCompatibleBrowserContext(BrowserAttemptContext $context): void
+    {
+        $this->assertCompatibleActorAndSource($context->checkoutSource(), $context->userUuid(), $context->guestReference());
+
+        if ($this->cartRevision !== $context->cartRevision()) {
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
+        }
+    }
+
     public function assertCompatibleOrder(OrderCreationContext $order, ?string $guestReference): void
     {
         $this->assertCompatibleActorAndSource($order->checkoutSource(), $order->userUuid(), $guestReference);

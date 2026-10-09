@@ -13,11 +13,14 @@ use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutator;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartViewFactory;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\KirbySessionCartStore;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\BrowserAttemptStore;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutBootstrapFactory;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutPreparationFactory;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutResolver;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionCreator;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionReconciler;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionRetriever;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutUrlBuilder;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\DisputeRetriever;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\IncompleteOrderRecovery;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
@@ -92,6 +95,21 @@ final class RuntimeFactory
         return $this->configurationReport()
             ->configurationOrFail()
             ->settings();
+    }
+
+    public function checkoutBootstrapFactory(): CheckoutBootstrapFactory
+    {
+        $configuration = $this->configurationReport()->configurationOrFail();
+        $session = $this->kirby->session();
+
+        return new CheckoutBootstrapFactory(
+            kirby: $this->kirby,
+            configuration: $configuration,
+            requestContextFactory: new SessionRequestContextFactory($this->kirby),
+            checkoutUrlBuilder: new CheckoutUrlBuilder($this->kirby),
+            cartStore: new KirbySessionCartStore($session, Uuid::generate(...)),
+            attemptStore: new BrowserAttemptStore($session),
+        );
     }
 
     /** HTTP writes may defer presentation; public cart() reads remain eager. */
@@ -242,7 +260,11 @@ final class RuntimeFactory
         return new CheckoutPreparationFactory(
             resolver: $this->checkoutResolver(),
             orderNumbers: new OrderNumberFormatter((new ConfigurationResolver())->orderNumberFormatter($options)),
-            requestBuilder: new SessionRequestBuilder($this->kirby, $this->settings()),
+            requestBuilder: new SessionRequestBuilder(
+                kirby: $this->kirby,
+                settings: $this->settings(),
+                checkoutUrlBuilder: new CheckoutUrlBuilder($this->kirby),
+            ),
             requestCustomizer: new SessionRequestCustomizer($this->kirby),
         );
     }

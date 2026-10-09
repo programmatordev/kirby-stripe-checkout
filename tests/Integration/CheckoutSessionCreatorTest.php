@@ -22,6 +22,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptBinding;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptToken;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutPreparationFactory;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionCreator;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutUrlBuilder;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\InitiatingShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestBuilder;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestContextFactory;
@@ -1797,6 +1798,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         return (new SessionRequestBuilder(
             kirby: $this->kirby,
             settings: $configuration->settings(),
+            checkoutUrlBuilder: new CheckoutUrlBuilder($this->kirby),
         ))->build(
             $context,
             $initiatingShipping ?? ($checkout->shippableItems() !== []
@@ -1882,7 +1884,11 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
                     ? $numberFormatter($uuid)
                     : (new OrderNumberFormatter())->format(OrderData::text((new \Kirby\Uuid\Uri($uuid))->host()));
             }),
-            requestBuilder: new SessionRequestBuilder($this->kirby, $configuration->settings()),
+            requestBuilder: new SessionRequestBuilder(
+                kirby: $this->kirby,
+                settings: $configuration->settings(),
+                checkoutUrlBuilder: new CheckoutUrlBuilder($this->kirby),
+            ),
             requestCustomizer: new SessionRequestCustomizer($this->kirby),
         );
 

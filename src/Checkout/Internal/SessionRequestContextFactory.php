@@ -74,6 +74,11 @@ final class SessionRequestContextFactory
 
     public function __construct(private readonly App $kirby) {}
 
+    public function initiatingUrl(?string $languageCode, ?string $requestUrl = null): string
+    {
+        return $this->resolveInitiatingUrl($requestUrl, $this->siteUrl($languageCode));
+    }
+
     public function create(
         OrderCreationContext $order,
         Configuration $configuration,

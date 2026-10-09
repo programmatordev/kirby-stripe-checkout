@@ -31,15 +31,10 @@ final class SessionRequestBuilder
 {
     private const INTEGRATION_IDENTIFIER_PREFIX = 'kirby_stripe_checkout_';
 
-    private const ORDER_QUERY_KEY = '_stripe_checkout_order';
-
-    private const SESSION_ID_QUERY_KEY = 'session_id';
-
-    private const SESSION_ID_PLACEHOLDER = '{CHECKOUT_SESSION_ID}';
-
     public function __construct(
         private readonly App $kirby,
         private readonly Settings $settings,
+        private readonly CheckoutUrlBuilder $checkoutUrlBuilder,
     ) {}
 
     public function build(
@@ -93,11 +88,11 @@ final class SessionRequestBuilder
         }
 
         if ($context->uiMode() === UiMode::Hosted) {
-            $parameters['cancel_url'] = $this->routeUrl('cancel', $context);
-            $parameters['success_url'] = $this->routeUrl('success', $context, true);
+            $parameters['cancel_url'] = $this->checkoutUrlBuilder->cancelUrl($context);
+            $parameters['success_url'] = $this->checkoutUrlBuilder->successUrl($context);
         } else {
             $parameters['redirect_on_completion'] = Session::REDIRECT_ON_COMPLETION_ALWAYS;
-            $parameters['return_url'] = $this->routeUrl('return', $context, true);
+            $parameters['return_url'] = $this->checkoutUrlBuilder->returnUrl($context);
         }
 
         return new SessionRequest($parameters);
@@ -433,31 +428,5 @@ final class SessionRequestBuilder
         // The settings Page UUID is randomly generated once per installation;
         // deriving the suffix from it keeps Stripe's identifier stable.
         return self::INTEGRATION_IDENTIFIER_PREFIX . $suffix;
-    }
-
-    private function routeUrl(
-        string $route,
-        SessionRequestContext $context,
-        bool $includeSessionId = false,
-    ): string {
-        $languageCode = $context->languageCode();
-
-        if ($this->kirby->multilang()) {
-            $languageCode = $this->kirby->language($languageCode)?->code()
-                ?? $this->kirby->defaultLanguage()?->code();
-        } else {
-            $languageCode = null;
-        }
-
-        $url = rtrim($this->kirby->site()->url($languageCode), '/')
-            . '/stripe-checkout/' . $route
-            . '?' . self::ORDER_QUERY_KEY . '=' . rawurlencode($context->order()->pageUuid());
-
-        if ($includeSessionId) {
-            // Stripe replaces this exact unencoded placeholder after creating the Session, so it must not pass through URL encoding.
-            $url .= '&' . self::SESSION_ID_QUERY_KEY . '=' . self::SESSION_ID_PLACEHOLDER;
-        }
-
-        return $url;
     }
 }

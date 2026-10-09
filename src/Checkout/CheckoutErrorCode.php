@@ -13,9 +13,13 @@ final class CheckoutErrorCode
 
     public const ATTEMPT_CONFLICT = 'checkout.attempt_conflict';
 
+    public const ATTEMPT_LIMIT_REACHED = 'checkout.attempt_limit_reached';
+
     public const ATTEMPT_RETRY_EXPIRED = 'checkout.attempt_retry_expired';
 
     public const ATTEMPT_TOKEN_INVALID = 'checkout.attempt_token_invalid';
+
+    public const CART_DISABLED = 'checkout.cart_disabled';
 
     public const SESSION_ATTACHMENT_FAILED = 'checkout.session_attachment_failed';
 

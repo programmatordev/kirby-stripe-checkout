@@ -11,6 +11,8 @@ use Kirby\Cms\Page;
 use Kirby\Cms\Pages;
 use Kirby\Cms\User;
 use ProgrammatorDev\StripeCheckout\Cart\Cart;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutBootstrap;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Money\MoneyFormatter;
@@ -42,6 +44,11 @@ final class StripeCheckout
     public function cart(): ?Cart
     {
         return (new RuntimeFactory($this->kirby))->cart();
+    }
+
+    public function checkout(CheckoutSource $checkoutSource = CheckoutSource::Cart): CheckoutBootstrap
+    {
+        return (new RuntimeFactory($this->kirby))->checkoutBootstrapFactory()->create($checkoutSource);
     }
 
     /** @return Pages<Page> */

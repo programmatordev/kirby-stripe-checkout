@@ -11,6 +11,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutUrlBuilder;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\InitiatingShippingSnapshot;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestBuilder;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
@@ -649,6 +650,7 @@ final class SessionRequestBuilderTest extends KirbyTestCase
         return new SessionRequestBuilder(
             kirby: $this->kirby,
             settings: (new RuntimeFactory($this->kirby))->settings(),
+            checkoutUrlBuilder: new CheckoutUrlBuilder($this->kirby),
         );
     }
 
