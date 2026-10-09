@@ -30,6 +30,7 @@ use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailure;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionFailureType;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionGatewayInterface;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\Exception\CheckoutSessionGatewayException;
+use Stripe\Checkout\Session;
 use Throwable;
 
 /** Creates, resumes, and repairs one persisted idempotent Checkout Session attempt. */
@@ -441,12 +442,6 @@ final class CheckoutSessionCreator
 
         try {
             $sessionRecord = $this->sessionGateway->retrieve(sessionId: $sessionId);
-            $session = $this->sessionFactory->create(
-                record: $sessionRecord,
-                context: $requestContext,
-                request: $sessionRequest,
-                liveMode: $this->liveMode(),
-            );
         } catch (CheckoutSessionGatewayException $error) {
             throw $this->sessionException($error);
         }
@@ -459,6 +454,31 @@ final class CheckoutSessionCreator
                 previous: $error,
             );
         }
+
+        // Stripe can close the Session before its webhook reaches the local Order.
+        // Verify purchase correlation and the saved association before reporting a closed customer action.
+        if (in_array($sessionRecord->status, [Session::STATUS_COMPLETE, Session::STATUS_EXPIRED], true)) {
+            $association = $this->sessionFactory->association(
+                record: $sessionRecord,
+                order: $requestContext->order(),
+                request: $sessionRequest,
+                liveMode: $this->liveMode(),
+            );
+
+            if ($persistedAssociation->equals($association) === false) {
+                throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);
+            }
+
+            // Canonical state remains with reconciliation; this read only blocks presentation of a closed Session.
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CLOSED);
+        }
+
+        $session = $this->sessionFactory->create(
+            record: $sessionRecord,
+            context: $requestContext,
+            request: $sessionRequest,
+            liveMode: $this->liveMode(),
+        );
 
         if ($persistedAssociation->equals($session->association()) === false) {
             throw new CheckoutSessionException(CheckoutErrorCode::SESSION_INCOMPATIBLE);

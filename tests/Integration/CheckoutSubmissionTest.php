@@ -62,7 +62,7 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         $body = [...$this->bootstrapData(), 'items' => [['reference' => 'alias', 'quantity' => 2, 'options' => (object) ['size' => 'large']]], 'shippingCountry' => 'PT'];
         $this->request($body);
         $acceptedAt = new DateTimeImmutable();
-        $submission = (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create($acceptedAt);
+        $submission = (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(input: CheckoutSubmissionParser::parse($this->kirby), acceptedAt: $acceptedAt);
         $lineItem = $submission->checkout()->items()[0];
         $this->assertSame('shirt', $lineItem->productReference());
         $this->assertSame(2, $lineItem->quantity());
@@ -78,7 +78,7 @@ final class CheckoutSubmissionTest extends KirbyTestCase
 
         $body['items'] = [['reference' => 'shirt', 'quantity' => 2, 'options' => (object) ['size' => 'large']]];
         $this->request($body);
-        $duplicate = (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create($acceptedAt->modify('+1 minute'));
+        $duplicate = (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(input: CheckoutSubmissionParser::parse($this->kirby), acceptedAt: $acceptedAt->modify('+1 minute'));
         $this->assertSame($submission->binding()->fingerprint(), $duplicate->binding()->fingerprint());
         $this->assertSame($acceptedAt->getTimestamp(), $duplicate->attempt()->boundAt());
     }
@@ -89,7 +89,7 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         $store = new KirbySessionCartStore($this->kirby->session(), static fn(): string => 'cart');
         $store->mutate(static fn(CartSnapshot $current): CartSnapshot => $cart);
         $this->request($this->bootstrapData(CheckoutSource::Cart));
-        $submission = (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(new DateTimeImmutable());
+        $submission = (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(input: CheckoutSubmissionParser::parse($this->kirby), acceptedAt: new DateTimeImmutable());
         $this->assertSame(CheckoutSource::Cart, $submission->checkout()->checkoutSource());
         $this->assertSame('revision', $submission->binding()->cartRevision());
         $this->assertSame('PT', $submission->shipping()->shippingCountry());
@@ -117,7 +117,7 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         $this->request(http_build_query($body), headers: ['Content-Type' => 'application/x-www-form-urlencoded', 'X-CSRF' => null]);
         $acceptedAt = new DateTimeImmutable();
         // The fixture's shipping resolver throws if called; a physical line must still reach purchase binding.
-        $submission = (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create($acceptedAt);
+        $submission = (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(input: CheckoutSubmissionParser::parse($this->kirby), acceptedAt: $acceptedAt);
         $this->assertCount(1, $submission->checkout()->shippableItems());
         $this->assertSame('physical', $submission->checkout()->shippableItems()[0]->productReference());
         $this->assertSame(2, $submission->checkout()->shippableItems()[0]->quantity());
@@ -143,7 +143,7 @@ final class CheckoutSubmissionTest extends KirbyTestCase
             ['reference' => 'shirt', 'quantity' => 2],
         ]];
         $this->request($body);
-        $submission = (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(new DateTimeImmutable());
+        $submission = (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(input: CheckoutSubmissionParser::parse($this->kirby), acceptedAt: new DateTimeImmutable());
         $this->assertCount(1, $submission->checkout()->items());
         $lineItem = $submission->checkout()->items()[0];
         $this->assertSame('shirt', $lineItem->productRequest()->reference());
@@ -178,7 +178,7 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         $this->request([...$submissionData, 'items' => [['reference' => 'shirt']]]);
 
         try {
-            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(new DateTimeImmutable());
+            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(input: CheckoutSubmissionParser::parse($this->kirby), acceptedAt: new DateTimeImmutable());
             $this->fail('An unavailable product cannot accept the action.');
         } catch (\ProgrammatorDev\StripeCheckout\Product\Exception\ProductUnavailableException) {
             /** @var array{attempts: array<string, array{boundAt: int|null}>} $state */
@@ -207,7 +207,7 @@ final class CheckoutSubmissionTest extends KirbyTestCase
             }
         };
         $this->request($body);
-        (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(new DateTimeImmutable());
+        (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(input: CheckoutSubmissionParser::parse($this->kirby), acceptedAt: new DateTimeImmutable());
         $this->assertCount(1, $this->resolved);
     }
 
@@ -217,7 +217,7 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         $body = [...$this->bootstrapData(), 'items' => [['reference' => 'shirt']], 'shippingCountry' => 'PT'];
         $this->request($body);
         $acceptedAt = new DateTimeImmutable();
-        $submission = (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create($acceptedAt);
+        $submission = (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(input: CheckoutSubmissionParser::parse($this->kirby), acceptedAt: $acceptedAt);
 
         if ($change === 'country') {
             $body['shippingCountry'] = 'ES';
@@ -230,7 +230,7 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         $this->request($body);
 
         try {
-            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create($acceptedAt->modify('+1 second'));
+            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(input: CheckoutSubmissionParser::parse($this->kirby), acceptedAt: $acceptedAt->modify('+1 second'));
             $this->fail('An accepted purchase must remain bound.');
         } catch (CheckoutInputException $error) {
             $this->assertSame(CheckoutErrorCode::ATTEMPT_CONFLICT, $error->errorCode());
@@ -263,14 +263,14 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         $body = [...$this->bootstrapData(), 'items' => [['reference' => 'physical']], 'shippingCountry' => 'PT'];
         $this->request($body);
         $acceptedAt = new DateTimeImmutable();
-        $submission = (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create($acceptedAt);
+        $submission = (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(input: CheckoutSubmissionParser::parse($this->kirby), acceptedAt: $acceptedAt);
         $this->assertSame(TaxBehavior::Inclusive, $submission->shipping()->taxBehavior());
         $this->assertSame('txcd_92010001', $submission->shipping()->taxCode());
         $this->kirby->impersonate('kirby', fn(): Page => $settingsPage->update([$settingName => $settingValue]));
         $this->request($body);
 
         try {
-            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create($acceptedAt->modify('+1 minute'));
+            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(input: CheckoutSubmissionParser::parse($this->kirby), acceptedAt: $acceptedAt->modify('+1 minute'));
             $this->fail('Changed shipping tax policy must not rebind an accepted purchase.');
         } catch (CheckoutInputException $error) {
             $this->assertSame(CheckoutErrorCode::ATTEMPT_CONFLICT, $error->errorCode());
@@ -301,7 +301,7 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         $this->request($body);
 
         try {
-            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(new DateTimeImmutable());
+            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(input: CheckoutSubmissionParser::parse($this->kirby), acceptedAt: new DateTimeImmutable());
             $this->fail('The issued revision must match.');
         } catch (CheckoutInputException $error) {
             $this->assertSame(CheckoutErrorCode::ATTEMPT_CONFLICT, $error->errorCode());
@@ -316,7 +316,7 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         $this->request($body);
 
         try {
-            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(new DateTimeImmutable());
+            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(input: CheckoutSubmissionParser::parse($this->kirby), acceptedAt: new DateTimeImmutable());
             $this->fail('Changing actor cannot reuse guest authority.');
         } catch (CheckoutInputException $error) {
             $this->assertSame(CheckoutErrorCode::ATTEMPT_CONFLICT, $error->errorCode());
@@ -331,7 +331,7 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         $this->request($body);
         $this->expectException(CheckoutInputException::class);
         $this->expectExceptionMessage(CheckoutErrorCode::ATTEMPT_CONFLICT);
-        (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(new DateTimeImmutable());
+        (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(input: CheckoutSubmissionParser::parse($this->kirby), acceptedAt: new DateTimeImmutable());
     }
 
     public function testAnUnissuedTokenCannotResolveProducts(): void
@@ -341,7 +341,7 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         $this->request($body);
 
         try {
-            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(new DateTimeImmutable());
+            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(input: CheckoutSubmissionParser::parse($this->kirby), acceptedAt: new DateTimeImmutable());
             $this->fail('A valid token must also be issued in this browser.');
         } catch (CheckoutInputException $error) {
             $this->assertSame(CheckoutErrorCode::ATTEMPT_TOKEN_INVALID, $error->errorCode());
@@ -357,7 +357,7 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         $this->request(http_build_query($body), headers: ['Content-Type' => 'application/x-www-form-urlencoded', 'X-CSRF' => null]);
 
         try {
-            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(new DateTimeImmutable());
+            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(input: CheckoutSubmissionParser::parse($this->kirby), acceptedAt: new DateTimeImmutable());
             $this->fail('Embedded Checkout is JSON-only.');
         } catch (CheckoutInputException $error) {
             $this->assertSame(RequestErrorCode::UNSUPPORTED_REPRESENTATION, $error->errorCode());
@@ -388,7 +388,7 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         $this->request($body);
 
         try {
-            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(new DateTimeImmutable());
+            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(input: CheckoutSubmissionParser::parse($this->kirby), acceptedAt: new DateTimeImmutable());
             $this->fail('Expected invalid transport.');
         } catch (CheckoutInputException $error) {
             $this->assertSame($errorCode, $error->errorCode());
@@ -445,7 +445,7 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         $this->request($body, $headers);
 
         try {
-            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(new DateTimeImmutable());
+            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(input: CheckoutSubmissionParser::parse($this->kirby), acceptedAt: new DateTimeImmutable());
             $this->fail('Request security must reject this submission.');
         } catch (CheckoutInputException $error) {
             $this->assertSame($errorCode, $error->errorCode());

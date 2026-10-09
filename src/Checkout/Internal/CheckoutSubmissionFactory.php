@@ -23,6 +23,7 @@ use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 
 /**
  * Authorizes one submission, resolves its facts once, and atomically accepts its purchase binding.
+ * The HTTP edge supplies parsed input after verifying transport, CSRF and origin requirements.
  * Shipping quotation and Order/Session mutation belong to CheckoutSessionCreator.
  *
  * @internal
@@ -37,9 +38,8 @@ final readonly class CheckoutSubmissionFactory
         private BrowserAttemptStore $attemptStore,
     ) {}
 
-    public function create(DateTimeImmutable $acceptedAt): CheckoutSubmission
+    public function create(CheckoutSubmissionInput $input, DateTimeImmutable $acceptedAt): CheckoutSubmission
     {
-        $input = CheckoutSubmissionParser::parse($this->kirby);
         $uiMode = $this->configuration->settings()->uiMode();
 
         if ($uiMode === UiMode::Embedded && $input->isJson() === false) {

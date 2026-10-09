@@ -43,4 +43,4 @@ Internal reconciliation uses `CheckoutErrorCode::RECONCILIATION_CONFLICT` when r
 
 Checkout bootstrap uses `CheckoutErrorCode::CART_DISABLED` when Cart is selected while disabled, and `ATTEMPT_LIMIT_REACHED` when browser capacity is occupied entirely by accepted actions. Missing credentials or currency use the existing configuration codes. These bootstrap failures create no Order or Stripe resource.
 
-Internal Checkout submission preparation uses `RequestErrorCode::ORIGIN_INVALID` for a mismatched Origin or fallback Referer, and `UNSUPPORTED_REPRESENTATION` for embedded form input. HTTP status mapping belongs to the upcoming submission endpoint, which is not registered yet.
+Checkout submission uses `RequestErrorCode::ORIGIN_INVALID` for a mismatched Origin or fallback Referer. The registered JSON endpoint maps errors to safe translated messages and HTTP statuses; see [Checkout submission](checkout.md#json-submission). `SESSION_UNCERTAIN` describes an uncertain mutation (`202`); `SESSION_UNAVAILABLE` describes an unavailable provider operation (`503`). Retryability is separate from that classification. Hosted form/HTML presentation remains unfinished.

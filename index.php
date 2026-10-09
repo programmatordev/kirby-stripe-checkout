@@ -7,6 +7,7 @@ use Kirby\Cms\Page;
 use Kirby\Content\Field;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Kirby\CartRoutes;
+use ProgrammatorDev\StripeCheckout\Kirby\CheckoutRoutes;
 use ProgrammatorDev\StripeCheckout\Kirby\CustomFieldsField;
 use ProgrammatorDev\StripeCheckout\Kirby\OptionsField;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderBlueprint;
@@ -92,7 +93,7 @@ App::plugin(
             },
         ],
         'translations' => Catalogue::bundled(),
-        'routes' => static fn(App $kirby): array => [...CartRoutes::definition($kirby), ...WebhookRoutes::definition($kirby)],
+        'routes' => static fn(App $kirby): array => [...CartRoutes::definition($kirby), ...CheckoutRoutes::definition($kirby), ...WebhookRoutes::definition($kirby)],
         'permissions' => [
             'settings.read' => false,
             'settings.update' => false,

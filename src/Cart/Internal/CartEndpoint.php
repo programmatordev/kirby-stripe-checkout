@@ -19,6 +19,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Exception\InternalErrorCode;
+use ProgrammatorDev\StripeCheckout\Http\ResponseNegotiator;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
 use Throwable;
@@ -32,7 +33,7 @@ final class CartEndpoint
 
     public function respond(CartOperation $operation, ?string $itemId = null): Response
     {
-        $type = $this->responseType();
+        $type = ResponseNegotiator::preferred($this->kirby, ['application/json', 'text/html']);
 
         if ($type === null) {
             return new Response('', code: 406, headers: self::HEADERS);
@@ -178,58 +179,5 @@ final class CartEndpoint
 
             return new Response('', 'text/html', $status, self::HEADERS);
         }
-    }
-
-    private function responseType(): ?string
-    {
-        $header = $this->kirby->request()->header('Accept', '*/*');
-        $accept = is_string($header) ? $header : '';
-
-        if (trim($accept) === '') {
-            $accept = '*/*';
-        }
-
-        $best = null;
-        $bestQuality = 0.0;
-
-        // Kirby's preferredMimeType does not exclude q=0 or give an explicit exclusion precedence over a wildcard.
-        // Apply that narrow HTTP rule here.
-        foreach (['application/json', 'text/html'] as $type) {
-            $quality = 0.0;
-            $specificity = -1;
-
-            foreach (explode(',', strtolower($accept)) as $range) {
-                $parts = array_map('trim', explode(';', $range));
-                $mime = array_shift($parts);
-                $rank = match ($mime) {
-                    $type => 2,
-                    explode('/', $type)[0] . '/*' => 1,
-                    '*/*' => 0,
-                    default => -1,
-                };
-
-                if ($rank < 0 || $rank < $specificity) {
-                    continue;
-                }
-
-                $q = 1.0;
-
-                foreach ($parts as $parameter) {
-                    if (str_starts_with($parameter, 'q=')) {
-                        $q = is_numeric(substr($parameter, 2)) ? (float) substr($parameter, 2) : 0.0;
-                    }
-                }
-
-                $specificity = $rank;
-                $quality = $q >= 0 && $q <= 1 ? $q : 0.0;
-            }
-
-            if ($quality > $bestQuality) {
-                $best = $type;
-                $bestQuality = $quality;
-            }
-        }
-
-        return $best;
     }
 }
