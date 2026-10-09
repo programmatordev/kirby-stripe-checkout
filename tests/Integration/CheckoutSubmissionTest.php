@@ -8,6 +8,7 @@ use Brick\Money\Money;
 use Closure;
 use DateTimeImmutable;
 use Kirby\Cms\App;
+use Kirby\Cms\Page;
 use Kirby\Http\Environment;
 use Kirby\Http\Request;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -21,6 +22,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\Internal\BrowserAttemptStore;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSubmissionParser;
 use ProgrammatorDev\StripeCheckout\Checkout\RequestErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
+use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
@@ -28,6 +30,7 @@ use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
+use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ReflectionProperty;
@@ -93,6 +96,41 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         $this->assertSame(3, $submission->checkout()->items()[0]->quantity());
         $this->assertCount(1, $this->resolved);
         $this->assertSame('revision', $store->read()->revision());
+    }
+
+    #[DataProvider('physicalCheckoutSources')]
+    public function testPhysicalSubmissionLeavesShippingQuotationWithTheCreator(CheckoutSource $checkoutSource): void
+    {
+        if ($checkoutSource === CheckoutSource::Cart) {
+            $cart = new CartSnapshot('cart', 'revision', [new CartEntry('line', new ProductRequest('physical', 2))], 1, 1, 'PT');
+            $store = new KirbySessionCartStore($this->kirby->session(), static fn(): string => 'cart');
+            $store->mutate(static fn(CartSnapshot $current): CartSnapshot => $cart);
+        }
+
+        $body = $this->bootstrapData($checkoutSource, json: false);
+
+        if ($checkoutSource === CheckoutSource::Direct) {
+            $body['items'] = [['reference' => 'physical', 'quantity' => '2']];
+            $body['shippingCountry'] = 'PT';
+        }
+
+        $this->request(http_build_query($body), headers: ['Content-Type' => 'application/x-www-form-urlencoded', 'X-CSRF' => null]);
+        $acceptedAt = new DateTimeImmutable();
+        // The fixture's shipping resolver throws if called; a physical line must still reach purchase binding.
+        $submission = (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create($acceptedAt);
+        $this->assertCount(1, $submission->checkout()->shippableItems());
+        $this->assertSame('physical', $submission->checkout()->shippableItems()[0]->productReference());
+        $this->assertSame(2, $submission->checkout()->shippableItems()[0]->quantity());
+        $this->assertSame('PT', $submission->shipping()->shippingCountry());
+        $this->assertSame($acceptedAt->getTimestamp(), $submission->attempt()->boundAt());
+        $this->assertCount(0, (new StripeCheckout($this->kirby))->orders());
+    }
+
+    /** @return iterable<string, array{CheckoutSource}> */
+    public static function physicalCheckoutSources(): iterable
+    {
+        yield 'Cart' => [CheckoutSource::Cart];
+        yield 'Direct' => [CheckoutSource::Direct];
     }
 
     public function testDirectAliasesReuseTheFactsAcceptedForTheirMergedQuantity(): void
@@ -210,6 +248,47 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         yield 'country' => ['country'];
         yield 'price' => ['price'];
         yield 'selection' => ['selection'];
+    }
+
+    #[DataProvider('shippingTaxPolicyChanges')]
+    public function testShippingTaxPolicyChangesCannotRetargetAnAcceptedAction(string $settingName, string $settingValue): void
+    {
+        $this->restart(['settings' => ['automaticTax' => true]]);
+        // Scoped operator edits preserve the submitting guest's actor and native CSRF context.
+        /** @var Page $settingsPage */
+        $settingsPage = $this->kirby->impersonate('kirby', fn(): Page => (new StripeCheckoutPageStore($this->kirby))->initialize()->update([
+            'shippingTaxBehavior' => 'inclusive',
+            'shippingTaxCode' => 'shipping',
+        ]));
+        $body = [...$this->bootstrapData(), 'items' => [['reference' => 'physical']], 'shippingCountry' => 'PT'];
+        $this->request($body);
+        $acceptedAt = new DateTimeImmutable();
+        $submission = (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create($acceptedAt);
+        $this->assertSame(TaxBehavior::Inclusive, $submission->shipping()->taxBehavior());
+        $this->assertSame('txcd_92010001', $submission->shipping()->taxCode());
+        $this->kirby->impersonate('kirby', fn(): Page => $settingsPage->update([$settingName => $settingValue]));
+        $this->request($body);
+
+        try {
+            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create($acceptedAt->modify('+1 minute'));
+            $this->fail('Changed shipping tax policy must not rebind an accepted purchase.');
+        } catch (CheckoutInputException $error) {
+            $this->assertSame(CheckoutErrorCode::ATTEMPT_CONFLICT, $error->errorCode());
+        }
+
+        /** @var array{attempts: array<string, array{bindingFingerprint: string, boundAt: int}>} $state */
+        $state = $this->kirby->session()->data()->get(BrowserAttemptStore::KEY);
+        $attempt = $state['attempts'][$submission->attempt()->token()->hash()];
+        $this->assertSame($submission->binding()->fingerprint(), $attempt['bindingFingerprint']);
+        $this->assertSame($acceptedAt->getTimestamp(), $attempt['boundAt']);
+        $this->assertCount(0, (new StripeCheckout($this->kirby))->orders());
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function shippingTaxPolicyChanges(): iterable
+    {
+        yield 'tax behavior' => ['shippingTaxBehavior', 'exclusive'];
+        yield 'tax code' => ['shippingTaxCode', 'nontaxable'];
     }
 
     public function testCartChangesRejectBeforeProductResolution(): void
