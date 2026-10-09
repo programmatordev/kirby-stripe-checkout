@@ -176,6 +176,7 @@ return [
     'programmatordev.stripe-checkout.product.price_source_mismatch' => 'A configuração do preço do produto mudou. Reveja a compra.',
     'programmatordev.stripe-checkout.shipping.country_required' => 'Escolha um país de entrega antes de iniciar o Checkout.',
     'programmatordev.stripe-checkout.shipping.invalid' => 'A configuração da entrega precisa de atenção. Contacte a loja.',
+    'programmatordev.stripe-checkout.order.number_invalid' => 'A configuração do número da encomenda precisa de atenção. Contacte a loja.',
     'programmatordev.stripe-checkout.persistence.order_unavailable' => 'O armazenamento de encomendas está temporariamente indisponível. Tente novamente com a mesma ação de checkout.',
     'programmatordev.stripe-checkout.internal.error' => 'Não foi possível preparar o Checkout. Contacte a loja antes de tentar novamente.',
     'programmatordev.stripe-checkout.session_request.filter_failed' => 'A configuração do Checkout precisa de atenção. Contacte a loja.',

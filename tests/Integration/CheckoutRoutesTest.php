@@ -434,6 +434,32 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertError($this->send($this->submission()), 422, 'product.invalid', false);
     }
 
+    #[DataProvider('orderNumberFormatterFailures')]
+    public function testOrderNumberFormatterFailuresAreSafeConfigurationErrors(bool $throws): void
+    {
+        $this->restart(options: ['orders' => ['numberFormatter' => static function (string $pageUuid) use ($throws): string {
+            if ($throws) {
+                throw new RuntimeException('private formatter details');
+            }
+
+            return '';
+        }]]);
+        $response = $this->send($this->submission());
+        $this->assertError($response, 422, 'order.number_invalid', false);
+        $error = $this->body($response)['error'];
+        $this->assertIsArray($error);
+        $this->assertSame('The order number configuration needs attention. Contact the store.', $error['message']);
+        $this->assertCount(0, $this->requests);
+        $this->assertCount(0, (new OrderPageStore($this->kirby))->orders());
+    }
+
+    /** @return iterable<string, array{bool}> */
+    public static function orderNumberFormatterFailures(): iterable
+    {
+        yield 'empty label' => [false];
+        yield 'callback throws' => [true];
+    }
+
     /** @param array<string, mixed> $options */
     private function restart(UiMode $uiMode = UiMode::Hosted, array $options = []): void
     {

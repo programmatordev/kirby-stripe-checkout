@@ -21,7 +21,9 @@ use ProgrammatorDev\StripeCheckout\Exception\InternalErrorCode;
 use ProgrammatorDev\StripeCheckout\Exception\MoneyException;
 use ProgrammatorDev\StripeCheckout\Http\ResponseNegotiator;
 use ProgrammatorDev\StripeCheckout\Kirby\PersistenceErrorCode;
+use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
+use ProgrammatorDev\StripeCheckout\Order\OrderErrorCode;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductException;
 use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
@@ -115,6 +117,7 @@ final class CheckoutEndpoint
             $failure instanceof InvalidSessionRequestException => $failure->errorCode(),
             $failure instanceof MoneyException => ProductErrorCode::INVALID,
             $failure instanceof OrderStorageException => PersistenceErrorCode::ORDER_UNAVAILABLE,
+            $failure instanceof OrderDataException && $failure->errorCode() === OrderErrorCode::NUMBER_INVALID => OrderErrorCode::NUMBER_INVALID,
             default => InternalErrorCode::ERROR,
         };
         $httpStatus = match ($code) {
@@ -128,7 +131,7 @@ final class CheckoutEndpoint
             ProductErrorCode::UNAVAILABLE, ProductErrorCode::PRICE_SOURCE_MISMATCH,
             ShippingErrorCode::COUNTRY_REQUIRED, ShippingErrorCode::COUNTRY_INVALID, ShippingErrorCode::UNAVAILABLE,
             ConfigurationErrorCode::CREDENTIAL_MODE_MISMATCH => self::HTTP_CONFLICT,
-            ProductErrorCode::INVALID, ShippingErrorCode::INVALID,
+            ProductErrorCode::INVALID, ShippingErrorCode::INVALID, OrderErrorCode::NUMBER_INVALID,
             SessionRequestErrorCode::FILTER_FAILED, SessionRequestErrorCode::FILTER_INVALID,
             SessionRequestErrorCode::INVARIANT_VIOLATION, SessionRequestErrorCode::PARAMETER_INVALID,
             SessionRequestErrorCode::PARAMETER_PROTECTED => self::HTTP_UNPROCESSABLE_ENTITY,

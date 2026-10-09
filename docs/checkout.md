@@ -95,7 +95,7 @@ Failures contain `ok: false` and `error.code`, translated `error.message` and in
 | `403` | Invalid CSRF or Origin/Referer context. Refresh the store page. |
 | `405` / `406` | Unsupported method, request media type or representation. |
 | `409` | Stale or closed action, changed purchase/configuration, unavailable product, shipping input that needs review, or expired uncertain retry. |
-| `422` | Product, shipping or customized Session request configuration needs attention. |
+| `422` | Product, shipping, order number or customized Session request configuration needs attention. |
 | `503` | Invalid Settings, unavailable storage or a temporary product/Session dependency. |
 | `502` | Definitive Stripe rejection or unverifiable Session facts. |
 | `202` | Session creation is uncertain. Preserve this same action and original submission. |

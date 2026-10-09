@@ -176,6 +176,7 @@ return [
     'programmatordev.stripe-checkout.product.price_source_mismatch' => 'The product price configuration has changed. Review your purchase.',
     'programmatordev.stripe-checkout.shipping.country_required' => 'Choose a shipping country before starting Checkout.',
     'programmatordev.stripe-checkout.shipping.invalid' => 'The shipping configuration needs attention. Contact the store.',
+    'programmatordev.stripe-checkout.order.number_invalid' => 'The order number configuration needs attention. Contact the store.',
     'programmatordev.stripe-checkout.persistence.order_unavailable' => 'The order store is temporarily unavailable. Try again using the same checkout action.',
     'programmatordev.stripe-checkout.internal.error' => 'Checkout could not be prepared. Contact the store before trying again.',
     'programmatordev.stripe-checkout.session_request.filter_failed' => 'The Checkout configuration needs attention. Contact the store.',
