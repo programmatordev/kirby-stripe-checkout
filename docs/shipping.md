@@ -86,7 +86,7 @@ The resolver receives two immutable contexts with separate responsibilities.
 - `shippingCountry()` returns the validated shipping country, when known;
 - `taxBehavior()` and `taxCode()` provide the effective shipping tax defaults for new options.
 
-Each line item exposes `productReference()`, nullable `variantId()` and `sku()`, `quantity()`, effective `price()`, calculated `subtotal()`, `requiresShipping()`, selected `options()`, and safe project `metadata()`.
+Each line item exposes `productReference()`, nullable `variantId()` and `sku()`, `quantity()`, effective `price()`, calculated `subtotal()`, `requiresShipping()`, selected `options()`, and safe project `metadata()`. `productRequest()` retains the canonical reference, quantity and selected option identifiers accepted for those resolved facts, without retaining the Product's mutable File handle.
 
 It also exposes the local `name()`, `description()` and `imageUrls()`, plus `priceSource()`. Stripe-priced lines include `stripePriceId()` and `stripeProductId()`; Kirby-priced lines expose their optional local `taxCode()`. Stripe owns classification for Stripe Prices, so those lines return `null` from `taxCode()`.
 

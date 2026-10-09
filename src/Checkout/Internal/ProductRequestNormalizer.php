@@ -42,17 +42,15 @@ final class ProductRequestNormalizer
     /** @return non-empty-list<Product> */
     public function normalizeDirectInput(mixed $items): array
     {
-        if (is_array($items) === false || array_is_list($items) === false || $items === []) {
-            throw new CheckoutInputException(SelectionErrorCode::INVALID);
-        }
+        return $this->normalizeDirectRequests(ProductRequestData::parseList($items));
+    }
 
-        // Bound submitted work before resolution, even if duplicates would merge.
-        if (count($items) > self::MAX_ENTRIES) {
-            throw new CheckoutInputException(SelectionErrorCode::LINE_LIMIT_EXCEEDED);
-        }
-
-        // Parse the complete body before running any project resolver.
-        $requests = array_map(ProductRequestData::parse(...), $items);
+    /**
+     * @param non-empty-list<ProductRequest> $requests Parsed at the owning input boundary.
+     * @return non-empty-list<Product>
+     */
+    public function normalizeDirectRequests(array $requests): array
+    {
         $products = [];
         $totalQuantity = 0;
 

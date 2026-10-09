@@ -10,6 +10,7 @@ use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
+use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
@@ -22,6 +23,8 @@ use Throwable;
  */
 final readonly class CheckoutLineItem
 {
+    private ProductRequest $productRequest;
+
     private string $productReference;
 
     private ?string $variantId;
@@ -59,6 +62,7 @@ final readonly class CheckoutLineItem
 
     public function __construct(Product $product, ?StripePrice $stripePrice = null)
     {
+        $this->productRequest = $product->request();
         $productPrice = $product->price();
 
         if (
@@ -102,6 +106,12 @@ final readonly class CheckoutLineItem
     public function productReference(): string
     {
         return $this->productReference;
+    }
+
+    /** Retains the canonical request used for these resolved facts, without retaining the Product's file handle. */
+    public function productRequest(): ProductRequest
+    {
+        return $this->productRequest;
     }
 
     public function variantId(): ?string

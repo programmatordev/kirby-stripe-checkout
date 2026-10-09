@@ -5,35 +5,31 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Cart\Internal;
 
 use Kirby\Cms\App;
-use Kirby\Http\Request;
 use ProgrammatorDev\StripeCheckout\Cart\CartOperation;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutHttpRequestParser;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestData;
-use ProgrammatorDev\StripeCheckout\Checkout\RequestErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
-use stdClass;
 
 /** @internal Validates HTTP transport only; product rules remain in the shared cart API. */
 final class CartRequestParser
 {
     public static function addItem(App $kirby): ProductRequest
     {
-        $selection = self::body($kirby, CartOperation::AddItem);
+        $parser = new CheckoutHttpRequestParser($kirby);
+        $selection = self::body($parser, CartOperation::AddItem);
 
-        // HTTP uses the concise Cart vocabulary; the shared selection parser and stored product requests keep their internal schema.
-        if (array_key_exists('options', $selection)) {
-            $selection['selectedOptions'] = $selection['options'];
-            unset($selection['options']);
-        }
-
-        return ProductRequestData::parse($selection);
+        return ProductRequestData::parseHttp(
+            $selection,
+            json: $parser->isJson(),
+        );
     }
 
     public static function updateItem(App $kirby): CartItemUpdate
     {
-        $body = self::body($kirby, CartOperation::UpdateItem);
+        $body = self::body(new CheckoutHttpRequestParser($kirby), CartOperation::UpdateItem);
         $quantity = $body['quantity'] ?? null;
 
         if (is_int($quantity) === false || $quantity < 1) {
@@ -45,7 +41,7 @@ final class CartRequestParser
 
     public static function updateShippingCountry(App $kirby): ShippingCountryUpdate
     {
-        $body = self::body($kirby, CartOperation::UpdateShippingCountry);
+        $body = self::body(new CheckoutHttpRequestParser($kirby), CartOperation::UpdateShippingCountry);
 
         if (
             array_key_exists('shippingCountry', $body) === false
@@ -59,66 +55,27 @@ final class CartRequestParser
 
     public static function removeItem(App $kirby): string
     {
-        return self::revision(self::body($kirby, CartOperation::RemoveItem));
+        return self::revision(self::body(new CheckoutHttpRequestParser($kirby), CartOperation::RemoveItem));
     }
 
     public static function clear(App $kirby): string
     {
-        return self::revision(self::body($kirby, CartOperation::Clear));
+        return self::revision(self::body(new CheckoutHttpRequestParser($kirby), CartOperation::Clear));
     }
 
     /** @return array<string, mixed> */
-    private static function body(App $kirby, CartOperation $operation): array
+    private static function body(CheckoutHttpRequestParser $parser, CartOperation $operation): array
     {
-        $request = $kirby->request();
-        $header = $request->header('Content-Type', $_SERVER['CONTENT_TYPE'] ?? '');
-        $type = is_string($header) ? strtolower(trim(explode(';', $header)[0])) : '';
+        $body = $parser->body();
 
-        if (in_array($type, ['application/json', 'application/x-www-form-urlencoded'], true) === false) {
-            throw new CheckoutInputException(RequestErrorCode::UNSUPPORTED_MEDIA_TYPE);
-        }
+        $parser->assertCsrf($body);
 
-        $raw = $request->body()->contents();
-
-        if ($type === 'application/json') {
-            // Kirby deliberately falls back to form parsing after invalid JSON.
-            // This endpoint must reject it and distinguish {} from [] instead.
-            $object = is_string($raw) ? json_decode($raw, depth: 32) : null;
-
-            if ($object instanceof stdClass === false) {
-                throw new CheckoutInputException(RequestErrorCode::INVALID_BODY);
-            }
-
-            $body = (array) $object;
-
-            if (array_key_exists('options', $body)) {
-                if ($body['options'] instanceof stdClass === false) {
-                    throw new CheckoutInputException(SelectionErrorCode::INVALID);
-                }
-
-                $body['options'] = (array) $body['options'];
-            }
-        } else {
-            if (is_array($raw)) {
-                $body = $raw; // PHP has already decoded an ordinary POST form.
-            } else {
-                // Avoid Body::data()'s JSON-first fallback for form-labelled input too.
-                parse_str($raw, $body);
-            }
-
-            if ($body === []) {
-                throw new CheckoutInputException(RequestErrorCode::INVALID_BODY);
-            }
-        }
-
-        self::csrf($kirby, $request, $type === 'application/json' ? null : ($body['csrf'] ?? null));
-
-        if ($type !== 'application/json') {
+        if ($parser->isJson() === false) {
             unset($body['csrf']);
 
             // Form values are strings; normalize only the documented quantity.
-            if (in_array($operation, [CartOperation::AddItem, CartOperation::UpdateItem], true) && array_key_exists('quantity', $body)) {
-                $body['quantity'] = self::formQuantity($body['quantity']);
+            if ($operation === CartOperation::UpdateItem && array_key_exists('quantity', $body)) {
+                $body['quantity'] = ProductRequestData::formQuantity($body['quantity']);
             }
 
             if ($operation === CartOperation::UpdateShippingCountry && ($body['shippingCountry'] ?? null) === '') {
@@ -126,8 +83,12 @@ final class CartRequestParser
             }
         }
 
+        if ($operation === CartOperation::AddItem) {
+            // The shared product input boundary owns Add's allowed fields and form quantity conversion.
+            return $body;
+        }
+
         $keys = match ($operation) {
-            CartOperation::AddItem => ['reference', 'quantity', 'options'],
             CartOperation::UpdateItem => ['revision', 'quantity'],
             CartOperation::UpdateShippingCountry => ['revision', 'shippingCountry'],
             default => ['revision'],
@@ -152,34 +113,5 @@ final class CartRequestParser
         }
 
         return $revision;
-    }
-
-    private static function csrf(App $kirby, Request $request, mixed $formToken): void
-    {
-        $header = $request->header('X-CSRF');
-        $token = $header ?? $formToken;
-
-        if (
-            is_string($token) === false
-            || ($header !== null && $formToken !== null && $header !== $formToken)
-            || $kirby->csrf($token) !== true
-        ) {
-            throw new CheckoutInputException(RequestErrorCode::CSRF_INVALID);
-        }
-    }
-
-    private static function formQuantity(mixed $value): int
-    {
-        if (is_string($value) === false || preg_match('/^[1-9][0-9]*$/D', $value) !== 1) {
-            throw new CheckoutInputException(SelectionErrorCode::QUANTITY_INVALID);
-        }
-
-        $quantity = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-
-        if ($quantity === false) {
-            throw new CheckoutInputException(SelectionErrorCode::QUANTITY_INVALID);
-        }
-
-        return $quantity;
     }
 }

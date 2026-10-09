@@ -160,6 +160,8 @@ return [
     'programmatordev.stripe-checkout.cart.provider_unavailable' => 'Product information is temporarily unavailable. Please try again.',
     'programmatordev.stripe-checkout.request.invalid_body' => 'The request body is invalid.',
     'programmatordev.stripe-checkout.request.csrf_invalid' => 'Your session could not be verified. Refresh the page and try again.',
+    'programmatordev.stripe-checkout.request.origin_invalid' => 'Submit Checkout from this store. Refresh the page and try again.',
+    'programmatordev.stripe-checkout.request.unsupported_representation' => 'Embedded Checkout requires a JSON request and response.',
     'programmatordev.stripe-checkout.request.unsupported_media_type' => 'Send JSON or form-encoded data.',
     'programmatordev.stripe-checkout.selection.invalid' => 'Check the submitted product, options and cart revision.',
     'programmatordev.stripe-checkout.selection.quantity_invalid' => 'Quantity must be a positive whole number.',

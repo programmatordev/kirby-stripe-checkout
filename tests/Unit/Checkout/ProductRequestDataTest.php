@@ -15,6 +15,69 @@ use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 
 final class ProductRequestDataTest extends TestCase
 {
+    public function testHttpSelectionsShareOptionMappingWithDistinctFormAndJsonQuantityTypes(): void
+    {
+        $form = ProductRequestData::parseHttp([
+            'reference' => 'shirt',
+            'quantity' => '2',
+            'options' => ['size' => 'large'],
+        ], json: false);
+        $json = ProductRequestData::parseHttp([
+            'reference' => 'shirt',
+            'quantity' => 2,
+            'options' => (object) ['size' => 'large'],
+        ], json: true);
+        $expected = [
+            'reference' => 'shirt',
+            'quantity' => 2,
+            'selectedOptions' => ['size' => 'large'],
+        ];
+        $this->assertSame($expected, ProductRequestData::toArray($form));
+        $this->assertSame($expected, ProductRequestData::toArray($json));
+        $this->assertSame(PHP_INT_MAX, ProductRequestData::parseHttp([
+            'reference' => 'shirt',
+            'quantity' => (string) PHP_INT_MAX,
+        ], json: false)->quantity());
+    }
+
+    /** @param array<string, mixed> $input */
+    #[DataProvider('invalidHttpSelections')]
+    public function testHttpSelectionParsingPreservesInputAndQuantityErrors(array $input, bool $json, string $code): void
+    {
+        try {
+            ProductRequestData::parseHttp($input, json: $json);
+            $this->fail('Expected invalid HTTP selection.');
+        } catch (CheckoutInputException $error) {
+            $this->assertSame($code, $error->errorCode());
+        }
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, bool, string}> */
+    public static function invalidHttpSelections(): iterable
+    {
+        $quantities = [
+            'zero' => '0',
+            'negative' => '-1',
+            'zero padding' => '01',
+            'positive sign' => '+1',
+            'whitespace' => ' 1 ',
+            'fraction' => '1.2',
+            'exponent' => '1e2',
+            'integer overflow' => (string) PHP_INT_MAX . '0',
+            'array' => ['2'],
+            'null' => null,
+        ];
+
+        foreach ($quantities as $case => $quantity) {
+            yield 'form ' . $case => [['reference' => 'shirt', 'quantity' => $quantity], false, 'selection.quantity_invalid'];
+        }
+
+        yield 'JSON string quantity' => [['reference' => 'shirt', 'quantity' => '2'], true, 'selection.quantity_invalid'];
+        yield 'JSON options list' => [['reference' => 'shirt', 'options' => []], true, 'selection.invalid'];
+        yield 'form internal options key' => [['reference' => 'shirt', 'selectedOptions' => []], false, 'selection.invalid'];
+        yield 'JSON internal options key' => [['reference' => 'shirt', 'selectedOptions' => (object) []], true, 'selection.invalid'];
+    }
+
     public function testDefaultsAndOptionOrderingReuseProductRequestRules(): void
     {
         $request = ProductRequestData::parse(['reference' => 'products/shirt']);

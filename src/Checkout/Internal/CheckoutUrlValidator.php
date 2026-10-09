@@ -9,6 +9,20 @@ final class CheckoutUrlValidator
 {
     public const RESULT_QUERY_KEY = '_stripe_checkout_result';
 
+    public static function sameOrigin(string $url, string $siteUrl): bool
+    {
+        $urlParts = parse_url($url);
+        $siteUrlParts = parse_url($siteUrl);
+
+        if (is_array($urlParts) === false || is_array($siteUrlParts) === false) {
+            return false;
+        }
+
+        return strtolower((string) ($urlParts['scheme'] ?? '')) === strtolower((string) ($siteUrlParts['scheme'] ?? ''))
+            && strtolower((string) ($urlParts['host'] ?? '')) === strtolower((string) ($siteUrlParts['host'] ?? ''))
+            && self::port($urlParts) === self::port($siteUrlParts);
+    }
+
     public static function isDestination(string $value, bool $requiresHttps): bool
     {
         $parts = self::parts($value);
@@ -79,6 +93,12 @@ final class CheckoutUrlValidator
             || str_ends_with($host, '.localhost')
             || str_ends_with($host, '.test')
             || str_ends_with($host, '.ddev.site');
+    }
+
+    /** @param array{scheme?: string, port?: int} $parts */
+    private static function port(array $parts): int
+    {
+        return $parts['port'] ?? (strtolower($parts['scheme'] ?? '') === 'https' ? 443 : 80);
     }
 
     /** @param array<string, int|string> $parts */

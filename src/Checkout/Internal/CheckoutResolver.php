@@ -75,8 +75,14 @@ final class CheckoutResolver
     /** Resolves untrusted cartless product input into the shared trusted context. */
     public function directCheckoutContext(mixed $items): CheckoutContext
     {
+        return $this->directCheckoutContextFromRequests(ProductRequestData::parseList($items));
+    }
+
+    /** @param non-empty-list<ProductRequest> $requests Parsed at the owning input boundary. */
+    public function directCheckoutContextFromRequests(array $requests): CheckoutContext
+    {
         $products = (new ProductRequestNormalizer($this->resolveProduct(...)))
-            ->normalizeDirectInput($items);
+            ->normalizeDirectRequests($requests);
         $lineItems = [];
 
         foreach ($products as $product) {

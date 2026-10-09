@@ -20,6 +20,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutResolver;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionCreator;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionReconciler;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionRetriever;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSubmissionFactory;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutUrlBuilder;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\DisputeRetriever;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\IncompleteOrderRecovery;
@@ -107,6 +108,20 @@ final class RuntimeFactory
             configuration: $configuration,
             requestContextFactory: new SessionRequestContextFactory($this->kirby),
             checkoutUrlBuilder: new CheckoutUrlBuilder($this->kirby),
+            cartStore: new KirbySessionCartStore($session, Uuid::generate(...)),
+            attemptStore: new BrowserAttemptStore($session),
+        );
+    }
+
+    public function checkoutSubmissionFactory(): CheckoutSubmissionFactory
+    {
+        $configuration = $this->configurationReport()->configurationOrFail();
+        $session = $this->kirby->session();
+
+        return new CheckoutSubmissionFactory(
+            kirby: $this->kirby,
+            configuration: $configuration,
+            resolver: $this->checkoutResolver(),
             cartStore: new KirbySessionCartStore($session, Uuid::generate(...)),
             attemptStore: new BrowserAttemptStore($session),
         );

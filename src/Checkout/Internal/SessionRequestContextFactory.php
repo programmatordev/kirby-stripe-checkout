@@ -216,7 +216,7 @@ final class SessionRequestContextFactory
             return $siteUrl;
         }
 
-        return $this->sameOrigin($initiatingUrl, $siteUrl) ? $initiatingUrl : $siteUrl;
+        return CheckoutUrlValidator::sameOrigin($initiatingUrl, $siteUrl) ? $initiatingUrl : $siteUrl;
     }
 
     private function resolveDestination(
@@ -286,33 +286,5 @@ final class SessionRequestContextFactory
         }
 
         return Url::stripFragment($value);
-    }
-
-    private function sameOrigin(string $url, string $siteUrl): bool
-    {
-        $urlParts = parse_url($url);
-        $siteUrlParts = parse_url($siteUrl);
-
-        if (is_array($urlParts) === false || is_array($siteUrlParts) === false) {
-            return false;
-        }
-
-        return strtolower((string) ($urlParts['scheme'] ?? '')) === strtolower((string) ($siteUrlParts['scheme'] ?? ''))
-            && strtolower((string) ($urlParts['host'] ?? '')) === strtolower((string) ($siteUrlParts['host'] ?? ''))
-            && $this->port($urlParts) === $this->port($siteUrlParts);
-    }
-
-    /** @param array<string, mixed> $parts */
-    private function port(array $parts): int
-    {
-        $port = $parts['port'] ?? null;
-
-        if (is_int($port)) {
-            return $port;
-        }
-
-        $scheme = $parts['scheme'] ?? null;
-
-        return is_string($scheme) && strtolower($scheme) === 'https' ? 443 : 80;
     }
 }

@@ -42,3 +42,5 @@ Translation keys remain literal strings; use the existing keys when [overriding 
 Internal reconciliation uses `CheckoutErrorCode::RECONCILIATION_CONFLICT` when repeated concurrent changes prevent a stable commit. It is retryable: retry the read/commit operation, not Session creation. `SESSION_INCOMPATIBLE` means required provider facts are missing or contradict the saved purchase evidence; the order is not partially updated.
 
 Checkout bootstrap uses `CheckoutErrorCode::CART_DISABLED` when Cart is selected while disabled, and `ATTEMPT_LIMIT_REACHED` when browser capacity is occupied entirely by accepted actions. Missing credentials or currency use the existing configuration codes. These bootstrap failures create no Order or Stripe resource.
+
+Internal Checkout submission preparation uses `RequestErrorCode::ORIGIN_INVALID` for a mismatched Origin or fallback Referer, and `UNSUPPORTED_REPRESENTATION` for embedded form input. HTTP status mapping belongs to the upcoming submission endpoint, which is not registered yet.

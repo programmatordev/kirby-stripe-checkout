@@ -11,5 +11,9 @@ final class RequestErrorCode
 
     public const INVALID_BODY = 'request.invalid_body';
 
+    public const ORIGIN_INVALID = 'request.origin_invalid';
+
+    public const UNSUPPORTED_REPRESENTATION = 'request.unsupported_representation';
+
     public const UNSUPPORTED_MEDIA_TYPE = 'request.unsupported_media_type';
 }
