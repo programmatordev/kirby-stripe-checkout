@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Order\Internal;
 
 use Closure;
-use Kirby\Uuid\Uri;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\OrderErrorCode;
 use ProgrammatorDev\StripeCheckout\Support\TextValidator;
@@ -19,11 +18,7 @@ final class OrderNumberFormatter
 
     public function format(string $uuid): string
     {
-        $reference = new Uri([
-            'scheme' => 'page',
-            'host' => OrderData::text($uuid),
-        ]);
-        $pageUuid = OrderData::uuid($reference->toString());
+        $pageUuid = OrderData::pageUuid($uuid);
 
         try {
             $number = $this->formatter === null

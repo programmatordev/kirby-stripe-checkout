@@ -73,16 +73,33 @@ final readonly class BrowserAttemptContext
 
     public function guestReference(): ?string
     {
+        return self::guestReferenceFromFingerprint($this->userUuid, $this->csrfFingerprint);
+    }
+
+    public static function guestReferenceFor(?string $userUuid, string $csrf): ?string
+    {
+        return self::guestReferenceFromFingerprint($userUuid, hash('sha256', $csrf));
+    }
+
+    private static function guestReferenceFromFingerprint(?string $userUuid, string $csrfFingerprint): ?string
+    {
+        if ($userUuid !== null) {
+            return null;
+        }
+
         // Kirby's CSRF value is native session state, not a caller-supplied identity.
         // Its rotation on logout also invalidates earlier guest actions.
-        return $this->userUuid === null
-            ? hash('sha256', 'stripe-checkout.guest:' . $this->csrfFingerprint)
-            : null;
+        return hash('sha256', 'stripe-checkout.guest:' . $csrfFingerprint);
     }
 
     public function cartRevision(): ?string
     {
         return $this->cartRevision;
+    }
+
+    public function matchesActor(?string $userUuid, ?string $guestReference): bool
+    {
+        return $this->userUuid === $userUuid && $this->guestReference() === $guestReference;
     }
 
     public function assertMatches(self $context): void

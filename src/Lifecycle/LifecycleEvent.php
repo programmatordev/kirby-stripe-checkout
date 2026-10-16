@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Lifecycle;
 
 use DateTimeImmutable;
-use Kirby\Uuid\Uri;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\DisputeStatus;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
@@ -73,12 +72,7 @@ final readonly class LifecycleEvent
             throw new OrderDataException();
         }
 
-        $snapshotReference = new Uri([
-            'scheme' => 'page',
-            'host' => OrderData::text($snapshot['uuid'] ?? null),
-        ]);
-
-        if ($snapshotReference->toString() !== $pageUuid) {
+        if (OrderData::pageUuid($snapshot['uuid'] ?? null) !== $pageUuid) {
             throw new OrderDataException();
         }
 

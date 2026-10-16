@@ -12,6 +12,7 @@ use Kirby\Cms\Pages;
 use Kirby\Cms\User;
 use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutBootstrap;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutResult;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
@@ -26,6 +27,10 @@ use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
  */
 final class StripeCheckout
 {
+    private bool $checkoutResultResolved = false;
+
+    private ?CheckoutResult $checkoutResult = null;
+
     /**
      * Keeps every operation tied to the Site's active App instead of relying
      * on ambient global state.
@@ -49,6 +54,16 @@ final class StripeCheckout
     public function checkout(CheckoutSource $checkoutSource = CheckoutSource::Cart): CheckoutBootstrap
     {
         return (new RuntimeFactory($this->kirby))->checkoutBootstrapFactory()->create($checkoutSource);
+    }
+
+    public function checkoutResult(): ?CheckoutResult
+    {
+        if ($this->checkoutResultResolved === false) {
+            $this->checkoutResult = (new RuntimeFactory($this->kirby))->checkoutResultResolver()->resolve();
+            $this->checkoutResultResolved = true;
+        }
+
+        return $this->checkoutResult;
     }
 
     /** @return Pages<Page> */

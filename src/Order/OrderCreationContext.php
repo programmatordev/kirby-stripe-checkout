@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Order;
 
 use Brick\Money\Money;
-use Kirby\Uuid\Uri;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
@@ -43,12 +42,7 @@ final readonly class OrderCreationContext
         array $lineItems,
     ) {
         // Snapshot the native content ID, not a live Page UUID object: its methods can populate caches or generate missing IDs.
-        // Only the public reference needs a scheme, which Kirby's URI value builds without those side effects.
-        $reference = new Uri([
-            'scheme' => 'page',
-            'host' => OrderData::text($uuid),
-        ]);
-        $this->pageUuid = OrderData::uuid($reference->toString());
+        $this->pageUuid = OrderData::pageUuid($uuid);
         OrderData::text($orderNumber, 80);
 
         if ($userUuid !== null) {

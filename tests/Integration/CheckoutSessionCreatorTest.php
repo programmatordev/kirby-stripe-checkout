@@ -553,7 +553,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         $this->assertCount(1, $gateway->requests);
         $this->assertSame([$sessionRecord->id], $gateway->retrievals);
         $this->assertCount(1, (new OrderPageStore($this->kirby))->orders());
-        $this->assertSame('page://' . $token->orderUuid(), $first->orderPageUuid());
+        $this->assertSame(OrderData::pageUuid($token->orderUuid()), $first->orderPageUuid());
     }
 
     public function testAChangedNonceCannotReuseTheOrderUuid(): void
@@ -648,7 +648,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
             $this->assertSame('checkout.session_uncertain', $error->errorCode());
         }
 
-        $pageUuid = 'page://' . self::ORDER_UUID;
+        $pageUuid = OrderData::pageUuid(self::ORDER_UUID);
         $store = new OrderPageStore($this->kirby);
         $before = $store->data($store->order($pageUuid) ?? $this->fail('Missing uncertain order.'));
         $this->kirby->impersonate('kirby', fn() => (new StripeCheckoutPageStore($this->kirby))->initialize()->update([
@@ -1678,7 +1678,7 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         }
 
         $store = new OrderPageStore($this->kirby);
-        $page = $store->order('page://' . self::ORDER_UUID) ?? $this->fail('Uncertain order was not persisted.');
+        $page = $store->order(OrderData::pageUuid(self::ORDER_UUID)) ?? $this->fail('Uncertain order was not persisted.');
         $this->assertSame(CheckoutStatus::CreationUncertain->value, $store->data($page)['checkoutStatus']);
         $this->assertCount(1, $gateway->requests);
     }

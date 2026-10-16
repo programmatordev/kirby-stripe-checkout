@@ -181,7 +181,7 @@ final class OrderPageStore
      */
     public function createAttemptOnce(string $orderUuid, Closure $prepare): OrderPage
     {
-        $pageUuid = OrderData::uuid('page://' . $orderUuid);
+        $pageUuid = OrderData::pageUuid($orderUuid);
 
         $created = false;
         $page = OrderWriteLock::run(

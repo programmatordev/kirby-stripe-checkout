@@ -56,7 +56,7 @@ final class CheckoutSessionCreator
         ?string $initiatingUrl = null,
     ): CheckoutSessionPresentation {
         $binding->assertCompatibleCheckout($checkout, $guestReference);
-        $page = $this->orderPageStore->order('page://' . $token->orderUuid());
+        $page = $this->orderPageStore->order(OrderData::pageUuid($token->orderUuid()));
 
         // This lookup only avoids unnecessary preparation.
         // Reuse still verifies the full token and binding; the locked lookup below decides creation.

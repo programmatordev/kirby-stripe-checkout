@@ -6,10 +6,11 @@ namespace ProgrammatorDev\StripeCheckout\Kirby;
 
 use Kirby\Cms\App;
 use Kirby\Http\Response;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutCancelEndpoint;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutEndpoint;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutUrlBuilder;
 
-/** Registers localized Checkout submission without opening browser state during boot. */
+/** Registers localized Checkout browser routes without opening session state during boot. */
 final class CheckoutRoutes
 {
     public const HTTP_METHOD_NOT_ALLOWED = 405;
@@ -32,6 +33,20 @@ final class CheckoutRoutes
                 }
 
                 return (new CheckoutEndpoint($kirby))->respond();
+            },
+        ], [
+            'pattern' => CheckoutUrlBuilder::CANCEL_PATH,
+            'method' => 'ALL',
+            'language' => '*',
+            'action' => function () use ($kirby): Response {
+                if ($kirby->request()->method() !== 'GET') {
+                    return new Response('', code: CheckoutRoutes::HTTP_METHOD_NOT_ALLOWED, headers: [
+                        ...CheckoutCancelEndpoint::HEADERS,
+                        'Allow' => 'GET',
+                    ]);
+                }
+
+                return (new CheckoutCancelEndpoint($kirby))->respond();
             },
         ]];
     }

@@ -146,6 +146,12 @@ final class OrderData
         throw new OrderDataException();
     }
 
+    /** Builds and validates the canonical Kirby Page UUID reference for an Order UUID ID. */
+    public static function pageUuid(mixed $uuid): string
+    {
+        return self::uuid('page://' . self::text($uuid));
+    }
+
     public static function timestamp(DateTimeImmutable $value): string
     {
         return $value->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');

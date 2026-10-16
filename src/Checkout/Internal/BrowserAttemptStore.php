@@ -9,6 +9,8 @@ use DateTimeImmutable;
 use Kirby\Session\Session;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use Throwable;
 
 /**
  * Native browser authorization with atomic first binding, independent of Order persistence.
@@ -85,6 +87,49 @@ final class BrowserAttemptStore
         return ($attempt->boundAt() ?? $attempt->issuedAt()) + self::RETENTION_SECONDS;
     }
 
+    public function findBoundContextForOrder(
+        string $pageUuid,
+        string $tokenHash,
+        string $bindingFingerprint,
+        ?string $userUuid,
+        ?string $guestReference,
+        DateTimeImmutable $checkedAt,
+    ): ?BrowserAttemptContext {
+        try {
+            OrderData::uuid($pageUuid);
+        } catch (Throwable) {
+            return null;
+        }
+
+        return $this->locked(function () use ($pageUuid, $tokenHash, $bindingFingerprint, $userUuid, $guestReference, $checkedAt): ?BrowserAttemptContext {
+            foreach ($this->current($checkedAt->getTimestamp()) as $hash => $data) {
+                if (($data['pageUuid'] ?? null) !== $pageUuid) {
+                    continue;
+                }
+
+                $storedBindingFingerprint = $data['bindingFingerprint'] ?? null;
+
+                if (
+                    hash_equals($tokenHash, $hash) === false
+                    || is_string($storedBindingFingerprint) === false
+                    || hash_equals($bindingFingerprint, $storedBindingFingerprint) === false
+                ) {
+                    return null;
+                }
+
+                try {
+                    $context = BrowserAttempt::boundContextFromArray($pageUuid, $data);
+                } catch (Throwable) {
+                    return null;
+                }
+
+                return $context->matchesActor($userUuid, $guestReference) ? $context : null;
+            }
+
+            return null;
+        });
+    }
+
     private function access(
         AttemptToken $token,
         BrowserAttemptContext $context,
@@ -106,8 +151,12 @@ final class BrowserAttemptStore
         });
     }
 
-    /** @param Closure(): BrowserAttempt $operation */
-    private function locked(Closure $operation): BrowserAttempt
+    /**
+     * @template T
+     * @param Closure(): T $operation
+     * @return T
+     */
+    private function locked(Closure $operation): mixed
     {
         $this->session->ensureToken();
         // As with the cart, Session::set() alone locks after the comparison.

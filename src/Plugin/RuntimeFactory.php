@@ -18,6 +18,8 @@ use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutBootstrapFactory;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutFormResultStore;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutPreparationFactory;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutResolver;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutResultResolver;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutResultStore;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionCreator;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionReconciler;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionRetriever;
@@ -118,6 +120,30 @@ final class RuntimeFactory
     public function checkoutFormResultStore(): CheckoutFormResultStore
     {
         return new CheckoutFormResultStore($this->kirby->session());
+    }
+
+    public function browserAttemptStore(): BrowserAttemptStore
+    {
+        return new BrowserAttemptStore($this->kirby->session());
+    }
+
+    public function checkoutResultStore(): CheckoutResultStore
+    {
+        return new CheckoutResultStore($this->kirby->session());
+    }
+
+    public function checkoutResultResolver(): CheckoutResultResolver
+    {
+        return new CheckoutResultResolver(
+            kirby: $this->kirby,
+            results: $this->checkoutResultStore(),
+            orders: $this->orderPageStore(),
+        );
+    }
+
+    public function orderPageStore(): OrderPageStore
+    {
+        return new OrderPageStore($this->kirby);
     }
 
     public function checkoutSubmissionFactory(): CheckoutSubmissionFactory

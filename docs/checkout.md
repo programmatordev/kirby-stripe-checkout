@@ -2,7 +2,7 @@
 
 `checkout()` prepares private submission data for one browser checkout action. It creates no Order or Stripe resource and does not resolve products, prices or shipping quotes.
 
-Bootstrap, hosted form submission and JSON submission are available now. Browser success, cancel and embedded return routes are still being implemented, so this guide does not describe a complete production checkout integration.
+Bootstrap, hosted form submission, JSON submission and hosted cancellation are available now. Browser success and embedded return routes are still being implemented, so this guide does not describe a complete production checkout integration.
 
 ```php
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
@@ -70,6 +70,27 @@ $checkout = $site->stripeCheckout()->checkout();
 Direct forms submit `items[index][reference]`, optional `items[index][quantity]`, optional `items[index][options][optionId]`, and optional `shippingCountry` alongside the issued CSRF, source and attempt token. When returned `submissionData()` contains `items`, render those values unchanged: the plugin retained them because starting a fresh action could duplicate or abandon an existing Session attempt.
 
 `CheckoutError` exposes `code()`, translated `message()` and `retryable()`. The initiating template owns presentation; the plugin registers no error/pending page, template, snippet or configurable error destination. Failures that cannot be safely tied to an issued browser action, including invalid CSRF or malformed action identity, remain direct HTTP errors and do not trust a request or Referer destination.
+
+## Hosted cancellation
+
+Stripe's hosted back action returns through the fixed plugin cancel route and redirects to the saved `cancelDestination`. When that destination is on the Kirby site and the same browser still owns the attempt, its template can consume the result:
+
+```php
+<?php
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutResultReason;
+
+$stripeCheckout = $site->stripeCheckout();
+$checkoutResult = $stripeCheckout->checkoutResult();
+?>
+
+<?php if ($checkoutResult?->reason() === CheckoutResultReason::HostedCancel): ?>
+    <!-- Render the project's cancellation message or action here. -->
+<?php endif ?>
+```
+
+An available cancellation result exposes the protected Order Page through `order()` and its current local `checkoutStatus()` and `paymentStatus()`. The navigation reason does not claim Checkout completion or payment success. `canResumeCheckout()` is always false for hosted cancellation.
+
+Cancellation performs no Stripe read or mutation, does not change the Order, and does not clear the Cart. The result reference is native-session-bound, expires after 15 minutes and is consumed once. Keep the same `$stripeCheckout` object when reading it more than once in one template; that object memoizes the consumed result. External cancellation destinations receive no result reference because they cannot read the Kirby session API.
 
 ## JSON submission
 

@@ -6,7 +6,6 @@ namespace ProgrammatorDev\StripeCheckout\Lifecycle\Internal;
 
 use DateInterval;
 use DateTimeImmutable;
-use Kirby\Uuid\Uri;
 use Kirby\Uuid\Uuid;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleErrorCode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEvent;
@@ -39,10 +38,7 @@ final class HookDeliveryLedger
         return new LifecycleEvent(
             deliveryId: Uuid::generate(),
             type: $type,
-            pageUuid: (new Uri([
-                'scheme' => 'page',
-                'host' => OrderData::text($data['uuid']),
-            ]))->toString(),
+            pageUuid: OrderData::pageUuid($data['uuid'] ?? null),
             occurredAt: OrderData::date($data['updatedAt']),
             revision: $revision,
             languageCode: OrderData::nullableString($data['languageCode'] ?? null),
@@ -185,7 +181,7 @@ final class HookDeliveryLedger
             $deliveryId = OrderData::string($eventData['deliveryId']);
             $eventRevision = OrderData::integer($eventData['revision']);
 
-            if ($eventData['pageUuid'] !== 'page://' . $uuid || isset($ids[$deliveryId])) {
+            if ($eventData['pageUuid'] !== OrderData::pageUuid($uuid) || isset($ids[$deliveryId])) {
                 throw new OrderDataException();
             }
 

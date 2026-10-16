@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 
 /**
  * An issued action and its first accepted purchase binding, separate from Order/provider facts.
@@ -72,8 +73,10 @@ final readonly class BrowserAttempt
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        // The transport token is supplied at lookup; native storage needs only its hash as the map key.
+        // Keep only the non-secret Order identity needed for provider-return lookup.
+        // The nonce-bearing transport token is still supplied by the browser and stored only as the map-key hash.
         return [
+            'pageUuid' => OrderData::pageUuid($this->token->orderUuid()),
             'context' => $this->context->toArray(),
             'initiatingUrl' => $this->initiatingUrl,
             'issuedAt' => $this->issuedAt,
@@ -85,6 +88,10 @@ final readonly class BrowserAttempt
     public static function fromArray(AttemptToken $token, mixed $data): self
     {
         if (is_array($data) === false) {
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_TOKEN_INVALID);
+        }
+
+        if (($data['pageUuid'] ?? null) !== OrderData::pageUuid($token->orderUuid())) {
             throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_TOKEN_INVALID);
         }
 
@@ -127,5 +134,46 @@ final readonly class BrowserAttempt
             bindingFingerprint: $bindingFingerprint,
             boundAt: $boundAt,
         );
+    }
+
+    /** Revalidates persisted browser state for navigation that has no transport token. */
+    public static function boundContextFromArray(string $pageUuid, mixed $data): BrowserAttemptContext
+    {
+        if (is_array($data) === false) {
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_TOKEN_INVALID);
+        }
+
+        if (($data['pageUuid'] ?? null) !== $pageUuid) {
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_TOKEN_INVALID);
+        }
+
+        try {
+            OrderData::uuid($pageUuid);
+        } catch (\Throwable $error) {
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_TOKEN_INVALID, previous: $error);
+        }
+
+        $initiatingUrl = $data['initiatingUrl'] ?? null;
+        $issuedAt = $data['issuedAt'] ?? null;
+        $bindingFingerprint = $data['bindingFingerprint'] ?? null;
+        $boundAt = $data['boundAt'] ?? null;
+
+        if (is_string($initiatingUrl) === false || CheckoutUrlValidator::isPersistedDestination($initiatingUrl, false) === false) {
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_TOKEN_INVALID);
+        }
+
+        if (is_int($issuedAt) === false || $issuedAt < 0) {
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_TOKEN_INVALID);
+        }
+
+        if (is_string($bindingFingerprint) === false || $bindingFingerprint === '') {
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_TOKEN_INVALID);
+        }
+
+        if (is_int($boundAt) === false || $boundAt < $issuedAt) {
+            throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_TOKEN_INVALID);
+        }
+
+        return BrowserAttemptContext::fromArray($data['context'] ?? null);
     }
 }

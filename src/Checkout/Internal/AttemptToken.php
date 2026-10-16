@@ -54,7 +54,7 @@ final readonly class AttemptToken
 
             // Order identities follow Kirby's configured UUID vocabulary,
             // including custom generators as well as the bundled formats.
-            OrderData::uuid('page://' . $orderUuid);
+            OrderData::pageUuid($orderUuid);
         } catch (Throwable) {
             throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_TOKEN_INVALID);
         }

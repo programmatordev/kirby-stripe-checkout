@@ -27,7 +27,7 @@ final class OrderUuidValidator
             throw new OrderDataException(OrderErrorCode::UUID_UNAVAILABLE);
         }
 
-        OrderData::uuid('page://' . $uuid);
+        OrderData::pageUuid($uuid);
 
         try {
             $slug = Url::slug($uuid);

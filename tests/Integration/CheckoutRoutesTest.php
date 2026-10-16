@@ -12,18 +12,21 @@ use Kirby\Http\Environment;
 use Kirby\Http\Request;
 use Kirby\Http\Response;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutResultReason;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutSessionException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptToken;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\BrowserAttemptContext;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\BrowserAttemptStore;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutFormResultStore;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutResultStore;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSubmissionInput;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestCustomizer;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\Exception\ProductUnavailableException;
@@ -592,6 +595,98 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertSame('pt', $this->orderData($body)['languageCode']);
     }
 
+    public function testHostedCancellationReturnsOneAvailableResultWithoutChangingCommerceState(): void
+    {
+        $this->restart(options: ['settings' => ['cancelDestination' => '/cancelled?from=checkout']]);
+        $body = $this->submission(CheckoutSource::Cart);
+        $this->assertSame(201, $this->send($body)->code());
+        $before = $this->orderData($body);
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $cartRevision = $cart->revision();
+        $this->assertSame(1, $cart->count());
+        $parameters = $this->requests[0]['parameters'];
+        $this->assertIsString($parameters['cancel_url']);
+
+        $cancelled = $this->sendNavigation($parameters['cancel_url']);
+        $this->assertSame(303, $cancelled->code());
+        $this->assertNavigationPrivate($cancelled);
+        $location = $cancelled->headers()['Location'] ?? null;
+        $this->assertIsString($location);
+        $this->assertStringStartsWith('https://kirby-stripe-checkout.test/en/cancelled?from=checkout&', $location);
+        $this->assertStringContainsString('_stripe_checkout_result=', $location);
+        $this->assertCount(1, $this->requests);
+        $this->assertSame($before, $this->orderData($body));
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $this->assertSame($cartRevision, $cart->revision());
+        $this->assertSame(1, $cart->count());
+
+        $this->setRequest($location);
+        $stripeCheckout = new StripeCheckout($this->kirby);
+        $result = $stripeCheckout->checkoutResult();
+        $this->assertNotNull($result);
+        $this->assertSame($result, $stripeCheckout->checkoutResult());
+        $this->assertSame(CheckoutResultReason::HostedCancel, $result->reason());
+        $this->assertTrue($result->isAvailable());
+        $this->assertSame(CheckoutStatus::Open, $result->checkoutStatus());
+        $this->assertSame(PaymentStatus::Unpaid, $result->paymentStatus());
+        $this->assertFalse($result->canResumeCheckout());
+        $this->assertNotNull($result->order());
+        $this->assertNull((new StripeCheckout($this->kirby))->checkoutResult());
+    }
+
+    public function testHostedCancellationWithoutBrowserBindingNavigatesWithoutAnOrderResult(): void
+    {
+        $this->restart(options: ['settings' => ['cancelDestination' => '/cancelled']]);
+        $body = $this->submission();
+        $this->assertSame(201, $this->send($body)->code());
+        $parameters = $this->requests[0]['parameters'];
+        $this->assertIsString($parameters['cancel_url']);
+        $this->kirby->session()->data()->remove(BrowserAttemptStore::KEY);
+
+        $cancelled = $this->sendNavigation($parameters['cancel_url']);
+        $this->assertSame(303, $cancelled->code());
+        $this->assertSame('https://kirby-stripe-checkout.test/en/cancelled', $cancelled->headers()['Location'] ?? null);
+        $this->assertCount(1, $this->requests);
+        $this->setRequest('https://kirby-stripe-checkout.test/en/cancelled');
+        $this->assertNull((new StripeCheckout($this->kirby))->checkoutResult());
+    }
+
+    public function testExternalCancellationDestinationReceivesNoSessionResultReference(): void
+    {
+        $this->restart(options: ['settings' => ['cancelDestination' => 'https://storefront.example/cancelled?from=checkout']]);
+        $body = $this->submission();
+        $this->assertSame(201, $this->send($body)->code());
+        $parameters = $this->requests[0]['parameters'];
+        $this->assertIsString($parameters['cancel_url']);
+
+        $cancelled = $this->sendNavigation($parameters['cancel_url']);
+        $this->assertSame(303, $cancelled->code());
+        $this->assertSame('https://storefront.example/cancelled?from=checkout', $cancelled->headers()['Location'] ?? null);
+        $this->assertNull($this->kirby->session()->data()->get(CheckoutResultStore::KEY));
+        $this->assertCount(1, $this->requests);
+    }
+
+    public function testCancellationRejectsOtherMethodsAndEmbeddedOrders(): void
+    {
+        $this->restart(UiMode::Embedded);
+        $body = $this->submission();
+        $this->assertSame(201, $this->send($body)->code());
+        $this->assertIsString($body['attemptToken']);
+        $pageUuid = OrderData::pageUuid((new AttemptToken($body['attemptToken']))->orderUuid());
+        $url = 'https://kirby-stripe-checkout.test/en/stripe-checkout/cancel?_stripe_checkout_order=' . rawurlencode($pageUuid);
+
+        $embedded = $this->sendNavigation($url);
+        $this->assertSame(303, $embedded->code());
+        $this->assertSame('https://kirby-stripe-checkout.test/en', $embedded->headers()['Location'] ?? null);
+        $this->assertCount(1, $this->requests);
+
+        $method = $this->sendNavigation($url, 'POST');
+        $this->assertSame(405, $method->code());
+        $this->assertSame('GET', $method->headers()['Allow'] ?? null);
+    }
+
     public function testInvalidSettingsAndCallbackFailuresAreSafe(): void
     {
         $body = $this->submission();
@@ -830,6 +925,25 @@ final class CheckoutRoutesTest extends KirbyTestCase
         return (new StripeCheckout($this->kirby))->checkout($checkoutSource);
     }
 
+    private function sendNavigation(string $url, string $method = 'GET'): Response
+    {
+        $this->setRequest($url, $method);
+        $path = parse_url($url, PHP_URL_PATH);
+        $this->assertIsString($path);
+        $response = $this->kirby->call(ltrim($path, '/'), $method);
+        $this->assertInstanceOf(Response::class, $response);
+
+        return $response;
+    }
+
+    private function setRequest(string $url, string $method = 'GET'): void
+    {
+        (new ReflectionProperty(App::class, 'request'))->setValue($this->kirby, new Request([
+            'method' => $method,
+            'url' => $url,
+        ]));
+    }
+
     /** @return array<string, mixed> */
     private function body(Response $response): array
     {
@@ -843,6 +957,13 @@ final class CheckoutRoutesTest extends KirbyTestCase
     {
         $this->assertSame('no-store, private', $response->headers()['Cache-Control']);
         $this->assertSame('Accept', $response->headers()['Vary']);
+        $this->assertSame('no-referrer', $response->headers()['Referrer-Policy']);
+        $this->assertArrayNotHasKey('Access-Control-Allow-Origin', $response->headers());
+    }
+
+    private function assertNavigationPrivate(Response $response): void
+    {
+        $this->assertSame('no-store, private', $response->headers()['Cache-Control']);
         $this->assertSame('no-referrer', $response->headers()['Referrer-Policy']);
         $this->assertArrayNotHasKey('Access-Control-Allow-Origin', $response->headers());
     }
@@ -870,7 +991,7 @@ final class CheckoutRoutesTest extends KirbyTestCase
     {
         $store = new OrderPageStore($this->kirby);
         $this->assertIsString($body['attemptToken']);
-        $page = $store->order('page://' . (new AttemptToken($body['attemptToken']))->orderUuid()) ?? $this->fail('Missing order.');
+        $page = $store->order(OrderData::pageUuid((new AttemptToken($body['attemptToken']))->orderUuid())) ?? $this->fail('Missing order.');
         return $store->data($page);
     }
 }

@@ -24,9 +24,9 @@ final class CheckoutUrlBuilder
 
     public const RETURN_PATH = 'stripe-checkout/return';
 
-    private const ORDER_QUERY_KEY = '_stripe_checkout_order';
+    public const ORDER_QUERY_KEY = '_stripe_checkout_order';
 
-    private const SESSION_ID_QUERY_KEY = 'session_id';
+    public const SESSION_ID_QUERY_KEY = 'session_id';
 
     private const SESSION_ID_PLACEHOLDER = '{CHECKOUT_SESSION_ID}';
 
@@ -59,6 +59,24 @@ final class CheckoutUrlBuilder
         $query[CheckoutUrlValidator::FORM_RESULT_QUERY_KEY] = $reference;
 
         return Url::build(['query' => $query], $initiatingUrl);
+    }
+
+    public function checkoutResultUrl(string $destinationUrl, string $reference): string
+    {
+        $query = [];
+        parse_str((string) parse_url($destinationUrl, PHP_URL_QUERY), $query);
+        $query[CheckoutUrlValidator::RESULT_QUERY_KEY] = $reference;
+
+        return Url::build(['query' => $query], $destinationUrl);
+    }
+
+    public static function resultDestinationUrl(string $url): string
+    {
+        $query = [];
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+        unset($query[CheckoutUrlValidator::RESULT_QUERY_KEY]);
+
+        return Url::build(['query' => $query], $url);
     }
 
     private function resultUrl(string $path, SessionRequestContext $context, bool $includeSessionId): string
