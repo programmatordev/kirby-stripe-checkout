@@ -21,6 +21,7 @@ use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductOptions;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
+use Throwable;
 
 /**
  * Provides the immutable, Site-scoped entry point for plugin developers.
@@ -59,7 +60,13 @@ final class StripeCheckout
     public function checkoutResult(): ?CheckoutResult
     {
         if ($this->checkoutResultResolved === false) {
-            $this->checkoutResult = (new RuntimeFactory($this->kirby))->checkoutResultResolver()->resolve();
+            try {
+                $this->checkoutResult = (new RuntimeFactory($this->kirby))->checkoutResultResolver()->resolve();
+            } catch (Throwable) {
+                // Short-lived presentation state is optional and must not prevent the destination Page from rendering.
+                $this->checkoutResult = null;
+            }
+
             $this->checkoutResultResolved = true;
         }
 

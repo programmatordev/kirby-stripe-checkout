@@ -55,24 +55,33 @@ final class CheckoutCancelEndpoint
             // Current configuration must not retarget a Session already handed to Stripe.
             $destinationUrl = OrderData::string($checkoutAttempt['cancelUrl']);
             $languageCode = OrderData::nullableString($data['languageCode'] ?? null);
-            $userUuid = $this->kirby->user()?->uuid()->toString();
-            $guestReference = BrowserAttemptContext::guestReferenceFor($userUuid, (string) $this->kirby->csrf());
-            $browserContext = $runtime->browserAttemptStore()->findBoundContextForOrder(
-                pageUuid: $pageUuid,
-                tokenHash: OrderData::string($checkoutAttempt['tokenHash']),
-                bindingFingerprint: OrderData::string($checkoutAttempt['bindingFingerprint']),
-                userUuid: $userUuid,
-                guestReference: $guestReference,
-                checkedAt: new DateTimeImmutable(),
-            );
+
+            // Result references grant access to browser-session state and must never be sent to another origin.
+            if (CheckoutUrlValidator::sameOrigin($destinationUrl, $this->siteUrl($languageCode)) === false) {
+                return $this->redirect($destinationUrl);
+            }
+
+            try {
+                $userUuid = $this->kirby->user()?->uuid()->toString();
+                $guestReference = BrowserAttemptContext::guestReferenceFor($userUuid, (string) $this->kirby->csrf());
+                $browserContext = $runtime->browserAttemptStore()->findBoundContextForOrder(
+                    pageUuid: $pageUuid,
+                    tokenHash: OrderData::string($checkoutAttempt['tokenHash']),
+                    bindingFingerprint: OrderData::string($checkoutAttempt['bindingFingerprint']),
+                    userUuid: $userUuid,
+                    guestReference: $guestReference,
+                    checkedAt: new DateTimeImmutable(),
+                );
+            } catch (Throwable) {
+                // Browser results are optional; cancellation must still reach the saved destination when session access fails.
+                return $this->redirect($destinationUrl);
+            }
 
             if ($browserContext !== null && $this->matchesOrderAttempt($browserContext, $data, $checkoutAttempt) === false) {
                 $browserContext = null;
             }
 
-            // Result references grant access to same-browser session state.
-            // Never disclose them to an external destination.
-            if ($browserContext !== null && CheckoutUrlValidator::sameOrigin($destinationUrl, $this->siteUrl($languageCode))) {
+            if ($browserContext !== null) {
                 try {
                     $reference = $runtime->checkoutResultStore()->save(
                         reason: CheckoutResultReason::HostedCancel,

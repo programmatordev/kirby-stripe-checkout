@@ -11,6 +11,7 @@ use Kirby\Cms\App;
 use Kirby\Http\Environment;
 use Kirby\Http\Request;
 use Kirby\Http\Response;
+use Kirby\Session\AutoSession;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutResultReason;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
@@ -634,6 +635,9 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertFalse($result->canResumeCheckout());
         $this->assertNotNull($result->order());
         $this->assertNull((new StripeCheckout($this->kirby))->checkoutResult());
+        $this->assertNull($this->withUnavailableSession(
+            fn() => (new StripeCheckout($this->kirby))->checkoutResult(),
+        ));
     }
 
     public function testHostedCancellationWithoutBrowserBindingNavigatesWithoutAnOrderResult(): void
@@ -653,6 +657,21 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertNull((new StripeCheckout($this->kirby))->checkoutResult());
     }
 
+    public function testHostedCancellationNavigatesWhenOptionalSessionAccessFails(): void
+    {
+        $this->restart(options: ['settings' => ['cancelDestination' => '/cancelled']]);
+        $body = $this->submission();
+        $this->assertSame(201, $this->send($body)->code());
+        $parameters = $this->requests[0]['parameters'];
+        $this->assertIsString($parameters['cancel_url']);
+
+        $cancelled = $this->withUnavailableSession(
+            fn() => $this->sendNavigation($parameters['cancel_url']),
+        );
+        $this->assertSame(303, $cancelled->code());
+        $this->assertSame('https://kirby-stripe-checkout.test/en/cancelled', $cancelled->headers()['Location'] ?? null);
+    }
+
     public function testExternalCancellationDestinationReceivesNoSessionResultReference(): void
     {
         $this->restart(options: ['settings' => ['cancelDestination' => 'https://storefront.example/cancelled?from=checkout']]);
@@ -661,7 +680,9 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $parameters = $this->requests[0]['parameters'];
         $this->assertIsString($parameters['cancel_url']);
 
-        $cancelled = $this->sendNavigation($parameters['cancel_url']);
+        $cancelled = $this->withUnavailableSession(
+            fn() => $this->sendNavigation($parameters['cancel_url']),
+        );
         $this->assertSame(303, $cancelled->code());
         $this->assertSame('https://storefront.example/cancelled?from=checkout', $cancelled->headers()['Location'] ?? null);
         $this->assertNull($this->kirby->session()->data()->get(CheckoutResultStore::KEY));
@@ -942,6 +963,26 @@ final class CheckoutRoutesTest extends KirbyTestCase
             'method' => $method,
             'url' => $url,
         ]));
+    }
+
+    /**
+     * @template T
+     * @param Closure(): T $operation
+     * @return T
+     */
+    private function withUnavailableSession(Closure $operation): mixed
+    {
+        $sessionHandlerProperty = new ReflectionProperty(App::class, 'sessionHandler');
+        $sessionHandler = $this->kirby->sessionHandler();
+        $unavailableSessionHandler = $this->createMock(AutoSession::class);
+        $unavailableSessionHandler->method('get')->willThrowException(new RuntimeException('Session unavailable.'));
+        $sessionHandlerProperty->setValue($this->kirby, $unavailableSessionHandler);
+
+        try {
+            return $operation();
+        } finally {
+            $sessionHandlerProperty->setValue($this->kirby, $sessionHandler);
+        }
     }
 
     /** @return array<string, mixed> */
