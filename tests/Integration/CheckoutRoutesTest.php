@@ -460,6 +460,20 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertCount(0, $this->requests);
     }
 
+    public function testUnsupportedFormMediaUsesTheNegotiatedHtmlResponse(): void
+    {
+        $response = $this->send('unsupported', headers: [
+            'Accept' => 'text/html',
+            'Content-Type' => 'text/plain',
+            'X-CSRF' => null,
+        ]);
+        $this->assertSame(415, $response->code());
+        $this->assertSame('', $response->body());
+        $this->assertPrivate($response);
+        $this->assertCount(0, $this->requests);
+        $this->assertCount(0, (new OrderPageStore($this->kirby))->orders());
+    }
+
     public function testEmbeddedFormRemainsUnsupported(): void
     {
         $this->restart(UiMode::Embedded);

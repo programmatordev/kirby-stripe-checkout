@@ -31,13 +31,16 @@ final class CheckoutEndpoint
     public function respond(): Response
     {
         // Reject unsupported representations before body parsing, browser binding and creation work.
-        if (ResponseNegotiator::preferred($this->kirby, ['application/json', 'text/html']) === null) {
+        $responseType = ResponseNegotiator::preferred($this->kirby, ['application/json', 'text/html']);
+
+        if ($responseType === null) {
             return new Response('', code: self::HTTP_NOT_ACCEPTABLE, headers: self::HEADERS);
         }
 
         $authorization = null;
         $submission = null;
-        $form = false;
+        // Before request media is known, use the negotiated representation for direct parsing failures.
+        $htmlResponse = $responseType === 'text/html';
         $acceptedAt = new DateTimeImmutable();
         $runtime = new RuntimeFactory($this->kirby);
 
@@ -49,7 +52,7 @@ final class CheckoutEndpoint
                 return new Response('', code: self::HTTP_NOT_ACCEPTABLE, headers: self::HEADERS);
             }
 
-            $form = $requestParser->isJson() === false;
+            $htmlResponse = $requestParser->isJson() === false;
             $input = CheckoutSubmissionParser::parse($this->kirby, $requestParser);
             $submissionFactory = $runtime->checkoutSubmissionFactory();
             // Retain the authorized attempt so later commerce/provider failures can safely return to its initiating page.
@@ -66,7 +69,7 @@ final class CheckoutEndpoint
                 initiatingUrl: $attempt->initiatingUrl(),
             );
 
-            if ($form) {
+            if ($htmlResponse) {
                 $redirectUrl = $presentation->redirectUrl();
 
                 if ($redirectUrl === null) {
@@ -92,7 +95,7 @@ final class CheckoutEndpoint
         } catch (Throwable $failure) {
             $httpFailure = (new CheckoutFailureMapper($this->kirby))->map($failure);
 
-            if ($form && $authorization !== null) {
+            if ($htmlResponse && $authorization !== null) {
                 try {
                     $attempt = $authorization->attempt();
                     $retryInput = $submission !== null && $httpFailure->requiresExistingAction()
@@ -113,7 +116,7 @@ final class CheckoutEndpoint
                 }
             }
 
-            if ($form) {
+            if ($htmlResponse) {
                 return new Response('', code: $httpFailure->httpStatus(), headers: self::HEADERS);
             }
 
