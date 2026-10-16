@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Brick\Money\Money;
+use Closure;
 use DateTimeImmutable;
 use Kirby\Cms\App;
 use Kirby\Http\Environment;
@@ -32,6 +33,7 @@ use ProgrammatorDev\StripeCheckout\Shipping\ShippingQuote;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
+use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
 use ReflectionProperty;
 use RuntimeException;
 use Stripe\ApiRequestor;
@@ -426,6 +428,17 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertError($this->send($body), 503, 'configuration.not_ready', false);
     }
 
+    public function testUnavailableOrderStoreReturnsARetryableDependencyFailure(): void
+    {
+        $this->restart(beforeApp: static function (TestWorkspace $workspace): void {
+            $workspace->writeDraftPage('stripe-checkout-orders', 'default', ['title' => 'Foreign container']);
+        });
+        $body = $this->submission();
+
+        $this->assertError($this->send($body), 503, 'persistence.order_unavailable', true);
+        $this->assertCount(0, $this->requests);
+    }
+
     public function testCustomProductExceptionDoesNotExposeItsArbitraryCode(): void
     {
         $this->restart(options: ['products' => ['resolver' => static function (): never {
@@ -461,7 +474,7 @@ final class CheckoutRoutesTest extends KirbyTestCase
     }
 
     /** @param array<string, mixed> $options */
-    private function restart(UiMode $uiMode = UiMode::Hosted, array $options = []): void
+    private function restart(UiMode $uiMode = UiMode::Hosted, array $options = [], ?Closure $beforeApp = null): void
     {
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start(
@@ -478,6 +491,7 @@ final class CheckoutRoutesTest extends KirbyTestCase
                 ['code' => 'pt', 'locale' => 'pt_PT', 'name' => 'Português'],
             ],
             impersonate: null,
+            beforeApp: $beforeApp,
         );
         $this->kirby = $this->environment->app();
         $this->kirby->setCurrentLanguage('en');

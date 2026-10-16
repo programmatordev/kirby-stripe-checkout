@@ -22,6 +22,7 @@ use ProgrammatorDev\StripeCheckout\Exception\MoneyException;
 use ProgrammatorDev\StripeCheckout\Http\ResponseNegotiator;
 use ProgrammatorDev\StripeCheckout\Kirby\PersistenceErrorCode;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
+use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\OrderErrorCode;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
@@ -116,7 +117,7 @@ final class CheckoutEndpoint
             $failure instanceof ShippingException => ShippingErrorCode::INVALID,
             $failure instanceof InvalidSessionRequestException => $failure->errorCode(),
             $failure instanceof MoneyException => ProductErrorCode::INVALID,
-            $failure instanceof OrderStorageException => PersistenceErrorCode::ORDER_UNAVAILABLE,
+            $failure instanceof OrderStorageException || $failure instanceof OrderQueryException => PersistenceErrorCode::ORDER_UNAVAILABLE,
             $failure instanceof OrderDataException && $failure->errorCode() === OrderErrorCode::NUMBER_INVALID => OrderErrorCode::NUMBER_INVALID,
             default => InternalErrorCode::ERROR,
         };
