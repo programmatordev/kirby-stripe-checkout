@@ -17,14 +17,14 @@ use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
  */
 final class CheckoutSubmissionParser
 {
-    public static function parse(App $kirby, ?CheckoutHttpRequestParser $parser = null): CheckoutSubmissionInput
+    public static function parse(App $kirby, ?CheckoutHttpRequestParser $requestParser = null): CheckoutSubmissionInput
     {
-        $parser ??= new CheckoutHttpRequestParser($kirby);
-        $body = $parser->body();
-        $parser->assertCsrf($body);
+        $requestParser ??= new CheckoutHttpRequestParser($kirby);
+        $body = $requestParser->body();
+        $requestParser->assertCsrf($body);
         self::assertOrigin($kirby);
 
-        if ($parser->isJson() === false) {
+        if ($requestParser->isJson() === false) {
             unset($body['csrf']);
         }
 
@@ -60,10 +60,10 @@ final class CheckoutSubmissionParser
                 throw new CheckoutInputException(RequestErrorCode::INVALID_BODY);
             }
         } else {
-            $items = ProductRequestData::parseHttpList($body['items'] ?? null, json: $parser->isJson());
+            $items = ProductRequestData::parseHttpList($body['items'] ?? null, json: $requestParser->isJson());
             $shippingCountry = $body['shippingCountry'] ?? null;
 
-            if ($parser->isJson() === false && $shippingCountry === '') {
+            if ($requestParser->isJson() === false && $shippingCountry === '') {
                 $shippingCountry = null;
             }
 
@@ -78,7 +78,7 @@ final class CheckoutSubmissionParser
             cartRevision: $cartRevision,
             items: $items,
             shippingCountry: $shippingCountry,
-            json: $parser->isJson(),
+            json: $requestParser->isJson(),
         );
     }
 
