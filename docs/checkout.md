@@ -93,7 +93,8 @@ Failures contain `ok: false` and `error.code`, translated `error.message` and in
 | --- | --- |
 | `400` | Malformed body, unknown field or invalid selection. Correct the input. |
 | `403` | Invalid CSRF or Origin/Referer context. Refresh the store page. |
-| `405` / `406` | Unsupported method, request media type or representation. |
+| `405` / `406` | Unsupported method or requested response representation. |
+| `415` | Unsupported request media type. Send JSON with `application/json`. |
 | `409` | Stale or closed action, changed purchase/configuration, unavailable product, shipping input that needs review, or expired uncertain retry. |
 | `422` | Product, shipping, order number or customized Session request configuration needs attention. |
 | `503` | Invalid Settings, unavailable storage or a temporary product/Session dependency. |

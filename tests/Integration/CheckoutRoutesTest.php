@@ -321,7 +321,7 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $body = $this->submission();
         $this->assertError($this->send('broken JSON'), 400, 'request.invalid_body', false);
         $this->assertError($this->send([...$body, 'amount' => 1]), 400, 'request.invalid_body', false);
-        $this->assertError($this->send($body, headers: ['Content-Type' => 'text/plain']), 406, 'request.unsupported_media_type', false);
+        $this->assertError($this->send($body, headers: ['Content-Type' => 'text/plain']), 415, 'request.unsupported_media_type', false);
         $this->assertSame(0, $this->resolutions);
         $this->assertCount(0, $this->requests);
     }

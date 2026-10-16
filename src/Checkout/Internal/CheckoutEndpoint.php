@@ -51,6 +51,7 @@ final class CheckoutEndpoint
     private const HTTP_FORBIDDEN = 403;
     private const HTTP_NOT_ACCEPTABLE = 406;
     private const HTTP_CONFLICT = 409;
+    private const HTTP_UNSUPPORTED_MEDIA_TYPE = 415;
     private const HTTP_UNPROCESSABLE_ENTITY = 422;
     private const HTTP_INTERNAL_SERVER_ERROR = 500;
     private const HTTP_BAD_GATEWAY = 502;
@@ -125,7 +126,8 @@ final class CheckoutEndpoint
             RequestErrorCode::INVALID_BODY,
             SelectionErrorCode::INVALID, SelectionErrorCode::QUANTITY_INVALID, SelectionErrorCode::LINE_LIMIT_EXCEEDED => self::HTTP_BAD_REQUEST,
             RequestErrorCode::CSRF_INVALID, RequestErrorCode::ORIGIN_INVALID => self::HTTP_FORBIDDEN,
-            RequestErrorCode::UNSUPPORTED_REPRESENTATION, RequestErrorCode::UNSUPPORTED_MEDIA_TYPE => self::HTTP_NOT_ACCEPTABLE,
+            RequestErrorCode::UNSUPPORTED_REPRESENTATION => self::HTTP_NOT_ACCEPTABLE,
+            RequestErrorCode::UNSUPPORTED_MEDIA_TYPE => self::HTTP_UNSUPPORTED_MEDIA_TYPE,
             CheckoutErrorCode::ATTEMPT_TOKEN_INVALID, CheckoutErrorCode::ATTEMPT_CONFLICT,
             CheckoutErrorCode::ATTEMPT_CLOSED, CheckoutErrorCode::ATTEMPT_RETRY_EXPIRED,
             CheckoutErrorCode::CART_DISABLED, CheckoutErrorCode::SESSION_MISSING,
