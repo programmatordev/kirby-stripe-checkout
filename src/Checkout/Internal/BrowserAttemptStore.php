@@ -80,6 +80,11 @@ final class BrowserAttemptStore
         return $this->access($token, $context, $boundAt, $binding);
     }
 
+    public static function retainedUntil(BrowserAttempt $attempt): int
+    {
+        return ($attempt->boundAt() ?? $attempt->issuedAt()) + self::RETENTION_SECONDS;
+    }
+
     private function access(
         AttemptToken $token,
         BrowserAttemptContext $context,

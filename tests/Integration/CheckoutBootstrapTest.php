@@ -48,7 +48,7 @@ final class CheckoutBootstrapTest extends KirbyTestCase
         $this->assertSame('https://kirby-stripe-checkout.test/stripe-checkout/checkout', $bootstrap->actionUrl());
         $this->assertSame(['csrf', 'source', 'attemptToken', 'revision'], array_keys($submissionData));
         $this->assertSame('cart', $submissionData['source']);
-        $this->assertSame('revision', $submissionData['revision']);
+        $this->assertSame('revision', $submissionData['revision'] ?? null);
         $this->assertTrue($this->kirby->csrf($submissionData['csrf']));
         $this->assertNull($bootstrap->publishableKey());
         $this->assertSame([
@@ -68,7 +68,7 @@ final class CheckoutBootstrapTest extends KirbyTestCase
         $this->assertStringNotContainsString($submissionData['attemptToken'], json_encode($session->data()->get(BrowserAttemptStore::KEY), JSON_THROW_ON_ERROR));
         $second = (new StripeCheckout($this->kirby))->checkout();
         $this->assertNotSame($submissionData['attemptToken'], $second->submissionData()['attemptToken']);
-        $this->assertSame('revision', $second->submissionData()['revision']);
+        $this->assertSame('revision', $second->submissionData()['revision'] ?? null);
     }
 
     public function testEmbeddedDirectBootstrapIsLocalizedAndExposesOnlyThePublishableKey(): void
@@ -158,6 +158,7 @@ final class CheckoutBootstrapTest extends KirbyTestCase
     public static function requestUrls(): iterable
     {
         yield 'result and fragment stripped' => ['GET', 'https://kirby-stripe-checkout.test/shop?keep=yes&_stripe_checkout_result=private#section', 'https://kirby-stripe-checkout.test/shop?keep=yes'];
+        yield 'form result stripped' => ['GET', 'https://kirby-stripe-checkout.test/shop?keep=yes&_stripe_checkout_form_result=private', 'https://kirby-stripe-checkout.test/shop?keep=yes'];
         yield 'foreign origin' => ['GET', 'https://other.example/shop', 'https://kirby-stripe-checkout.test'];
         yield 'post path is not a back link' => ['POST', 'https://kirby-stripe-checkout.test/stripe-checkout/checkout', 'https://kirby-stripe-checkout.test'];
     }

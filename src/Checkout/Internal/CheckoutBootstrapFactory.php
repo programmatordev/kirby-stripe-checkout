@@ -30,6 +30,7 @@ final class CheckoutBootstrapFactory
         private readonly CheckoutUrlBuilder $checkoutUrlBuilder,
         private readonly CartStoreInterface $cartStore,
         private readonly BrowserAttemptStore $attemptStore,
+        private readonly CheckoutFormResultStore $formResultStore,
     ) {}
 
     public function create(CheckoutSource $checkoutSource): CheckoutBootstrap
@@ -60,11 +61,37 @@ final class CheckoutBootstrapFactory
             csrf: $csrf,
             cart: $cart,
         );
-        $attempt = $this->attemptStore->issue(
+        $now = new DateTimeImmutable();
+        $formResult = $this->formResult($requestUrl, $now);
+        $error = null;
+        $retryInput = null;
+        $attempt = null;
+
+        // A matching result may show its error even when its exact retry is no longer valid.
+        // In that case the page receives a fresh action instead of reviving stale authority.
+        if ($formResult !== null && $formResult->context()->matches($context, $initiatingUrl)) {
+            $error = $formResult->error();
+            $retryInput = $formResult->retryInput();
+
+            if ($retryInput !== null) {
+                if ($retryInput->checkoutSource() !== $checkoutSource) {
+                    $retryInput = null;
+                } else {
+                    try {
+                        $attempt = $this->attemptStore->load($retryInput->attemptToken(), $context, $now);
+                    } catch (CheckoutInputException) {
+                        $retryInput = null;
+                    }
+                }
+            }
+        }
+
+        $attempt ??= $this->attemptStore->issue(
             context: $context,
             initiatingUrl: $initiatingUrl,
-            issuedAt: new DateTimeImmutable(),
+            issuedAt: $now,
         );
+
         return new CheckoutBootstrap(
             uiMode: $uiMode,
             checkoutSource: $checkoutSource,
@@ -73,7 +100,27 @@ final class CheckoutBootstrapFactory
             attemptToken: $attempt->token(),
             cartRevision: $cart?->revision(),
             publishableKey: $uiMode === UiMode::Embedded ? $this->configuration->stripe()->publishableKey() : null,
+            error: $error,
+            retryInput: $retryInput,
         );
+    }
+
+    private function formResult(?string $requestUrl, DateTimeImmutable $checkedAt): ?CheckoutFormResult
+    {
+        if ($requestUrl === null) {
+            return null;
+        }
+
+        $query = parse_url($requestUrl, PHP_URL_QUERY);
+
+        if (is_string($query) === false) {
+            return null;
+        }
+
+        parse_str($query, $parameters);
+        $reference = $parameters[CheckoutUrlValidator::FORM_RESULT_QUERY_KEY] ?? null;
+
+        return is_string($reference) ? $this->formResultStore->find($reference, $checkedAt) : null;
     }
 
     private function requireReadyConfiguration(): void

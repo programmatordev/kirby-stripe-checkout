@@ -17,9 +17,9 @@ use ProgrammatorDev\StripeCheckout\Shipping\ShippingErrorCode;
  */
 final class CheckoutSubmissionParser
 {
-    public static function parse(App $kirby): CheckoutSubmissionInput
+    public static function parse(App $kirby, ?CheckoutHttpRequestParser $parser = null): CheckoutSubmissionInput
     {
-        $parser = new CheckoutHttpRequestParser($kirby);
+        $parser ??= new CheckoutHttpRequestParser($kirby);
         $body = $parser->body();
         $parser->assertCsrf($body);
         self::assertOrigin($kirby);

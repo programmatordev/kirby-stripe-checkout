@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 
 /**
@@ -45,5 +48,23 @@ final readonly class CheckoutSubmission
     public function binding(): AttemptBinding
     {
         return $this->binding;
+    }
+
+    /** Exact normalized form input for retrying this already accepted action. */
+    public function retryInput(): CheckoutSubmissionInput
+    {
+        $direct = $this->input->checkoutSource() === CheckoutSource::Direct;
+        $items = $direct
+            ? array_map(static fn(CheckoutLineItem $lineItem): ProductRequest => $lineItem->productRequest(), $this->checkout->items())
+            : [];
+
+        return new CheckoutSubmissionInput(
+            checkoutSource: $this->input->checkoutSource(),
+            attemptToken: $this->input->attemptToken(),
+            cartRevision: $this->input->cartRevision(),
+            items: $items,
+            shippingCountry: $direct ? $this->shipping->shippingCountry() : null,
+            json: false,
+        );
     }
 }

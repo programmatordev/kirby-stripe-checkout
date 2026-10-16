@@ -17,6 +17,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutSessionException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptToken;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\BrowserAttemptContext;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\BrowserAttemptStore;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutFormResultStore;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSubmissionInput;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionRequestCustomizer;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
@@ -289,21 +290,184 @@ final class CheckoutRoutesTest extends KirbyTestCase
         yield ['OPTIONS'];
     }
 
-    public function testFormSubmissionIsRejectedBeforeCreation(): void
+    public function testHostedFormRedirectsDirectlyToStripe(): void
     {
         $body = $this->submission();
-        $body['csrf'] = (string) $this->kirby->csrf();
-        $response = $this->send(http_build_query($body), headers: ['Content-Type' => 'application/x-www-form-urlencoded', 'X-CSRF' => null]);
-        $this->assertSame(406, $response->code());
+        $response = $this->sendForm($body);
+        $this->assertSame(303, $response->code());
+        $this->assertSame('https://checkout.stripe.com/c/pay/cs_test_browser', $response->headers()['Location']);
+        $this->assertPrivate($response);
+        $this->assertCount(1, $this->requests);
+        $this->assertSame(1, $this->resolutions);
+        $this->assertNull($this->kirby->session()->data()->get(CheckoutFormResultStore::KEY));
+    }
+
+    public function testHostedFormReturnsSafePreAttemptFailureWithAFreshAction(): void
+    {
+        $this->restart(options: ['products' => ['resolver' => static function (): never {
+            throw new ProductUnavailableException();
+        }]]);
+        $body = $this->submission();
+        $response = $this->sendForm($body);
+        $this->assertSame(303, $response->code());
+        $location = $response->headers()['Location'];
+        $this->assertIsString($location);
+        $this->assertStringStartsWith('https://kirby-stripe-checkout.test', $location);
+        $this->assertStringContainsString('_stripe_checkout_form_result=', $location);
+        $bootstrap = $this->checkoutAt($location);
+        $error = $bootstrap->error();
+        $this->assertNotNull($error);
+        $this->assertSame('product.unavailable', $error->code());
+        $this->assertFalse($error->retryable());
+        $this->assertSame($error->toArray(), $bootstrap->toArray()['error']);
+        $this->assertNotSame($body['attemptToken'], $bootstrap->submissionData()['attemptToken']);
+        $this->assertArrayNotHasKey('items', $bootstrap->submissionData());
         $this->assertCount(0, $this->requests);
-        $this->assertSame(0, $this->resolutions);
-        $entries = $this->kirby->session()->data()->get(BrowserAttemptStore::KEY);
-        $this->assertIsArray($entries);
-        $this->assertIsArray($entries['attempts']);
-        $this->assertIsString($body['attemptToken']);
-        $entry = $entries['attempts'][(new AttemptToken($body['attemptToken']))->hash()];
-        $this->assertIsArray($entry);
-        $this->assertNull($entry['boundAt']);
+        $this->assertCount(0, (new OrderPageStore($this->kirby))->orders());
+    }
+
+    public function testHostedFormUncertaintyReturnsTheExactAcceptedAction(): void
+    {
+        $body = $this->submission();
+        $this->uncertain = true;
+        $response = $this->sendForm($body);
+        $this->assertSame(303, $response->code());
+        $location = $response->headers()['Location'];
+        $this->assertIsString($location);
+        $bootstrap = $this->checkoutAt($location);
+        $error = $bootstrap->error();
+        $this->assertNotNull($error);
+        $this->assertSame('checkout.session_uncertain', $error->code());
+        $this->assertTrue($error->retryable());
+        $retryData = $bootstrap->submissionData();
+        $this->assertSame($body['attemptToken'], $retryData['attemptToken']);
+        $this->assertSame([[
+            'reference' => 'product',
+            'quantity' => 2,
+            'options' => [],
+        ]], $retryData['items'] ?? null);
+        $storedResult = json_encode($this->kirby->session()->data()->get(CheckoutFormResultStore::KEY), JSON_THROW_ON_ERROR);
+        $this->assertStringNotContainsString('https://checkout.stripe.com', $storedResult);
+        $this->assertStringNotContainsString('cs_test_browser_secret_private', $storedResult);
+        $this->assertStringNotContainsString('private provider details', $storedResult);
+        $retried = $this->sendForm($retryData);
+        $this->assertSame(303, $retried->code());
+        $this->assertSame('https://checkout.stripe.com/c/pay/cs_test_browser', $retried->headers()['Location']);
+        $this->assertSame($this->requests[0]['parameters'], $this->requests[1]['parameters']);
+        $this->assertSame($this->requests[0]['idempotencyKey'], $this->requests[1]['idempotencyKey']);
+        $this->assertCount(1, (new OrderPageStore($this->kirby))->orders());
+    }
+
+    public function testHostedCartFormUncertaintyRetainsTheSavedCartAction(): void
+    {
+        $body = $this->submission(CheckoutSource::Cart);
+        $this->uncertain = true;
+        $response = $this->sendForm($body);
+        $location = $response->headers()['Location'];
+        $this->assertIsString($location);
+        $bootstrap = $this->checkoutAt($location, CheckoutSource::Cart);
+        $retryData = $bootstrap->submissionData();
+        $this->assertSame('checkout.session_uncertain', $bootstrap->error()?->code());
+        $this->assertSame($body['attemptToken'], $retryData['attemptToken']);
+        $this->assertSame($body['revision'], $retryData['revision'] ?? null);
+        $this->assertArrayNotHasKey('items', $retryData);
+        $this->assertArrayNotHasKey('shippingCountry', $retryData);
+        $retried = $this->sendForm($retryData);
+        $this->assertSame(303, $retried->code());
+        $this->assertSame($this->requests[0]['parameters'], $this->requests[1]['parameters']);
+        $this->assertSame($this->requests[0]['idempotencyKey'], $this->requests[1]['idempotencyKey']);
+    }
+
+    public function testHostedFormUnavailablePresentationKeepsTheExistingAction(): void
+    {
+        $body = $this->submission();
+        $this->assertSame(303, $this->sendForm($body)->code());
+        $this->readUnavailable = true;
+        $response = $this->sendForm($body);
+        $this->assertSame(303, $response->code());
+        $location = $response->headers()['Location'];
+        $this->assertIsString($location);
+        $bootstrap = $this->checkoutAt($location);
+        $this->assertSame('checkout.session_unavailable', $bootstrap->error()?->code());
+        $this->assertSame($body['attemptToken'], $bootstrap->submissionData()['attemptToken']);
+        $this->assertSame(['post', 'get'], array_column($this->requests, 'method'));
+    }
+
+    public function testHostedFormResultsRemainIndependentAcrossTabs(): void
+    {
+        $this->restart(options: [
+            'settings' => ['shippingZones' => [[
+                'name' => 'Portugal',
+                'scope' => 'selected_countries',
+                'countries' => ['PT'],
+                'options' => [[
+                    'key' => 'standard',
+                    'label' => 'Standard delivery',
+                    'amount' => '4.90',
+                ]],
+            ]]],
+            'products' => ['resolver' => function (ProductRequest $request): Product {
+                if ($request->reference() === 'unavailable') {
+                    throw new ProductUnavailableException();
+                }
+
+                return new Product(
+                    request: $request,
+                    name: 'Product',
+                    requiresShipping: true,
+                    price: new Price(Money::of('16.00', 'EUR')),
+                );
+            }],
+        ]);
+        $shippingBody = $this->submission();
+        $shippingBody['items'] = [['reference' => 'physical']];
+        $productBody = $this->submission();
+        $productBody['items'] = [['reference' => 'unavailable']];
+        $shippingResponse = $this->sendForm($shippingBody);
+        $productResponse = $this->sendForm($productBody);
+        $shippingLocation = $shippingResponse->headers()['Location'];
+        $productLocation = $productResponse->headers()['Location'];
+        $this->assertIsString($shippingLocation);
+        $this->assertIsString($productLocation);
+        $this->assertNotSame($shippingLocation, $productLocation);
+        $this->assertSame('shipping.country_required', $this->checkoutAt($shippingLocation)->error()?->code());
+        $this->assertSame('product.unavailable', $this->checkoutAt($productLocation)->error()?->code());
+    }
+
+    public function testFormResultReferenceIsBoundToItsInitiatingPage(): void
+    {
+        $this->restart(options: ['products' => ['resolver' => static function (): never {
+            throw new ProductUnavailableException();
+        }]]);
+        $response = $this->sendForm($this->submission());
+        $location = $response->headers()['Location'];
+        $this->assertIsString($location);
+        $query = parse_url($location, PHP_URL_QUERY);
+        $this->assertIsString($query);
+        $otherPage = 'https://kirby-stripe-checkout.test/another-page?' . $query;
+        $this->assertNull($this->checkoutAt($otherPage)->error());
+        $this->assertSame('product.unavailable', $this->checkoutAt($location)->error()?->code());
+    }
+
+    public function testFormFailuresWithoutAnAuthorizedActionRemainDirect(): void
+    {
+        $body = $this->submission();
+        $body['csrf'] = 'wrong';
+        $response = $this->sendForm($body);
+        $this->assertSame(403, $response->code());
+        $this->assertArrayNotHasKey('Location', $response->headers());
+        $this->assertNull($this->kirby->session()->data()->get(CheckoutFormResultStore::KEY));
+        $this->assertCount(0, $this->requests);
+    }
+
+    public function testEmbeddedFormRemainsUnsupported(): void
+    {
+        $this->restart(UiMode::Embedded);
+        $response = $this->sendForm($this->submission());
+        $this->assertSame(406, $response->code());
+        $this->assertArrayNotHasKey('Location', $response->headers());
+        $this->assertCount(0, $this->requests);
+        $this->assertCount(0, (new OrderPageStore($this->kirby))->orders());
     }
 
     public function testSecurityFailuresDoNotCreateOrdersOrCallResolvers(): void
@@ -563,7 +727,7 @@ final class CheckoutRoutesTest extends KirbyTestCase
         ApiRequestor::setHttpClient($client);
     }
 
-    /** @return array<string, string|list<array<string, mixed>>> */
+    /** @return array<string, mixed> */
     private function submission(CheckoutSource $checkoutSource = CheckoutSource::Direct): array
     {
         $stripeCheckout = new StripeCheckout($this->kirby);
@@ -626,6 +790,30 @@ final class CheckoutRoutesTest extends KirbyTestCase
             $_SERVER = $server;
             $info->setValue($this->kirby->environment(), $previous);
         }
+    }
+
+    /** @param array<string, mixed> $body */
+    private function sendForm(array $body): Response
+    {
+        $body['csrf'] ??= (string) $this->kirby->csrf();
+
+        return $this->send(http_build_query($body), headers: [
+            'Accept' => 'text/html',
+            'Content-Type' => 'application/x-www-form-urlencoded',
+            'X-CSRF' => null,
+        ]);
+    }
+
+    private function checkoutAt(
+        string $url,
+        CheckoutSource $checkoutSource = CheckoutSource::Direct,
+    ): \ProgrammatorDev\StripeCheckout\Checkout\CheckoutBootstrap {
+        (new ReflectionProperty(App::class, 'request'))->setValue($this->kirby, new Request([
+            'method' => 'GET',
+            'url' => $url,
+        ]));
+
+        return (new StripeCheckout($this->kirby))->checkout($checkoutSource);
     }
 
     /** @return array<string, mixed> */

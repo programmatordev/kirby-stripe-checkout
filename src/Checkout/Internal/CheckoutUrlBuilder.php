@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
 use Kirby\Cms\App;
+use Kirby\Http\Url;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequestContext;
 
 /**
@@ -49,6 +50,15 @@ final class CheckoutUrlBuilder
     public function returnUrl(SessionRequestContext $context): string
     {
         return $this->resultUrl(path: self::RETURN_PATH, context: $context, includeSessionId: true);
+    }
+
+    public function formResultUrl(string $initiatingUrl, string $reference): string
+    {
+        $query = [];
+        parse_str((string) parse_url($initiatingUrl, PHP_URL_QUERY), $query);
+        $query[CheckoutUrlValidator::FORM_RESULT_QUERY_KEY] = $reference;
+
+        return Url::build(['query' => $query], $initiatingUrl);
     }
 
     private function resultUrl(string $path, SessionRequestContext $context, bool $includeSessionId): string

@@ -484,7 +484,16 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         yield 'browser omits both' => [null, null];
     }
 
-    /** @return array<string, string> */
+    /**
+     * @return array{
+     *     csrf?: string,
+     *     source: string,
+     *     attemptToken: string,
+     *     revision?: string,
+     *     items?: list<array{reference: string, quantity: int, options: array<string, string>}>,
+     *     shippingCountry?: string
+     * }
+     */
     private function bootstrapData(CheckoutSource $checkoutSource = CheckoutSource::Direct, bool $json = true): array
     {
         $data = (new StripeCheckout($this->kirby))->checkout($checkoutSource)->submissionData();

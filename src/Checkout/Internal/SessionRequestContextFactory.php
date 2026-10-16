@@ -273,12 +273,21 @@ final class SessionRequestContextFactory
         $query = [];
         parse_str((string) ($parts['query'] ?? ''), $query);
 
-        if (array_key_exists(CheckoutUrlValidator::RESULT_QUERY_KEY, $query)) {
+        $resultKeys = [
+            CheckoutUrlValidator::RESULT_QUERY_KEY,
+            CheckoutUrlValidator::FORM_RESULT_QUERY_KEY,
+        ];
+        $presentResultKeys = array_intersect($resultKeys, array_keys($query));
+
+        if ($presentResultKeys !== []) {
             if ($removeResultKey === false) {
                 throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path);
             }
 
-            unset($query[CheckoutUrlValidator::RESULT_QUERY_KEY]);
+            foreach ($presentResultKeys as $resultKey) {
+                unset($query[$resultKey]);
+            }
+
             $value = Url::build([
                 'fragment' => null,
                 'query' => $query,

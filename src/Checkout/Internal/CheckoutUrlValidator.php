@@ -9,6 +9,8 @@ final class CheckoutUrlValidator
 {
     public const RESULT_QUERY_KEY = '_stripe_checkout_result';
 
+    public const FORM_RESULT_QUERY_KEY = '_stripe_checkout_form_result';
+
     public static function sameOrigin(string $url, string $siteUrl): bool
     {
         $urlParts = parse_url($url);
@@ -45,9 +47,10 @@ final class CheckoutUrlValidator
         $query = [];
         parse_str((string) ($parts['query'] ?? ''), $query);
 
-        // This parameter belongs only to the short-lived browser result flow;
-        // accepting it in canonical navigation would make that flow ambiguous.
-        return array_key_exists(self::RESULT_QUERY_KEY, $query) === false;
+        // These parameters belong only to short-lived browser result flows;
+        // accepting them in canonical navigation would make those flows ambiguous.
+        return array_key_exists(self::RESULT_QUERY_KEY, $query) === false
+            && array_key_exists(self::FORM_RESULT_QUERY_KEY, $query) === false;
     }
 
     public static function isHostedCheckoutUrl(?string $value): bool

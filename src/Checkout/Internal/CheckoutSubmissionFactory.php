@@ -40,6 +40,14 @@ final readonly class CheckoutSubmissionFactory
 
     public function create(CheckoutSubmissionInput $input, DateTimeImmutable $acceptedAt): CheckoutSubmission
     {
+        return $this->createAuthorized(
+            authorization: $this->authorize($input, $acceptedAt),
+            acceptedAt: $acceptedAt,
+        );
+    }
+
+    public function authorize(CheckoutSubmissionInput $input, DateTimeImmutable $checkedAt): CheckoutSubmissionAuthorization
+    {
         $uiMode = $this->configuration->settings()->uiMode();
 
         if ($uiMode === UiMode::Embedded && $input->isJson() === false) {
@@ -66,7 +74,23 @@ final readonly class CheckoutSubmissionFactory
             cart: $cart,
         );
         // Verify browser authority before resolver callbacks; purchase acceptance follows successful resolution.
-        $this->attemptStore->load($input->attemptToken(), $context, $acceptedAt);
+        $attempt = $this->attemptStore->load($input->attemptToken(), $context, $checkedAt);
+
+        return new CheckoutSubmissionAuthorization(
+            input: $input,
+            attempt: $attempt,
+            context: $context,
+            cart: $cart,
+        );
+    }
+
+    public function createAuthorized(
+        CheckoutSubmissionAuthorization $authorization,
+        DateTimeImmutable $acceptedAt,
+    ): CheckoutSubmission {
+        $input = $authorization->input();
+        $cart = $authorization->cart();
+        $context = $authorization->context();
         $shipping = $cart !== null
             ? $this->resolver->shippingContext($cart->shippingCountry())
             : $this->resolver->directShippingContext($input->shippingCountry());

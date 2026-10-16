@@ -15,6 +15,7 @@ use ProgrammatorDev\StripeCheckout\Cart\Internal\CartViewFactory;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\KirbySessionCartStore;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\BrowserAttemptStore;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutBootstrapFactory;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutFormResultStore;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutPreparationFactory;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutResolver;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionCreator;
@@ -110,7 +111,13 @@ final class RuntimeFactory
             checkoutUrlBuilder: new CheckoutUrlBuilder($this->kirby),
             cartStore: new KirbySessionCartStore($session, Uuid::generate(...)),
             attemptStore: new BrowserAttemptStore($session),
+            formResultStore: new CheckoutFormResultStore($session),
         );
+    }
+
+    public function checkoutFormResultStore(): CheckoutFormResultStore
+    {
+        return new CheckoutFormResultStore($this->kirby->session());
     }
 
     public function checkoutSubmissionFactory(): CheckoutSubmissionFactory
