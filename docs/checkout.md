@@ -1,8 +1,8 @@
 # Checkout bootstrap and JSON submission
 
-`checkout()` prepares private form or JSON data for one browser checkout action. It creates no Order or Stripe resource and does not resolve products, prices or shipping quotes.
+`checkout()` prepares private submission data for one browser checkout action. It creates no Order or Stripe resource and does not resolve products, prices or shipping quotes.
 
-Bootstrap and JSON submission are available now. Hosted form redirects, pending/error pages and browser return routes are still being implemented; this guide does not describe a complete production checkout integration.
+Bootstrap and JSON submission are available now. Browser return routes are still being implemented, so this guide does not describe a complete production checkout integration.
 
 ```php
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
@@ -108,7 +108,7 @@ A temporarily unavailable duplicate presentation read receives `503` with `check
 
 Known errors expose no raw callback/provider details. All endpoint responses are private/no-store and use `Referrer-Policy: no-referrer`, with no permissive CORS. Treat authorized URLs and client secrets as ephemeral private values; do not persist them in content, session state, analytics or logs.
 
-This implementation step supports JSON requests and responses. HTML responses and hosted form submissions remain unavailable (`406`) until the pending/error presentation step is implemented. The accepted hosted form design will provide `303` redirects and explicit same-action retry controls.
+This implementation supports JSON requests and responses. HTML responses and hosted form submissions are unavailable (`406`). The same JSON response carries either presentation data or the safe error that the initiating storefront can display; there are no separate plugin pending/error pages.
 
 ## Browser ownership and lifetime
 

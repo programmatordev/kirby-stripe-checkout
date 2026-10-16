@@ -289,7 +289,7 @@ final class CheckoutRoutesTest extends KirbyTestCase
         yield ['OPTIONS'];
     }
 
-    public function testFormSubmissionWaitsForTheHostedPresentationStep(): void
+    public function testFormSubmissionIsRejectedBeforeCreation(): void
     {
         $body = $this->submission();
         $body['csrf'] = (string) $this->kirby->csrf();
