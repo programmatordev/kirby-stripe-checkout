@@ -29,6 +29,8 @@ use Stripe\ShippingRate;
 /** Builds the protected standard Stripe Checkout Session request. */
 final class SessionRequestBuilder
 {
+    private const SHIPPING_QUOTE_MISMATCH_MESSAGE = 'The initiating shipping quote does not match the order.';
+
     private const INTEGRATION_IDENTIFIER_PREFIX = 'kirby_stripe_checkout_';
 
     public function __construct(
@@ -46,14 +48,14 @@ final class SessionRequestBuilder
 
         // Certify the transient quote against the frozen purchase before its mapped request becomes the attempt's permanent initiating evidence.
         if ($order->requiresShipping() !== $hasShipping) {
-            throw new LogicException('The initiating shipping quote does not match the order.');
+            throw new LogicException(self::SHIPPING_QUOTE_MISMATCH_MESSAGE);
         }
 
         if ($initiatingShipping !== null && (
             $initiatingShipping->currency() !== $order->currency()
             || $initiatingShipping->matches($order) === false
         )) {
-            throw new LogicException('The initiating shipping quote does not match the order.');
+            throw new LogicException(self::SHIPPING_QUOTE_MISMATCH_MESSAGE);
         }
 
         // Keep the same order correlation on both Stripe resources because later lifecycle events may expose either the Session or PaymentIntent.

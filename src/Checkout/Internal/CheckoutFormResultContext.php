@@ -11,6 +11,8 @@ use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 /** @internal Browser and initiating-page binding for one redirected form result. */
 final readonly class CheckoutFormResultContext
 {
+    private const INVALID_CONTEXT_MESSAGE = 'Invalid Checkout form result context.';
+
     private function __construct(
         private CheckoutSource $checkoutSource,
         private UiMode $uiMode,
@@ -65,7 +67,7 @@ final readonly class CheckoutFormResultContext
             is_array($data) === false
             || array_diff(array_keys($data), ['source', 'uiMode', 'languageCode', 'userUuid', 'guestReference', 'initiatingUrl']) !== []
         ) {
-            throw new InvalidArgumentException('Invalid Checkout form result context.');
+            throw new InvalidArgumentException(self::INVALID_CONTEXT_MESSAGE);
         }
 
         $checkoutSource = is_string($data['source'] ?? null) ? CheckoutSource::tryFrom($data['source']) : null;
@@ -76,15 +78,15 @@ final readonly class CheckoutFormResultContext
         $initiatingUrl = $data['initiatingUrl'] ?? null;
 
         if ($checkoutSource === null || $uiMode === null) {
-            throw new InvalidArgumentException('Invalid Checkout form result context.');
+            throw new InvalidArgumentException(self::INVALID_CONTEXT_MESSAGE);
         }
 
         if (($userUuid === null) === ($guestReference === null)) {
-            throw new InvalidArgumentException('Invalid Checkout form result context.');
+            throw new InvalidArgumentException(self::INVALID_CONTEXT_MESSAGE);
         }
 
         if (is_string($initiatingUrl) === false || CheckoutUrlValidator::isPersistedDestination($initiatingUrl, false) === false) {
-            throw new InvalidArgumentException('Invalid Checkout form result context.');
+            throw new InvalidArgumentException(self::INVALID_CONTEXT_MESSAGE);
         }
 
         return new self(
@@ -101,13 +103,13 @@ final readonly class CheckoutFormResultContext
     private static function nullableString(array $data, string $key): ?string
     {
         if (array_key_exists($key, $data) === false) {
-            throw new InvalidArgumentException('Invalid Checkout form result context.');
+            throw new InvalidArgumentException(self::INVALID_CONTEXT_MESSAGE);
         }
 
         $value = $data[$key];
 
         if ($value !== null && (is_string($value) === false || $value === '')) {
-            throw new InvalidArgumentException('Invalid Checkout form result context.');
+            throw new InvalidArgumentException(self::INVALID_CONTEXT_MESSAGE);
         }
 
         return $value;

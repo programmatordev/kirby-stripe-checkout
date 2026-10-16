@@ -28,6 +28,8 @@ final class CheckoutCancelEndpoint
 
     private const HTTP_SEE_OTHER = 303;
 
+    private const MISSING_ORDER_REFERENCE_MESSAGE = 'Missing Checkout Order reference.';
+
     public function __construct(private readonly App $kirby) {}
 
     public function respond(): Response
@@ -108,14 +110,14 @@ final class CheckoutCancelEndpoint
         $query = parse_url($this->kirby->request()->url()->toString(), PHP_URL_QUERY);
 
         if (is_string($query) === false) {
-            throw new \InvalidArgumentException('Missing Checkout Order reference.');
+            throw new \InvalidArgumentException(self::MISSING_ORDER_REFERENCE_MESSAGE);
         }
 
         parse_str($query, $parameters);
         $pageUuid = $parameters[CheckoutUrlBuilder::ORDER_QUERY_KEY] ?? null;
 
         if (is_string($pageUuid) === false) {
-            throw new \InvalidArgumentException('Missing Checkout Order reference.');
+            throw new \InvalidArgumentException(self::MISSING_ORDER_REFERENCE_MESSAGE);
         }
 
         return OrderData::uuid($pageUuid);

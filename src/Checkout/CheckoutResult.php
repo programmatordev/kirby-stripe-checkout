@@ -12,6 +12,8 @@ use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 /** One short-lived same-browser Checkout navigation result. */
 final readonly class CheckoutResult
 {
+    private const INCONSISTENT_MESSAGE = 'The Checkout result is inconsistent.';
+
     /** @internal Resolved by the Site API from native session state. */
     public function __construct(
         private CheckoutResultReason $reason,
@@ -22,12 +24,20 @@ final readonly class CheckoutResult
     ) {
         $available = $order !== null;
 
-        if (
-            $available !== ($checkoutStatus !== null)
-            || $available !== ($paymentStatus !== null)
-            || $canResumeCheckout && ($available === false || $reason !== CheckoutResultReason::EmbeddedReturn)
-        ) {
-            throw new InvalidArgumentException('The Checkout result is inconsistent.');
+        if ($available !== ($checkoutStatus !== null)) {
+            throw new InvalidArgumentException(self::INCONSISTENT_MESSAGE);
+        }
+
+        if ($available !== ($paymentStatus !== null)) {
+            throw new InvalidArgumentException(self::INCONSISTENT_MESSAGE);
+        }
+
+        if ($canResumeCheckout && $available === false) {
+            throw new InvalidArgumentException(self::INCONSISTENT_MESSAGE);
+        }
+
+        if ($canResumeCheckout && $reason !== CheckoutResultReason::EmbeddedReturn) {
+            throw new InvalidArgumentException(self::INCONSISTENT_MESSAGE);
         }
     }
 

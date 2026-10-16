@@ -14,6 +14,8 @@ use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
  */
 final readonly class CheckoutSubmissionInput
 {
+    private const INVALID_FORM_RESULT_INPUT_MESSAGE = 'Invalid Checkout form result input.';
+
     /** @param list<ProductRequest> $items Empty for Cart; non-empty for Direct. */
     public function __construct(
         private CheckoutSource $checkoutSource,
@@ -112,7 +114,7 @@ final readonly class CheckoutSubmissionInput
             is_array($data) === false
             || array_diff(array_keys($data), ['source', 'attemptToken', 'cartRevision', 'items', 'shippingCountry']) !== []
         ) {
-            throw new \InvalidArgumentException('Invalid Checkout form result input.');
+            throw new \InvalidArgumentException(self::INVALID_FORM_RESULT_INPUT_MESSAGE);
         }
 
         $checkoutSource = is_string($data['source'] ?? null)
@@ -123,25 +125,25 @@ final readonly class CheckoutSubmissionInput
         $shippingCountry = $data['shippingCountry'] ?? null;
 
         if ($checkoutSource === null || is_string($attemptToken) === false) {
-            throw new \InvalidArgumentException('Invalid Checkout form result input.');
+            throw new \InvalidArgumentException(self::INVALID_FORM_RESULT_INPUT_MESSAGE);
         }
 
         if ($cartRevision !== null && is_string($cartRevision) === false) {
-            throw new \InvalidArgumentException('Invalid Checkout form result input.');
+            throw new \InvalidArgumentException(self::INVALID_FORM_RESULT_INPUT_MESSAGE);
         }
 
         if ($shippingCountry !== null && is_string($shippingCountry) === false) {
-            throw new \InvalidArgumentException('Invalid Checkout form result input.');
+            throw new \InvalidArgumentException(self::INVALID_FORM_RESULT_INPUT_MESSAGE);
         }
 
         $storedItems = $data['items'] ?? null;
 
         if ($checkoutSource === CheckoutSource::Cart && ($cartRevision === null || $storedItems !== [] || $shippingCountry !== null)) {
-            throw new \InvalidArgumentException('Invalid Checkout form result input.');
+            throw new \InvalidArgumentException(self::INVALID_FORM_RESULT_INPUT_MESSAGE);
         }
 
         if ($checkoutSource === CheckoutSource::Direct && $cartRevision !== null) {
-            throw new \InvalidArgumentException('Invalid Checkout form result input.');
+            throw new \InvalidArgumentException(self::INVALID_FORM_RESULT_INPUT_MESSAGE);
         }
 
         $items = $checkoutSource === CheckoutSource::Direct

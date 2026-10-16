@@ -12,6 +12,8 @@ use Throwable;
 /** @internal Safe form failure and optional exact input for an existing action. */
 final readonly class CheckoutFormResult
 {
+    private const INVALID_RESULT_MESSAGE = 'Invalid Checkout form result.';
+
     public function __construct(
         private CheckoutError $error,
         private CheckoutFormResultContext $context,
@@ -57,13 +59,13 @@ final readonly class CheckoutFormResult
             || array_diff(array_keys($data), ['error', 'context', 'retryInput', 'expiresAt']) !== []
             || is_array($data['error'] ?? null) === false
         ) {
-            throw new InvalidArgumentException('Invalid Checkout form result.');
+            throw new InvalidArgumentException(self::INVALID_RESULT_MESSAGE);
         }
 
         $error = $data['error'];
 
         if (array_diff(array_keys($error), ['code', 'message', 'retryable']) !== []) {
-            throw new InvalidArgumentException('Invalid Checkout form result.');
+            throw new InvalidArgumentException(self::INVALID_RESULT_MESSAGE);
         }
 
         $code = $error['code'] ?? null;
@@ -72,15 +74,15 @@ final readonly class CheckoutFormResult
         $expiresAt = $data['expiresAt'] ?? null;
 
         if (is_string($code) === false || $code === '' || array_key_exists(Catalogue::PREFIX . $code, Catalogue::bundled()['en']) === false) {
-            throw new InvalidArgumentException('Invalid Checkout form result.');
+            throw new InvalidArgumentException(self::INVALID_RESULT_MESSAGE);
         }
 
         if (is_string($message) === false || $message === '') {
-            throw new InvalidArgumentException('Invalid Checkout form result.');
+            throw new InvalidArgumentException(self::INVALID_RESULT_MESSAGE);
         }
 
         if (is_bool($retryable) === false || is_int($expiresAt) === false || $expiresAt < 0) {
-            throw new InvalidArgumentException('Invalid Checkout form result.');
+            throw new InvalidArgumentException(self::INVALID_RESULT_MESSAGE);
         }
 
         try {
@@ -95,7 +97,7 @@ final readonly class CheckoutFormResult
                 expiresAt: $expiresAt,
             );
         } catch (Throwable $error) {
-            throw new InvalidArgumentException('Invalid Checkout form result.', previous: $error);
+            throw new InvalidArgumentException(self::INVALID_RESULT_MESSAGE, previous: $error);
         }
     }
 }

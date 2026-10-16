@@ -11,6 +11,8 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 /** @internal Persistable browser and destination binding for one Checkout result. */
 final readonly class CheckoutResultState
 {
+    private const INVALID_STATE_MESSAGE = 'Invalid Checkout result state.';
+
     public function __construct(
         private CheckoutResultReason $reason,
         private ?string $pageUuid,
@@ -87,7 +89,7 @@ final readonly class CheckoutResultState
             is_array($data) === false
             || array_diff(array_keys($data), ['reason', 'pageUuid', 'userUuid', 'guestReference', 'destinationUrl', 'canResumeCheckout', 'expiresAt']) !== []
         ) {
-            throw new InvalidArgumentException('Invalid Checkout result state.');
+            throw new InvalidArgumentException(self::INVALID_STATE_MESSAGE);
         }
 
         $reason = is_string($data['reason'] ?? null) ? CheckoutResultReason::tryFrom($data['reason']) : null;
@@ -104,7 +106,7 @@ final readonly class CheckoutResultState
             || is_bool($canResumeCheckout) === false
             || is_int($expiresAt) === false
         ) {
-            throw new InvalidArgumentException('Invalid Checkout result state.');
+            throw new InvalidArgumentException(self::INVALID_STATE_MESSAGE);
         }
 
         return new self(
@@ -122,13 +124,13 @@ final readonly class CheckoutResultState
     private static function nullableString(array $data, string $key): ?string
     {
         if (array_key_exists($key, $data) === false) {
-            throw new InvalidArgumentException('Invalid Checkout result state.');
+            throw new InvalidArgumentException(self::INVALID_STATE_MESSAGE);
         }
 
         $value = $data[$key];
 
         if ($value !== null && (is_string($value) === false || $value === '')) {
-            throw new InvalidArgumentException('Invalid Checkout result state.');
+            throw new InvalidArgumentException(self::INVALID_STATE_MESSAGE);
         }
 
         return $value;

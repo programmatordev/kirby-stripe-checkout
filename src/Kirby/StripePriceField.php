@@ -24,6 +24,8 @@ use ProgrammatorDev\StripeCheckout\Stripe\Price\StripePrice;
  */
 final class StripePriceField extends FieldClass
 {
+    private const MISSING_CURRENCY_MESSAGE = 'Store currency is missing.';
+
     private readonly bool $sourceInactive;
 
     /** @param array<string, mixed> $params */
@@ -75,7 +77,7 @@ final class StripePriceField extends FieldClass
             $currency = $settings->currency();
 
             if ($currency === null) {
-                throw new InvalidArgumentException('Store currency is missing.');
+                throw new InvalidArgumentException(self::MISSING_CURRENCY_MESSAGE);
             }
 
             $state = $runtime->stripePriceCatalogue()->cached($currency);
@@ -405,7 +407,7 @@ final class StripePriceField extends FieldClass
         $currency = $runtime->settings()->currency();
 
         if ($currency === null) {
-            throw new InvalidArgumentException('Store currency is missing.');
+            throw new InvalidArgumentException(self::MISSING_CURRENCY_MESSAGE);
         }
 
         return $currency;
