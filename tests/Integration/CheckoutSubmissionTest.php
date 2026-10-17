@@ -18,6 +18,7 @@ use ProgrammatorDev\StripeCheckout\Cart\Internal\KirbySessionCartStore;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptToken;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\BrowserAttemptStore;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSubmissionParser;
 use ProgrammatorDev\StripeCheckout\Checkout\RequestErrorCode;
@@ -97,6 +98,38 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         $this->assertSame(3, $submission->checkout()->items()[0]->quantity());
         $this->assertCount(1, $this->resolved);
         $this->assertSame('revision', $store->read()->revision());
+    }
+
+    public function testConcurrentCartActionsUseTheFirstAcceptedAttemptBeforeAnOrderExists(): void
+    {
+        $cart = new CartSnapshot('cart', 'revision', [new CartEntry('line', new ProductRequest('shirt', 3))], 1, 1, 'PT');
+        $store = new KirbySessionCartStore($this->kirby->session(), static fn(): string => 'cart');
+        $store->mutate(static fn(CartSnapshot $current): CartSnapshot => $cart);
+        $firstBody = $this->bootstrapData(CheckoutSource::Cart);
+        $secondBody = $this->bootstrapData(CheckoutSource::Cart);
+        $this->assertNotSame($firstBody['attemptToken'], $secondBody['attemptToken']);
+
+        $acceptedAt = new DateTimeImmutable();
+        $this->request($firstBody);
+        $first = (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(
+            input: CheckoutSubmissionParser::parse($this->kirby),
+            acceptedAt: $acceptedAt,
+        );
+        $this->request($secondBody);
+        $second = (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(
+            input: CheckoutSubmissionParser::parse($this->kirby),
+            acceptedAt: $acceptedAt->modify('+1 second'),
+        );
+
+        $this->assertSame($first->attempt()->token()->value(), $second->attempt()->token()->value());
+        $this->assertSame($first->retryInput()->attemptToken()->value(), $second->retryInput()->attemptToken()->value());
+        $this->assertSame($first->binding()->fingerprint(), $second->binding()->fingerprint());
+        $this->assertCount(0, (new StripeCheckout($this->kirby))->orders());
+
+        /** @var array{attempts: array<string, array{boundAt: ?int}>} $state */
+        $state = $this->kirby->session()->data()->get(BrowserAttemptStore::KEY);
+        $secondToken = new AttemptToken($secondBody['attemptToken']);
+        $this->assertNull($state['attempts'][$secondToken->hash()]['boundAt']);
     }
 
     #[DataProvider('physicalCheckoutSources')]

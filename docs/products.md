@@ -370,4 +370,4 @@ A custom resolver replaces the Kirby Page resolver. The plugin still checks that
 
 ## Current boundary
 
-Kirby and Stripe Price product resolution, the [PHP cart API](cart.md), [cart HTTP routes](cart-http.md), native orders, protected browser [Checkout](checkout.md), embedded Session resume, and [signed webhooks](webhooks.md) are available. Webhook-only Cart clearing remains pending.
+Kirby and Stripe Price product resolution, the [PHP cart API](cart.md), [cart HTTP routes](cart-http.md), native orders, protected browser [Checkout](checkout.md), embedded Session resume, revision-safe Cart clearing, and [signed webhooks](webhooks.md) are available.

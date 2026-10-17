@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Plugin;
 
 use Closure;
+use DateTimeImmutable;
 use Kirby\Cms\App;
 use Kirby\Cms\Page;
 use Kirby\Content\Field;
@@ -13,6 +14,7 @@ use ProgrammatorDev\StripeCheckout\Cart\Cart;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartMutator;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\CartViewFactory;
 use ProgrammatorDev\StripeCheckout\Cart\Internal\KirbySessionCartStore;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\BrowserAttemptContextResolver;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\BrowserAttemptStore;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutBootstrapFactory;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutFormResultStore;
@@ -25,6 +27,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionReconciler;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSessionRetriever;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSubmissionFactory;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutUrlBuilder;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CompletedCheckoutCartClearer;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\DisputeRetriever;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\IncompleteOrderRecovery;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ProductRequestNormalizer;
@@ -105,14 +108,20 @@ final class RuntimeFactory
     {
         $configuration = $this->configurationReport()->configurationOrFail();
         $session = $this->kirby->session();
+        $cartStore = new KirbySessionCartStore($session, Uuid::generate(...));
+        $attemptStore = new BrowserAttemptStore($session);
 
         return new CheckoutBootstrapFactory(
             kirby: $this->kirby,
             configuration: $configuration,
             requestContextFactory: new SessionRequestContextFactory($this->kirby),
             checkoutUrlBuilder: new CheckoutUrlBuilder($this->kirby),
-            cartStore: new KirbySessionCartStore($session, Uuid::generate(...)),
-            attemptStore: new BrowserAttemptStore($session),
+            cartClearer: $this->createCompletedCheckoutCartClearer(
+                $cartStore,
+                $this->createCartMutator($cartStore),
+                $attemptStore,
+            ),
+            attemptStore: $attemptStore,
             formResultStore: new CheckoutFormResultStore($session),
         );
     }
@@ -157,6 +166,7 @@ final class RuntimeFactory
             resolver: $this->checkoutResolver(),
             cartStore: new KirbySessionCartStore($session, Uuid::generate(...)),
             attemptStore: new BrowserAttemptStore($session),
+            orderPageStore: $this->orderPageStore(),
         );
     }
 
@@ -173,8 +183,13 @@ final class RuntimeFactory
 
         $store = new KirbySessionCartStore($this->kirby->session(), Uuid::generate(...));
         $mutator = $this->createCartMutator($store);
+        $snapshot = $this->createCompletedCheckoutCartClearer(
+            $store,
+            $mutator,
+            new BrowserAttemptStore($this->kirby->session()),
+        )->clearIfCheckoutCompleted(new DateTimeImmutable());
 
-        return $this->cartViewFactory()->create($store->read(), $mutator, $resolve);
+        return $this->cartViewFactory()->create($snapshot, $mutator, $resolve);
     }
 
     /** Browser-return cleanup uses the same guarded mutation without depending on current cart enablement. */
@@ -190,6 +205,20 @@ final class RuntimeFactory
         );
 
         return new CartMutator($cartStore, $requestNormalizer, Uuid::generate(...));
+    }
+
+    private function createCompletedCheckoutCartClearer(
+        KirbySessionCartStore $cartStore,
+        CartMutator $cartMutator,
+        BrowserAttemptStore $attemptStore,
+    ): CompletedCheckoutCartClearer {
+        return new CompletedCheckoutCartClearer(
+            cartStore: $cartStore,
+            cartMutator: $cartMutator,
+            attemptStore: $attemptStore,
+            attemptContextResolver: new BrowserAttemptContextResolver($this->kirby, $attemptStore),
+            orderPageStore: $this->orderPageStore(),
+        );
     }
 
     private function taxCodeValidator(): TaxCodeValidator

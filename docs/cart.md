@@ -2,7 +2,7 @@
 
 The built-in cart works with Kirby's normal browser session. It needs no separate storage setup. Configure the store currency and product fields first; see [Configuration](configuration.md) and [Products](products.md).
 
-Use the PHP API below or the built-in [HTTP routes](cart-http.md) for browser interactions. Checkout submission is not available yet.
+Use the PHP API below or the built-in [HTTP routes](cart-http.md) for browser interactions. The saved Cart can supply the protected browser [Checkout](checkout.md) flow.
 
 ## Add and change items
 
@@ -201,7 +201,9 @@ Rejected input does not change stored selections. A conflict leaves the original
 
 ## Session behavior and disabling
 
-Login, logout, and signing in as another user preserve the same browser's cart. A fresh read uses the current user and site language. Carts are not saved to user accounts or shared between browsers/devices.
+Login, logout, and signing in as another user preserve the same browser's cart. A fresh read uses the current user and site language. Previously issued checkout actions and accepted Orders remain bound to their original guest or user, so call `checkout()` again after authentication changes. The new action keeps the unchanged Cart selections while creating any accepted checkout for the current actor. Carts are not saved to user accounts or shared between browsers/devices.
+
+When a webhook completes an accepted Cart checkout before the browser follows its return URL, the next Cart read, mutation or Cart Checkout bootstrap for the same browser and actor clears that exact Cart only if its UUID and revision are still unchanged. This uses retained browser-attempt state and the local Order without another Stripe request. Any later Cart or actor change prevents the deferred clear.
 
 Kirby's normal session lifetime controls expiry. The plugin does not request a long session, add its own cookie, or need cron. Unrelated plugin operations do not create a cart session. If stored cart data is malformed, only the cart is reset and a safe `cart.session_reset` diagnostic is written to PHP's error log.
 

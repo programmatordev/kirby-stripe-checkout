@@ -6,7 +6,6 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
 use DateTimeImmutable;
 use Kirby\Cms\App;
-use ProgrammatorDev\StripeCheckout\Cart\Internal\CartStoreInterface;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutBootstrap;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
@@ -28,7 +27,7 @@ final class CheckoutBootstrapFactory
         private readonly Configuration $configuration,
         private readonly SessionRequestContextFactory $requestContextFactory,
         private readonly CheckoutUrlBuilder $checkoutUrlBuilder,
-        private readonly CartStoreInterface $cartStore,
+        private readonly CompletedCheckoutCartClearer $cartClearer,
         private readonly BrowserAttemptStore $attemptStore,
         private readonly CheckoutFormResultStore $formResultStore,
     ) {}
@@ -50,9 +49,11 @@ final class CheckoutBootstrapFactory
             ? $this->kirby->request()->url()->toString()
             : null;
         $initiatingUrl = $this->requestContextFactory->initiatingUrl($languageCode, $requestUrl);
+        $now = new DateTimeImmutable();
+        // Apply locally reconciled completion before issuing an action that could bind the stale Cart.
         // Capture saved input without invoking product or shipping resolvers just to render a form.
         $cart = $checkoutSource === CheckoutSource::Cart
-            ? $this->cartStore->read()
+            ? $this->cartClearer->clearIfCheckoutCompleted($now)
             : null;
         $csrf = (string) $this->kirby->csrf();
         $context = BrowserAttemptContext::capture(
@@ -63,7 +64,6 @@ final class CheckoutBootstrapFactory
             csrf: $csrf,
             cart: $cart,
         );
-        $now = new DateTimeImmutable();
         $formResult = $this->formResult($requestUrl, $now);
         $error = null;
         $submissionInput = null;

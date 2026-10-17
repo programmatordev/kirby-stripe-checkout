@@ -2,7 +2,7 @@
 
 The plugin registers `POST /stripe-checkout/webhook` automatically through its Composer bootstrap. The endpoint has no language prefix and remains available when the built-in cart is disabled. It needs neither a browser session nor a CSRF token; Stripe's signature authenticates the delivery.
 
-Customer Checkout submission, authoritative browser return routes and embedded Session resume are available; webhook-only Cart clearing is still under development. This endpoint reconciles orders already created by the plugin's protected Checkout workflow; it does not create an order from an arbitrary Stripe event.
+Customer Checkout submission, authoritative browser return routes, embedded Session resume and deferred same-browser Cart clearing are available. This endpoint reconciles orders already created by the plugin's protected Checkout workflow; it does not create an order from an arbitrary Stripe event.
 
 ## Configure Stripe
 
@@ -53,6 +53,8 @@ Use the server key for the same account and mode as the destination. Keep both s
 The endpoint verifies the original request bytes with the Stripe SDK and its default five-minute timestamp tolerance. Keep the server clock accurate and preserve the body and `Stripe-Signature` header through any proxy. Stripe can include overlapping signatures during secret rotation. See [Stripe's signature guidance](https://docs.stripe.com/webhooks/signature).
 
 For a supported plugin-owned event, the saved order reference identifies the purchase. The reconciler retrieves current Stripe resources and commits validated payment and Checkout facts together. A browser return is not proof of payment. An older event therefore cannot overwrite a newer payment result merely because it arrives later.
+
+When a webhook completes Checkout before the customer follows a browser return, the webhook does not mutate browser session state. On the next Cart read, Cart mutation or Cart Checkout bootstrap by the same browser and actor, the plugin checks its retained accepted attempts and the local Order. It clears only the exact unchanged Cart correlated with a complete Order and makes no additional Stripe request. A changed Cart, Direct checkout, changed actor or another browser remains untouched.
 
 An early Checkout event can repair a missing local Session association. A requires-action event arriving before that association returns `503`; a later delivery can use the saved backlink. This waits only for correlation evidence, not for Checkout completion.
 

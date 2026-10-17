@@ -2,7 +2,7 @@
 
 `checkout()` prepares private submission data for one browser checkout action. It creates no Order or Stripe resource and does not resolve products, prices or shipping quotes.
 
-Bootstrap, hosted form submission, JSON submission, hosted success/cancellation, embedded return and embedded Session resume are available now. Webhook-only Cart clearing is still being implemented, so this guide does not yet describe the complete browser integration.
+Bootstrap, hosted form submission, JSON submission, hosted success/cancellation, embedded return, embedded Session resume and deferred Cart clearing after webhook-only completion are available now.
 
 ```php
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
@@ -34,6 +34,8 @@ Configure the store currency, Stripe secret key and webhook signing secret befor
 JSON serialization returns the same data as `toArray()`.
 
 Submission fields are `csrf`, `source`, `attemptToken`, and, for Cart, `revision`. Direct does not include a revision. Retain the issued fields together; do not fetch a fresh revision to submit an older form. For JSON submission, the CSRF value belongs in `X-CSRF`, with the remaining submission fields in the body. Escape values when rendering them into HTML.
+
+Calling `checkout()` in multiple tabs can issue different action tokens for the same unchanged Cart. The first accepted submission claims that Cart UUID and revision for the current browser actor. Later submissions for that exact Cart state reuse the same Order and Stripe Checkout Session instead of creating competing purchases. A Cart change starts a new revision and may create an independent Order and Session; the plugin does not expire an earlier open Session because the customer may still be using it. An expired Session or a definitive Session-creation failure allows a replacement Order for the same revision.
 
 After a hosted form failure that must reuse an existing attempt, Direct submission data additionally contains the exact normalized `items` and optional `shippingCountry` to render unchanged. Ordinary validation and definitive pre-attempt failures receive a fresh action instead.
 
@@ -119,6 +121,8 @@ This action copy follows the result's same-browser, same-destination, one-use an
 Every browser result reference is bound to its native session and exact destination, expires after 15 minutes and is consumed once. Keep the same `$stripeCheckout` object when a template reads the result or creates its next bootstrap; that object memoizes the consumed value.
 
 An authoritative complete return clears only the unchanged Cart from the initiating browser. A changed Cart, Direct checkout, missing browser binding, open/expired Session or unavailable read is preserved. Reconciliation still runs without browser authority, but that request cannot expose an Order result or clear browser state. External destinations receive no result reference; a matching local Cart may still be cleared after authoritative completion.
+
+If a webhook completes Checkout and the browser never follows the return URL, the next Cart read, Cart mutation or Cart Checkout bootstrap for the same browser and actor checks the retained accepted attempt against the local Order. It clears only the exact initiating Cart while its UUID and revision remain unchanged, without calling Stripe. A changed Cart, Direct checkout, incomplete Order, missing accepted attempt, changed actor or another browser is preserved.
 
 Embedded resume is intended for a customer who leaves Embedded Checkout for an external payment step and returns without completing Checkout. For example, a bank authorization may be cancelled or fail while the Stripe Checkout Session remains open. The return destination can then mount that same Session again so the customer can retry or choose another payment method without creating another Order or Session.
 

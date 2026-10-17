@@ -8,6 +8,7 @@ use Brick\Money\Money;
 use Closure;
 use DateTimeImmutable;
 use Kirby\Cms\App;
+use Kirby\Cms\User;
 use Kirby\Http\Environment;
 use Kirby\Http\Request;
 use Kirby\Http\Response;
@@ -61,6 +62,7 @@ final class CheckoutRoutesTest extends KirbyTestCase
     private string $sessionStatus = 'open';
     private string $sessionPaymentStatus = 'unpaid';
     private string $paymentIntentStatus = 'requires_payment_method';
+    private string $createdSessionId = 'cs_test_browser';
     /** @var array<string, mixed>|null */
     private ?array $paymentNextAction = null;
     private string $price = '16.00';
@@ -116,6 +118,116 @@ final class CheckoutRoutesTest extends KirbyTestCase
         yield 'hosted direct' => [UiMode::Hosted, CheckoutSource::Direct];
         yield 'embedded cart' => [UiMode::Embedded, CheckoutSource::Cart];
         yield 'embedded direct' => [UiMode::Embedded, CheckoutSource::Direct];
+    }
+
+    #[DataProvider('cartCheckoutModes')]
+    public function testCartTabsReuseTheFirstAcceptedOrderAndSession(UiMode $uiMode): void
+    {
+        $this->restart($uiMode);
+        $stripeCheckout = new StripeCheckout($this->kirby);
+        $stripeCheckout->cart()?->add('product', 2);
+        $firstBody = $stripeCheckout->checkout(CheckoutSource::Cart)->submissionData();
+        $secondBody = (new StripeCheckout($this->kirby))->checkout(CheckoutSource::Cart)->submissionData();
+        unset($firstBody['csrf'], $secondBody['csrf']);
+        $this->assertNotSame($firstBody['attemptToken'], $secondBody['attemptToken']);
+        $firstRevision = $firstBody['revision'] ?? null;
+        $secondRevision = $secondBody['revision'] ?? null;
+        $this->assertIsString($firstRevision);
+        $this->assertSame($firstRevision, $secondRevision);
+
+        $created = $this->send($firstBody);
+        $reused = $this->send($secondBody);
+
+        $this->assertSame(201, $created->code());
+        $this->assertSame(200, $reused->code());
+        $this->assertSame($this->body($created), $this->body($reused));
+        $this->assertSame(['post', 'get'], array_column($this->requests, 'method'));
+        $this->assertCount(1, (new OrderPageStore($this->kirby))->orders());
+        $secondPageUuid = OrderData::pageUuid((new AttemptToken($secondBody['attemptToken']))->orderUuid());
+        $this->assertNull((new OrderPageStore($this->kirby))->order($secondPageUuid));
+    }
+
+    /** @return iterable<string, array{UiMode}> */
+    public static function cartCheckoutModes(): iterable
+    {
+        yield 'hosted' => [UiMode::Hosted];
+        yield 'embedded' => [UiMode::Embedded];
+    }
+
+    public function testChangedCartRevisionCreatesAnIndependentOrderAndSession(): void
+    {
+        $stripeCheckout = new StripeCheckout($this->kirby);
+        $cart = $stripeCheckout->cart();
+        $this->assertNotNull($cart);
+        $cart->add('product', 2);
+        $firstBody = $stripeCheckout->checkout(CheckoutSource::Cart)->submissionData();
+        unset($firstBody['csrf']);
+        $this->assertSame(201, $this->send($firstBody)->code());
+
+        $item = $cart->items()[0];
+        $cart->update($item->id(), 3);
+        $secondBody = (new StripeCheckout($this->kirby))->checkout(CheckoutSource::Cart)->submissionData();
+        unset($secondBody['csrf']);
+        $firstRevision = $firstBody['revision'] ?? null;
+        $secondRevision = $secondBody['revision'] ?? null;
+        $this->assertIsString($firstRevision);
+        $this->assertIsString($secondRevision);
+        $this->assertNotSame($firstRevision, $secondRevision);
+        $this->createdSessionId = 'cs_test_changed_cart';
+
+        $this->assertSame(201, $this->send($secondBody)->code());
+
+        $firstOrder = $this->orderData($firstBody);
+        $secondOrder = $this->orderData($secondBody);
+        $this->assertSame(CheckoutStatus::Open->value, $firstOrder['checkoutStatus']);
+        $this->assertSame('cs_test_browser', $firstOrder['stripeCheckoutSessionId']);
+        $this->assertSame(CheckoutStatus::Open->value, $secondOrder['checkoutStatus']);
+        $this->assertSame('cs_test_changed_cart', $secondOrder['stripeCheckoutSessionId']);
+        $this->assertSame(['post', 'post'], array_column($this->requests, 'method'));
+        $this->assertCount(2, (new OrderPageStore($this->kirby))->orders());
+    }
+
+    public function testLoginPreservesTheCartButCreatesCheckoutForTheNewActor(): void
+    {
+        /** @var User $user */
+        $user = $this->kirby->impersonate('kirby', fn() => $this->kirby->users()->create([
+            'email' => 'checkout@example.test',
+            'role' => 'admin',
+            'password' => 'test-password-123',
+        ]));
+        $stripeCheckout = new StripeCheckout($this->kirby);
+        $cart = $stripeCheckout->cart();
+        $this->assertNotNull($cart);
+        $cart->add('product', 2);
+        $guestBody = $stripeCheckout->checkout(CheckoutSource::Cart)->submissionData();
+        unset($guestBody['csrf']);
+        $this->assertSame(201, $this->send($guestBody)->code());
+
+        $guestRevision = $guestBody['revision'] ?? null;
+        $this->assertIsString($guestRevision);
+        $user->loginPasswordless();
+        $userCheckout = new StripeCheckout($this->kirby);
+        $userCart = $userCheckout->cart();
+        $this->assertNotNull($userCart);
+        $this->assertSame($guestRevision, $userCart->revision());
+        $userBody = $userCheckout->checkout(CheckoutSource::Cart)->submissionData();
+        unset($userBody['csrf']);
+        $userRevision = $userBody['revision'] ?? null;
+        $this->assertIsString($userRevision);
+        $this->assertSame($guestRevision, $userRevision);
+        $this->assertNotSame($guestBody['attemptToken'], $userBody['attemptToken']);
+        $this->createdSessionId = 'cs_test_signed_in';
+
+        $this->assertSame(201, $this->send($userBody)->code());
+
+        $guestOrder = $this->orderData($guestBody);
+        $userOrder = $this->orderData($userBody);
+        $this->assertArrayNotHasKey('userUuid', $guestOrder);
+        $this->assertSame($user->uuid()->toString(), $userOrder['userUuid']);
+        $this->assertSame('cs_test_browser', $guestOrder['stripeCheckoutSessionId']);
+        $this->assertSame('cs_test_signed_in', $userOrder['stripeCheckoutSessionId']);
+        $this->assertSame(['post', 'post'], array_column($this->requests, 'method'));
+        $this->assertCount(2, (new OrderPageStore($this->kirby))->orders());
     }
 
     public function testUncertainMutationRetriesTheExactSavedRequestAndKey(): void
@@ -214,6 +326,46 @@ final class CheckoutRoutesTest extends KirbyTestCase
     {
         yield 'completed before webhook' => ['complete'];
         yield 'expired before webhook' => ['expired'];
+    }
+
+    public function testCompletedCartOrderClosesOtherActionsForTheSameCart(): void
+    {
+        $stripeCheckout = new StripeCheckout($this->kirby);
+        $stripeCheckout->cart()?->add('product', 2);
+        $firstBody = $stripeCheckout->checkout(CheckoutSource::Cart)->submissionData();
+        $secondBody = (new StripeCheckout($this->kirby))->checkout(CheckoutSource::Cart)->submissionData();
+        unset($firstBody['csrf'], $secondBody['csrf']);
+        $this->assertSame(201, $this->send($firstBody)->code());
+
+        $this->sessionStatus = 'complete';
+        $this->sessionPaymentStatus = 'paid';
+        $this->paymentIntentStatus = 'succeeded';
+        $pageUuid = OrderData::pageUuid((new AttemptToken($firstBody['attemptToken']))->orderUuid());
+        (new RuntimeFactory($this->kirby))->checkoutSessionReconciler()->reconcile($pageUuid, 'cs_test_browser');
+
+        $this->assertError($this->send($secondBody), 409, 'checkout.attempt_closed', false);
+        $this->assertCount(1, array_filter($this->requests, static fn(array $request): bool => $request['method'] === 'post'));
+        $this->assertCount(1, (new OrderPageStore($this->kirby))->orders());
+    }
+
+    public function testCreationFailureAllowsANewOrderForTheUnchangedCart(): void
+    {
+        $body = $this->submission(CheckoutSource::Cart);
+        $this->providerStatus = 400;
+        $this->assertError($this->send($body), 502, 'checkout.session_rejected', false);
+        $this->assertSame(CheckoutStatus::CreationFailed->value, $this->orderData($body)['checkoutStatus']);
+
+        $this->providerStatus = null;
+        $replacement = (new StripeCheckout($this->kirby))->checkout(CheckoutSource::Cart)->submissionData();
+        unset($replacement['csrf']);
+        $this->assertNotSame($body['attemptToken'], $replacement['attemptToken']);
+        $bodyRevision = $body['revision'] ?? null;
+        $replacementRevision = $replacement['revision'] ?? null;
+        $this->assertIsString($bodyRevision);
+        $this->assertSame($bodyRevision, $replacementRevision);
+        $this->assertSame(201, $this->send($replacement)->code());
+        $this->assertCount(2, (new OrderPageStore($this->kirby))->orders());
+        $this->assertCount(2, array_filter($this->requests, static fn(array $request): bool => $request['method'] === 'post'));
     }
 
     public function testClosedProviderResultStillRequiresTheSavedSessionIdentity(): void
@@ -695,6 +847,121 @@ final class CheckoutRoutesTest extends KirbyTestCase
     {
         yield 'hosted success' => [UiMode::Hosted, 'success_url', CheckoutResultReason::HostedSuccess];
         yield 'embedded completion' => [UiMode::Embedded, 'return_url', CheckoutResultReason::EmbeddedReturn];
+    }
+
+    public function testWebhookOnlyCompletionClearsTheExactCartOnItsNextReadWithoutAProviderRequest(): void
+    {
+        $body = $this->submission(CheckoutSource::Cart);
+        $this->assertSame(201, $this->send($body)->code());
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $originalRevision = $cart->revision();
+        $this->sessionStatus = 'complete';
+        $this->sessionPaymentStatus = 'paid';
+        $this->paymentIntentStatus = 'succeeded';
+        $attemptToken = $body['attemptToken'];
+        $this->assertIsString($attemptToken);
+        $pageUuid = OrderData::pageUuid((new AttemptToken($attemptToken))->orderUuid());
+        (new RuntimeFactory($this->kirby))->checkoutSessionReconciler()->reconcile($pageUuid, 'cs_test_browser');
+        $providerRequestCount = count($this->requests);
+
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $this->assertNotSame($originalRevision, $cart->revision());
+        $this->assertSame(0, $cart->count());
+        $this->assertCount($providerRequestCount, $this->requests);
+    }
+
+    public function testWebhookOnlyCompletionPreservesACartChangedAfterCheckoutStarted(): void
+    {
+        $body = $this->submission(CheckoutSource::Cart);
+        $this->assertSame(201, $this->send($body)->code());
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $cart->add('product');
+        $changedRevision = $cart->revision();
+        $this->sessionStatus = 'complete';
+        $this->sessionPaymentStatus = 'paid';
+        $this->paymentIntentStatus = 'succeeded';
+        $attemptToken = $body['attemptToken'];
+        $this->assertIsString($attemptToken);
+        $pageUuid = OrderData::pageUuid((new AttemptToken($attemptToken))->orderUuid());
+        (new RuntimeFactory($this->kirby))->checkoutSessionReconciler()->reconcile($pageUuid, 'cs_test_browser');
+        $providerRequestCount = count($this->requests);
+
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $this->assertSame($changedRevision, $cart->revision());
+        $this->assertSame(3, $cart->totalQuantity());
+        $this->assertCount($providerRequestCount, $this->requests);
+    }
+
+    public function testCartCheckoutBootstrapAppliesDeferredWebhookCompletionBeforeIssuingANewAction(): void
+    {
+        $body = $this->submission(CheckoutSource::Cart);
+        $this->assertSame(201, $this->send($body)->code());
+        $this->sessionStatus = 'complete';
+        $this->sessionPaymentStatus = 'paid';
+        $this->paymentIntentStatus = 'succeeded';
+        $attemptToken = $body['attemptToken'];
+        $this->assertIsString($attemptToken);
+        $pageUuid = OrderData::pageUuid((new AttemptToken($attemptToken))->orderUuid());
+        (new RuntimeFactory($this->kirby))->checkoutSessionReconciler()->reconcile($pageUuid, 'cs_test_browser');
+        $providerRequestCount = count($this->requests);
+
+        $submissionData = (new StripeCheckout($this->kirby))->checkout()->submissionData();
+        $this->assertArrayHasKey('revision', $body);
+        $this->assertArrayHasKey('revision', $submissionData);
+        $this->assertNotSame($body['revision'], $submissionData['revision']);
+        $this->assertCount($providerRequestCount, $this->requests);
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $this->assertSame(0, $cart->count());
+    }
+
+    public function testCartMutationAfterWebhookOnlyCompletionStartsFromTheClearedCart(): void
+    {
+        $body = $this->submission(CheckoutSource::Cart);
+        $this->assertSame(201, $this->send($body)->code());
+        $this->sessionStatus = 'complete';
+        $this->sessionPaymentStatus = 'paid';
+        $this->paymentIntentStatus = 'succeeded';
+        $attemptToken = $body['attemptToken'];
+        $this->assertIsString($attemptToken);
+        $pageUuid = OrderData::pageUuid((new AttemptToken($attemptToken))->orderUuid());
+        (new RuntimeFactory($this->kirby))->checkoutSessionReconciler()->reconcile($pageUuid, 'cs_test_browser');
+        $providerRequestCount = count($this->requests);
+
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $cart->add('product');
+        $this->assertSame(1, $cart->totalQuantity());
+        $this->assertCount($providerRequestCount, $this->requests);
+    }
+
+    public function testWebhookOnlyDirectCompletionDoesNotClearTheCurrentCart(): void
+    {
+        $stripeCheckout = new StripeCheckout($this->kirby);
+        $cart = $stripeCheckout->cart();
+        $this->assertNotNull($cart);
+        $cart->add('product');
+        $cartRevision = $cart->revision();
+        $body = $this->submission();
+        $this->assertSame(201, $this->send($body)->code());
+        $this->sessionStatus = 'complete';
+        $this->sessionPaymentStatus = 'paid';
+        $this->paymentIntentStatus = 'succeeded';
+        $attemptToken = $body['attemptToken'];
+        $this->assertIsString($attemptToken);
+        $pageUuid = OrderData::pageUuid((new AttemptToken($attemptToken))->orderUuid());
+        (new RuntimeFactory($this->kirby))->checkoutSessionReconciler()->reconcile($pageUuid, 'cs_test_browser');
+        $providerRequestCount = count($this->requests);
+
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $this->assertSame($cartRevision, $cart->revision());
+        $this->assertSame(1, $cart->totalQuantity());
+        $this->assertCount($providerRequestCount, $this->requests);
     }
 
     public function testEmbeddedOpenReturnUsesItsReturnDestinationWithoutClearingTheCart(): void
@@ -1230,7 +1497,7 @@ final class CheckoutRoutesTest extends KirbyTestCase
                 /** @var array<string, mixed> $parameters */
                 $this->sessionRequest = $parameters;
                 $this->session = [
-                    'id' => 'cs_test_browser',
+                    'id' => $this->createdSessionId,
                     'object' => 'checkout.session',
                     'created' => $expiresAt - 86400,
                     'expires_at' => $expiresAt,
@@ -1243,8 +1510,8 @@ final class CheckoutRoutesTest extends KirbyTestCase
                     'client_reference_id' => $parameters['client_reference_id'],
                     'integration_identifier' => $parameters['integration_identifier'],
                     'metadata' => $parameters['metadata'],
-                    'url' => $parameters['ui_mode'] === 'hosted_page' ? 'https://checkout.stripe.com/c/pay/cs_test_browser' : null,
-                    'client_secret' => $parameters['ui_mode'] === 'embedded_page' ? 'cs_test_browser_secret_private' : null,
+                    'url' => $parameters['ui_mode'] === 'hosted_page' ? 'https://checkout.stripe.com/c/pay/' . $this->createdSessionId : null,
+                    'client_secret' => $parameters['ui_mode'] === 'embedded_page' ? $this->createdSessionId . '_secret_private' : null,
                     'shipping_options' => isset($parameters['shipping_options']) ? [['shipping_rate' => 'shr_browser_standard']] : [],
                 ];
             }

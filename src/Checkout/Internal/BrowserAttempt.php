@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
@@ -77,7 +78,7 @@ final readonly class BrowserAttempt
             issuedAt: $this->issuedAt,
             bindingFingerprint: $binding->fingerprint(),
             boundAt: $boundAt,
-            acceptedInput: $this->context->uiMode() === UiMode::Embedded
+            acceptedInput: $this->context->uiMode() === UiMode::Embedded || $this->context->checkoutSource() === CheckoutSource::Cart
                 ? $acceptedInput
                 : null,
         );
@@ -86,8 +87,8 @@ final readonly class BrowserAttempt
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        // An accepted embedded action must retain its exact normalized input so a return can resume
-        // the same Session. Unused actions still keep the raw transport token only in the browser.
+        // Embedded resume and Cart-level winner recovery need the exact normalized accepted input.
+        // Unused actions and accepted hosted Direct actions keep the raw transport token only in the browser.
         return [
             'pageUuid' => OrderData::pageUuid($this->token->orderUuid()),
             'context' => $this->context->toArray(),
@@ -132,6 +133,7 @@ final readonly class BrowserAttempt
         $boundAt = $data['boundAt'];
         $acceptedInputData = $data['acceptedInput'];
         $context = BrowserAttemptContext::fromArray($data['context'] ?? null);
+        $retainsAcceptedInput = $context->uiMode() === UiMode::Embedded || $context->checkoutSource() === CheckoutSource::Cart;
 
         if ($bindingFingerprint !== null && (is_string($bindingFingerprint) === false || $bindingFingerprint === '')) {
             throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_TOKEN_INVALID);
@@ -150,11 +152,11 @@ final readonly class BrowserAttempt
             throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_TOKEN_INVALID);
         }
 
-        if ($bindingFingerprint !== null && $context->uiMode() === UiMode::Embedded && $acceptedInputData === null) {
+        if ($bindingFingerprint !== null && $retainsAcceptedInput && $acceptedInputData === null) {
             throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_TOKEN_INVALID);
         }
 
-        if ($context->uiMode() !== UiMode::Embedded && $acceptedInputData !== null) {
+        if ($retainsAcceptedInput === false && $acceptedInputData !== null) {
             throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_TOKEN_INVALID);
         }
 

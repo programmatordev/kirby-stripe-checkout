@@ -7,7 +7,9 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 use Closure;
 use DateTimeImmutable;
 use Kirby\Session\Session;
+use ProgrammatorDev\StripeCheckout\Cart\Internal\CartSnapshot;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use Throwable;
@@ -73,19 +75,68 @@ final class BrowserAttemptStore
         return $this->access($token, $context, $checkedAt);
     }
 
+    /** @param list<string> $nonBlockingOrderPageUuids */
     public function bind(
         AttemptToken $token,
         BrowserAttemptContext $context,
         AttemptBinding $binding,
         CheckoutSubmissionInput $acceptedInput,
         DateTimeImmutable $boundAt,
+        array $nonBlockingOrderPageUuids = [],
     ): BrowserAttempt {
-        return $this->access($token, $context, $boundAt, $binding, $acceptedInput);
+        return $this->access(
+            token: $token,
+            context: $context,
+            checkedAt: $boundAt,
+            binding: $binding,
+            acceptedInput: $acceptedInput,
+            nonBlockingOrderPageUuids: $nonBlockingOrderPageUuids,
+        );
     }
 
     public static function retainedUntil(BrowserAttempt $attempt): int
     {
         return ($attempt->boundAt() ?? $attempt->issuedAt()) + self::RETENTION_SECONDS;
+    }
+
+    /** @return list<string> Accepted Order Page UUIDs bound to this exact Cart state. */
+    public function acceptedOrderPageUuidsForCart(
+        CartSnapshot $cart,
+        DateTimeImmutable $checkedAt,
+    ): array {
+        return $this->locked(function () use ($cart, $checkedAt): array {
+            $pageUuids = [];
+
+            foreach ($this->current($checkedAt->getTimestamp()) as $data) {
+                $pageUuid = $data['pageUuid'] ?? null;
+
+                if (is_string($pageUuid) === false) {
+                    continue;
+                }
+
+                try {
+                    $context = BrowserAttempt::boundContextFromArray($pageUuid, $data);
+                } catch (Throwable) {
+                    continue;
+                }
+
+                if ($context->checkoutSource() !== CheckoutSource::Cart) {
+                    continue;
+                }
+
+                if ($context->cartId() !== $cart->id()) {
+                    continue;
+                }
+
+                if ($context->cartRevision() !== $cart->revision()) {
+                    continue;
+                }
+
+                $pageUuids[] = $pageUuid;
+            }
+
+            return $pageUuids;
+        });
     }
 
     public function findBoundContextForOrder(
@@ -167,14 +218,16 @@ final class BrowserAttemptStore
         });
     }
 
+    /** @param list<string> $nonBlockingOrderPageUuids */
     private function access(
         AttemptToken $token,
         BrowserAttemptContext $context,
         DateTimeImmutable $checkedAt,
         ?AttemptBinding $binding = null,
         ?CheckoutSubmissionInput $acceptedInput = null,
+        array $nonBlockingOrderPageUuids = [],
     ): BrowserAttempt {
-        return $this->locked(function () use ($token, $context, $checkedAt, $binding, $acceptedInput): BrowserAttempt {
+        return $this->locked(function () use ($token, $context, $checkedAt, $binding, $acceptedInput, $nonBlockingOrderPageUuids): BrowserAttempt {
             $attempts = $this->current($checkedAt->getTimestamp());
             $attempt = BrowserAttempt::fromArray($token, $attempts[$token->hash()] ?? null);
             $attempt->context()->assertMatches($context);
@@ -184,6 +237,17 @@ final class BrowserAttemptStore
                     throw new \LogicException('Binding a browser attempt requires accepted input.');
                 }
 
+                $cartWinner = $this->cartWinner(
+                    attempts: $attempts,
+                    currentToken: $token,
+                    context: $context,
+                    nonBlockingOrderPageUuids: $nonBlockingOrderPageUuids,
+                );
+
+                if ($cartWinner !== null) {
+                    return $cartWinner->bind($binding, $acceptedInput, $checkedAt->getTimestamp());
+                }
+
                 $attempt = $attempt->bind($binding, $acceptedInput, $checkedAt->getTimestamp());
                 $attempts[$token->hash()] = $attempt->toArray();
                 $this->write($attempts);
@@ -191,6 +255,71 @@ final class BrowserAttemptStore
 
             return $attempt;
         });
+    }
+
+    /**
+     * Returns the first accepted attempt for the exact Cart state and actor.
+     * This runs under the native session lock so competing tabs cannot both become the winner.
+     *
+     * @param array<string, array<string, mixed>> $attempts
+     * @param list<string> $nonBlockingOrderPageUuids
+     */
+    private function cartWinner(
+        array $attempts,
+        AttemptToken $currentToken,
+        BrowserAttemptContext $context,
+        array $nonBlockingOrderPageUuids,
+    ): ?BrowserAttempt {
+        if ($context->checkoutSource() !== CheckoutSource::Cart) {
+            return null;
+        }
+
+        foreach ($attempts as $hash => $data) {
+            if (hash_equals($hash, $currentToken->hash())) {
+                continue;
+            }
+
+            $pageUuid = $data['pageUuid'] ?? null;
+
+            if (is_string($pageUuid) === false || in_array($pageUuid, $nonBlockingOrderPageUuids, true)) {
+                continue;
+            }
+
+            try {
+                $winnerContext = BrowserAttempt::boundContextFromArray($pageUuid, $data);
+            } catch (Throwable) {
+                continue;
+            }
+
+            if ($winnerContext->checkoutSource() !== CheckoutSource::Cart) {
+                continue;
+            }
+
+            if ($winnerContext->cartId() !== $context->cartId()) {
+                continue;
+            }
+
+            // An older revision can still be active in Stripe, so each immutable Cart state has its own winner.
+            if ($winnerContext->cartRevision() !== $context->cartRevision()) {
+                continue;
+            }
+
+            // Authentication preserves Cart selections but never transfers accepted checkout authority.
+            if ($winnerContext->matchesActor($context->userUuid(), $context->guestReference()) === false) {
+                continue;
+            }
+
+            $winnerInput = CheckoutSubmissionInput::fromSessionData($data['acceptedInput'] ?? null);
+            $winner = BrowserAttempt::fromArray($winnerInput->attemptToken(), $data);
+
+            if (hash_equals($hash, $winner->token()->hash()) === false) {
+                throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_TOKEN_INVALID);
+            }
+
+            return $winner;
+        }
+
+        return null;
     }
 
     /**

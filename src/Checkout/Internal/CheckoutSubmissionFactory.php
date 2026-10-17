@@ -17,6 +17,9 @@ use ProgrammatorDev\StripeCheckout\Checkout\RequestErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\Configuration;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
+use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
@@ -37,6 +40,7 @@ final readonly class CheckoutSubmissionFactory
         private CheckoutResolver $resolver,
         private CartStoreInterface $cartStore,
         private BrowserAttemptStore $attemptStore,
+        private OrderPageStore $orderPageStore,
     ) {}
 
     public function create(CheckoutSubmissionInput $input, DateTimeImmutable $acceptedAt): CheckoutSubmission
@@ -127,6 +131,10 @@ final readonly class CheckoutSubmissionFactory
                 guestReference: $context->guestReference(),
             );
         $acceptedInput = $this->acceptedInput($input, $checkout, $shipping);
+        // Read terminal Order evidence before taking the native session lock; Order storage must not extend that lock.
+        $nonBlockingOrderPageUuids = $cart === null
+            ? []
+            : $this->nonBlockingOrderPageUuids($cart, $acceptedAt);
         // A competitor may bind while resolution runs; the store compares the winning fingerprint under its native lock.
         $attempt = $this->attemptStore->bind(
             token: $input->attemptToken(),
@@ -134,7 +142,11 @@ final readonly class CheckoutSubmissionFactory
             binding: $binding,
             acceptedInput: $acceptedInput,
             boundAt: $acceptedAt,
+            nonBlockingOrderPageUuids: $nonBlockingOrderPageUuids,
         );
+
+        // A competing tab returns its winning token and normalized input so downstream creation targets the same Order.
+        $acceptedInput = $attempt->acceptedInput() ?? $acceptedInput;
 
         return new CheckoutSubmission(
             acceptedInput: $acceptedInput,
@@ -163,6 +175,28 @@ final readonly class CheckoutSubmissionFactory
             shippingCountry: $direct ? $shipping->shippingCountry() : null,
             json: false,
         );
+    }
+
+    /** @return list<string> */
+    private function nonBlockingOrderPageUuids(CartSnapshot $cart, DateTimeImmutable $checkedAt): array
+    {
+        $nonBlockingOrderPageUuids = [];
+
+        foreach ($this->attemptStore->acceptedOrderPageUuidsForCart($cart, $checkedAt) as $pageUuid) {
+            $page = $this->orderPageStore->order($pageUuid);
+
+            if ($page === null) {
+                continue;
+            }
+
+            $checkoutStatus = CheckoutStatus::from(OrderData::string($this->orderPageStore->data($page)['checkoutStatus']));
+
+            if (in_array($checkoutStatus, [CheckoutStatus::CreationFailed, CheckoutStatus::Expired], true)) {
+                $nonBlockingOrderPageUuids[] = $pageUuid;
+            }
+        }
+
+        return $nonBlockingOrderPageUuids;
     }
 
     private function cartCheckoutContext(CartSnapshot $cart): CheckoutContext
