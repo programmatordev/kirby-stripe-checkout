@@ -121,30 +121,30 @@ final class CheckoutRoutesTest extends KirbyTestCase
     }
 
     #[DataProvider('cartCheckoutModes')]
-    public function testCartTabsReuseTheFirstAcceptedOrderAndSession(UiMode $uiMode): void
+    public function testLaterCartActionReusesTheFirstAcceptedOrderAndSession(UiMode $uiMode): void
     {
         $this->restart($uiMode);
         $stripeCheckout = new StripeCheckout($this->kirby);
         $stripeCheckout->cart()?->add('product', 2);
-        $firstBody = $stripeCheckout->checkout(CheckoutSource::Cart)->submissionData();
-        $secondBody = (new StripeCheckout($this->kirby))->checkout(CheckoutSource::Cart)->submissionData();
-        unset($firstBody['csrf'], $secondBody['csrf']);
-        $this->assertNotSame($firstBody['attemptToken'], $secondBody['attemptToken']);
-        $firstRevision = $firstBody['revision'] ?? null;
-        $secondRevision = $secondBody['revision'] ?? null;
+        $firstSubmissionData = $stripeCheckout->checkout(CheckoutSource::Cart)->submissionData();
+        $laterSubmissionData = (new StripeCheckout($this->kirby))->checkout(CheckoutSource::Cart)->submissionData();
+        unset($firstSubmissionData['csrf'], $laterSubmissionData['csrf']);
+        $this->assertNotSame($firstSubmissionData['attemptToken'], $laterSubmissionData['attemptToken']);
+        $firstRevision = $firstSubmissionData['revision'] ?? null;
+        $laterRevision = $laterSubmissionData['revision'] ?? null;
         $this->assertIsString($firstRevision);
-        $this->assertSame($firstRevision, $secondRevision);
+        $this->assertSame($firstRevision, $laterRevision);
 
-        $created = $this->send($firstBody);
-        $reused = $this->send($secondBody);
+        $createdResponse = $this->send($firstSubmissionData);
+        $reusedResponse = $this->send($laterSubmissionData);
 
-        $this->assertSame(201, $created->code());
-        $this->assertSame(200, $reused->code());
-        $this->assertSame($this->body($created), $this->body($reused));
+        $this->assertSame(201, $createdResponse->code());
+        $this->assertSame(200, $reusedResponse->code());
+        $this->assertSame($this->body($createdResponse), $this->body($reusedResponse));
         $this->assertSame(['post', 'get'], array_column($this->requests, 'method'));
         $this->assertCount(1, (new OrderPageStore($this->kirby))->orders());
-        $secondPageUuid = OrderData::pageUuid((new AttemptToken($secondBody['attemptToken']))->orderUuid());
-        $this->assertNull((new OrderPageStore($this->kirby))->order($secondPageUuid));
+        $laterPageUuid = OrderData::pageUuid((new AttemptToken($laterSubmissionData['attemptToken']))->orderUuid());
+        $this->assertNull((new OrderPageStore($this->kirby))->order($laterPageUuid));
     }
 
     /** @return iterable<string, array{UiMode}> */
