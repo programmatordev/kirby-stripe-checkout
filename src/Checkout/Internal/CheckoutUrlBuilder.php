@@ -92,6 +92,14 @@ final class CheckoutUrlBuilder
         return Url::build(['query' => $query], $url);
     }
 
+    public static function normalizedDestinationUrl(string $url): string
+    {
+        $query = [];
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+
+        return Url::build(['query' => $query], $url);
+    }
+
     private function resultUrl(string $path, SessionRequestContext $context, bool $includeSessionId): string
     {
         $url = $this->localizedUrl($path, $context->languageCode())

@@ -211,6 +211,9 @@ final class CheckoutProviderReturnEndpoint
             return $this->redirect($destinationUrl);
         }
 
+        // Kirby exposes request URLs in this canonical form, so bind the result to the same representation its destination will read.
+        $destinationUrl = CheckoutUrlBuilder::normalizedDestinationUrl($destinationUrl);
+
         try {
             $reference = $runtime->checkoutResultStore()->save(
                 reason: $this->reason(),

@@ -63,6 +63,9 @@ final class CheckoutCancelEndpoint
                 return $this->redirect($destinationUrl);
             }
 
+            // Kirby exposes request URLs in this canonical form, so bind the result to the same representation its destination will read.
+            $destinationUrl = CheckoutUrlBuilder::normalizedDestinationUrl($destinationUrl);
+
             try {
                 $browserContext = (new BrowserAttemptContextResolver($this->kirby, $runtime->browserAttemptStore()))->forOrder(
                     pageUuid: $pageUuid,

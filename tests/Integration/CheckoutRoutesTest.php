@@ -795,7 +795,10 @@ final class CheckoutRoutesTest extends KirbyTestCase
 
     public function testHostedCancellationReturnsOneAvailableResultWithoutChangingCommerceState(): void
     {
-        $this->restart(options: ['settings' => ['cancelDestination' => '/cancelled?from=checkout']]);
+        $destinationUrl = 'https://kirby-stripe-checkout.test/en/cancelled?tag=b&tags%5B0%5D=a&tags%5B1%5D=b&encoded=~';
+        $this->restart(options: ['settings' => [
+            'cancelDestination' => 'https://kirby-stripe-checkout.test/en/cancelled?tag=a&tag=b&tags[]=a&tags[]=b&encoded=%7E',
+        ]]);
         $body = $this->submission(CheckoutSource::Cart);
         $this->assertSame(201, $this->send($body)->code());
         $before = $this->orderData($body);
@@ -811,7 +814,7 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertNavigationPrivate($cancelled);
         $location = $cancelled->headers()['Location'] ?? null;
         $this->assertIsString($location);
-        $this->assertStringStartsWith('https://kirby-stripe-checkout.test/en/cancelled?from=checkout&', $location);
+        $this->assertStringStartsWith($destinationUrl . '&', $location);
         $this->assertStringContainsString('_stripe_checkout_result=', $location);
         $this->assertCount(1, $this->requests);
         $this->assertSame($before, $this->orderData($body));
