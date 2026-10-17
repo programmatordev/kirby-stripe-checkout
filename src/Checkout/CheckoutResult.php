@@ -46,6 +46,7 @@ final readonly class CheckoutResult
             $payment?->nextAction() !== null
             && (
                 $reason === CheckoutResultReason::HostedCancel
+                || $checkoutStatus === CheckoutStatus::Expired
                 || in_array($paymentStatus, [PaymentStatus::Unpaid, PaymentStatus::Pending], true) === false
             )
         ) {

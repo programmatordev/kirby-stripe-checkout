@@ -10,7 +10,7 @@ use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\PaymentSnapshot;
 
-/** Common payment facts; only a requires-action lifecycle snapshot attaches historical action evidence. */
+/** Common payment facts with optional transient action evidence supplied by its owning presentation or lifecycle context. */
 final readonly class Payment
 {
     private const MONEY_FIELDS = ['amount', 'amountReceived', 'amountCaptured'];
@@ -162,14 +162,14 @@ final readonly class Payment
         return $this->data['chargeCaptured'] === null ? null : OrderData::boolean($this->data['chargeCaptured']);
     }
 
-    /** Historical provider action, not proof of payment or a general-purpose customer-instruction format. */
+    /** Contextual provider action, not proof of payment or a general-purpose customer-instruction format. */
     public function nextAction(): ?PaymentAction
     {
         return $this->nextAction;
     }
 
     /**
-     * Only canonical payment facts are serialized here; LifecycleEvent owns any action payload.
+     * Only canonical payment facts are serialized here; the surrounding lifecycle event or Checkout result owns any action payload.
      * @return array<string, mixed>
      */
     public function toArray(): array

@@ -101,9 +101,13 @@ final class CheckoutProviderReturnEndpoint
                     $destinationUrl = $this->destination($checkoutAttempt, $checkoutStatus);
                     $observedAction = $reconciliation->nextAction();
 
-                    // Keep return-time instructions only while the committed payment can still require customer action.
+                    // Keep return-time instructions only while the Checkout remains usable or completed with payment pending.
                     // The result resolver also requires the same PaymentIntent before exposing them.
-                    if ($observedAction !== null && in_array($paymentStatus, [PaymentStatus::Unpaid, PaymentStatus::Pending], true)) {
+                    if (
+                        $observedAction !== null
+                        && $checkoutStatus !== CheckoutStatus::Expired
+                        && in_array($paymentStatus, [PaymentStatus::Unpaid, PaymentStatus::Pending], true)
+                    ) {
                         $paymentIntentId = $reconciliation->paymentIntentId();
                         $nextAction = $observedAction;
                     }

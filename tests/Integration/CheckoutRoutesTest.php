@@ -829,6 +829,36 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertFalse($result->canResumeCheckout());
     }
 
+    public function testExpiredEmbeddedReturnDoesNotExposeAnObservedPaymentAction(): void
+    {
+        $this->restart(UiMode::Embedded, ['settings' => ['returnDestination' => '/continue']]);
+        $body = $this->submission();
+        $this->assertSame(201, $this->send($body)->code());
+        $parameters = $this->requests[0]['parameters'];
+        $this->assertIsString($parameters['return_url']);
+        $this->sessionStatus = 'expired';
+        $this->paymentIntentStatus = 'requires_action';
+        $this->paymentNextAction = [
+            'type' => 'multibanco_display_details',
+            'multibanco_display_details' => [
+                'reference' => '123456789',
+            ],
+        ];
+
+        $returned = $this->sendNavigation(str_replace('{CHECKOUT_SESSION_ID}', 'cs_test_browser', $parameters['return_url']));
+        $location = $returned->headers()['Location'] ?? null;
+        $this->assertIsString($location);
+        $this->setRequest($location);
+        $result = (new StripeCheckout($this->kirby))->checkoutResult();
+        $this->assertNotNull($result);
+        $this->assertSame(CheckoutStatus::Expired, $result->checkoutStatus());
+        $this->assertSame(PaymentStatus::Unpaid, $result->paymentStatus());
+        $payment = $result->payment();
+        $this->assertNotNull($payment);
+        $this->assertSame('pi_browser', $payment->stripePaymentIntentId());
+        $this->assertNull($payment->nextAction());
+    }
+
     public function testCompletedReturnPreservesACartChangedAfterCheckoutStarted(): void
     {
         $this->restart(options: ['settings' => ['successDestination' => '/completed']]);
@@ -1226,7 +1256,7 @@ final class CheckoutRoutesTest extends KirbyTestCase
             'amount_tax' => 0,
             'breakdown' => ['discounts' => []],
         ];
-        $session['payment_intent'] = $this->sessionStatus === 'complete' ? [
+        $session['payment_intent'] = $this->sessionStatus === 'complete' || $this->paymentNextAction !== null ? [
             'id' => 'pi_browser',
             'object' => 'payment_intent',
             'created' => $session['created'],

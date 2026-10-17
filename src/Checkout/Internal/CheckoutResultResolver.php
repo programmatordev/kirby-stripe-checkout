@@ -84,6 +84,7 @@ final readonly class CheckoutResultResolver
             if (
                 $paymentData !== null
                 && $nextAction !== null
+                && $checkoutStatus !== CheckoutStatus::Expired
                 && in_array($paymentStatus, [PaymentStatus::Unpaid, PaymentStatus::Pending], true)
                 && $payment?->stripePaymentIntentId() === $state->paymentIntentId()
             ) {
