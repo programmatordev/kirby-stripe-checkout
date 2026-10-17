@@ -54,7 +54,15 @@ final class StripeCheckout
 
     public function checkout(CheckoutSource $checkoutSource = CheckoutSource::Cart): CheckoutBootstrap
     {
-        return (new RuntimeFactory($this->kirby))->checkoutBootstrapFactory()->create($checkoutSource);
+        $checkoutResult = $this->checkoutResult();
+        $resumablePageUuid = $checkoutResult?->canResumeCheckout()
+            ? $checkoutResult->order()?->uuid()->toString()
+            : null;
+
+        return (new RuntimeFactory($this->kirby))->checkoutBootstrapFactory()->create(
+            checkoutSource: $checkoutSource,
+            resumablePageUuid: $resumablePageUuid,
+        );
     }
 
     public function checkoutResult(): ?CheckoutResult

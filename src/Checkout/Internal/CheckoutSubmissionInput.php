@@ -14,7 +14,7 @@ use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
  */
 final readonly class CheckoutSubmissionInput
 {
-    private const INVALID_FORM_RESULT_INPUT_MESSAGE = 'Invalid Checkout form result input.';
+    private const INVALID_STORED_INPUT_MESSAGE = 'Invalid stored Checkout submission input.';
 
     /** @param list<ProductRequest> $items Empty for Cart; non-empty for Direct. */
     public function __construct(
@@ -62,7 +62,7 @@ final readonly class CheckoutSubmissionInput
      *     source: string,
      *     attemptToken: string,
      *     revision?: string,
-     *     items?: list<array{reference: string, quantity: int, options: array<string, string>}>,
+     *     items?: list<array{reference: string, quantity: int, options?: array<string, string>}>,
      *     shippingCountry?: string
      * }
      */
@@ -83,11 +83,19 @@ final readonly class CheckoutSubmissionInput
             return $data;
         }
 
-        $data['items'] = array_map(static fn(ProductRequest $item): array => [
-            'reference' => $item->reference(),
-            'quantity' => $item->quantity(),
-            'options' => $item->selectedOptions(),
-        ], $this->items);
+        $data['items'] = array_map(static function (ProductRequest $item): array {
+            $data = [
+                'reference' => $item->reference(),
+                'quantity' => $item->quantity(),
+            ];
+            $options = $item->selectedOptions();
+
+            if ($options !== []) {
+                $data['options'] = $options;
+            }
+
+            return $data;
+        }, $this->items);
 
         if ($this->shippingCountry !== null) {
             $data['shippingCountry'] = $this->shippingCountry;
@@ -114,7 +122,7 @@ final readonly class CheckoutSubmissionInput
             is_array($data) === false
             || array_diff(array_keys($data), ['source', 'attemptToken', 'cartRevision', 'items', 'shippingCountry']) !== []
         ) {
-            throw new \InvalidArgumentException(self::INVALID_FORM_RESULT_INPUT_MESSAGE);
+            throw new \InvalidArgumentException(self::INVALID_STORED_INPUT_MESSAGE);
         }
 
         $checkoutSource = is_string($data['source'] ?? null)
@@ -125,25 +133,25 @@ final readonly class CheckoutSubmissionInput
         $shippingCountry = $data['shippingCountry'] ?? null;
 
         if ($checkoutSource === null || is_string($attemptToken) === false) {
-            throw new \InvalidArgumentException(self::INVALID_FORM_RESULT_INPUT_MESSAGE);
+            throw new \InvalidArgumentException(self::INVALID_STORED_INPUT_MESSAGE);
         }
 
         if ($cartRevision !== null && is_string($cartRevision) === false) {
-            throw new \InvalidArgumentException(self::INVALID_FORM_RESULT_INPUT_MESSAGE);
+            throw new \InvalidArgumentException(self::INVALID_STORED_INPUT_MESSAGE);
         }
 
         if ($shippingCountry !== null && is_string($shippingCountry) === false) {
-            throw new \InvalidArgumentException(self::INVALID_FORM_RESULT_INPUT_MESSAGE);
+            throw new \InvalidArgumentException(self::INVALID_STORED_INPUT_MESSAGE);
         }
 
         $storedItems = $data['items'] ?? null;
 
         if ($checkoutSource === CheckoutSource::Cart && ($cartRevision === null || $storedItems !== [] || $shippingCountry !== null)) {
-            throw new \InvalidArgumentException(self::INVALID_FORM_RESULT_INPUT_MESSAGE);
+            throw new \InvalidArgumentException(self::INVALID_STORED_INPUT_MESSAGE);
         }
 
         if ($checkoutSource === CheckoutSource::Direct && $cartRevision !== null) {
-            throw new \InvalidArgumentException(self::INVALID_FORM_RESULT_INPUT_MESSAGE);
+            throw new \InvalidArgumentException(self::INVALID_STORED_INPUT_MESSAGE);
         }
 
         $items = $checkoutSource === CheckoutSource::Direct

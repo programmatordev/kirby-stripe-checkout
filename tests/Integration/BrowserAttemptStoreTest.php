@@ -12,9 +12,12 @@ use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptBinding;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\BrowserAttempt;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\BrowserAttemptContext;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\BrowserAttemptStore;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutSubmissionInput;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 
@@ -61,12 +64,13 @@ final class BrowserAttemptStoreTest extends KirbyTestCase
         $earlierBoundAt = $issuedAt->modify('+1 second');
         $boundAt = $issuedAt->modify('+2 seconds');
         $binding = AttemptBinding::direct([new ProductRequest('shirt')], str_repeat('a', 64), guestReference: $context->guestReference());
+        $acceptedInput = $this->acceptedInput($attempt);
 
         try {
             $earlierRequestStore->load($attempt->token(), $context, $earlierBoundAt);
-            $store->bind($attempt->token(), $context, $binding, $boundAt);
+            $store->bind($attempt->token(), $context, $binding, $acceptedInput, $boundAt);
             // Reload must retain the newer first binding even when this request captured an earlier time.
-            $duplicate = $earlierRequestStore->bind($attempt->token(), $context, $binding, $earlierBoundAt);
+            $duplicate = $earlierRequestStore->bind($attempt->token(), $context, $binding, $acceptedInput, $earlierBoundAt);
             $this->assertSame($boundAt->getTimestamp(), $duplicate->boundAt());
             $this->assertSame($boundAt->getTimestamp(), $store->load($attempt->token(), $context, $boundAt->modify('+1 second'))->boundAt());
         } finally {
@@ -91,21 +95,22 @@ final class BrowserAttemptStoreTest extends KirbyTestCase
         $other = $first->issue($context, 'https://shop.test/other', $issuedAt);
         $this->assertSame($other->token()->value(), $second->load($other->token(), $context, $issuedAt)->token()->value());
         $binding = AttemptBinding::direct([new ProductRequest('shirt')], str_repeat('a', 64), guestReference: $context->guestReference());
+        $acceptedInput = $this->acceptedInput($attempt);
         $boundAt = $issuedAt->modify('+1 minute');
-        $first->bind($attempt->token(), $context, $binding, $boundAt);
-        $duplicate = $second->bind($attempt->token(), $context, $binding, $boundAt->modify('+1 hour'));
+        $first->bind($attempt->token(), $context, $binding, $acceptedInput, $boundAt);
+        $duplicate = $second->bind($attempt->token(), $context, $binding, $acceptedInput, $boundAt->modify('+1 hour'));
         $this->assertSame($boundAt->getTimestamp(), $duplicate->boundAt());
         $this->assertSame('https://shop.test/product', $duplicate->initiatingUrl());
 
         try {
             $changedBinding = AttemptBinding::direct([new ProductRequest('other')], str_repeat('a', 64), guestReference: $context->guestReference());
-            $second->bind($attempt->token(), $context, $changedBinding, $boundAt);
+            $second->bind($attempt->token(), $context, $changedBinding, $acceptedInput, $boundAt);
             $this->fail('An action cannot be rebound to another purchase.');
         } catch (CheckoutInputException $error) {
             $this->assertSame(CheckoutErrorCode::ATTEMPT_CONFLICT, $error->errorCode());
         }
 
-        $this->assertSame($boundAt->getTimestamp(), $first->bind($attempt->token(), $context, $binding, $boundAt)->boundAt());
+        $this->assertSame($boundAt->getTimestamp(), $first->bind($attempt->token(), $context, $binding, $acceptedInput, $boundAt)->boundAt());
         $this->assertSame($other->token()->value(), $first->load($other->token(), $context, $boundAt)->token()->value());
         $session->destroy();
     }
@@ -128,6 +133,36 @@ final class BrowserAttemptStoreTest extends KirbyTestCase
             $firstSession->destroy();
             $otherSession->destroy();
         }
+    }
+
+    public function testEmbeddedAcceptanceRetainsOnlyItsExactResumableInput(): void
+    {
+        $store = new BrowserAttemptStore($this->kirby->session());
+        $context = $this->context(uiMode: UiMode::Embedded);
+        $acceptedAt = new DateTimeImmutable();
+        $attempt = $store->issue($context, 'https://shop.test/product', $acceptedAt);
+        $binding = AttemptBinding::direct(
+            [new ProductRequest('shirt')],
+            str_repeat('a', 64),
+            guestReference: $context->guestReference(),
+        );
+        $acceptedInput = $this->acceptedInput($attempt);
+        $store->bind($attempt->token(), $context, $binding, $acceptedInput, $acceptedAt);
+        $pageUuid = OrderData::pageUuid($attempt->token()->orderUuid());
+
+        $resumed = $store->findAcceptedAttemptForOrder($pageUuid, $context, $acceptedAt);
+        $this->assertNotNull($resumed);
+        $resumedInput = $resumed->acceptedInput();
+        $this->assertNotNull($resumedInput);
+        $this->assertSame($attempt->token()->value(), $resumedInput->attemptToken()->value());
+        $this->assertSame(['shirt'], array_map(
+            static fn(ProductRequest $item): string => $item->reference(),
+            $resumedInput->items(),
+        ));
+        $this->assertStringContainsString(
+            $attempt->token()->value(),
+            json_encode($this->kirby->session()->data()->get(BrowserAttemptStore::KEY), JSON_THROW_ON_ERROR),
+        );
     }
 
     #[DataProvider('changedContexts')]
@@ -173,11 +208,11 @@ final class BrowserAttemptStoreTest extends KirbyTestCase
         $issuedAt = new DateTimeImmutable();
         $binding = AttemptBinding::direct([new ProductRequest('shirt')], str_repeat('a', 64), guestReference: $context->guestReference());
         $first = $store->issue($context, 'https://shop.test', $issuedAt);
-        $store->bind($first->token(), $context, $binding, $issuedAt);
+        $store->bind($first->token(), $context, $binding, $this->acceptedInput($first), $issuedAt);
 
         for ($index = 0; $index < 99; $index++) {
             $attempt = $store->issue($context, 'https://shop.test', $issuedAt);
-            $store->bind($attempt->token(), $context, $binding, $issuedAt);
+            $store->bind($attempt->token(), $context, $binding, $this->acceptedInput($attempt), $issuedAt);
         }
 
         try {
@@ -200,9 +235,10 @@ final class BrowserAttemptStoreTest extends KirbyTestCase
         $attempt = $store->issue($context, 'https://shop.test', $issuedAt);
         $unused = $store->issue($context, 'https://shop.test/unused', $issuedAt);
         $binding = AttemptBinding::direct([new ProductRequest('shirt')], str_repeat('a', 64), guestReference: $context->guestReference());
+        $acceptedInput = $this->acceptedInput($attempt);
         $boundAt = $issuedAt->modify('+1 hour');
-        $store->bind($attempt->token(), $context, $binding, $boundAt);
-        $store->bind($attempt->token(), $context, $binding, $issuedAt->modify('+23 hours'));
+        $store->bind($attempt->token(), $context, $binding, $acceptedInput, $boundAt);
+        $store->bind($attempt->token(), $context, $binding, $acceptedInput, $issuedAt->modify('+23 hours'));
         $this->assertSame($boundAt->getTimestamp(), $store->load($attempt->token(), $context, $issuedAt->modify('+24 hours'))->boundAt());
 
         try {
@@ -229,7 +265,7 @@ final class BrowserAttemptStoreTest extends KirbyTestCase
         $issuedAt = new DateTimeImmutable();
         $accepted = $store->issue($context, 'https://shop.test/accepted', $issuedAt);
         $binding = AttemptBinding::direct([new ProductRequest('shirt')], str_repeat('a', 64), guestReference: $context->guestReference());
-        $store->bind($accepted->token(), $context, $binding, $issuedAt);
+        $store->bind($accepted->token(), $context, $binding, $this->acceptedInput($accepted), $issuedAt);
         $oldestUnused = $store->issue($context, 'https://shop.test/unused', $issuedAt);
 
         for ($index = 0; $index < 99; $index++) {
@@ -266,15 +302,27 @@ final class BrowserAttemptStoreTest extends KirbyTestCase
         }
     }
 
-    private function context(?CartSnapshot $cart = null): BrowserAttemptContext
+    private function context(?CartSnapshot $cart = null, UiMode $uiMode = UiMode::Hosted): BrowserAttemptContext
     {
         return BrowserAttemptContext::capture(
             checkoutSource: $cart === null ? CheckoutSource::Direct : CheckoutSource::Cart,
-            uiMode: UiMode::Hosted,
+            uiMode: $uiMode,
             languageCode: null,
             userUuid: null,
             csrf: 'native-csrf',
             cart: $cart,
+        );
+    }
+
+    private function acceptedInput(BrowserAttempt $attempt): CheckoutSubmissionInput
+    {
+        return new CheckoutSubmissionInput(
+            checkoutSource: CheckoutSource::Direct,
+            attemptToken: $attempt->token(),
+            cartRevision: null,
+            items: [new ProductRequest('shirt')],
+            shippingCountry: null,
+            json: false,
         );
     }
 }

@@ -86,6 +86,7 @@ final class CheckoutProviderReturnEndpoint
             $destinationUrl = $this->fallbackDestination($checkoutAttempt);
             $browserContext = $this->browserContext($runtime, $pageUuid, $orderData, $checkoutAttempt);
             $checkoutStatus = null;
+            $canResumeCheckout = false;
             $paymentIntentId = null;
             $nextAction = null;
             $savedSessionId = $orderData['stripeCheckoutSessionId'] ?? null;
@@ -99,6 +100,9 @@ final class CheckoutProviderReturnEndpoint
                     $checkoutStatus = CheckoutStatus::from(OrderData::string($orderData['checkoutStatus']));
                     $paymentStatus = PaymentStatus::from(OrderData::string($orderData['paymentStatus']));
                     $destinationUrl = $this->destination($checkoutAttempt, $checkoutStatus);
+                    $canResumeCheckout = $this->uiMode === UiMode::Embedded
+                        && $checkoutStatus === CheckoutStatus::Open
+                        && OrderData::date($orderData['checkoutExpiresAt']) > new DateTimeImmutable();
                     $observedAction = $reconciliation->nextAction();
 
                     // Keep return-time instructions only while the Checkout remains usable or completed with payment pending.
@@ -121,11 +125,19 @@ final class CheckoutProviderReturnEndpoint
                 $this->clearOriginatingCart($runtime, $browserContext);
             }
 
+            if ($canResumeCheckout) {
+                $acceptedAttempt = $browserContext === null
+                    ? null
+                    : $runtime->browserAttemptStore()->findAcceptedAttemptForOrder($pageUuid, $browserContext, new DateTimeImmutable());
+                $canResumeCheckout = $acceptedAttempt !== null;
+            }
+
             return $this->redirectWithResult(
                 runtime: $runtime,
                 destinationUrl: $destinationUrl,
                 pageUuid: $checkoutStatus === null ? null : $pageUuid,
                 browserContext: $browserContext,
+                canResumeCheckout: $canResumeCheckout,
                 paymentIntentId: $paymentIntentId,
                 nextAction: $nextAction,
             );
@@ -183,6 +195,7 @@ final class CheckoutProviderReturnEndpoint
         string $destinationUrl,
         ?string $pageUuid,
         ?BrowserAttemptContext $browserContext,
+        bool $canResumeCheckout,
         ?string $paymentIntentId,
         ?PaymentAction $nextAction,
     ): Response {
@@ -205,6 +218,7 @@ final class CheckoutProviderReturnEndpoint
                 pageUuid: $pageUuid,
                 destinationUrl: $destinationUrl,
                 savedAt: new DateTimeImmutable(),
+                canResumeCheckout: $canResumeCheckout,
                 paymentIntentId: $paymentIntentId,
                 nextAction: $nextAction,
             );

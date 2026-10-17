@@ -33,8 +33,10 @@ final class CheckoutBootstrapFactory
         private readonly CheckoutFormResultStore $formResultStore,
     ) {}
 
-    public function create(CheckoutSource $checkoutSource): CheckoutBootstrap
-    {
+    public function create(
+        CheckoutSource $checkoutSource,
+        ?string $resumablePageUuid = null,
+    ): CheckoutBootstrap {
         $this->requireReadyConfiguration();
 
         if ($checkoutSource === CheckoutSource::Cart && $this->configuration->cartEnabled() === false) {
@@ -64,26 +66,31 @@ final class CheckoutBootstrapFactory
         $now = new DateTimeImmutable();
         $formResult = $this->formResult($requestUrl, $now);
         $error = null;
-        $retryInput = null;
+        $submissionInput = null;
         $attempt = null;
 
         // A matching result may show its error even when its exact retry is no longer valid.
         // In that case the page receives a fresh action instead of reviving stale authority.
         if ($formResult !== null && $formResult->context()->matches($context, $initiatingUrl)) {
             $error = $formResult->error();
-            $retryInput = $formResult->retryInput();
+            $submissionInput = $formResult->retryInput();
 
-            if ($retryInput !== null) {
-                if ($retryInput->checkoutSource() !== $checkoutSource) {
-                    $retryInput = null;
+            if ($submissionInput !== null) {
+                if ($submissionInput->checkoutSource() !== $checkoutSource) {
+                    $submissionInput = null;
                 } else {
                     try {
-                        $attempt = $this->attemptStore->load($retryInput->attemptToken(), $context, $now);
+                        $attempt = $this->attemptStore->load($submissionInput->attemptToken(), $context, $now);
                     } catch (CheckoutInputException) {
-                        $retryInput = null;
+                        $submissionInput = null;
                     }
                 }
             }
+        }
+
+        if ($attempt === null && $error === null && $uiMode === UiMode::Embedded && $resumablePageUuid !== null) {
+            $attempt = $this->attemptStore->findAcceptedAttemptForOrder($resumablePageUuid, $context, $now);
+            $submissionInput = $attempt?->acceptedInput();
         }
 
         $attempt ??= $this->attemptStore->issue(
@@ -101,7 +108,7 @@ final class CheckoutBootstrapFactory
             cartRevision: $cart?->revision(),
             publishableKey: $uiMode === UiMode::Embedded ? $this->configuration->stripe()->publishableKey() : null,
             error: $error,
-            retryInput: $retryInput,
+            submissionInput: $submissionInput,
         );
     }
 

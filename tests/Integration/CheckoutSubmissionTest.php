@@ -74,6 +74,7 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         $this->assertCount(0, (new StripeCheckout($this->kirby))->orders());
         $state = json_encode($this->kirby->session()->data()->get(BrowserAttemptStore::KEY), JSON_THROW_ON_ERROR);
         $this->assertStringNotContainsString('shirt', $state);
+        $this->assertStringNotContainsString('alias', $state);
         $this->assertStringNotContainsString('sk_test_server', $state);
 
         $body['items'] = [['reference' => 'shirt', 'quantity' => 2, 'options' => (object) ['size' => 'large']]];
@@ -490,7 +491,7 @@ final class CheckoutSubmissionTest extends KirbyTestCase
      *     source: string,
      *     attemptToken: string,
      *     revision?: string,
-     *     items?: list<array{reference: string, quantity: int, options: array<string, string>}>,
+     *     items?: list<array{reference: string, quantity: int, options?: array<string, string>}>,
      *     shippingCountry?: string
      * }
      */

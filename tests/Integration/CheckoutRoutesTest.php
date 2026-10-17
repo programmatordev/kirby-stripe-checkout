@@ -355,7 +355,6 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertSame([[
             'reference' => 'product',
             'quantity' => 2,
-            'options' => [],
         ]], $retryData['items'] ?? null);
         $storedResult = json_encode($this->kirby->session()->data()->get(CheckoutFormResultStore::KEY), JSON_THROW_ON_ERROR);
         $this->assertStringNotContainsString('https://checkout.stripe.com', $storedResult);
@@ -721,11 +720,48 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertSame(1, $cart->count());
 
         $this->setRequest($location);
-        $result = (new StripeCheckout($this->kirby))->checkoutResult();
+        $stripeCheckout = new StripeCheckout($this->kirby);
+        $result = $stripeCheckout->checkoutResult();
         $this->assertNotNull($result);
         $this->assertTrue($result->isAvailable());
         $this->assertSame(CheckoutStatus::Open, $result->checkoutStatus());
-        $this->assertFalse($result->canResumeCheckout());
+        $this->assertTrue($result->canResumeCheckout());
+        $resumeData = $stripeCheckout->checkout(CheckoutSource::Cart)->submissionData();
+        $this->assertArrayHasKey('revision', $body);
+        $this->assertArrayHasKey('revision', $resumeData);
+        $this->assertSame($body['attemptToken'], $resumeData['attemptToken']);
+        $this->assertSame($body['revision'], $resumeData['revision']);
+        unset($resumeData['csrf']);
+        $resumed = $this->send($resumeData, languageCode: 'pt');
+        $this->assertSame(200, $resumed->code());
+        $this->assertSame(['post', 'get', 'get', 'get'], array_column($this->requests, 'method'));
+        $this->assertCount(1, array_filter($this->requests, static fn(array $request): bool => $request['method'] === 'post'));
+    }
+
+    public function testEmbeddedOpenReturnReissuesTheAcceptedDirectInput(): void
+    {
+        $this->restart(UiMode::Embedded, ['settings' => ['returnDestination' => '/continue']]);
+        $body = $this->submission();
+        $this->assertSame(201, $this->send($body)->code());
+        $parameters = $this->requests[0]['parameters'];
+        $this->assertIsString($parameters['return_url']);
+        $returned = $this->sendNavigation(str_replace('{CHECKOUT_SESSION_ID}', 'cs_test_browser', $parameters['return_url']));
+        $location = $returned->headers()['Location'] ?? null;
+        $this->assertIsString($location);
+
+        $this->setRequest($location);
+        $stripeCheckout = new StripeCheckout($this->kirby);
+        $resumeData = $stripeCheckout->checkout(CheckoutSource::Direct)->submissionData();
+        $this->assertTrue($stripeCheckout->checkoutResult()?->canResumeCheckout());
+        $this->assertSame($body['attemptToken'], $resumeData['attemptToken']);
+        $this->assertArrayHasKey('items', $resumeData);
+        $this->assertSame([[
+            'reference' => 'product',
+            'quantity' => 2,
+        ]], $resumeData['items']);
+        unset($resumeData['csrf']);
+        $this->assertSame(200, $this->send($resumeData)->code());
+        $this->assertCount(1, array_filter($this->requests, static fn(array $request): bool => $request['method'] === 'post'));
     }
 
     public function testCompletedHostedReturnKeepsPendingPaymentDistinctFromCheckoutCompletion(): void
@@ -822,11 +858,13 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertSame(1, $cart->count());
 
         $this->setRequest($location);
-        $result = (new StripeCheckout($this->kirby))->checkoutResult();
+        $stripeCheckout = new StripeCheckout($this->kirby);
+        $result = $stripeCheckout->checkoutResult();
         $this->assertNotNull($result);
         $this->assertSame(CheckoutStatus::Expired, $result->checkoutStatus());
         $this->assertSame(PaymentStatus::Unpaid, $result->paymentStatus());
         $this->assertFalse($result->canResumeCheckout());
+        $this->assertNotSame($body['attemptToken'], $stripeCheckout->checkout()->submissionData()['attemptToken']);
     }
 
     public function testExpiredEmbeddedReturnDoesNotExposeAnObservedPaymentAction(): void

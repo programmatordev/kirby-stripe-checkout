@@ -20,6 +20,7 @@ use ProgrammatorDev\StripeCheckout\Configuration\Configuration;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
 use ProgrammatorDev\StripeCheckout\Product\ProductErrorCode;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
+use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 
 /**
  * Authorizes one submission, resolves its facts once, and atomically accepts its purchase binding.
@@ -125,15 +126,42 @@ final readonly class CheckoutSubmissionFactory
                 userUuid: $context->userUuid(),
                 guestReference: $context->guestReference(),
             );
+        $acceptedInput = $this->acceptedInput($input, $checkout, $shipping);
         // A competitor may bind while resolution runs; the store compares the winning fingerprint under its native lock.
-        $attempt = $this->attemptStore->bind($input->attemptToken(), $context, $binding, $acceptedAt);
+        $attempt = $this->attemptStore->bind(
+            token: $input->attemptToken(),
+            context: $context,
+            binding: $binding,
+            acceptedInput: $acceptedInput,
+            boundAt: $acceptedAt,
+        );
 
         return new CheckoutSubmission(
-            input: $input,
+            acceptedInput: $acceptedInput,
             attempt: $attempt,
             checkout: $checkout,
             shipping: $shipping,
             binding: $binding,
+        );
+    }
+
+    private function acceptedInput(
+        CheckoutSubmissionInput $input,
+        CheckoutContext $checkout,
+        ShippingContext $shipping,
+    ): CheckoutSubmissionInput {
+        $direct = $input->checkoutSource() === CheckoutSource::Direct;
+        $items = $direct
+            ? array_map(static fn(CheckoutLineItem $lineItem): ProductRequest => $lineItem->productRequest(), $checkout->items())
+            : [];
+
+        return new CheckoutSubmissionInput(
+            checkoutSource: $input->checkoutSource(),
+            attemptToken: $input->attemptToken(),
+            cartRevision: $input->cartRevision(),
+            items: $items,
+            shippingCountry: $direct ? $shipping->shippingCountry() : null,
+            json: false,
         );
     }
 

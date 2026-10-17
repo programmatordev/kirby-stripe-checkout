@@ -77,9 +77,10 @@ final class BrowserAttemptStore
         AttemptToken $token,
         BrowserAttemptContext $context,
         AttemptBinding $binding,
+        CheckoutSubmissionInput $acceptedInput,
         DateTimeImmutable $boundAt,
     ): BrowserAttempt {
-        return $this->access($token, $context, $boundAt, $binding);
+        return $this->access($token, $context, $boundAt, $binding, $acceptedInput);
     }
 
     public static function retainedUntil(BrowserAttempt $attempt): int
@@ -130,19 +131,60 @@ final class BrowserAttemptStore
         });
     }
 
+    public function findAcceptedAttemptForOrder(
+        string $pageUuid,
+        BrowserAttemptContext $context,
+        DateTimeImmutable $checkedAt,
+    ): ?BrowserAttempt {
+        try {
+            OrderData::uuid($pageUuid);
+        } catch (Throwable) {
+            return null;
+        }
+
+        return $this->locked(function () use ($pageUuid, $context, $checkedAt): ?BrowserAttempt {
+            foreach ($this->current($checkedAt->getTimestamp()) as $hash => $data) {
+                if (($data['pageUuid'] ?? null) !== $pageUuid) {
+                    continue;
+                }
+
+                try {
+                    $acceptedInput = CheckoutSubmissionInput::fromSessionData($data['acceptedInput'] ?? null);
+                    $attempt = BrowserAttempt::fromArray($acceptedInput->attemptToken(), $data);
+                    $attempt->context()->assertMatches($context);
+                } catch (Throwable) {
+                    return null;
+                }
+
+                if (hash_equals($hash, $attempt->token()->hash()) === false) {
+                    return null;
+                }
+
+                return $attempt;
+            }
+
+            return null;
+        });
+    }
+
     private function access(
         AttemptToken $token,
         BrowserAttemptContext $context,
         DateTimeImmutable $checkedAt,
         ?AttemptBinding $binding = null,
+        ?CheckoutSubmissionInput $acceptedInput = null,
     ): BrowserAttempt {
-        return $this->locked(function () use ($token, $context, $checkedAt, $binding): BrowserAttempt {
+        return $this->locked(function () use ($token, $context, $checkedAt, $binding, $acceptedInput): BrowserAttempt {
             $attempts = $this->current($checkedAt->getTimestamp());
             $attempt = BrowserAttempt::fromArray($token, $attempts[$token->hash()] ?? null);
             $attempt->context()->assertMatches($context);
 
             if ($binding !== null) {
-                $attempt = $attempt->bind($binding, $checkedAt->getTimestamp());
+                if ($acceptedInput === null) {
+                    throw new \LogicException('Binding a browser attempt requires accepted input.');
+                }
+
+                $attempt = $attempt->bind($binding, $acceptedInput, $checkedAt->getTimestamp());
                 $attempts[$token->hash()] = $attempt->toArray();
                 $this->write($attempts);
             }

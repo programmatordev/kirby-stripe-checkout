@@ -26,7 +26,7 @@ final readonly class CheckoutBootstrap implements JsonSerializable
         private ?string $cartRevision,
         private ?string $publishableKey,
         private ?CheckoutError $error = null,
-        private ?CheckoutSubmissionInput $retryInput = null,
+        private ?CheckoutSubmissionInput $submissionInput = null,
     ) {}
 
     public function uiMode(): UiMode
@@ -53,16 +53,16 @@ final readonly class CheckoutBootstrap implements JsonSerializable
      *     source: string,
      *     attemptToken: string,
      *     revision?: string,
-     *     items?: list<array{reference: string, quantity: int, options: array<string, string>}>,
+     *     items?: list<array{reference: string, quantity: int, options?: array<string, string>}>,
      *     shippingCountry?: string
      * }
      */
     public function submissionData(): array
     {
-        if ($this->retryInput !== null) {
+        if ($this->submissionInput !== null) {
             return [
                 'csrf' => $this->csrf,
-                ...$this->retryInput->toFormData(),
+                ...$this->submissionInput->toFormData(),
             ];
         }
 

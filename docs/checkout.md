@@ -2,7 +2,7 @@
 
 `checkout()` prepares private submission data for one browser checkout action. It creates no Order or Stripe resource and does not resolve products, prices or shipping quotes.
 
-Bootstrap, hosted form submission, JSON submission, hosted success/cancellation and embedded return routes are available now. Embedded Session resume and webhook-only Cart clearing are still being implemented, so this guide does not yet describe the complete browser integration.
+Bootstrap, hosted form submission, JSON submission, hosted success/cancellation, embedded return and embedded Session resume are available now. Webhook-only Cart clearing is still being implemented, so this guide does not yet describe the complete browser integration.
 
 ```php
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
@@ -116,11 +116,31 @@ When the return-time provider read includes `next_action`, the one-time result a
 
 This action copy follows the result's same-browser, same-destination, one-use and 15-minute limits. It is private provider data and can expire sooner at Stripe. Do not expose its complete details in public logs or analytics, and do not treat it as payment proof. The permanent Order keeps only canonical payment facts; longer-lived server-side handling uses the `payment.requiresAction` lifecycle event described in [Orders](orders.md#payment-facts-and-actions).
 
-Every browser result reference is bound to its native session and exact destination, expires after 15 minutes and is consumed once. Keep the same `$stripeCheckout` object when a template reads the result more than once; that object memoizes the consumed value.
+Every browser result reference is bound to its native session and exact destination, expires after 15 minutes and is consumed once. Keep the same `$stripeCheckout` object when a template reads the result or creates its next bootstrap; that object memoizes the consumed value.
 
 An authoritative complete return clears only the unchanged Cart from the initiating browser. A changed Cart, Direct checkout, missing browser binding, open/expired Session or unavailable read is preserved. Reconciliation still runs without browser authority, but that request cannot expose an Order result or clear browser state. External destinations receive no result reference; a matching local Cart may still be cleared after authoritative completion.
 
-Embedded resume is not implemented in this step, so `canResumeCheckout()` remains false for embedded open results. The next batch adds safe reuse of the original open Session and deferred Cart clearing after webhook-only completion.
+Embedded resume is intended for a customer who leaves Embedded Checkout for an external payment step and returns without completing Checkout. For example, a bank authorization may be cancelled or fail while the Stripe Checkout Session remains open. The return destination can then mount that same Session again so the customer can retry or choose another payment method without creating another Order or Session.
+
+After a correlated same-browser return, `canResumeCheckout()` is `true` only while that original Session is open and unexpired. Use it to decide whether the return page should mount Embedded Checkout again:
+
+```php
+<?php
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+
+$stripeCheckout = $site->stripeCheckout();
+$checkoutResult = $stripeCheckout->checkoutResult();
+
+if ($checkoutResult?->canResumeCheckout()) {
+    $checkoutBootstrap = $stripeCheckout->checkout(CheckoutSource::Cart);
+
+    // Use the normal embedded JSON integration with this bootstrap.
+}
+```
+
+Submit the returned bootstrap through the ordinary embedded JSON flow. The endpoint recognizes the accepted action, retrieves the existing Session and returns its current `data.clientSecret`; the frontend uses that secret to mount Embedded Checkout as usual. There is no separate resume endpoint or frontend submission format.
+
+Direct checkout reuses the accepted canonical items and shipping country; it never reconstructs them from current storefront content. Cart checkout requires the same Cart identity and revision. A completed return should present completion, and an expired return should present expiration or an explicit new-checkout action. Do not automatically submit a fresh bootstrap for either result. An ordinary Checkout page without a return result calls `checkout()` normally to issue a new action.
 
 ## Hosted cancellation
 
@@ -178,7 +198,7 @@ if (result.ok && result.data.uiMode === "hosted") {
 }
 ```
 
-The example shows submission, not a complete storefront or error interface. When `ok` is false, display the safe `error.message` and handle `error.code` as described below. Embedded success supplies `data.clientSecret` for Stripe.js instead of a redirect URL. The bootstrap's publishable key is the browser key; never send the server key to the browser. A complete embedded mount/resume example will accompany the remaining browser-flow implementation.
+The example shows submission, not a complete storefront or error interface. When `ok` is false, display the safe `error.message` and handle `error.code` as described below. Embedded success supplies `data.clientSecret` for Stripe.js instead of a redirect URL. The bootstrap's publishable key is the browser key; never send the server key to the browser. An eligible embedded return uses this same submission contract to retrieve the existing Session's current client secret.
 
 Successful JSON responses contain only:
 
