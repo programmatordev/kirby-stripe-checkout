@@ -187,6 +187,36 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertCount(2, (new OrderPageStore($this->kirby))->orders());
     }
 
+    public function testChangedLanguageCreatesAnIndependentCheckoutForTheSameCartRevision(): void
+    {
+        $stripeCheckout = new StripeCheckout($this->kirby);
+        $stripeCheckout->cart()?->add('product', 2);
+        $englishBody = $stripeCheckout->checkout(CheckoutSource::Cart)->submissionData();
+        unset($englishBody['csrf']);
+        $this->assertSame(201, $this->send($englishBody)->code());
+
+        $this->kirby->setCurrentLanguage('pt');
+        $portugueseBody = (new StripeCheckout($this->kirby))->checkout(CheckoutSource::Cart)->submissionData();
+        unset($portugueseBody['csrf']);
+        $englishRevision = $englishBody['revision'] ?? null;
+        $portugueseRevision = $portugueseBody['revision'] ?? null;
+        $this->assertIsString($englishRevision);
+        $this->assertSame($englishRevision, $portugueseRevision);
+        $this->assertNotSame($englishBody['attemptToken'], $portugueseBody['attemptToken']);
+        $this->createdSessionId = 'cs_test_portuguese';
+
+        $this->assertSame(201, $this->send($portugueseBody, languageCode: 'pt')->code());
+
+        $englishOrder = $this->orderData($englishBody);
+        $portugueseOrder = $this->orderData($portugueseBody);
+        $this->assertSame('en', $englishOrder['languageCode']);
+        $this->assertSame('pt', $portugueseOrder['languageCode']);
+        $this->assertSame('cs_test_browser', $englishOrder['stripeCheckoutSessionId']);
+        $this->assertSame('cs_test_portuguese', $portugueseOrder['stripeCheckoutSessionId']);
+        $this->assertSame(['post', 'post'], array_column($this->requests, 'method'));
+        $this->assertCount(2, (new OrderPageStore($this->kirby))->orders());
+    }
+
     public function testLoginPreservesTheCartButCreatesCheckoutForTheNewActor(): void
     {
         /** @var User $user */

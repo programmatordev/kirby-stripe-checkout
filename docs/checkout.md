@@ -35,7 +35,7 @@ JSON serialization returns the same data as `toArray()`.
 
 Submission fields are `csrf`, `source`, `attemptToken`, and, for Cart, `revision`. Direct does not include a revision. Retain the issued fields together; do not fetch a fresh revision to submit an older form. For JSON submission, the CSRF value belongs in `X-CSRF`, with the remaining submission fields in the body. Escape values when rendering them into HTML.
 
-Calling `checkout()` in multiple tabs can issue different action tokens for the same unchanged Cart. The first accepted submission claims that Cart UUID and revision for the current browser actor. Later submissions for that exact Cart state reuse the same Order and Stripe Checkout Session instead of creating competing purchases. A Cart change starts a new revision and may create an independent Order and Session; the plugin does not expire an earlier open Session because the customer may still be using it. An expired Session or a definitive Session-creation failure allows a replacement Order for the same revision.
+Calling `checkout()` in multiple tabs can issue different action tokens for the same unchanged Cart. The first accepted submission claims that Cart UUID and revision for the current browser actor, language and Checkout UI mode. Later submissions for that exact Checkout context reuse the same Order and Stripe Checkout Session instead of creating competing purchases. A Cart change or language change starts an independent Checkout context and may create another Order and Session; the plugin does not expire an earlier open Session because the customer may still be using it. An expired Session or a definitive Session-creation failure allows a replacement Order for the same context.
 
 After a hosted form failure that must reuse an existing attempt, Direct submission data additionally contains the exact normalized `items` and optional `shippingCountry` to render unchanged. Ordinary validation and definitive pre-attempt failures receive a fresh action instead.
 
@@ -247,7 +247,7 @@ Bootstrap uses ordinary Kirby sessions and Kirby's CSRF token. It does not repla
 
 Each call issues a new action. Keep the same issued action for duplicate submissions or retries. A deliberate new checkout uses a new bootstrap. The attempt token is not authorization by itself: its native browser state must match the actor, source, UI mode, language and, for Cart, saved identity/revision. A login, logout or changed context makes the old action unusable.
 
-Switching language allows a new bootstrap in that language. The language check applies to reusing the same action: its retries retain the original language and navigation context.
+Switching language allows a new bootstrap and independent Checkout in that language while preserving the Cart and its revision. Reusing an existing action retains its original language and navigation context.
 
 The initiating URL comes from the current same-site GET request, with internal result parameters and the fragment removed. Other methods or an unsuitable URL use the localized site URL. Request-body and Referer destinations are not used.
 

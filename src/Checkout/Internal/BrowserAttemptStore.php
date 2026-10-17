@@ -258,7 +258,7 @@ final class BrowserAttemptStore
     }
 
     /**
-     * Returns the first accepted attempt for the exact Cart state and actor.
+     * Returns the first accepted attempt for the exact Cart and presentation context.
      * This runs under the native session lock so competing tabs cannot both become the winner.
      *
      * @param array<string, array<string, mixed>> $attempts
@@ -301,6 +301,15 @@ final class BrowserAttemptStore
 
             // An older revision can still be active in Stripe, so each immutable Cart state has its own winner.
             if ($winnerContext->cartRevision() !== $context->cartRevision()) {
+                continue;
+            }
+
+            // Language and mode freeze customer-facing Session facts independently from Cart selections.
+            if ($winnerContext->languageCode() !== $context->languageCode()) {
+                continue;
+            }
+
+            if ($winnerContext->uiMode() !== $context->uiMode()) {
                 continue;
             }
 
