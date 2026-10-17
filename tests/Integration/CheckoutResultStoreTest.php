@@ -10,6 +10,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\BrowserAttemptContext;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutResultStore;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 
 final class CheckoutResultStoreTest extends KirbyTestCase
@@ -115,6 +116,40 @@ final class CheckoutResultStoreTest extends KirbyTestCase
             checkedAt: $savedAt->modify('+15 minutes'),
         ));
         $this->assertSame('keep', $session->data()->get('other'));
+    }
+
+    public function testResultPreservesOnePaymentIntentBoundAction(): void
+    {
+        $savedAt = new DateTimeImmutable('2026-10-16T10:00:00Z');
+        $store = new CheckoutResultStore($this->kirby->session());
+        $context = $this->context();
+        $nextAction = PaymentAction::fromArray([
+            'type' => 'multibanco_display_details',
+            'multibanco_display_details' => [
+                'reference' => '123456789',
+            ],
+        ]);
+        $this->assertNotNull($nextAction);
+        $reference = $store->save(
+            reason: CheckoutResultReason::HostedSuccess,
+            context: $context,
+            pageUuid: 'page://Abc123def456GHI7',
+            destinationUrl: 'https://kirby-stripe-checkout.test/completed',
+            savedAt: $savedAt,
+            paymentIntentId: 'pi_current',
+            nextAction: $nextAction,
+        );
+
+        $result = $store->consume(
+            reference: $reference,
+            userUuid: null,
+            guestReference: $context->guestReference(),
+            destinationUrl: 'https://kirby-stripe-checkout.test/completed',
+            checkedAt: $savedAt,
+        );
+        $this->assertNotNull($result);
+        $this->assertSame('pi_current', $result->paymentIntentId());
+        $this->assertSame($nextAction->toArray(), $result->nextAction()?->toArray());
     }
 
     private function context(): BrowserAttemptContext

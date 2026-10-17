@@ -231,7 +231,7 @@ Checkout events preserve both financial collections. Refund and Dispute events r
 
 The protected `payment` snapshot retains common payment facts: status, exact amounts, method type, PaymentIntent/Charge/PaymentMethod identifiers, provider statuses, safe failure code, and provider timestamps. A free Checkout can have no PaymentIntent; missing amounts remain unknown rather than being invented as zero. A successful payment is not assumed to have been captured immediately.
 
-Hooks read these frozen facts through `$lifecycleEvent->payment()`. This does not contact Stripe or read the current Order Page:
+Hooks read these frozen facts through `$lifecycleEvent->payment()`. A same-browser Checkout return can expose the same typed `Payment` through `CheckoutResult::payment()`, with the action observed by that return attached for its one-time presentation window. Neither access contacts Stripe again:
 
 ```php
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEvent;
@@ -262,7 +262,7 @@ An action is not necessarily a set of customer payment instructions. It may desc
 
 A pending payment can be recorded before its action arrives, and an action can arrive before Checkout completes. Use `payment.requiresAction` to handle action details, not `payment.pending`. The action hook runs after its delivery snapshot is saved while payment is non-terminal; its frozen payment status may still be `unpaid`. A later pending transition has no action attached and does not repeat the action notification. Identical action evidence does not notify again, and late actions after terminal payment are ignored.
 
-Action data exists only in the `requiresAction` lifecycle payload, outside its canonical `orderSnapshot`. `$lifecycleEvent->payment()?->nextAction()` attaches that historical evidence to the frozen common payment facts. The order's `payment` field never contains an action, observation watermark or action-specific expiry. `Payment::toArray()` serializes common payment facts only; use `LifecycleEvent::toArray()` when queuing the complete hook payload.
+Action data exists only in the `requiresAction` lifecycle payload and the short-lived same-browser Checkout result, outside canonical Order data. `$lifecycleEvent->payment()?->nextAction()` attaches historical delivery evidence to frozen common payment facts. `$checkoutResult->payment()?->nextAction()` attaches the action observed during that provider return and drops it when the current Order has become terminal or no longer has the same PaymentIntent. The order's `payment` field never contains an action, observation watermark or action-specific expiry. `Payment::toArray()` serializes common payment facts only; use `LifecycleEvent::toArray()` when queuing the complete hook payload.
 
 The delivery's fixed replay deadline uses the PHP-only `housekeeping.lifecycleDeliveryPayloadRetentionDays`, defaulting to 30 days. Retries never renew it. It is not Stripe's own action expiry: historical codes or URLs may already be unusable. Every saved delivery payload, including successful deliveries, stays until its fixed retention deadline, defaulting to 30 days from local delivery creation. The internal single-order cleanup operation can remove expired payloads regardless of delivery status. Successful deliveries remain non-retryable during retention. It removes the frozen order snapshot and private action together; automatic cleanup is not running yet. Sanitized delivery metadata, including an action fingerprint for duplicate suppression, is separate from the private payload.
 

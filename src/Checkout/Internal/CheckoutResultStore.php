@@ -9,6 +9,7 @@ use DateInterval;
 use DateTimeImmutable;
 use Kirby\Session\Session;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutResultReason;
+use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
 use Throwable;
 
 /** @internal Bounded native-session storage for one-navigation Checkout results. */
@@ -32,8 +33,10 @@ final class CheckoutResultStore
         string $destinationUrl,
         DateTimeImmutable $savedAt,
         bool $canResumeCheckout = false,
+        ?string $paymentIntentId = null,
+        ?PaymentAction $nextAction = null,
     ): string {
-        return $this->locked(function () use ($reason, $context, $pageUuid, $destinationUrl, $savedAt, $canResumeCheckout): string {
+        return $this->locked(function () use ($reason, $context, $pageUuid, $destinationUrl, $savedAt, $canResumeCheckout, $paymentIntentId, $nextAction): string {
             $results = $this->current($savedAt->getTimestamp());
 
             if (count($results) >= self::MAX_RESULTS) {
@@ -52,6 +55,8 @@ final class CheckoutResultStore
                 guestReference: $context->guestReference(),
                 destinationUrl: $destinationUrl,
                 canResumeCheckout: $canResumeCheckout,
+                paymentIntentId: $paymentIntentId,
+                nextAction: $nextAction,
                 expiresAt: $savedAt->add(new DateInterval(self::RETENTION))->getTimestamp(),
             );
             $this->write($results);

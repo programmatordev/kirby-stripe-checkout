@@ -93,6 +93,12 @@ final class CheckoutSessionReconciler
      */
     public function reconcile(string $pageUuid, string $sessionId, ?Event $event = null): OrderPage
     {
+        return $this->reconcileResult($pageUuid, $sessionId, $event)->orderPageOrFail();
+    }
+
+    /** Reconciles current provider state while retaining transient facts needed by the immediate caller. */
+    public function reconcileResult(string $pageUuid, string $sessionId, ?Event $event = null): ReconciliationResult
+    {
         $page = $this->orders->order($pageUuid) ?? throw new OrderDataException();
         $data = $this->orders->data($page);
         $order = OrderSerializer::context($data);
@@ -135,7 +141,7 @@ final class CheckoutSessionReconciler
             trigger: $trigger,
             baseline: $baseline,
             observation: $observation,
-        )->orderPageOrFail();
+        );
     }
 
     public function refundCorrelation(Event $event): ?RefundCorrelation
@@ -337,7 +343,14 @@ final class CheckoutSessionReconciler
                         triggerId: $trigger?->id,
                     );
 
-                    return ReconciliationResult::committed(orderPage: $page, updated: $updated);
+                    $nextAction = $observation->payment()->nextAction();
+
+                    return ReconciliationResult::committed(
+                        orderPage: $page,
+                        updated: $updated,
+                        paymentIntentId: $nextAction === null ? null : $observation->payment()->stripePaymentIntentId(),
+                        nextAction: $nextAction,
+                    );
                 } catch (ReconciliationConflictException) {
                     // A new complete provider read follows the fresh local state; no mutation is replayed.
                     $observation = null;

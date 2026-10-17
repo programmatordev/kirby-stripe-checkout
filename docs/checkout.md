@@ -90,9 +90,13 @@ $checkoutResult = $stripeCheckout->checkoutResult();
 <?php elseif ($checkoutResult?->reason() === CheckoutResultReason::EmbeddedReturn): ?>
     <!-- Present the current embedded Checkout result. -->
 <?php endif ?>
+
+<?php if ($nextAction = $checkoutResult?->payment()?->nextAction()): ?>
+    <!-- Present the provider action that fits your store and payment methods. -->
+<?php endif ?>
 ```
 
-`reason()` describes the route used, while `checkoutStatus()` and `paymentStatus()` expose the reconciled facts. A complete Checkout may still have `PaymentStatus::Pending`; fulfillment must follow authoritative payment state and lifecycle hooks. A temporary provider read or correlation failure can produce a result whose `isAvailable()` is false and whose Order/status methods return `null`.
+`reason()` describes the route used, while `checkoutStatus()` and `paymentStatus()` expose the reconciled facts. `payment()` returns the current typed payment facts when the Order has them. A complete Checkout may still have `PaymentStatus::Pending`; fulfillment must follow authoritative payment state and lifecycle hooks. A temporary provider read or correlation failure can produce a result whose `isAvailable()` is false and whose Order, payment and status methods return `null`.
 
 The meaningful status combinations are:
 
@@ -107,6 +111,10 @@ The meaningful status combinations are:
 | `complete` | `failed` | Checkout completed, but the associated payment definitively failed. |
 
 `CheckoutStatus::Complete` therefore describes completion of the Checkout flow, not proof that funds have settled. Use `paymentStatus()` when deciding what to present or fulfill, and keep webhooks authoritative for later payment changes.
+
+When the return-time provider read includes `next_action`, the one-time result attaches it to `payment()` for the destination template. The action keeps Stripe's original type and active detail branch; inspect `type()` before using `details()`. A pending payment does not necessarily require customer action, so `nextAction()` can be `null`. The plugin discards the result action if a later webhook or reconciliation makes the payment terminal or replaces its PaymentIntent before the template consumes it.
+
+This action copy follows the result's same-browser, same-destination, one-use and 15-minute limits. It is private provider data and can expire sooner at Stripe. Do not expose its complete details in public logs or analytics, and do not treat it as payment proof. The permanent Order keeps only canonical payment facts; longer-lived server-side handling uses the `payment.requiresAction` lifecycle event described in [Orders](orders.md#payment-facts-and-actions).
 
 Every browser result reference is bound to its native session and exact destination, expires after 15 minutes and is consumed once. Keep the same `$stripeCheckout` object when a template reads the result more than once; that object memoizes the consumed value.
 
@@ -131,7 +139,7 @@ $checkoutResult = $stripeCheckout->checkoutResult();
 <?php endif ?>
 ```
 
-An available cancellation result exposes the protected Order Page through `order()` and its current local `checkoutStatus()` and `paymentStatus()`. The navigation reason does not claim Checkout completion or payment success. `canResumeCheckout()` is always false for hosted cancellation.
+An available cancellation result exposes the protected Order Page through `order()` and its current local `checkoutStatus()` and `paymentStatus()`. It can expose existing canonical facts through `payment()`, but never a return-time payment action. The navigation reason does not claim Checkout completion or payment success. `canResumeCheckout()` is always false for hosted cancellation.
 
 Cancellation performs no Stripe read or mutation, does not change the Order, and does not clear the Cart. The result reference is native-session-bound, expires after 15 minutes and is consumed once. Keep the same `$stripeCheckout` object when reading it more than once in one template; that object memoizes the consumed result. External cancellation destinations receive no result reference because they cannot read the Kirby session API.
 

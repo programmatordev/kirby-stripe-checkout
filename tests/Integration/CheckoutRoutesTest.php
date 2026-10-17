@@ -61,6 +61,8 @@ final class CheckoutRoutesTest extends KirbyTestCase
     private string $sessionStatus = 'open';
     private string $sessionPaymentStatus = 'unpaid';
     private string $paymentIntentStatus = 'requires_payment_method';
+    /** @var array<string, mixed>|null */
+    private ?array $paymentNextAction = null;
     private string $price = '16.00';
 
     /** @var array<string, mixed>|null */
@@ -735,6 +737,12 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertIsString($parameters['success_url']);
         $this->sessionStatus = 'complete';
         $this->paymentIntentStatus = 'processing';
+        $this->paymentNextAction = [
+            'type' => 'multibanco_display_details',
+            'multibanco_display_details' => [
+                'reference' => '123456789',
+            ],
+        ];
 
         $returned = $this->sendNavigation(str_replace('{CHECKOUT_SESSION_ID}', 'cs_test_browser', $parameters['success_url']));
         $location = $returned->headers()['Location'] ?? null;
@@ -749,6 +757,47 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertNotNull($result);
         $this->assertSame(CheckoutStatus::Complete, $result->checkoutStatus());
         $this->assertSame(PaymentStatus::Pending, $result->paymentStatus());
+        $payment = $result->payment();
+        $this->assertNotNull($payment);
+        $this->assertSame('pi_browser', $payment->stripePaymentIntentId());
+        $nextAction = $payment->nextAction();
+        $this->assertNotNull($nextAction);
+        $this->assertSame('multibanco_display_details', $nextAction->type());
+        $this->assertSame('123456789', $nextAction->details()['reference']);
+    }
+
+    public function testReturnResultDropsItsObservedActionAfterThePaymentBecomesTerminal(): void
+    {
+        $this->restart(options: ['settings' => ['successDestination' => '/completed']]);
+        $body = $this->submission();
+        $this->assertSame(201, $this->send($body)->code());
+        $parameters = $this->requests[0]['parameters'];
+        $this->assertIsString($parameters['success_url']);
+        $this->sessionStatus = 'complete';
+        $this->paymentIntentStatus = 'processing';
+        $this->paymentNextAction = [
+            'type' => 'multibanco_display_details',
+            'multibanco_display_details' => [
+                'reference' => '123456789',
+            ],
+        ];
+
+        $returned = $this->sendNavigation(str_replace('{CHECKOUT_SESSION_ID}', 'cs_test_browser', $parameters['success_url']));
+        $location = $returned->headers()['Location'] ?? null;
+        $this->assertIsString($location);
+        $this->sessionPaymentStatus = 'paid';
+        $this->paymentIntentStatus = 'succeeded';
+        $this->paymentNextAction = null;
+        $attemptToken = $body['attemptToken'];
+        $this->assertIsString($attemptToken);
+        $pageUuid = OrderData::pageUuid((new AttemptToken($attemptToken))->orderUuid());
+        (new RuntimeFactory($this->kirby))->checkoutSessionReconciler()->reconcile($pageUuid, 'cs_test_browser');
+
+        $this->setRequest($location);
+        $result = (new StripeCheckout($this->kirby))->checkoutResult();
+        $this->assertNotNull($result);
+        $this->assertSame(PaymentStatus::Paid, $result->paymentStatus());
+        $this->assertNull($result->payment()?->nextAction());
     }
 
     public function testExpiredEmbeddedReturnUsesItsReturnDestinationAndPreservesTheCart(): void
@@ -1194,6 +1243,7 @@ final class CheckoutRoutesTest extends KirbyTestCase
                 'type' => 'card',
             ],
             'latest_charge' => null,
+            'next_action' => $this->paymentNextAction,
         ] : null;
 
         return $session;

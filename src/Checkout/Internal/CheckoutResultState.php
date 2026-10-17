@@ -7,8 +7,13 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 use InvalidArgumentException;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutResultReason;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
 
-/** @internal Persistable browser and destination binding for one Checkout result. */
+/**
+ * @internal Persistable browser and destination binding for one Checkout result.
+ *
+ * Payment actions are temporary presentation evidence and never become canonical Order data.
+ */
 final readonly class CheckoutResultState
 {
     private const INVALID_STATE_MESSAGE = 'Invalid Checkout result state.';
@@ -20,6 +25,8 @@ final readonly class CheckoutResultState
         private ?string $guestReference,
         private string $destinationUrl,
         private bool $canResumeCheckout,
+        private ?string $paymentIntentId,
+        private ?PaymentAction $nextAction,
         private int $expiresAt,
     ) {
         if (($userUuid === null) === ($guestReference === null)) {
@@ -37,6 +44,18 @@ final readonly class CheckoutResultState
         if ($canResumeCheckout && ($pageUuid === null || $reason !== CheckoutResultReason::EmbeddedReturn)) {
             throw new InvalidArgumentException('The Checkout result cannot resume.');
         }
+
+        if (($paymentIntentId === null) !== ($nextAction === null)) {
+            throw new InvalidArgumentException('The Checkout result payment action is inconsistent.');
+        }
+
+        if ($paymentIntentId !== null) {
+            OrderData::nonEmptyString($paymentIntentId);
+
+            if ($pageUuid === null || $reason === CheckoutResultReason::HostedCancel) {
+                throw new InvalidArgumentException('The Checkout result cannot expose a payment action.');
+            }
+        }
     }
 
     public function reason(): CheckoutResultReason
@@ -52,6 +71,16 @@ final readonly class CheckoutResultState
     public function canResumeCheckout(): bool
     {
         return $this->canResumeCheckout;
+    }
+
+    public function paymentIntentId(): ?string
+    {
+        return $this->paymentIntentId;
+    }
+
+    public function nextAction(): ?PaymentAction
+    {
+        return $this->nextAction;
     }
 
     public function expiresAt(): int
@@ -79,6 +108,8 @@ final readonly class CheckoutResultState
             'guestReference' => $this->guestReference,
             'destinationUrl' => $this->destinationUrl,
             'canResumeCheckout' => $this->canResumeCheckout,
+            'paymentIntentId' => $this->paymentIntentId,
+            'nextAction' => $this->nextAction?->toJson(),
             'expiresAt' => $this->expiresAt,
         ];
     }
@@ -87,7 +118,7 @@ final readonly class CheckoutResultState
     {
         if (
             is_array($data) === false
-            || array_diff(array_keys($data), ['reason', 'pageUuid', 'userUuid', 'guestReference', 'destinationUrl', 'canResumeCheckout', 'expiresAt']) !== []
+            || array_diff(array_keys($data), ['reason', 'pageUuid', 'userUuid', 'guestReference', 'destinationUrl', 'canResumeCheckout', 'paymentIntentId', 'nextAction', 'expiresAt']) !== []
         ) {
             throw new InvalidArgumentException(self::INVALID_STATE_MESSAGE);
         }
@@ -98,6 +129,8 @@ final readonly class CheckoutResultState
         $guestReference = self::nullableString($data, 'guestReference');
         $destinationUrl = $data['destinationUrl'] ?? null;
         $canResumeCheckout = $data['canResumeCheckout'] ?? null;
+        $paymentIntentId = self::nullableString($data, 'paymentIntentId');
+        $nextAction = self::nullableString($data, 'nextAction');
         $expiresAt = $data['expiresAt'] ?? null;
 
         if (
@@ -116,6 +149,8 @@ final readonly class CheckoutResultState
             guestReference: $guestReference,
             destinationUrl: $destinationUrl,
             canResumeCheckout: $canResumeCheckout,
+            paymentIntentId: $paymentIntentId,
+            nextAction: $nextAction === null ? null : PaymentAction::fromJson($nextAction),
             expiresAt: $expiresAt,
         );
     }

@@ -18,6 +18,8 @@ use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
+use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use Throwable;
 use ValueError;
@@ -84,15 +86,27 @@ final class CheckoutProviderReturnEndpoint
             $destinationUrl = $this->fallbackDestination($checkoutAttempt);
             $browserContext = $this->browserContext($runtime, $pageUuid, $orderData, $checkoutAttempt);
             $checkoutStatus = null;
+            $paymentIntentId = null;
+            $nextAction = null;
             $savedSessionId = $orderData['stripeCheckoutSessionId'] ?? null;
 
             // The query Session ID is untrusted. Read Stripe only after it exactly matches the Session persisted for this Order.
             if ($savedSessionId === $sessionId) {
                 try {
-                    $page = $runtime->checkoutSessionReconciler()->reconcile($pageUuid, $sessionId);
+                    $reconciliation = $runtime->checkoutSessionReconciler()->reconcileResult($pageUuid, $sessionId);
+                    $page = $reconciliation->orderPageOrFail();
                     $orderData = $orderPageStore->data($page);
                     $checkoutStatus = CheckoutStatus::from(OrderData::string($orderData['checkoutStatus']));
+                    $paymentStatus = PaymentStatus::from(OrderData::string($orderData['paymentStatus']));
                     $destinationUrl = $this->destination($checkoutAttempt, $checkoutStatus);
+                    $observedAction = $reconciliation->nextAction();
+
+                    // Keep return-time instructions only while the committed payment can still require customer action.
+                    // The result resolver also requires the same PaymentIntent before exposing them.
+                    if ($observedAction !== null && in_array($paymentStatus, [PaymentStatus::Unpaid, PaymentStatus::Pending], true)) {
+                        $paymentIntentId = $reconciliation->paymentIntentId();
+                        $nextAction = $observedAction;
+                    }
                 } catch (CheckoutSessionException|ConfigurationException|OrderDataException|OrderQueryException|OrderStorageException|ValueError) {
                     // Browser navigation cannot establish provider facts. Preserve the saved safe destination and expose only an unavailable result.
                 }
@@ -108,6 +122,8 @@ final class CheckoutProviderReturnEndpoint
                 destinationUrl: $destinationUrl,
                 pageUuid: $checkoutStatus === null ? null : $pageUuid,
                 browserContext: $browserContext,
+                paymentIntentId: $paymentIntentId,
+                nextAction: $nextAction,
             );
         } catch (InvalidArgumentException|OrderDataException|OrderQueryException|OrderStorageException) {
             return $this->redirect($fallbackUrl);
@@ -163,6 +179,8 @@ final class CheckoutProviderReturnEndpoint
         string $destinationUrl,
         ?string $pageUuid,
         ?BrowserAttemptContext $browserContext,
+        ?string $paymentIntentId,
+        ?PaymentAction $nextAction,
     ): Response {
         if ($browserContext === null) {
             return $this->redirect($destinationUrl);
@@ -183,6 +201,8 @@ final class CheckoutProviderReturnEndpoint
                 pageUuid: $pageUuid,
                 destinationUrl: $destinationUrl,
                 savedAt: new DateTimeImmutable(),
+                paymentIntentId: $paymentIntentId,
+                nextAction: $nextAction,
             );
             $destinationUrl = $urlBuilder->checkoutResultUrl($destinationUrl, $reference);
         } catch (Throwable) {

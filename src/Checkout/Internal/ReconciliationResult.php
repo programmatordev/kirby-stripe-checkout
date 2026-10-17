@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
 use LogicException;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
+use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
 
 /** @internal Committed Page or safe failure details; never retains provider exceptions. */
 final readonly class ReconciliationResult
@@ -13,13 +14,28 @@ final readonly class ReconciliationResult
     private function __construct(
         private ReconciliationOutcome $outcome,
         private ?OrderPage $orderPage,
+        private ?string $paymentIntentId = null,
+        private ?PaymentAction $nextAction = null,
         private ?string $errorCode = null,
         private bool $retryable = false,
     ) {}
 
-    public static function committed(OrderPage $orderPage, bool $updated): self
-    {
-        return new self($updated ? ReconciliationOutcome::Updated : ReconciliationOutcome::NoChange, $orderPage);
+    public static function committed(
+        OrderPage $orderPage,
+        bool $updated,
+        ?string $paymentIntentId = null,
+        ?PaymentAction $nextAction = null,
+    ): self {
+        if (($paymentIntentId === null) !== ($nextAction === null)) {
+            throw new LogicException('A reconciliation payment action requires its PaymentIntent.');
+        }
+
+        return new self(
+            outcome: $updated ? ReconciliationOutcome::Updated : ReconciliationOutcome::NoChange,
+            orderPage: $orderPage,
+            paymentIntentId: $paymentIntentId,
+            nextAction: $nextAction,
+        );
     }
 
     public static function failed(string $errorCode, bool $retryable = false): self
@@ -45,6 +61,17 @@ final readonly class ReconciliationResult
     public function orderPageOrFail(): OrderPage
     {
         return $this->orderPage ?? throw new LogicException('A failed reconciliation has no committed order Page.');
+    }
+
+    /** Current provider action observed by this reconciliation, never a permanent Order fact. */
+    public function nextAction(): ?PaymentAction
+    {
+        return $this->nextAction;
+    }
+
+    public function paymentIntentId(): ?string
+    {
+        return $this->paymentIntentId;
     }
 
     public function errorCode(): ?string

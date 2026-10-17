@@ -14,6 +14,7 @@ use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Order\Payment;
 use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 use ValueError;
 
@@ -76,6 +77,20 @@ final readonly class CheckoutResultResolver
             $data = $this->orders->data($page);
             $checkoutStatus = CheckoutStatus::from(OrderData::string($data['checkoutStatus']));
             $paymentStatus = PaymentStatus::from(OrderData::string($data['paymentStatus']));
+            $paymentData = isset($data['payment']) ? OrderData::map($data['payment']) : null;
+            $payment = $paymentData === null ? null : Payment::fromArray($paymentData);
+            $nextAction = $state->nextAction();
+
+            if (
+                $paymentData !== null
+                && $nextAction !== null
+                && in_array($paymentStatus, [PaymentStatus::Unpaid, PaymentStatus::Pending], true)
+                && $payment?->stripePaymentIntentId() === $state->paymentIntentId()
+            ) {
+                // The one-time action remains usable only while current canonical payment facts still match its provider observation.
+                $payment = Payment::fromArray($paymentData, nextAction: $nextAction);
+            }
+
             $canResumeCheckout = $state->canResumeCheckout()
                 && $state->reason() === CheckoutResultReason::EmbeddedReturn
                 && $checkoutStatus === CheckoutStatus::Open
@@ -86,6 +101,7 @@ final readonly class CheckoutResultResolver
                 order: $page,
                 checkoutStatus: $checkoutStatus,
                 paymentStatus: $paymentStatus,
+                payment: $payment,
                 canResumeCheckout: $canResumeCheckout,
             );
         } catch (OrderDataException|OrderQueryException|OrderStorageException|ValueError) {
@@ -100,6 +116,7 @@ final readonly class CheckoutResultResolver
             order: null,
             checkoutStatus: null,
             paymentStatus: null,
+            payment: null,
             canResumeCheckout: false,
         );
     }
