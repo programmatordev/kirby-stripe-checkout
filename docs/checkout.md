@@ -118,7 +118,7 @@ When the return-time provider read includes `next_action`, the one-time result a
 
 This action copy follows the result's same-browser, same-destination, one-use and 15-minute limits. It is private provider data and can expire sooner at Stripe. Do not expose its complete details in public logs or analytics, and do not treat it as payment proof. The permanent Order keeps only canonical payment facts; longer-lived server-side handling uses the `payment.requiresAction` lifecycle event described in [Orders](orders.md#payment-facts-and-actions).
 
-Every browser result reference is bound to its native session and exact destination, expires after 15 minutes and is consumed once. Keep the same `$stripeCheckout` object when a template reads the result or creates its next bootstrap; that object memoizes the consumed value.
+Every browser result reference is bound to its native session and exact destination, expires after 15 minutes and is consumed once. Repeated `$site->stripeCheckout()` calls share one facade during the active Kirby App lifecycle, so templates and snippets can read the same memoized result after its session reference is consumed.
 
 An authoritative complete return clears only the unchanged Cart from the initiating browser. A changed Cart, Direct checkout, missing browser binding, open/expired Session or unavailable read is preserved. Reconciliation still runs without browser authority, but that request cannot expose an Order result or clear browser state. External destinations receive no result reference; a matching local Cart may still be cleared after authoritative completion.
 

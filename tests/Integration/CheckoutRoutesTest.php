@@ -1059,9 +1059,15 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertIsString($location);
 
         $this->setRequest($location);
-        $stripeCheckout = new StripeCheckout($this->kirby);
-        $resumeData = $stripeCheckout->checkout(CheckoutSource::Direct)->submissionData();
-        $this->assertTrue($stripeCheckout->checkoutResult()?->canResumeCheckout());
+        /** @phpstan-ignore-next-line method.notFound */
+        $stripeCheckout = $this->kirby->site()->stripeCheckout();
+        $this->assertInstanceOf(StripeCheckout::class, $stripeCheckout);
+        $checkoutResult = $stripeCheckout->checkoutResult();
+        $this->assertTrue($checkoutResult?->canResumeCheckout());
+        /** @phpstan-ignore-next-line method.notFound */
+        $reusedStripeCheckout = $this->kirby->site()->stripeCheckout();
+        $this->assertSame($stripeCheckout, $reusedStripeCheckout);
+        $resumeData = $reusedStripeCheckout->checkout(CheckoutSource::Direct)->submissionData();
         $this->assertSame($body['attemptToken'], $resumeData['attemptToken']);
         $this->assertArrayHasKey('items', $resumeData);
         $this->assertSame([[
