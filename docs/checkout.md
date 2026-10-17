@@ -2,7 +2,7 @@
 
 `checkout()` prepares private submission data for one browser checkout action. It creates no Order or Stripe resource and does not resolve products, prices or shipping quotes.
 
-Bootstrap, hosted form submission, JSON submission and hosted cancellation are available now. Browser success and embedded return routes are still being implemented, so this guide does not describe a complete production checkout integration.
+Bootstrap, hosted form submission, JSON submission, hosted success/cancellation and embedded return routes are available now. Embedded Session resume and webhook-only Cart clearing are still being implemented, so this guide does not yet describe the complete browser integration.
 
 ```php
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
@@ -71,6 +71,49 @@ Direct forms submit `items[index][reference]`, optional `items[index][quantity]`
 
 `CheckoutError` exposes `code()`, translated `message()` and `retryable()`. The initiating template owns presentation; the plugin registers no error/pending page, template, snippet or configurable error destination. Failures that cannot be safely tied to an issued browser action, including invalid CSRF or malformed action identity, remain direct HTTP errors and do not trust a request or Referer destination.
 
+## Browser returns
+
+Hosted success and embedded return navigation pass through fixed, language-aware plugin routes. Those routes retrieve the current Checkout Session, run the same guarded reconciliation used by webhooks, commit the authoritative Order state and then redirect to the destination saved when the Session was created. Browser navigation itself is never payment proof.
+
+A complete Session redirects to the saved `successDestination`, including when an asynchronous payment remains pending. An embedded open or expired Session redirects to `returnDestination`. When the same browser still owns the attempt and the destination is on the Kirby site, its template can consume the result:
+
+```php
+<?php
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutResultReason;
+
+$stripeCheckout = $site->stripeCheckout();
+$checkoutResult = $stripeCheckout->checkoutResult();
+?>
+
+<?php if ($checkoutResult?->reason() === CheckoutResultReason::HostedSuccess): ?>
+    <!-- Inspect checkoutStatus() and paymentStatus() before choosing the message. -->
+<?php elseif ($checkoutResult?->reason() === CheckoutResultReason::EmbeddedReturn): ?>
+    <!-- Present the current embedded Checkout result. -->
+<?php endif ?>
+```
+
+`reason()` describes the route used, while `checkoutStatus()` and `paymentStatus()` expose the reconciled facts. A complete Checkout may still have `PaymentStatus::Pending`; fulfillment must follow authoritative payment state and lifecycle hooks. A temporary provider read or correlation failure can produce a result whose `isAvailable()` is false and whose Order/status methods return `null`.
+
+The meaningful status combinations are:
+
+| Checkout status | Payment status | Meaning |
+| --- | --- | --- |
+| `creating`, `creation_uncertain` or `creation_failed` | `unpaid` | The plugin has not confirmed an open Stripe Checkout Session. |
+| `open` | `unpaid` | The Checkout Session can potentially still be completed. |
+| `expired` | `unpaid` | The Checkout Session expired before completion. |
+| `complete` | `pending` | Checkout completed, but an asynchronous payment is still processing. |
+| `complete` | `paid` | Stripe confirmed payment. |
+| `complete` | `no_payment_required` | Checkout completed with no payment to collect. |
+| `complete` | `failed` | Checkout completed, but the associated payment definitively failed. |
+
+`CheckoutStatus::Complete` therefore describes completion of the Checkout flow, not proof that funds have settled. Use `paymentStatus()` when deciding what to present or fulfill, and keep webhooks authoritative for later payment changes.
+
+Every browser result reference is bound to its native session and exact destination, expires after 15 minutes and is consumed once. Keep the same `$stripeCheckout` object when a template reads the result more than once; that object memoizes the consumed value.
+
+An authoritative complete return clears only the unchanged Cart from the initiating browser. A changed Cart, Direct checkout, missing browser binding, open/expired Session or unavailable read is preserved. Reconciliation still runs without browser authority, but that request cannot expose an Order result or clear browser state. External destinations receive no result reference; a matching local Cart may still be cleared after authoritative completion.
+
+Embedded resume is not implemented in this step, so `canResumeCheckout()` remains false for embedded open results. The next batch adds safe reuse of the original open Session and deferred Cart clearing after webhook-only completion.
+
 ## Hosted cancellation
 
 Stripe's hosted back action returns through the fixed plugin cancel route and redirects to the saved `cancelDestination`. When that destination is on the Kirby site and the same browser still owns the attempt, its template can consume the result:
@@ -127,7 +170,7 @@ if (result.ok && result.data.uiMode === "hosted") {
 }
 ```
 
-The example shows submission, not a complete storefront or error interface. When `ok` is false, display the safe `error.message` and handle `error.code` as described below. Embedded success supplies `data.clientSecret` for Stripe.js instead of a redirect URL. The bootstrap's publishable key is the browser key; never send the server key to the browser. A complete embedded/return example will accompany the remaining browser-flow implementation.
+The example shows submission, not a complete storefront or error interface. When `ok` is false, display the safe `error.message` and handle `error.code` as described below. Embedded success supplies `data.clientSecret` for Stripe.js instead of a redirect URL. The bootstrap's publishable key is the browser key; never send the server key to the browser. A complete embedded mount/resume example will accompany the remaining browser-flow implementation.
 
 Successful JSON responses contain only:
 

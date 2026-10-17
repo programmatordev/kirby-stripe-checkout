@@ -1,6 +1,6 @@
 # Documentation
 
-Kirby Stripe Checkout is under active development and is not ready for production use. The current package provides its configuration foundation, exact money formatting, Kirby and Stripe Price product resolution, variants, a session-backed PHP cart API and HTTP routes, private Checkout bootstrap data and JSON submission, native order storage and queries, protected Checkout Session creation and signed webhook payment reconciliation, a native Panel area, and local diagnostics. Browser return flows are not implemented yet.
+Kirby Stripe Checkout is under active development and is not ready for production use. The current package provides its configuration foundation, exact money formatting, Kirby and Stripe Price product resolution, variants, a session-backed PHP cart API and HTTP routes, private Checkout bootstrap data and JSON submission, authoritative hosted success/cancel and embedded return navigation, native order storage and queries, protected Checkout Session creation and signed webhook payment reconciliation, a native Panel area, and local diagnostics. Embedded Session resume and webhook-only Cart clearing remain pending.
 
 ## Current guides
 
@@ -9,7 +9,7 @@ Kirby Stripe Checkout is under active development and is not ready for productio
 - [Products and variants](products.md) — reusable fields, existing-schema mapping, options, variants, and product resolution.
 - [Cart](cart.md) — adding and changing items in PHP, exact totals, errors, and session behavior.
 - [Cart HTTP routes](cart-http.md) — browser requests, CSRF, revisions, JSON and HTML fragments.
-- [Checkout](checkout.md) — private browser-action data and JSON submission; browser return flows remain pending.
+- [Checkout](checkout.md) — private browser-action data, form/JSON submission and authoritative browser return navigation.
 - [Checkout Session requests](session-requests.md) — the protected standard request and safe project customization.
 - [Shipping quotes](shipping.md) — built-in destination zones, replacement resolvers, trusted context, and quote outcomes.
 - [Orders](orders.md) — native Pages, scoped queries, custom fields, separate states and immutable snapshots.

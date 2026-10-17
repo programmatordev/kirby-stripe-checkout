@@ -2,7 +2,7 @@
 
 The plugin registers `POST /stripe-checkout/webhook` automatically through its Composer bootstrap. The endpoint has no language prefix and remains available when the built-in cart is disabled. It needs neither a browser session nor a CSRF token; Stripe's signature authenticates the delivery.
 
-Customer Checkout and return routes are still under development. This endpoint reconciles orders already created by the plugin's protected Checkout workflow; it does not create an order from an arbitrary Stripe event.
+Customer Checkout submission and authoritative browser return routes are available; embedded Session resume and webhook-only Cart clearing are still under development. This endpoint reconciles orders already created by the plugin's protected Checkout workflow; it does not create an order from an arbitrary Stripe event.
 
 ## Configure Stripe
 

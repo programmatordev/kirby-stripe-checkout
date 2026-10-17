@@ -70,6 +70,19 @@ final class CheckoutUrlBuilder
         return Url::build(['query' => $query], $destinationUrl);
     }
 
+    public function localizedSiteUrl(?string $languageCode): string
+    {
+        if ($this->kirby->multilang()) {
+            // A saved attempt's language may have been removed since creation.
+            $languageCode = $this->kirby->language($languageCode)?->code()
+                ?? $this->kirby->defaultLanguage()?->code();
+        } else {
+            $languageCode = null;
+        }
+
+        return $this->kirby->site()->url($languageCode);
+    }
+
     public static function resultDestinationUrl(string $url): string
     {
         $query = [];
@@ -95,14 +108,6 @@ final class CheckoutUrlBuilder
 
     private function localizedUrl(string $path, ?string $languageCode): string
     {
-        if ($this->kirby->multilang()) {
-            // A saved attempt's language may have been removed since creation.
-            $languageCode = $this->kirby->language($languageCode)?->code()
-                ?? $this->kirby->defaultLanguage()?->code();
-        } else {
-            $languageCode = null;
-        }
-
-        return rtrim($this->kirby->site()->url($languageCode), '/') . '/' . $path;
+        return rtrim($this->localizedSiteUrl($languageCode), '/') . '/' . $path;
     }
 }

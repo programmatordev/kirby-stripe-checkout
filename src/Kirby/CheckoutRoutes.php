@@ -8,7 +8,9 @@ use Kirby\Cms\App;
 use Kirby\Http\Response;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutCancelEndpoint;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutEndpoint;
+use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutProviderReturnEndpoint;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\CheckoutUrlBuilder;
+use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 
 /** Registers localized Checkout browser routes without opening session state during boot. */
 final class CheckoutRoutes
@@ -33,6 +35,34 @@ final class CheckoutRoutes
                 }
 
                 return (new CheckoutEndpoint($kirby))->respond();
+            },
+        ], [
+            'pattern' => CheckoutUrlBuilder::SUCCESS_PATH,
+            'method' => 'ALL',
+            'language' => '*',
+            'action' => function () use ($kirby): Response {
+                if ($kirby->request()->method() !== 'GET') {
+                    return new Response('', code: CheckoutRoutes::HTTP_METHOD_NOT_ALLOWED, headers: [
+                        ...CheckoutProviderReturnEndpoint::HEADERS,
+                        'Allow' => 'GET',
+                    ]);
+                }
+
+                return (new CheckoutProviderReturnEndpoint($kirby, UiMode::Hosted))->respond();
+            },
+        ], [
+            'pattern' => CheckoutUrlBuilder::RETURN_PATH,
+            'method' => 'ALL',
+            'language' => '*',
+            'action' => function () use ($kirby): Response {
+                if ($kirby->request()->method() !== 'GET') {
+                    return new Response('', code: CheckoutRoutes::HTTP_METHOD_NOT_ALLOWED, headers: [
+                        ...CheckoutProviderReturnEndpoint::HEADERS,
+                        'Allow' => 'GET',
+                    ]);
+                }
+
+                return (new CheckoutProviderReturnEndpoint($kirby, UiMode::Embedded))->respond();
             },
         ], [
             'pattern' => CheckoutUrlBuilder::CANCEL_PATH,

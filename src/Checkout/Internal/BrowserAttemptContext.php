@@ -92,6 +92,11 @@ final readonly class BrowserAttemptContext
         return hash('sha256', 'stripe-checkout.guest:' . $csrfFingerprint);
     }
 
+    public function cartId(): ?string
+    {
+        return $this->cartId;
+    }
+
     public function cartRevision(): ?string
     {
         return $this->cartRevision;

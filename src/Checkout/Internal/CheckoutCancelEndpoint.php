@@ -9,7 +9,6 @@ use InvalidArgumentException;
 use Kirby\Cms\App;
 use Kirby\Http\Response;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutResultReason;
-use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
@@ -39,48 +38,42 @@ final class CheckoutCancelEndpoint
         try {
             $pageUuid = $this->pageUuid();
             $runtime = new RuntimeFactory($this->kirby);
-            $orders = $runtime->orderPageStore();
-            $page = $orders->order($pageUuid);
+            $urlBuilder = new CheckoutUrlBuilder($this->kirby);
+            $orderPageStore = $runtime->orderPageStore();
+            $page = $orderPageStore->order($pageUuid);
 
             if ($page === null) {
                 return $this->redirect($fallbackUrl);
             }
 
-            $data = $orders->data($page);
-            $checkoutAttempt = OrderData::map($data['checkoutAttempt']);
+            $orderData = $orderPageStore->data($page);
+            $checkoutAttempt = OrderData::map($orderData['checkoutAttempt']);
 
-            if (UiMode::tryFrom(OrderData::string($checkoutAttempt['uiMode'])) !== UiMode::Hosted) {
+            if (UiMode::from(OrderData::string($checkoutAttempt['uiMode'])) !== UiMode::Hosted) {
                 return $this->redirect($fallbackUrl);
             }
 
             // Use the destination frozen into this attempt.
             // Current configuration must not retarget a Session already handed to Stripe.
             $destinationUrl = OrderData::string($checkoutAttempt['cancelUrl']);
-            $languageCode = OrderData::nullableString($data['languageCode'] ?? null);
+            $languageCode = OrderData::nullableString($orderData['languageCode'] ?? null);
 
             // Result references grant access to browser-session state and must never be sent to another origin.
-            if (CheckoutUrlValidator::sameOrigin($destinationUrl, $this->siteUrl($languageCode)) === false) {
+            if (CheckoutUrlValidator::sameOrigin($destinationUrl, $urlBuilder->localizedSiteUrl($languageCode)) === false) {
                 return $this->redirect($destinationUrl);
             }
 
             try {
-                $userUuid = $this->kirby->user()?->uuid()->toString();
-                $guestReference = BrowserAttemptContext::guestReferenceFor($userUuid, (string) $this->kirby->csrf());
-                $browserContext = $runtime->browserAttemptStore()->findBoundContextForOrder(
+                $browserContext = (new BrowserAttemptContextResolver($this->kirby, $runtime->browserAttemptStore()))->forOrder(
                     pageUuid: $pageUuid,
-                    tokenHash: OrderData::string($checkoutAttempt['tokenHash']),
-                    bindingFingerprint: OrderData::string($checkoutAttempt['bindingFingerprint']),
-                    userUuid: $userUuid,
-                    guestReference: $guestReference,
+                    orderData: $orderData,
+                    checkoutAttempt: $checkoutAttempt,
+                    uiMode: UiMode::Hosted,
                     checkedAt: new DateTimeImmutable(),
                 );
             } catch (Throwable) {
                 // Browser results are optional; cancellation must still reach the saved destination when session access fails.
                 return $this->redirect($destinationUrl);
-            }
-
-            if ($browserContext !== null && $this->matchesOrderAttempt($browserContext, $data, $checkoutAttempt) === false) {
-                $browserContext = null;
             }
 
             if ($browserContext !== null) {
@@ -92,7 +85,7 @@ final class CheckoutCancelEndpoint
                         destinationUrl: $destinationUrl,
                         savedAt: new DateTimeImmutable(),
                     );
-                    $destinationUrl = (new CheckoutUrlBuilder($this->kirby))->checkoutResultUrl($destinationUrl, $reference);
+                    $destinationUrl = $urlBuilder->checkoutResultUrl($destinationUrl, $reference);
                 } catch (Throwable) {
                     // Cancellation remains usable when optional browser-result storage is unavailable.
                 }
@@ -110,49 +103,17 @@ final class CheckoutCancelEndpoint
         $query = parse_url($this->kirby->request()->url()->toString(), PHP_URL_QUERY);
 
         if (is_string($query) === false) {
-            throw new \InvalidArgumentException(self::MISSING_ORDER_REFERENCE_MESSAGE);
+            throw new InvalidArgumentException(self::MISSING_ORDER_REFERENCE_MESSAGE);
         }
 
         parse_str($query, $parameters);
         $pageUuid = $parameters[CheckoutUrlBuilder::ORDER_QUERY_KEY] ?? null;
 
         if (is_string($pageUuid) === false) {
-            throw new \InvalidArgumentException(self::MISSING_ORDER_REFERENCE_MESSAGE);
+            throw new InvalidArgumentException(self::MISSING_ORDER_REFERENCE_MESSAGE);
         }
 
         return OrderData::uuid($pageUuid);
-    }
-
-    private function siteUrl(?string $languageCode): string
-    {
-        if ($this->kirby->multilang()) {
-            $languageCode = $this->kirby->language($languageCode)?->code()
-                ?? $this->kirby->defaultLanguage()?->code();
-        } else {
-            $languageCode = null;
-        }
-
-        return $this->kirby->site()->url($languageCode);
-    }
-
-    /** @param array<string, mixed> $data
-     * @param array<string, mixed> $checkoutAttempt
-     */
-    private function matchesOrderAttempt(
-        BrowserAttemptContext $browserContext,
-        array $data,
-        array $checkoutAttempt,
-    ): bool {
-        $checkoutSource = CheckoutSource::tryFrom(OrderData::string($checkoutAttempt['source']));
-        $userUuid = OrderData::nullableString($data['userUuid'] ?? null);
-        $guestReference = OrderData::nullableString($checkoutAttempt['guestReference']);
-
-        return $checkoutSource !== null
-            && $browserContext->checkoutSource() === $checkoutSource
-            && $browserContext->uiMode() === UiMode::Hosted
-            && $browserContext->languageCode() === OrderData::nullableString($data['languageCode'] ?? null)
-            && $browserContext->cartRevision() === OrderData::nullableString($checkoutAttempt['cartRevision'])
-            && $browserContext->matchesActor($userUuid, $guestReference);
     }
 
     private function redirect(string $location): Response

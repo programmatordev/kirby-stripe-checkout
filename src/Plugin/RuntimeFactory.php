@@ -172,12 +172,24 @@ final class RuntimeFactory
         }
 
         $store = new KirbySessionCartStore($this->kirby->session(), Uuid::generate(...));
+        $mutator = $this->createCartMutator($store);
+
+        return $this->cartViewFactory()->create($store->read(), $mutator, $resolve);
+    }
+
+    /** Browser-return cleanup uses the same guarded mutation without depending on current cart enablement. */
+    public function cartMutator(): CartMutator
+    {
+        return $this->createCartMutator(new KirbySessionCartStore($this->kirby->session(), Uuid::generate(...)));
+    }
+
+    private function createCartMutator(KirbySessionCartStore $cartStore): CartMutator
+    {
         $requestNormalizer = new ProductRequestNormalizer(
             fn(ProductRequest $request): Product => (new self($this->kirby))->checkoutResolver()->cartProduct($request),
         );
-        $mutator = new CartMutator($store, $requestNormalizer, Uuid::generate(...));
 
-        return $this->cartViewFactory()->create($store->read(), $mutator, $resolve);
+        return new CartMutator($cartStore, $requestNormalizer, Uuid::generate(...));
     }
 
     private function taxCodeValidator(): TaxCodeValidator

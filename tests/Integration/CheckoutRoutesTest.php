@@ -59,7 +59,12 @@ final class CheckoutRoutesTest extends KirbyTestCase
     private bool $readUnavailable = false;
     private ?int $providerStatus = null;
     private string $sessionStatus = 'open';
+    private string $sessionPaymentStatus = 'unpaid';
+    private string $paymentIntentStatus = 'requires_payment_method';
     private string $price = '16.00';
+
+    /** @var array<string, mixed>|null */
+    private ?array $sessionRequest = null;
 
     protected function setUp(): void
     {
@@ -640,6 +645,281 @@ final class CheckoutRoutesTest extends KirbyTestCase
         ));
     }
 
+    #[DataProvider('providerReturnModes')]
+    public function testAuthoritativeCompletedReturnRedirectsToSuccessAndClearsTheOriginatingCart(
+        UiMode $uiMode,
+        string $requestUrlKey,
+        CheckoutResultReason $reason,
+    ): void {
+        $this->restart($uiMode, ['settings' => ['successDestination' => '/completed?from=checkout']]);
+        $body = $this->submission(CheckoutSource::Cart);
+        $this->assertSame(201, $this->send($body)->code());
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $originalRevision = $cart->revision();
+        $parameters = $this->requests[0]['parameters'];
+        $this->assertIsString($parameters[$requestUrlKey]);
+        $this->sessionStatus = 'complete';
+        $this->sessionPaymentStatus = 'paid';
+        $this->paymentIntentStatus = 'succeeded';
+
+        $returned = $this->sendNavigation(str_replace('{CHECKOUT_SESSION_ID}', 'cs_test_browser', $parameters[$requestUrlKey]));
+        $this->assertSame(303, $returned->code());
+        $this->assertNavigationPrivate($returned);
+        $location = $returned->headers()['Location'] ?? null;
+        $this->assertIsString($location);
+        $this->assertStringStartsWith('https://kirby-stripe-checkout.test/en/completed?from=checkout&', $location);
+        $this->assertStringContainsString('_stripe_checkout_result=', $location);
+        $this->assertSame(['post', 'get', 'get'], array_column($this->requests, 'method'));
+        $data = $this->orderData($body);
+        $this->assertSame(CheckoutStatus::Complete->value, $data['checkoutStatus']);
+        $this->assertSame(PaymentStatus::Paid->value, $data['paymentStatus']);
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $this->assertNotSame($originalRevision, $cart->revision());
+        $this->assertSame(0, $cart->count());
+
+        $this->setRequest($location);
+        $result = (new StripeCheckout($this->kirby))->checkoutResult();
+        $this->assertNotNull($result);
+        $this->assertSame($reason, $result->reason());
+        $this->assertTrue($result->isAvailable());
+        $this->assertSame(CheckoutStatus::Complete, $result->checkoutStatus());
+        $this->assertSame(PaymentStatus::Paid, $result->paymentStatus());
+        $this->assertFalse($result->canResumeCheckout());
+    }
+
+    /** @return iterable<string, array{UiMode, string, CheckoutResultReason}> */
+    public static function providerReturnModes(): iterable
+    {
+        yield 'hosted success' => [UiMode::Hosted, 'success_url', CheckoutResultReason::HostedSuccess];
+        yield 'embedded completion' => [UiMode::Embedded, 'return_url', CheckoutResultReason::EmbeddedReturn];
+    }
+
+    public function testEmbeddedOpenReturnUsesItsReturnDestinationWithoutClearingTheCart(): void
+    {
+        $this->restart(UiMode::Embedded, ['settings' => ['returnDestination' => '/continue?from=checkout']]);
+        $this->kirby->setCurrentLanguage('pt');
+        $body = $this->submission(CheckoutSource::Cart);
+        $this->assertSame(201, $this->send($body, languageCode: 'pt')->code());
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $originalRevision = $cart->revision();
+        $parameters = $this->requests[0]['parameters'];
+        $this->assertIsString($parameters['return_url']);
+
+        $returned = $this->sendNavigation(str_replace('{CHECKOUT_SESSION_ID}', 'cs_test_browser', $parameters['return_url']));
+        $location = $returned->headers()['Location'] ?? null;
+        $this->assertIsString($location);
+        $this->assertStringStartsWith('https://kirby-stripe-checkout.test/pt/continue?from=checkout&', $location);
+        $this->assertSame(CheckoutStatus::Open->value, $this->orderData($body)['checkoutStatus']);
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $this->assertSame($originalRevision, $cart->revision());
+        $this->assertSame(1, $cart->count());
+
+        $this->setRequest($location);
+        $result = (new StripeCheckout($this->kirby))->checkoutResult();
+        $this->assertNotNull($result);
+        $this->assertTrue($result->isAvailable());
+        $this->assertSame(CheckoutStatus::Open, $result->checkoutStatus());
+        $this->assertFalse($result->canResumeCheckout());
+    }
+
+    public function testCompletedHostedReturnKeepsPendingPaymentDistinctFromCheckoutCompletion(): void
+    {
+        $this->restart(options: ['settings' => ['successDestination' => '/completed']]);
+        $body = $this->submission();
+        $this->assertSame(201, $this->send($body)->code());
+        $parameters = $this->requests[0]['parameters'];
+        $this->assertIsString($parameters['success_url']);
+        $this->sessionStatus = 'complete';
+        $this->paymentIntentStatus = 'processing';
+
+        $returned = $this->sendNavigation(str_replace('{CHECKOUT_SESSION_ID}', 'cs_test_browser', $parameters['success_url']));
+        $location = $returned->headers()['Location'] ?? null;
+        $this->assertIsString($location);
+        $this->assertStringStartsWith('https://kirby-stripe-checkout.test/en/completed?', $location);
+        $data = $this->orderData($body);
+        $this->assertSame(CheckoutStatus::Complete->value, $data['checkoutStatus']);
+        $this->assertSame(PaymentStatus::Pending->value, $data['paymentStatus']);
+
+        $this->setRequest($location);
+        $result = (new StripeCheckout($this->kirby))->checkoutResult();
+        $this->assertNotNull($result);
+        $this->assertSame(CheckoutStatus::Complete, $result->checkoutStatus());
+        $this->assertSame(PaymentStatus::Pending, $result->paymentStatus());
+    }
+
+    public function testExpiredEmbeddedReturnUsesItsReturnDestinationAndPreservesTheCart(): void
+    {
+        $this->restart(UiMode::Embedded, ['settings' => ['returnDestination' => '/continue']]);
+        $body = $this->submission(CheckoutSource::Cart);
+        $this->assertSame(201, $this->send($body)->code());
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $originalRevision = $cart->revision();
+        $parameters = $this->requests[0]['parameters'];
+        $this->assertIsString($parameters['return_url']);
+        $this->sessionStatus = 'expired';
+
+        $returned = $this->sendNavigation(str_replace('{CHECKOUT_SESSION_ID}', 'cs_test_browser', $parameters['return_url']));
+        $location = $returned->headers()['Location'] ?? null;
+        $this->assertIsString($location);
+        $this->assertStringStartsWith('https://kirby-stripe-checkout.test/en/continue?', $location);
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $this->assertSame($originalRevision, $cart->revision());
+        $this->assertSame(1, $cart->count());
+
+        $this->setRequest($location);
+        $result = (new StripeCheckout($this->kirby))->checkoutResult();
+        $this->assertNotNull($result);
+        $this->assertSame(CheckoutStatus::Expired, $result->checkoutStatus());
+        $this->assertSame(PaymentStatus::Unpaid, $result->paymentStatus());
+        $this->assertFalse($result->canResumeCheckout());
+    }
+
+    public function testCompletedReturnPreservesACartChangedAfterCheckoutStarted(): void
+    {
+        $this->restart(options: ['settings' => ['successDestination' => '/completed']]);
+        $body = $this->submission(CheckoutSource::Cart);
+        $this->assertSame(201, $this->send($body)->code());
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $cart->add('product');
+        $changedRevision = $cart->revision();
+        $this->assertSame(3, $cart->totalQuantity());
+        $parameters = $this->requests[0]['parameters'];
+        $this->assertIsString($parameters['success_url']);
+        $this->sessionStatus = 'complete';
+        $this->sessionPaymentStatus = 'paid';
+        $this->paymentIntentStatus = 'succeeded';
+
+        $this->sendNavigation(str_replace('{CHECKOUT_SESSION_ID}', 'cs_test_browser', $parameters['success_url']));
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $this->assertSame($changedRevision, $cart->revision());
+        $this->assertSame(3, $cart->totalQuantity());
+    }
+
+    public function testExternalSuccessDestinationReceivesNoBrowserResultButStillClearsTheMatchingCart(): void
+    {
+        $this->restart(options: ['settings' => ['successDestination' => 'https://storefront.example/completed']]);
+        $body = $this->submission(CheckoutSource::Cart);
+        $this->assertSame(201, $this->send($body)->code());
+        $parameters = $this->requests[0]['parameters'];
+        $this->assertIsString($parameters['success_url']);
+        $this->sessionStatus = 'complete';
+        $this->sessionPaymentStatus = 'paid';
+        $this->paymentIntentStatus = 'succeeded';
+
+        $returned = $this->sendNavigation(str_replace('{CHECKOUT_SESSION_ID}', 'cs_test_browser', $parameters['success_url']));
+        $this->assertSame('https://storefront.example/completed', $returned->headers()['Location'] ?? null);
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $this->assertSame(0, $cart->count());
+        $this->assertNull($this->kirby->session()->data()->get(CheckoutResultStore::KEY));
+    }
+
+    public function testUnavailableEmbeddedReturnExposesNoOrderFactsAndPreservesTheCart(): void
+    {
+        $this->restart(UiMode::Embedded, ['settings' => ['returnDestination' => '/continue']]);
+        $body = $this->submission(CheckoutSource::Cart);
+        $this->assertSame(201, $this->send($body)->code());
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $originalRevision = $cart->revision();
+        $parameters = $this->requests[0]['parameters'];
+        $this->assertIsString($parameters['return_url']);
+        $this->readUnavailable = true;
+
+        $returned = $this->sendNavigation(str_replace('{CHECKOUT_SESSION_ID}', 'cs_test_browser', $parameters['return_url']));
+        $location = $returned->headers()['Location'] ?? null;
+        $this->assertIsString($location);
+        $this->assertStringStartsWith('https://kirby-stripe-checkout.test/en/continue?', $location);
+        $this->assertSame(['post', 'get'], array_column($this->requests, 'method'));
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $this->assertSame($originalRevision, $cart->revision());
+        $this->assertSame(1, $cart->count());
+
+        $this->setRequest($location);
+        $result = (new StripeCheckout($this->kirby))->checkoutResult();
+        $this->assertNotNull($result);
+        $this->assertSame(CheckoutResultReason::EmbeddedReturn, $result->reason());
+        $this->assertFalse($result->isAvailable());
+        $this->assertNull($result->order());
+        $this->assertNull($result->checkoutStatus());
+        $this->assertNull($result->paymentStatus());
+    }
+
+    public function testMismatchedReturnSessionPerformsNoProviderReadAndExposesNoOrderFacts(): void
+    {
+        $this->restart(options: ['settings' => ['successDestination' => '/completed']]);
+        $body = $this->submission();
+        $this->assertSame(201, $this->send($body)->code());
+        $parameters = $this->requests[0]['parameters'];
+        $this->assertIsString($parameters['success_url']);
+
+        $returned = $this->sendNavigation(str_replace('{CHECKOUT_SESSION_ID}', 'cs_other', $parameters['success_url']));
+        $location = $returned->headers()['Location'] ?? null;
+        $this->assertIsString($location);
+        $this->assertStringStartsWith('https://kirby-stripe-checkout.test/en/completed?', $location);
+        $this->assertCount(1, $this->requests);
+
+        $this->setRequest($location);
+        $result = (new StripeCheckout($this->kirby))->checkoutResult();
+        $this->assertNotNull($result);
+        $this->assertSame(CheckoutResultReason::HostedSuccess, $result->reason());
+        $this->assertFalse($result->isAvailable());
+        $this->assertNull($result->order());
+    }
+
+    public function testCompletedReturnWithoutBrowserBindingReconcilesWithoutClearingOrExposingAResult(): void
+    {
+        $this->restart(options: ['settings' => ['successDestination' => '/completed']]);
+        $body = $this->submission(CheckoutSource::Cart);
+        $this->assertSame(201, $this->send($body)->code());
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $originalRevision = $cart->revision();
+        $parameters = $this->requests[0]['parameters'];
+        $this->assertIsString($parameters['success_url']);
+        $this->kirby->session()->data()->remove(BrowserAttemptStore::KEY);
+        $this->sessionStatus = 'complete';
+        $this->sessionPaymentStatus = 'paid';
+        $this->paymentIntentStatus = 'succeeded';
+
+        $returned = $this->sendNavigation(str_replace('{CHECKOUT_SESSION_ID}', 'cs_test_browser', $parameters['success_url']));
+        $this->assertSame('https://kirby-stripe-checkout.test/en/completed', $returned->headers()['Location'] ?? null);
+        $this->assertSame(CheckoutStatus::Complete->value, $this->orderData($body)['checkoutStatus']);
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $this->assertSame($originalRevision, $cart->revision());
+        $this->assertSame(1, $cart->count());
+        $this->assertNull($this->kirby->session()->data()->get(CheckoutResultStore::KEY));
+    }
+
+    public function testProviderReturnRejectsTheWrongModeAndNonGetRequests(): void
+    {
+        $body = $this->submission();
+        $this->assertSame(201, $this->send($body)->code());
+        $parameters = $this->requests[0]['parameters'];
+        $this->assertIsString($parameters['success_url']);
+        $returnUrl = str_replace('/success?', '/return?', $parameters['success_url']);
+        $returnUrl = str_replace('{CHECKOUT_SESSION_ID}', 'cs_test_browser', $returnUrl);
+
+        $wrongMode = $this->sendNavigation($returnUrl);
+        $this->assertSame(303, $wrongMode->code());
+        $this->assertSame('https://kirby-stripe-checkout.test/en', $wrongMode->headers()['Location'] ?? null);
+        $this->assertCount(1, $this->requests);
+
+        $method = $this->sendNavigation($returnUrl, 'POST');
+        $this->assertSame(405, $method->code());
+        $this->assertSame('GET', $method->headers()['Allow'] ?? null);
+    }
+
     public function testHostedCancellationWithoutBrowserBindingNavigatesWithoutAnOrderResult(): void
     {
         $this->restart(options: ['settings' => ['cancelDestination' => '/cancelled']]);
@@ -828,12 +1108,15 @@ final class CheckoutRoutesTest extends KirbyTestCase
             }
 
             if ($method === 'post') {
-                $this->assertIsInt($parameters['expires_at']);
+                $expiresAt = $parameters['expires_at'] ?? null;
+                $this->assertIsInt($expiresAt);
+                /** @var array<string, mixed> $parameters */
+                $this->sessionRequest = $parameters;
                 $this->session = [
                     'id' => 'cs_test_browser',
                     'object' => 'checkout.session',
-                    'created' => $parameters['expires_at'] - 86400,
-                    'expires_at' => $parameters['expires_at'],
+                    'created' => $expiresAt - 86400,
+                    'expires_at' => $expiresAt,
                     'status' => 'open',
                     'payment_status' => 'unpaid',
                     'livemode' => false,
@@ -849,12 +1132,119 @@ final class CheckoutRoutesTest extends KirbyTestCase
                 ];
             }
 
+            if (str_ends_with($url, '/line_items')) {
+                return [json_encode($this->reconciliationLineItems(), JSON_THROW_ON_ERROR), 200, []];
+            }
+
             $session = $this->session ?? $this->fail('Retrieve requires an existing provider Session.');
             $session['status'] = $this->sessionStatus;
+            $session['payment_status'] = $this->sessionPaymentStatus;
 
-            return [json_encode($session, JSON_THROW_ON_ERROR), 200, []];
+            return [json_encode($this->reconciliationSession($session), JSON_THROW_ON_ERROR), 200, []];
         });
         ApiRequestor::setHttpClient($client);
+    }
+
+    /**
+     * @param array<string, mixed> $session
+     * @return array<string, mixed>
+     */
+    private function reconciliationSession(array $session): array
+    {
+        $parameters = $this->sessionRequest ?? $this->fail('Missing saved Session request.');
+        $lineItems = $parameters['line_items'] ?? null;
+        $this->assertIsArray($lineItems);
+        $lineItem = $lineItems[0] ?? null;
+        $this->assertIsArray($lineItem);
+        $priceData = $lineItem['price_data'] ?? null;
+        $this->assertIsArray($priceData);
+        $unitAmount = $priceData['unit_amount'] ?? null;
+        $quantity = $lineItem['quantity'] ?? null;
+        $this->assertIsInt($unitAmount);
+        $this->assertIsInt($quantity);
+        $total = $unitAmount * $quantity;
+        $paymentIntentData = $parameters['payment_intent_data'] ?? null;
+        $this->assertIsArray($paymentIntentData);
+        $paymentMetadata = $paymentIntentData['metadata'] ?? null;
+        $this->assertIsArray($paymentMetadata);
+        $session['amount_subtotal'] = $total;
+        $session['amount_total'] = $total;
+        $session['automatic_tax'] = ['enabled' => false];
+        $session['custom_fields'] = [];
+        $session['total_details'] = [
+            'amount_discount' => 0,
+            'amount_shipping' => 0,
+            'amount_tax' => 0,
+            'breakdown' => ['discounts' => []],
+        ];
+        $session['payment_intent'] = $this->sessionStatus === 'complete' ? [
+            'id' => 'pi_browser',
+            'object' => 'payment_intent',
+            'created' => $session['created'],
+            'livemode' => false,
+            'metadata' => $paymentMetadata,
+            'currency' => 'eur',
+            'amount' => $total,
+            'amount_received' => $this->sessionPaymentStatus === 'paid' ? $total : 0,
+            'capture_method' => 'automatic',
+            'status' => $this->paymentIntentStatus,
+            'payment_method' => [
+                'id' => 'pm_browser',
+                'object' => 'payment_method',
+                'type' => 'card',
+            ],
+            'latest_charge' => null,
+        ] : null;
+
+        return $session;
+    }
+
+    /** @return array<string, mixed> */
+    private function reconciliationLineItems(): array
+    {
+        $parameters = $this->sessionRequest ?? $this->fail('Missing saved Session request.');
+        $lineItems = $parameters['line_items'] ?? null;
+        $this->assertIsArray($lineItems);
+        $lineItem = $lineItems[0] ?? null;
+        $this->assertIsArray($lineItem);
+        $metadata = $lineItem['metadata'] ?? null;
+        $priceData = $lineItem['price_data'] ?? null;
+        $quantity = $lineItem['quantity'] ?? null;
+        $this->assertIsArray($metadata);
+        $this->assertIsArray($priceData);
+        $this->assertIsInt($quantity);
+        $unitAmount = $priceData['unit_amount'] ?? null;
+        $this->assertIsInt($unitAmount);
+        $total = $unitAmount * $quantity;
+
+        return [
+            'object' => 'list',
+            'data' => [[
+                'id' => 'li_browser',
+                'object' => 'item',
+                'metadata' => $metadata,
+                'quantity' => $quantity,
+                'currency' => 'eur',
+                'description' => 'Product',
+                'amount_subtotal' => $total,
+                'amount_discount' => 0,
+                'amount_tax' => 0,
+                'amount_total' => $total,
+                'price' => [
+                    'id' => 'price_browser',
+                    'object' => 'price',
+                    'currency' => 'eur',
+                    'unit_amount' => $unitAmount,
+                    'product' => 'prod_browser',
+                    'billing_scheme' => 'per_unit',
+                    'type' => 'one_time',
+                ],
+                'discounts' => [],
+                'taxes' => [],
+            ]],
+            'has_more' => false,
+            'url' => '/v1/checkout/sessions/cs_test_browser/line_items',
+        ];
     }
 
     /** @return array<string, mixed> */
