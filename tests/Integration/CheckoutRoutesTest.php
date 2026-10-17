@@ -383,7 +383,16 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $body = $this->submission(CheckoutSource::Cart);
         $this->providerStatus = 400;
         $this->assertError($this->send($body), 502, 'checkout.session_rejected', false);
-        $this->assertSame(CheckoutStatus::CreationFailed->value, $this->orderData($body)['checkoutStatus']);
+        $orderData = $this->orderData($body);
+        $this->assertSame(CheckoutStatus::CreationFailed->value, $orderData['checkoutStatus']);
+        $this->assertIsString($body['attemptToken']);
+        $pageUuid = OrderData::pageUuid((new AttemptToken($body['attemptToken']))->orderUuid());
+        $store = new OrderPageStore($this->kirby);
+        $this->assertFalse($store->deleteManually(
+            uuid: $pageUuid,
+            checkedAt: OrderData::date($orderData['createdAt'])->modify('+23 hours 59 minutes 59 seconds'),
+        ));
+        $this->assertNotNull($store->order($pageUuid));
 
         $this->providerStatus = null;
         $replacement = (new StripeCheckout($this->kirby))->checkout(CheckoutSource::Cart)->submissionData();
@@ -394,7 +403,7 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertIsString($bodyRevision);
         $this->assertSame($bodyRevision, $replacementRevision);
         $this->assertSame(201, $this->send($replacement)->code());
-        $this->assertCount(2, (new OrderPageStore($this->kirby))->orders());
+        $this->assertCount(2, $store->orders());
         $this->assertCount(2, array_filter($this->requests, static fn(array $request): bool => $request['method'] === 'post'));
     }
 

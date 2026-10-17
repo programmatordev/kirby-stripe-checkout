@@ -116,14 +116,15 @@ final class RetentionPolicyTest extends TestCase
         yield 'expired Session' => ['expired', 'checkoutExpiredAt', '2026-09-08T00:00:00Z'];
     }
 
-    public function testManualEligibilityIgnoresCleanupConfigurationAndAgeButProtectsAnAssociatedSession(): void
+    public function testManualEligibilityIgnoresCleanupConfigurationButKeepsTheBrowserAttemptSafetyWindow(): void
     {
         $data = $this->data('creation_failed', 'unpaid');
         $policy = $this->policy(['cleanupIncompleteOrders' => false, 'cleanupUnpaidOrders' => false]);
         $this->assertFalse($policy->isEligible($data, new DateTimeImmutable('2026-09-01T00:00:00Z')));
-        $this->assertTrue(RetentionPolicy::isTerminalUnpaid($data));
+        $this->assertFalse(RetentionPolicy::isManuallyEligible($data, new DateTimeImmutable('2026-09-01T23:59:59Z')));
+        $this->assertTrue(RetentionPolicy::isManuallyEligible($data, new DateTimeImmutable('2026-09-02T00:00:00Z')));
         $data['stripeCheckoutSessionId'] = 'opaque-session';
-        $this->assertFalse(RetentionPolicy::isTerminalUnpaid($data));
+        $this->assertFalse(RetentionPolicy::isManuallyEligible($data, new DateTimeImmutable('2026-09-02T00:00:00Z')));
     }
 
     public function testLaterPaymentFailureControlsTheCompletedFailureRetentionClock(): void

@@ -877,7 +877,7 @@ final class OrderHookDispatcherTest extends KirbyTestCase
     }
 
     #[DataProvider('manualDeletionStates')]
-    public function testManualDeletionBypassesCleanupSettingsAndAgeForTerminalUnpaidOrders(string $checkoutStatus, string $paymentStatus): void
+    public function testManualDeletionBypassesCleanupSettingsAfterTheSafetyWindowForTerminalUnpaidOrders(string $checkoutStatus, string $paymentStatus): void
     {
         $this->restart([], options: ['programmatordev.stripe-checkout' => ['settings' => [
             'cleanupIncompleteOrders' => false,
@@ -919,8 +919,17 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         /** @var array<string, mixed> $options */
         $options = $this->kirby->options();
         $policy = new RetentionPolicy((new ConfigurationResolver())->resolve($options)->configurationOrFail()->settings());
-        $this->assertFalse($store->deleteEligible($page->uuid()->toString(), $policy, new DateTimeImmutable()));
-        $this->assertTrue($store->deleteManually($page->uuid()->toString()));
+        $createdAt = OrderData::date($store->data($page)['createdAt']);
+        $this->assertFalse($store->deleteEligible($page->uuid()->toString(), $policy, $createdAt->modify('+1 day')));
+        $this->assertFalse($store->deleteManually(
+            uuid: $page->uuid()->toString(),
+            checkedAt: $createdAt->modify('+23 hours 59 minutes 59 seconds'),
+        ));
+        $this->assertNotNull($store->order($page->uuid()->toString()));
+        $this->assertTrue($store->deleteManually(
+            uuid: $page->uuid()->toString(),
+            checkedAt: $createdAt->modify('+1 day'),
+        ));
         $this->assertNull($store->order($page->uuid()->toString()));
     }
 
@@ -960,7 +969,7 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         ]);
         $this->assertFalse($store->deleteEligible($page->uuid()->toString(), $policy, new DateTimeImmutable()));
         $deleted = $manual
-            ? $store->deleteManually($page->uuid()->toString())
+            ? $store->deleteManually(uuid: $page->uuid()->toString(), checkedAt: $future)
             : $store->deleteEligible($page->uuid()->toString(), $policy, $future);
         $this->assertTrue($deleted);
         $this->assertNull($observed['found']);
@@ -999,6 +1008,7 @@ final class OrderHookDispatcherTest extends KirbyTestCase
             'checkoutStatus' => 'creation_failed',
             'creationFailedAt' => $data['createdAt'],
         ]);
+        $future = OrderData::date($store->data($page)['createdAt'])->modify('+1 day');
         $this->kirby->extend(['hooks' => [
             'page.delete:' . $stage => function (): void {
                 throw new RuntimeException('PRIVATE_FAILURE_CANARY');
@@ -1006,7 +1016,7 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         ]]);
 
         try {
-            $this->assertTrue($store->deleteManually($page->uuid()->toString()));
+            $this->assertTrue($store->deleteManually(uuid: $page->uuid()->toString(), checkedAt: $future));
             $this->assertTrue($committed);
         } catch (OrderStorageException $error) {
             $this->assertFalse($committed);

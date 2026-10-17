@@ -12,6 +12,8 @@ use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 /** @internal Terminal unpaid eligibility and automatic retention policy; never scans, reconciles or deletes an order. */
 final readonly class RetentionPolicy
 {
+    private const MANUAL_DELETION_SAFETY_DAYS = 1;
+
     public function __construct(private Settings $settings) {}
 
     /** @param array<string, mixed> $data Validated, freshly loaded canonical facts. */
@@ -26,7 +28,7 @@ final readonly class RetentionPolicy
         }
 
         // The retention threshold starts recovery, not deletion of an unresolved attempt.
-        return $this->oldEnough($data['createdAt'], $this->settings->incompleteOrderRetentionDays(), $checkedAt);
+        return self::oldEnough($data['createdAt'], $this->settings->incompleteOrderRetentionDays(), $checkedAt);
     }
 
     /** @param array<string, mixed> $data Validated, freshly loaded canonical facts. */
@@ -40,7 +42,7 @@ final readonly class RetentionPolicy
             // Terminal eligibility is established above; age alone cannot resolve an open or uncertain Checkout.
             // Recovery may observe expiry later, but it must not restart an incomplete order's retention clock.
             return $this->settings->cleanupIncompleteOrders()
-                && $this->oldEnough($data['createdAt'], $this->settings->incompleteOrderRetentionDays(), $now);
+                && self::oldEnough($data['createdAt'], $this->settings->incompleteOrderRetentionDays(), $now);
         }
 
         if ($this->settings->cleanupUnpaidOrders() === false) {
@@ -51,7 +53,19 @@ final readonly class RetentionPolicy
         // Start retention only once both facts are terminal, not while payment was still pending.
         $terminalAt = max(OrderData::string($data['checkoutCompletedAt']), OrderData::string($data['paymentFailedAt']));
 
-        return $this->oldEnough($terminalAt, $this->settings->unpaidOrderRetentionDays(), $now);
+        return self::oldEnough($terminalAt, $this->settings->unpaidOrderRetentionDays(), $now);
+    }
+
+    /** @param array<string, mixed> $data Validated, freshly loaded canonical facts. */
+    public static function isManuallyEligible(array $data, DateTimeImmutable $now): bool
+    {
+        if (self::isTerminalUnpaid($data) === false) {
+            return false;
+        }
+
+        // A retained browser attempt can still refer to this Order for 24 hours.
+        // Deleting it sooner could make the same accepted attempt recreate the discarded Order identity.
+        return self::oldEnough($data['createdAt'], self::MANUAL_DELETION_SAFETY_DAYS, $now);
     }
 
     /** @param array<string, mixed> $data Validated, freshly loaded canonical facts. */
@@ -61,7 +75,6 @@ final readonly class RetentionPolicy
             return false;
         }
 
-        // Manual deletion shares this safety rule, independently of automatic cleanup switches and age.
         return match ($data['checkoutStatus']) {
             CheckoutStatus::CreationFailed->value => isset($data['stripeCheckoutSessionId']) === false,
             CheckoutStatus::Expired->value => true,
@@ -70,7 +83,7 @@ final readonly class RetentionPolicy
         };
     }
 
-    private function oldEnough(mixed $timestamp, int $days, DateTimeImmutable $now): bool
+    private static function oldEnough(mixed $timestamp, int $days, DateTimeImmutable $now): bool
     {
         // Compare whole elapsed UTC days; timezone/DST changes must not shorten a retention period, and large configured periods must not overflow.
         $age = $now->getTimestamp() - OrderData::date($timestamp)->getTimestamp();

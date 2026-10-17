@@ -482,12 +482,18 @@ final class OrderPageStore
     }
 
     /**
-     * Explicit terminal unpaid deletion; ignores automatic cleanup enablement and retention age.
+     * Explicit terminal unpaid deletion; ignores configured cleanup enablement and retention periods.
      * Returns false for an ineligible order; true means deletion committed even if its optional notification failed.
      */
-    public function deleteManually(string $uuid): bool
+    public function deleteManually(string $uuid, ?DateTimeImmutable $checkedAt = null): bool
     {
-        return $this->deleteWhenEligible(uuid: $uuid, isEligible: RetentionPolicy::isTerminalUnpaid(...), now: null);
+        $checkedAt ??= new DateTimeImmutable();
+
+        return $this->deleteWhenEligible(
+            uuid: $uuid,
+            isEligible: static fn(array $data): bool => RetentionPolicy::isManuallyEligible($data, $checkedAt),
+            now: $checkedAt,
+        );
     }
 
     /** @param Closure(array<string, mixed>): bool $isEligible Checked against current persisted facts under the lock. */
