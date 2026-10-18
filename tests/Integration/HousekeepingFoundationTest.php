@@ -92,7 +92,7 @@ final class HousekeepingFoundationTest extends KirbyTestCase
             createdBefore: 200,
         );
         $state = (new HousekeepingState())
-            ->withLastOrderPageUuid('page://order-one')
+            ->withContinueAfterPageUuid('page://order-one')
             ->withProgress($oldCredentialProgress)
             ->withProgress($progress)
             ->withOutcome($outcome)
@@ -101,7 +101,7 @@ final class HousekeepingFoundationTest extends KirbyTestCase
         $store->write($state);
         $restored = $store->read();
 
-        $this->assertSame('page://order-one', $restored->lastOrderPageUuid());
+        $this->assertSame('page://order-one', $restored->continueAfterPageUuid());
         $this->assertCount(1, $restored->discoveryProgress());
         $this->assertNull($restored->progress('page://order-one', 'old-credential'));
         $this->assertSame($progress->toArray(), $restored->progress('page://order-one', 'credential-one')?->toArray());
@@ -143,7 +143,7 @@ final class HousekeepingFoundationTest extends KirbyTestCase
 
         HousekeepingState::fromArray([
             'schemaVersion' => 1,
-            'lastOrderPageUuid' => null,
+            'continueAfterPageUuid' => null,
             'discoveryProgress' => [$progress->toArray(), $rotatedProgress->toArray()],
             'lastAttempt' => null,
             'lastSuccess' => null,
@@ -201,7 +201,7 @@ final class HousekeepingFoundationTest extends KirbyTestCase
     public function testStateReadWaitsForAnActiveWriteLock(): void
     {
         $store = new HousekeepingStateStore($this->kirby);
-        $store->write((new HousekeepingState())->withLastOrderPageUuid('page://order-one'));
+        $store->write((new HousekeepingState())->withContinueAfterPageUuid('page://order-one'));
         $path = $this->kirby->root('site') . '/storage/stripe-checkout/housekeeping.json';
         $handle = fopen($path, 'c+');
         $this->assertIsResource($handle);
@@ -224,7 +224,7 @@ final class HousekeepingFoundationTest extends KirbyTestCase
             // A reader must not observe the interval in which F::update() truncates and rewrites the state file.
             $this->assertSame(0, stream_select($read, $write, $except, 0, 100000));
             $replacement = Json::encode(
-                (new HousekeepingState())->withLastOrderPageUuid('page://order-two')->toArray(),
+                (new HousekeepingState())->withContinueAfterPageUuid('page://order-two')->toArray(),
                 true,
             );
             $this->assertTrue(ftruncate($handle, 0));

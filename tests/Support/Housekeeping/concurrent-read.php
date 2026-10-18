@@ -20,4 +20,4 @@ $store = new HousekeepingStateStore($kirby);
 
 fwrite(STDOUT, "ready\n");
 fgets(STDIN);
-fwrite(STDOUT, ($store->read()->lastOrderPageUuid() ?? 'empty') . "\n");
+fwrite(STDOUT, ($store->read()->continueAfterPageUuid() ?? 'empty') . "\n");

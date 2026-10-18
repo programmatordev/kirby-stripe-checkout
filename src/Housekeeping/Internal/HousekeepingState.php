@@ -14,18 +14,19 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 final readonly class HousekeepingState
 {
     private const INVALID_STATE_MESSAGE = 'Invalid housekeeping state.';
+    private const SCHEMA_VERSION = 1;
 
     /**
      * @param list<SessionDiscoveryProgress> $discoveryProgress
      */
     public function __construct(
-        private ?string $lastOrderPageUuid = null,
+        private ?string $continueAfterPageUuid = null,
         private array $discoveryProgress = [],
         private ?HousekeepingRunOutcome $lastAttempt = null,
         private ?HousekeepingRunOutcome $lastSuccess = null,
     ) {
-        if ($lastOrderPageUuid !== null) {
-            OrderData::uuid($lastOrderPageUuid);
+        if ($continueAfterPageUuid !== null) {
+            OrderData::uuid($continueAfterPageUuid);
         }
 
         // Credential rotation replaces an order's search; two continuations for one order cannot both remain resumable.
@@ -44,9 +45,9 @@ final readonly class HousekeepingState
         }
     }
 
-    public function lastOrderPageUuid(): ?string
+    public function continueAfterPageUuid(): ?string
     {
-        return $this->lastOrderPageUuid;
+        return $this->continueAfterPageUuid;
     }
 
     /** @return list<SessionDiscoveryProgress> */
@@ -76,10 +77,10 @@ final readonly class HousekeepingState
         return $this->lastSuccess;
     }
 
-    public function withLastOrderPageUuid(?string $lastOrderPageUuid): self
+    public function withContinueAfterPageUuid(?string $continueAfterPageUuid): self
     {
         return new self(
-            lastOrderPageUuid: $lastOrderPageUuid,
+            continueAfterPageUuid: $continueAfterPageUuid,
             discoveryProgress: $this->discoveryProgress,
             lastAttempt: $this->lastAttempt,
             lastSuccess: $this->lastSuccess,
@@ -100,7 +101,7 @@ final readonly class HousekeepingState
         $discoveryProgress[] = $progress;
 
         return new self(
-            lastOrderPageUuid: $this->lastOrderPageUuid,
+            continueAfterPageUuid: $this->continueAfterPageUuid,
             discoveryProgress: $discoveryProgress,
             lastAttempt: $this->lastAttempt,
             lastSuccess: $this->lastSuccess,
@@ -115,7 +116,7 @@ final readonly class HousekeepingState
         ));
 
         return new self(
-            lastOrderPageUuid: $this->lastOrderPageUuid,
+            continueAfterPageUuid: $this->continueAfterPageUuid,
             discoveryProgress: $discoveryProgress,
             lastAttempt: $this->lastAttempt,
             lastSuccess: $this->lastSuccess,
@@ -125,7 +126,7 @@ final readonly class HousekeepingState
     public function withOutcome(HousekeepingRunOutcome $outcome): self
     {
         return new self(
-            lastOrderPageUuid: $this->lastOrderPageUuid,
+            continueAfterPageUuid: $this->continueAfterPageUuid,
             discoveryProgress: $this->discoveryProgress,
             lastAttempt: $outcome,
             lastSuccess: $outcome->status() === HousekeepingRunStatus::Success ? $outcome : $this->lastSuccess,
@@ -136,8 +137,8 @@ final readonly class HousekeepingState
     public function toArray(): array
     {
         return [
-            'schemaVersion' => 1,
-            'lastOrderPageUuid' => $this->lastOrderPageUuid,
+            'schemaVersion' => self::SCHEMA_VERSION,
+            'continueAfterPageUuid' => $this->continueAfterPageUuid,
             'discoveryProgress' => array_map(
                 static fn(SessionDiscoveryProgress $progress): array => $progress->toArray(),
                 $this->discoveryProgress,
@@ -149,7 +150,7 @@ final readonly class HousekeepingState
 
     public static function fromArray(mixed $data): self
     {
-        $keys = ['schemaVersion', 'lastOrderPageUuid', 'discoveryProgress', 'lastAttempt', 'lastSuccess'];
+        $keys = ['schemaVersion', 'continueAfterPageUuid', 'discoveryProgress', 'lastAttempt', 'lastSuccess'];
 
         if (is_array($data) === false) {
             throw new InvalidArgumentException(self::INVALID_STATE_MESSAGE);
@@ -163,11 +164,11 @@ final readonly class HousekeepingState
             throw new InvalidArgumentException(self::INVALID_STATE_MESSAGE);
         }
 
-        if ($data['schemaVersion'] !== 1) {
+        if ($data['schemaVersion'] !== self::SCHEMA_VERSION) {
             throw new InvalidArgumentException(self::INVALID_STATE_MESSAGE);
         }
 
-        if ($data['lastOrderPageUuid'] !== null && is_string($data['lastOrderPageUuid']) === false) {
+        if ($data['continueAfterPageUuid'] !== null && is_string($data['continueAfterPageUuid']) === false) {
             throw new InvalidArgumentException(self::INVALID_STATE_MESSAGE);
         }
 
@@ -180,7 +181,7 @@ final readonly class HousekeepingState
         }
 
         return new self(
-            lastOrderPageUuid: $data['lastOrderPageUuid'],
+            continueAfterPageUuid: $data['continueAfterPageUuid'],
             discoveryProgress: array_map(
                 static fn(mixed $progress): SessionDiscoveryProgress => SessionDiscoveryProgress::fromArray($progress),
                 $data['discoveryProgress'],
