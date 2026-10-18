@@ -300,6 +300,8 @@ Run it more frequently when the store regularly creates more Orders than `batchS
 
 Cron owns cadence. Without a cron entry or direct invocation, housekeeping does not run. The plugin does not add a request hook, worker, queue or internal scheduler, and it cannot detect whether the host configured cron.
 
+The authenticated Panel backend also accepts one explicit housekeeping run from a role with `housekeeping.run`. It calls this same runner, configured batch limit, continuation state and non-overlapping lock; it does not create a separate cleanup path or schedule later work. The Panel button and outcome presentation belong to the later interface batch, so the CLI remains the direct operator entry point in this version.
+
 ## Built-in cart
 
 The session cart is enabled by default. Set the PHP-only `cart.enabled` option to `false` to disable it; `$site->stripeCheckout()->cart()` then returns `null` without opening a session and its routes are not registered. The optional PHP-only `cart.renderer` closure enables HTML fragments on those same routes. See [Cart](cart.md) for PHP usage and [Cart HTTP routes](cart-http.md) for requests and rendering.

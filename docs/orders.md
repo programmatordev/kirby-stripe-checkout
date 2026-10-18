@@ -291,7 +291,7 @@ Keep the argument names `order` and `lifecycleEvent`: Kirby supplies them by nam
 
 Failed listeners do not undo the order or its payment state. A protected `lifecycleDeliveries` field records pending, delivered or failed status, attempt count, safe error code, delivery identity, the retained event payload and a fixed local expiry deadline. After cleanup, sanitized identity/outcome metadata and action fingerprints remain, with an immutable pruning timestamp; the payload cannot be restored or retried. Diagnostics show pending/failed counts. A retry keeps the same delivery ID and snapshot, but receives the current Page; it is refused at or after the deadline, even before physical cleanup runs.
 
-The internal `OrderHookDispatcher::retryFailed($pageUuid, $deliveryId)` operation retries one failed delivery. Pending, delivered, missing, expired and pruned deliveries are rejected without changing attempt history. Its `DeliveryResult` exposes `isDelivered()` and a safe `errorCode()`; storage failure cannot report a durably recorded success. Only lifecycle delivery attempts change, not Stripe Event attempts. The optional `$attemptedAt` argument supplies an explicit attempt time; when omitted, the current time is resolved after the locked reload so waiting cannot admit an expired delivery. There is no Panel retry action or automatic retry runner yet.
+The internal `OrderHookDispatcher::retryFailed($pageUuid, $deliveryId)` operation retries one failed delivery. Pending, delivered, missing, expired and pruned deliveries are rejected without changing attempt history. Its `DeliveryResult` exposes `isDelivered()` and a safe `errorCode()`; storage failure cannot report a durably recorded success. Only lifecycle delivery attempts change, not Stripe Event attempts. The optional `$attemptedAt` argument supplies an explicit attempt time; when omitted, the current time is resolved after the locked reload so waiting cannot admit an expired delivery. An authenticated Panel request can invoke this operation for a role with `orders.read` and `lifecycle.retry`; its button and confirmation UI are added with the later order view. There is no automatic retry runner.
 
 Recording a hook attempt or result does not advance the order's `updatedAt` or invalidate the storefront page cache. Business-state changes still invalidate that cache.
 
@@ -317,7 +317,7 @@ Manual reconciliation does not schedule automatic retries or increment existing 
 
 All required provider reads must succeed before a combined local update. A complete empty financial list clears that collection and its summary; a failed or unread list cannot clear saved facts. No-cost or pre-payment Sessions without a PaymentIntent require no financial list request. Existing payment success and completed Checkout remain protected from stale observations, and a missing or contradictory established PaymentIntent cannot be used to erase financial facts.
 
-An order without a saved Session is ineligible for this operation; recovery is separate. This is an internal service for the later operator interface. No Panel reconciliation action or public mutation route is available yet.
+An order without a saved Session is ineligible for this operation; recovery is separate. An authenticated Panel request can invoke it for a role with `orders.read` and `orders.reconcile`; its button and result presentation are added with the later order view. There is no public mutation route.
 
 ### Event values
 
@@ -341,7 +341,7 @@ Housekeeping can discover a missing Session association for `creating` or `creat
 
 The internal `OrderPageStore::deleteEligible()` operation applies these automatic cleanup switches and age thresholds. `OrderPageStore::deleteManually($pageUuid)` uses the same deletion path but ignores configured cleanup enablement and retention periods. It still requires 24 elapsed hours from Order creation so a retained browser attempt cannot recreate the deleted Order identity. It allows only failed creation without a Session and unpaid/failed payment, expired Checkout with unpaid/failed payment, or completed Checkout with failed payment. It does not contact Stripe or resolve current storefront settings.
 
-Both operations reload and recheck current persisted eligibility under the existing per-order write lock. They return `false` for an ineligible order, `true` once deletion commits, and throw a safe storage exception for lookup/write failures. A deletion listener failure cannot undo committed deletion or make its discarded payload retryable. Ordinary Page deletion remains forbidden, including for administrators. These are internal services; no Panel deletion action or public mutation route is available yet.
+Both operations reload and recheck current persisted eligibility under the existing per-order write lock. They return `false` for an ineligible order, `true` once deletion commits, and throw a safe storage exception for lookup/write failures. A deletion listener failure cannot undo committed deletion or make its discarded payload retryable. Ordinary Page deletion remains forbidden, including for administrators. An authenticated Panel request can invoke manual deletion for a role with `orders.read` and `orders.delete`; its confirmation UI is added with the later order view. There is no public mutation route.
 
 ## Internal content format
 

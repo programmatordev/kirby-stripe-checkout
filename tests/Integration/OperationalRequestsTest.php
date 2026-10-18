@@ -9,6 +9,9 @@ use Kirby\Panel\Panel;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
+use ProgrammatorDev\StripeCheckout\Housekeeping\HousekeepingErrorCode;
+use ProgrammatorDev\StripeCheckout\Housekeeping\Internal\HousekeepingRunLock;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\PersistenceErrorCode;
@@ -30,6 +33,7 @@ final class OperationalRequestsTest extends KirbyTestCase
 {
     private const DELETION_PATTERN = 'stripe-checkout/orders/(:any)';
     private const DELETION_PATH = 'stripe-checkout/orders/' . self::ORDER_ID;
+    private const HOUSEKEEPING_PATH = 'stripe-checkout/housekeeping/run';
     private const ORDER_ID = 'abc123def456ghi7';
     private const RETRY_PATTERN = 'stripe-checkout/orders/(:any)/deliveries/(:any)/retry';
     private const SYNC_PATTERN = 'stripe-checkout/orders/(:any)/sync';
@@ -45,6 +49,7 @@ final class OperationalRequestsTest extends KirbyTestCase
             ['pattern' => self::SYNC_PATTERN, 'method' => 'POST'],
             ['pattern' => self::RETRY_PATTERN, 'method' => 'POST'],
             ['pattern' => self::DELETION_PATTERN, 'method' => 'DELETE'],
+            ['pattern' => self::HOUSEKEEPING_PATH, 'method' => 'POST'],
         ], array_map(static fn(array $request): array => [
             'pattern' => $request['pattern'],
             'method' => $request['method'],
@@ -88,11 +93,15 @@ final class OperationalRequestsTest extends KirbyTestCase
 
         $this->assertNotNull($response);
         $this->assertSame(400, $response->code(), $response->body());
-        /** @var array{outcome: string, errorCode: string, retryable: bool} $body */
-        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
-        $this->assertSame('failed', $body['outcome']);
-        $this->assertSame(OrderErrorCode::DATA_INVALID, $body['errorCode']);
-        $this->assertFalse($body['retryable']);
+        $this->assertSame([
+            'code' => 400,
+            'status' => 'failed',
+            'result' => null,
+            'error' => [
+                'code' => OrderErrorCode::DATA_INVALID,
+                'retryable' => false,
+            ],
+        ], json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR));
     }
 
     public function testOrderSyncReturnsTheSafeOperationFailure(): void
@@ -106,11 +115,40 @@ final class OperationalRequestsTest extends KirbyTestCase
 
         $this->assertNotNull($response);
         $this->assertSame(409, $response->code(), $response->body());
-        /** @var array{outcome: string, errorCode: string, retryable: bool} $body */
-        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
-        $this->assertSame('failed', $body['outcome']);
-        $this->assertSame(PersistenceErrorCode::ORDER_UNAVAILABLE, $body['errorCode']);
-        $this->assertFalse($body['retryable']);
+        $this->assertSame([
+            'code' => 409,
+            'status' => 'failed',
+            'result' => null,
+            'error' => [
+                'code' => PersistenceErrorCode::ORDER_UNAVAILABLE,
+                'retryable' => false,
+            ],
+        ], json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR));
+    }
+
+    public function testOrderSyncReturnsASafeConfigurationFailure(): void
+    {
+        $this->restartRequest(
+            permissions: [
+                'orders.read' => true,
+                'orders.reconcile' => true,
+            ],
+            pluginOptions: ['stripe' => []],
+        );
+
+        $response = Panel::router(self::SYNC_PATH);
+
+        $this->assertNotNull($response);
+        $this->assertSame(409, $response->code(), $response->body());
+        $this->assertSame([
+            'code' => 409,
+            'status' => 'failed',
+            'result' => null,
+            'error' => [
+                'code' => ConfigurationErrorCode::CREDENTIAL_MISSING,
+                'retryable' => false,
+            ],
+        ], json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR));
     }
 
     /** @param array<string, bool> $permissions */
@@ -200,10 +238,12 @@ final class OperationalRequestsTest extends KirbyTestCase
 
         $this->assertNotNull($response);
         $this->assertSame(200, $response->code(), $response->body());
-        /** @var array{delivered: bool, errorCode: string|null} $body */
-        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
-        $this->assertTrue($body['delivered']);
-        $this->assertNull($body['errorCode']);
+        $this->assertSame([
+            'code' => 200,
+            'status' => 'success',
+            'result' => ['delivered' => true],
+            'error' => null,
+        ], json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR));
         $this->assertSame(2, $calls);
         $order = $store->requirePage($order->id());
         $deliveries = OrderData::list($store->data($order)['lifecycleDeliveries']);
@@ -237,10 +277,15 @@ final class OperationalRequestsTest extends KirbyTestCase
 
         $this->assertNotNull($response);
         $this->assertSame(409, $response->code(), $response->body());
-        /** @var array{delivered: bool, errorCode: string} $body */
-        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
-        $this->assertFalse($body['delivered']);
-        $this->assertSame(LifecycleErrorCode::DELIVERY_NOT_FOUND, $body['errorCode']);
+        $this->assertSame([
+            'code' => 409,
+            'status' => 'failed',
+            'result' => null,
+            'error' => [
+                'code' => LifecycleErrorCode::DELIVERY_NOT_FOUND,
+                'retryable' => false,
+            ],
+        ], json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR));
     }
 
     public function testEligibleOrderCanBeDeletedThroughThePanelRequest(): void
@@ -262,10 +307,12 @@ final class OperationalRequestsTest extends KirbyTestCase
 
         $this->assertNotNull($response);
         $this->assertSame(200, $response->code(), $response->body());
-        /** @var array{deleted: bool, errorCode: string|null} $body */
-        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
-        $this->assertTrue($body['deleted']);
-        $this->assertNull($body['errorCode']);
+        $this->assertSame([
+            'code' => 200,
+            'status' => 'success',
+            'result' => ['deleted' => true],
+            'error' => null,
+        ], json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR));
         $this->assertNull($store->order($order->uuid()->toString()));
     }
 
@@ -282,21 +329,161 @@ final class OperationalRequestsTest extends KirbyTestCase
 
         $this->assertNotNull($response);
         $this->assertSame(409, $response->code(), $response->body());
-        /** @var array{deleted: bool, errorCode: string} $body */
-        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
-        $this->assertFalse($body['deleted']);
-        $this->assertSame(OrderErrorCode::DELETION_NOT_ALLOWED, $body['errorCode']);
+        $this->assertSame([
+            'code' => 409,
+            'status' => 'failed',
+            'result' => null,
+            'error' => [
+                'code' => OrderErrorCode::DELETION_NOT_ALLOWED,
+                'retryable' => false,
+            ],
+        ], json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR));
         $this->assertNotNull($store->order($order->uuid()->toString()));
     }
 
-    /** @param array<string, bool> $permissions */
-    private function restartRequest(array $permissions, string $method = 'POST'): void
+    public function testHousekeepingRequiresItsSpecificPermission(): void
     {
+        $this->restartRequest(['housekeeping.run' => false]);
+
+        $response = Panel::router(self::HOUSEKEEPING_PATH);
+
+        $this->assertNotNull($response);
+        $this->assertSame(403, $response->code(), $response->body());
+    }
+
+    public function testHousekeepingReturnsTheSanitizedBatchOutcome(): void
+    {
+        $this->restartRequest(['housekeeping.run' => true]);
+
+        $response = Panel::router(self::HOUSEKEEPING_PATH);
+
+        $this->assertNotNull($response);
+        $this->assertSame(200, $response->code(), $response->body());
+        /** @var array<string, mixed> $body */
+        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame([
+            'code',
+            'status',
+            'result',
+            'error',
+        ], array_keys($body));
+        $this->assertIsArray($body['result']);
+        /** @var array<string, int|string> $result */
+        $result = $body['result'];
+        $this->assertSame([
+            'attemptedAt',
+            'completedAt',
+            'selectedOrders',
+            'processedOrders',
+            'prunedDeliveries',
+            'deletedOrders',
+            'recoveredOrders',
+            'failedOrders',
+        ], array_keys($result));
+        $this->assertSame('success', $body['status']);
+        $this->assertSame(0, $result['selectedOrders']);
+        $this->assertSame(0, $result['processedOrders']);
+        $this->assertNull($body['error']);
+    }
+
+    public function testHousekeepingUsesTheConfiguredBatchSize(): void
+    {
+        $this->restartRequest(
+            permissions: ['housekeeping.run' => true],
+            pluginOptions: ['housekeeping' => ['batchSize' => 1]],
+        );
+        $this->createOrder(new DateTimeImmutable(), self::ORDER_ID);
+        $this->createOrder(new DateTimeImmutable(), 'order-second');
+
+        $response = Panel::router(self::HOUSEKEEPING_PATH);
+
+        $this->assertNotNull($response);
+        $this->assertSame(200, $response->code(), $response->body());
+        /** @var array{result: array{selectedOrders: int, processedOrders: int}} $body */
+        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame(1, $body['result']['selectedOrders']);
+        $this->assertSame(1, $body['result']['processedOrders']);
+    }
+
+    public function testHousekeepingSharesTheCliRunLock(): void
+    {
+        $this->restartRequest(['housekeeping.run' => true]);
+
+        $response = HousekeepingRunLock::run(
+            $this->kirby,
+            static fn() => Panel::router(self::HOUSEKEEPING_PATH),
+        );
+
+        $this->assertNotNull($response);
+        $this->assertSame(409, $response->code(), $response->body());
+        $this->assertSame([
+            'code' => 409,
+            'status' => 'failed',
+            'result' => null,
+            'error' => [
+                'code' => HousekeepingErrorCode::LOCKED,
+                'retryable' => true,
+            ],
+        ], json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR));
+    }
+
+    public function testHousekeepingReturnsASafeConfigurationFailure(): void
+    {
+        $this->restartRequest(
+            permissions: ['housekeeping.run' => true],
+            pluginOptions: ['stripe' => []],
+        );
+
+        $response = Panel::router(self::HOUSEKEEPING_PATH);
+
+        $this->assertNotNull($response);
+        $this->assertSame(409, $response->code(), $response->body());
+        $this->assertSame([
+            'code' => 409,
+            'status' => 'failed',
+            'result' => null,
+            'error' => [
+                'code' => ConfigurationErrorCode::CREDENTIAL_MISSING,
+                'retryable' => false,
+            ],
+        ], json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR));
+    }
+
+    public function testHousekeepingReturnsPartialFailuresAsCompletedBatchOutcomes(): void
+    {
+        $this->restartRequest(['housekeeping.run' => true]);
+        $order = $this->createOrder(new DateTimeImmutable('2026-09-01T00:00:00Z'), 'order-corrupt');
+        $order->version('latest')->update(['schemaVersion' => '2'], 'default');
+
+        $response = Panel::router(self::HOUSEKEEPING_PATH);
+
+        $this->assertNotNull($response);
+        $this->assertSame(200, $response->code(), $response->body());
+        /** @var array{status: string, result: array{failedOrders: int}, error: array{code: string, retryable: bool}} $body */
+        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('partial_failure', $body['status']);
+        $this->assertSame(1, $body['result']['failedOrders']);
+        $this->assertSame([
+            'code' => HousekeepingErrorCode::PARTIAL_FAILURE,
+            'retryable' => false,
+        ], $body['error']);
+    }
+
+    /**
+     * @param array<string, bool>  $permissions
+     * @param array<string, mixed> $pluginOptions
+     */
+    private function restartRequest(
+        array $permissions,
+        string $method = 'POST',
+        array $pluginOptions = [],
+    ): void {
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start(
             options: [
                 'programmatordev.stripe-checkout' => [
                     'stripe' => ['secretKey' => 'sk_test_operational_requests'],
+                    ...$pluginOptions,
                 ],
             ],
             roles: [[
@@ -323,11 +510,11 @@ final class OperationalRequestsTest extends KirbyTestCase
         $this->kirby = $this->environment->app();
     }
 
-    private function createOrder(DateTimeImmutable $createdAt): OrderPage
+    private function createOrder(DateTimeImmutable $createdAt, string $orderId = self::ORDER_ID): OrderPage
     {
         $context = new OrderCreationContext(
-            uuid: self::ORDER_ID,
-            orderNumber: (new OrderNumberFormatter())->format(self::ORDER_ID),
+            uuid: $orderId,
+            orderNumber: (new OrderNumberFormatter())->format($orderId),
             lineItems: [OrderFixture::lineItem()],
             currency: 'EUR',
             checkoutSource: CheckoutSource::Direct,

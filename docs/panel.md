@@ -27,6 +27,10 @@ permissions:
     taxCodes.read: true
     orders.read: true
     orders.update: true
+    orders.reconcile: true
+    orders.delete: true
+    lifecycle.retry: true
+    housekeeping.run: true
 ```
 
 `prices.read` allows a role to search and explicitly refresh the read-only Stripe Price catalogue from product fields. Page-update permission still controls whether the selected scalar Price ID can be saved.
@@ -34,6 +38,23 @@ permissions:
 `taxCodes.read` permits reading, searching, and refreshing the full Tax Code catalogue from product/variant pickers. Saving a selection still requires native Page-update permission. The Tax Code catalogue diagnostic reports only cached counts and successful/failed refresh times; it never checks Stripe Tax setup or account readiness and never refreshes Stripe itself.
 
 `orders.read` permits viewing native order Pages. `orders.update` additionally permits editing project-owned fields; canonical payment/order fields remain protected. See [Orders](orders.md) for blueprint customization. The orders container is also initialized automatically; the main hub does not yet include an Orders tab.
+
+The remaining permissions authorize explicit operational requests. `orders.reconcile` and `orders.delete` also require `orders.read`; `lifecycle.retry` requires `orders.read` when retrying one failed order hook. `housekeeping.run` starts one configured housekeeping batch using the same continuation state and non-overlapping lock as the CLI command. These permissions are disabled by default for custom roles. The authenticated request backend is available for the later Panel action UI; this version does not add its buttons or expose public mutation routes.
+
+Every operational request uses the same response envelope. `code` is the HTTP status, `status` is `success`, `partial_failure` or `failed`, `result` contains only operation-specific successful output, and `error` is either `null` or a safe code plus explicit retryability:
+
+```json
+{
+  "code": 200,
+  "status": "success",
+  "result": {
+    "deleted": true
+  },
+  "error": null
+}
+```
+
+Failed requests set `result` to `null`. A completed housekeeping batch can return `partial_failure` with its sanitized counters in `result` and its stable issue in `error`. `retryable` is true only when the operation specifically classifies a later explicit invocation as useful; it never schedules or automatically replays an action.
 
 ## Panel menu
 
