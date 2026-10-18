@@ -106,6 +106,10 @@ App::plugin(
             'taxCodes.read' => false,
             'orders.read' => false,
             'orders.update' => false,
+            'orders.reconcile' => false,
+            'orders.delete' => false,
+            'lifecycle.retry' => false,
+            'housekeeping.run' => false,
         ],
         'areas' => [
             'stripe-checkout' => [StripeCheckoutArea::class, 'definition'],

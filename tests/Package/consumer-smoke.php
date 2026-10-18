@@ -227,6 +227,10 @@ try {
             'taxCodes.read' => false,
             'orders.read' => false,
             'orders.update' => false,
+            'orders.reconcile' => false,
+            'orders.delete' => false,
+            'lifecycle.retry' => false,
+            'housekeeping.run' => false,
         ]
     ) {
         throw new RuntimeException('The package did not register its Panel permissions.');

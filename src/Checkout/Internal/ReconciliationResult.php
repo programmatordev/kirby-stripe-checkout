@@ -79,6 +79,11 @@ final readonly class ReconciliationResult
         return $this->errorCode;
     }
 
+    public function errorCodeOrFail(): string
+    {
+        return $this->errorCode ?? throw new LogicException('A successful reconciliation has no error code.');
+    }
+
     /** A temporary failure can warrant another explicit invocation; this does not schedule a retry. */
     public function isRetryable(): bool
     {

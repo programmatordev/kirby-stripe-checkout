@@ -32,12 +32,20 @@ final class PanelAreaTest extends KirbyTestCase
             'taxCodes.read' => false,
             'orders.read' => false,
             'orders.update' => false,
+            'orders.reconcile' => false,
+            'orders.delete' => false,
+            'lifecycle.retry' => false,
+            'housekeeping.run' => false,
         ], $defaults);
         $this->assertNotNull($admin);
         $this->assertTrue($admin->for(PluginPermissions::CATEGORY, 'settings.read'));
         $this->assertTrue($admin->for(PluginPermissions::CATEGORY, 'settings.update'));
         $this->assertTrue($admin->for(PluginPermissions::CATEGORY, 'diagnostics.read'));
         $this->assertTrue($admin->for(PluginPermissions::CATEGORY, 'prices.read'));
+        $this->assertTrue($admin->for(PluginPermissions::CATEGORY, 'orders.reconcile'));
+        $this->assertTrue($admin->for(PluginPermissions::CATEGORY, 'orders.delete'));
+        $this->assertTrue($admin->for(PluginPermissions::CATEGORY, 'lifecycle.retry'));
+        $this->assertTrue($admin->for(PluginPermissions::CATEGORY, 'housekeeping.run'));
     }
 
     public function testMenuUsesReadPermissionsWithoutChangingAreaAccess(): void

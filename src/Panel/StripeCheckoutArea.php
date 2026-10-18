@@ -47,6 +47,7 @@ final class StripeCheckoutArea
                 return ($plugin['settings.read'] ?? false) === true
                     || ($plugin['diagnostics.read'] ?? false) === true;
             },
+            'requests' => OperationalRequests::definition($kirby),
             'views' => [[
                 'pattern' => 'stripe-checkout',
                 'action' => function () use ($kirby): array {
