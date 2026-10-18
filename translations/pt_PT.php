@@ -44,7 +44,7 @@ return [
     'programmatordev.stripe-checkout.settings.unpaidOrderRetentionDays.help' => 'Contar desde o momento em que a conclusão do Checkout e a falha do pagamento eram ambas conhecidas. Reduzir este prazo pode tornar encomendas existentes elegíveis para a próxima limpeza.',
     'programmatordev.stripe-checkout.orders.fields.lifecycleDeliveries' => 'Notificações do ciclo de vida',
     'programmatordev.stripe-checkout.diagnostics.housekeeping' => 'Manutenção',
-    'programmatordev.stripe-checkout.diagnostics.housekeeping.configured' => 'Configuração PHP: intervalo de {intervalHours} horas; até {batchSize} candidatos por execução; retenção dos dados das notificações de {lifecycleDeliveryPayloadRetentionDays} dias. A limpeza automática ainda não está ativa.',
+    'programmatordev.stripe-checkout.diagnostics.housekeeping.configured' => 'Configuração PHP: até {batchSize} candidatos por execução; retenção dos dados das notificações de {lifecycleDeliveryPayloadRetentionDays} dias. A limpeza automática ainda não está ativa.',
     'programmatordev.stripe-checkout.diagnostics.retention' => 'Retenção de encomendas',
     'programmatordev.stripe-checkout.diagnostics.retention.configured' => 'Quando ativada: encomendas incompletas confirmadas são mantidas durante {incompleteOrderRetentionDays} dias desde a criação; encomendas concluídas com pagamento falhado durante {unpaidOrderRetentionDays} dias após ambos os factos serem conhecidos. Prazos mais curtos podem tornar registos existentes elegíveis.',
     'programmatordev.stripe-checkout.diagnostics.lifecycle' => 'Hooks do ciclo de vida',

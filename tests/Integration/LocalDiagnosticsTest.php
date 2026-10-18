@@ -7,12 +7,23 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 use Kirby\Uuid\Uuid;
 use Kirby\Uuid\Uuids;
 use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
+use ProgrammatorDev\StripeCheckout\Panel\DiagnosticsSections;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
 
 final class LocalDiagnosticsTest extends KirbyTestCase
 {
+    public function testRendersCurrentHousekeepingConfiguration(): void
+    {
+        $sections = DiagnosticsSections::build($this->kirby);
+
+        $this->assertSame(
+            'PHP configuration: at most 25 candidates per run; lifecycle snapshot retention 30 days. Automatic cleanup is not running yet.',
+            $sections['diagnostics-housekeeping']['text'],
+        );
+    }
+
     public function testReportsDependenciesIncompleteCredentialsAndInitializedSettingsLocally(): void
     {
         $report = (new LocalDiagnostics($this->kirby))->report();
