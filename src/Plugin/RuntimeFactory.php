@@ -43,6 +43,9 @@ use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Configuration\ShippingConfiguration;
 use ProgrammatorDev\StripeCheckout\Configuration\StripeConfiguration;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
+use ProgrammatorDev\StripeCheckout\Housekeeping\Internal\HousekeepingRunner;
+use ProgrammatorDev\StripeCheckout\Housekeeping\Internal\HousekeepingStateStore;
+use ProgrammatorDev\StripeCheckout\Housekeeping\Internal\OrderReferenceSelector;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
@@ -440,6 +443,42 @@ final class RuntimeFactory
             retentionPolicy: new RetentionPolicy($configuration->settings()),
             credentialMode: $stripe->secretKeyMode(),
             credentialFingerprint: $stripe->secretKeyFingerprint('checkout-discovery'),
+        );
+    }
+
+    public function housekeepingRunner(): HousekeepingRunner
+    {
+        $configuration = $this->configurationReport()->configurationOrFail();
+        $stripe = $configuration->stripe();
+        $orders = new OrderPageStore($this->kirby);
+        $gateway = $this->checkoutSessionGateway();
+        $retentionPolicy = new RetentionPolicy($configuration->settings());
+        // Housekeeping establishes Checkout/payment outcomes only;
+        // full refund and dispute refresh remains the explicit order-sync operation.
+        $reconciler = new CheckoutSessionReconciler(
+            orders: $orders,
+            retriever: new CheckoutSessionRetriever($gateway),
+            credentialMode: $stripe->secretKeyMode(),
+        );
+        $credentialFingerprint = $stripe->secretKeyFingerprint('checkout-discovery');
+
+        return new HousekeepingRunner(
+            kirby: $this->kirby,
+            orders: $orders,
+            orderReferenceSelector: new OrderReferenceSelector($orders),
+            stateStore: new HousekeepingStateStore($this->kirby),
+            retentionPolicy: $retentionPolicy,
+            incompleteOrderRecovery: new IncompleteOrderRecovery(
+                orders: $orders,
+                gateway: $gateway,
+                reconciler: $reconciler,
+                retentionPolicy: $retentionPolicy,
+                credentialMode: $stripe->secretKeyMode(),
+                credentialFingerprint: $credentialFingerprint,
+            ),
+            checkoutSessionReconciler: $reconciler,
+            batchSize: $configuration->housekeeping()->batchSize(),
+            credentialFingerprint: $credentialFingerprint,
         );
     }
 

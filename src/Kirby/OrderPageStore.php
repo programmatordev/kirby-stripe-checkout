@@ -456,19 +456,31 @@ final class OrderPageStore
         return $deliveryIds === [] ? $updated : $this->requirePage($pageId);
     }
 
-    /** Internal single-order cleanup; eligibility is rechecked under the existing lock, without scans or hook dispatch. */
-    public function pruneLifecycleDeliveryPayloads(string $uuid, DateTimeImmutable $now): OrderPage
+    /** Internal single-order cleanup; returns the number pruned under the existing lock, without scans or hook dispatch. */
+    public function pruneLifecycleDeliveryPayloads(string $uuid, DateTimeImmutable $now): int
     {
-        return $this->update($uuid, static function (array $data) use ($now): array {
+        $prunedDeliveries = 0;
+        $this->update($uuid, static function (array $data) use ($now, &$prunedDeliveries): array {
             /** @var list<array<string, mixed>> $entries */
             $entries = $data['lifecycleDeliveries'] ?? [];
 
             if ($entries !== []) {
-                $data['lifecycleDeliveries'] = HookDeliveryLedger::prunePayloads($entries, $now);
+                $prunedEntries = HookDeliveryLedger::prunePayloads($entries, $now);
+
+                // Count the protected transition itself; separate reads before and after this lock could observe concurrent ledger changes.
+                foreach ($entries as $index => $entry) {
+                    if ($entry['payloadPrunedAt'] === null && $prunedEntries[$index]['payloadPrunedAt'] !== null) {
+                        $prunedDeliveries++;
+                    }
+                }
+
+                $data['lifecycleDeliveries'] = $prunedEntries;
             }
 
             return $data;
         });
+
+        return $prunedDeliveries;
     }
 
     /** Internal single-order primitive; no scan, route or automatic execution. */

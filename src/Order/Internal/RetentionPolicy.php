@@ -17,18 +17,28 @@ final readonly class RetentionPolicy
     public function __construct(private Settings $settings) {}
 
     /** @param array<string, mixed> $data Validated, freshly loaded canonical facts. */
-    public function needsSessionDiscovery(array $data, DateTimeImmutable $checkedAt): bool
+    public function needsCheckoutRecovery(array $data, DateTimeImmutable $checkedAt): bool
     {
-        if ($this->settings->cleanupIncompleteOrders() === false || isset($data['stripeCheckoutSessionId'])) {
+        if ($this->settings->cleanupIncompleteOrders() === false) {
             return false;
         }
 
-        if (in_array($data['checkoutStatus'], [CheckoutStatus::Creating->value, CheckoutStatus::CreationUncertain->value], true) === false) {
+        if (in_array($data['checkoutStatus'], [CheckoutStatus::Creating->value, CheckoutStatus::CreationUncertain->value, CheckoutStatus::Open->value], true) === false) {
             return false;
         }
 
         // The retention threshold starts recovery, not deletion of an unresolved attempt.
         return self::oldEnough($data['createdAt'], $this->settings->incompleteOrderRetentionDays(), $checkedAt);
+    }
+
+    /** @param array<string, mixed> $data Validated, freshly loaded canonical facts. */
+    public function needsSessionDiscovery(array $data, DateTimeImmutable $checkedAt): bool
+    {
+        if (isset($data['stripeCheckoutSessionId'])) {
+            return false;
+        }
+
+        return $this->needsCheckoutRecovery($data, $checkedAt);
     }
 
     /** @param array<string, mixed> $data Validated, freshly loaded canonical facts. */

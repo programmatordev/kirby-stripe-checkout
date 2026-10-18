@@ -96,7 +96,8 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $dispatcher = new OrderHookDispatcher($this->kirby);
         $dispatcher->dispatch(uuid: $page->uuid()->toString(), deliveryId: $deliveryId, attemptedAt: $originalDeadline->modify('-1 second'));
         $dispatcher->dispatch(uuid: $page->uuid()->toString(), deliveryId: $deliveryId, attemptedAt: $originalDeadline);
-        $page = $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $originalDeadline);
+        $this->assertSame(1, $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $originalDeadline));
+        $page = $store->requirePage($page->id());
         $afterCleanup = [];
 
         foreach ($this->entries($page) as $entry) {
@@ -129,12 +130,14 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $cache = $this->kirby->cache('pages');
         $cache->set('order-summary', 'unchanged');
         $now = OrderData::date($entry['expiresAt']);
-        $page = $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $now->modify('-1 second'));
+        $this->assertSame(0, $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $now->modify('-1 second')));
+        $page = $store->requirePage($page->id());
         $this->assertSame($before, $store->data($page));
         $this->assertSame('unchanged', $cache->get('order-summary'));
         $deliveryId = OrderData::string(OrderData::map($entry['event'])['deliveryId']);
         (new OrderHookDispatcher($this->kirby))->dispatch($page->uuid()->toString(), $deliveryId);
-        $page = $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $now);
+        $this->assertSame(1, $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $now));
+        $page = $store->requirePage($page->id());
         $after = $store->data($page);
         $pruned = $this->entries($page)[0];
         unset($before['lifecycleDeliveries'], $after['lifecycleDeliveries']);
@@ -147,7 +150,8 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $this->assertStringNotContainsString('PRIVATE_SNAPSHOT_CANARY', OrderData::json($pruned));
         $deliveryId = OrderData::string(OrderData::map($pruned['event'])['deliveryId']);
         (new OrderHookDispatcher($this->kirby))->dispatch($page->uuid()->toString(), $deliveryId);
-        $page = $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $now->modify('+1 day'));
+        $this->assertSame(0, $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $now->modify('+1 day')));
+        $page = $store->requirePage($page->id());
         $this->assertSame($pruned, $this->entries($page)[0]);
         $this->assertSame(1, $calls);
     }
@@ -165,9 +169,11 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $store = new OrderPageStore($this->kirby);
         $before = $this->entries($page)[0];
         $deadline = OrderData::date($before['expiresAt']);
-        $page = $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $deadline->modify('-1 second'));
+        $this->assertSame(0, $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $deadline->modify('-1 second')));
+        $page = $store->requirePage($page->id());
         $this->assertSame($before, $this->entries($page)[0]);
-        $page = $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $deadline);
+        $this->assertSame(1, $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $deadline));
+        $page = $store->requirePage($page->id());
         $pruned = $this->entries($page)[0];
         $this->assertSame('failed', $pruned['status']);
         $this->assertSame($before['errorCode'], $pruned['errorCode']);
@@ -210,7 +216,8 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         }
 
         $this->assertSame($before, $store->data($store->requirePage($page->id())));
-        $page = $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $deadline);
+        $this->assertSame(1, $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), $deadline));
+        $page = $store->requirePage($page->id());
         $this->assertNotNull($this->entries($page)[0]['payloadPrunedAt']);
     }
 
@@ -704,7 +711,8 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $dispatcher->dispatch($page->uuid()->toString(), $deliveryId);
         $this->assertSame('delivered', $this->entries($store->requirePage($page->id()))[0]['status']);
 
-        $page = $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), OrderData::date($entry['expiresAt']));
+        $this->assertSame(1, $store->pruneLifecycleDeliveryPayloads($page->uuid()->toString(), OrderData::date($entry['expiresAt'])));
+        $page = $store->requirePage($page->id());
         $before = $store->data($page);
         $this->assertSame(LifecycleErrorCode::DELIVERY_NOT_RETRYABLE, $dispatcher->retryFailed($page->uuid()->toString(), $deliveryId)->errorCode());
         $this->assertSame($before, $store->data($store->requirePage($page->id())));

@@ -49,30 +49,37 @@ final class RetentionPolicyTest extends TestCase
     }
 
     #[DataProvider('discoveryStates')]
-    public function testDiscoveryOnlySelectsUnresolvedCreationWithoutAnAssociation(string $checkout, string $payment, bool $expected): void
-    {
+    public function testRecoverySelectsStaleIncompleteOrdersAndDiscoveryRequiresAMissingAssociation(
+        string $checkout,
+        string $payment,
+        bool $needsRecovery,
+        bool $needsDiscovery,
+    ): void {
         $data = $this->data($checkout, $payment);
         $checkedAt = new DateTimeImmutable('2026-09-08T00:00:00Z');
-        $this->assertSame($expected, $this->policy()->needsSessionDiscovery($data, $checkedAt));
+        $this->assertSame($needsRecovery, $this->policy()->needsCheckoutRecovery($data, $checkedAt));
+        $this->assertSame($needsDiscovery, $this->policy()->needsSessionDiscovery($data, $checkedAt));
+        $this->assertFalse($this->policy(['cleanupIncompleteOrders' => false])->needsCheckoutRecovery($data, $checkedAt));
         $this->assertFalse($this->policy(['cleanupIncompleteOrders' => false])->needsSessionDiscovery($data, $checkedAt));
 
-        if ($expected) {
+        if ($needsRecovery) {
+            $this->assertFalse($this->policy()->needsCheckoutRecovery($data, new DateTimeImmutable('2026-09-07T23:59:59Z')));
             $this->assertFalse($this->policy()->needsSessionDiscovery($data, new DateTimeImmutable('2026-09-07T23:59:59Z')));
-            $this->assertFalse($this->policy(['incompleteOrderRetentionDays' => 14])->needsSessionDiscovery($data, $checkedAt));
-            $this->assertTrue($this->policy(['cleanupUnpaidOrders' => false])->needsSessionDiscovery($data, $checkedAt));
+            $this->assertFalse($this->policy(['incompleteOrderRetentionDays' => 14])->needsCheckoutRecovery($data, $checkedAt));
+            $this->assertTrue($this->policy(['cleanupUnpaidOrders' => false])->needsCheckoutRecovery($data, $checkedAt));
         }
     }
 
-    /** @return iterable<string, array{string, string, bool}> */
+    /** @return iterable<string, array{string, string, bool, bool}> */
     public static function discoveryStates(): iterable
     {
-        yield 'creating' => ['creating', 'unpaid', true];
-        yield 'uncertain' => ['creation_uncertain', 'unpaid', true];
-        yield 'definite failure' => ['creation_failed', 'unpaid', false];
-        yield 'saved open Session' => ['open', 'unpaid', false];
-        yield 'expired' => ['expired', 'unpaid', false];
-        yield 'paid' => ['complete', 'paid', false];
-        yield 'pending' => ['complete', 'pending', false];
+        yield 'creating' => ['creating', 'unpaid', true, true];
+        yield 'uncertain' => ['creation_uncertain', 'unpaid', true, true];
+        yield 'definite failure' => ['creation_failed', 'unpaid', false, false];
+        yield 'saved open Session' => ['open', 'unpaid', true, false];
+        yield 'expired' => ['expired', 'unpaid', false, false];
+        yield 'paid' => ['complete', 'paid', false, false];
+        yield 'pending' => ['complete', 'pending', false, false];
     }
 
     public function testAgeBoundaryUsesWholeUtcDaysAndDisabledCategoriesRemainIndependent(): void
