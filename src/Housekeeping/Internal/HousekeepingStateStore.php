@@ -11,7 +11,7 @@ use ProgrammatorDev\StripeCheckout\Housekeeping\Exception\HousekeepingException;
 use ProgrammatorDev\StripeCheckout\Housekeeping\HousekeepingErrorCode;
 use Throwable;
 
-/** @internal Persists bounded continuation and sanitized outcomes outside Order content. */
+/** @internal Persists batch continuation and sanitized outcomes outside Order content. */
 final readonly class HousekeepingStateStore
 {
     private string $path;

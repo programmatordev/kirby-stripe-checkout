@@ -292,7 +292,7 @@ Run it more frequently when the store regularly creates more Orders than `batchS
 
 | Exit code | Meaning |
 | --- | --- |
-| `0` | The bounded pass completed without per-Order failures. |
+| `0` | The batch completed without per-Order failures. |
 | `1` | The pass or its local state failed. |
 | `2` | The pass completed with one or more failed Orders. |
 | `3` | Another housekeeping invocation already holds the lock. |

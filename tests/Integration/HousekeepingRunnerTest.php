@@ -38,7 +38,7 @@ final class HousekeepingRunnerTest extends KirbyTestCase
 {
     private const CREDENTIAL_FINGERPRINT = 'current-credential';
 
-    public function testProcessesOneBoundedSliceAndContinuesWithTheNextOrder(): void
+    public function testProcessesOneSelectedBatchAndContinuesWithTheNextOrder(): void
     {
         $store = new OrderPageStore($this->kirby);
         $createdAt = new DateTimeImmutable('2026-09-01T00:00:00Z');

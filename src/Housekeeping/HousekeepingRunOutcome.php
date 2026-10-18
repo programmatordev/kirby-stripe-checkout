@@ -9,7 +9,7 @@ use InvalidArgumentException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use Throwable;
 
-/** Sanitized counters and status for one bounded housekeeping invocation. */
+/** Sanitized counters and status for one housekeeping batch. */
 final readonly class HousekeepingRunOutcome
 {
     private const INVALID_OUTCOME_MESSAGE = 'Invalid housekeeping run outcome.';

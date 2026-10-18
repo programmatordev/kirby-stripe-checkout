@@ -10,6 +10,7 @@ use Kirby\Filesystem\Dir;
 use Kirby\Plugin\Plugin;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
+use ProgrammatorDev\StripeCheckout\Housekeeping\HousekeepingCommand;
 use ProgrammatorDev\StripeCheckout\Kirby\CustomFieldsField;
 use ProgrammatorDev\StripeCheckout\Kirby\OptionsField;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
@@ -123,6 +124,7 @@ try {
     $blueprints = $extensions['blueprints'] ?? null;
     $pageModels = $extensions['pageModels'] ?? null;
     $fields = $extensions['fields'] ?? null;
+    $commands = $extensions['commands'] ?? null;
     $fieldMethods = $extensions['fieldMethods'] ?? null;
     $siteMethods = $extensions['siteMethods'] ?? null;
     $areas = $extensions['areas'] ?? null;
@@ -138,6 +140,14 @@ try {
         ],
     ]) {
         throw new RuntimeException('The package registered an unexpected runtime extension.');
+    }
+
+    if ($commands !== ['stripe-checkout:housekeeping' => HousekeepingCommand::class]) {
+        throw new RuntimeException('The package did not register its housekeeping command.');
+    }
+
+    if (is_file($consumerRoot . '/vendor/bin/kirby') === false) {
+        throw new RuntimeException('The package did not install the Kirby CLI binary.');
     }
 
     if ($hubBlueprint !== [SettingsBlueprint::class, 'load']) {

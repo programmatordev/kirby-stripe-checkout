@@ -21,7 +21,7 @@ use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
 
-/** @internal Runs one non-overlapping, bounded housekeeping slice and persists its continuation. */
+/** @internal Runs one non-overlapping housekeeping batch and persists its continuation. */
 final readonly class HousekeepingRunner
 {
     public function __construct(

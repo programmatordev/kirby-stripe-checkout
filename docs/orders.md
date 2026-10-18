@@ -1,6 +1,6 @@
 # Orders
 
-Orders are stored as native Kirby draft Pages under the protected `stripe-checkout-orders` container, which is initialized automatically. The package includes guarded internal creation and updates, developer queries, lifecycle hooks, and an extendable order blueprint. The browser Checkout flow creates an order before its Stripe Session, and [signed webhooks](webhooks.md) and provider-backed browser returns reconcile current payment results. The [housekeeping command](configuration.md#running-housekeeping) performs bounded cleanup when invoked directly or by cron.
+Orders are stored as native Kirby draft Pages under the protected `stripe-checkout-orders` container, which is initialized automatically. The package includes guarded internal creation and updates, developer queries, lifecycle hooks, and an extendable order blueprint. The browser Checkout flow creates an order before its Stripe Session, and [signed webhooks](webhooks.md) and provider-backed browser returns reconcile current payment results. The [housekeeping command](configuration.md#running-housekeeping) performs cleanup in configured batches when invoked directly or by cron.
 
 ## Query orders
 

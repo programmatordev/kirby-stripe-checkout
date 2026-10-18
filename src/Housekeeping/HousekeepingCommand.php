@@ -12,7 +12,7 @@ use ProgrammatorDev\StripeCheckout\Housekeeping\Exception\HousekeepingException;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use Throwable;
 
-/** Runs one bounded housekeeping invocation from Kirby CLI. */
+/** Runs one configured housekeeping batch from Kirby CLI. */
 final class HousekeepingCommand extends Command
 {
     private const EXIT_CONFIGURATION = 4;
@@ -32,7 +32,7 @@ final class HousekeepingCommand extends Command
 
     public static function description(): string
     {
-        return 'Run one bounded Stripe Checkout housekeeping pass';
+        return 'Run one Stripe Checkout housekeeping batch';
     }
 
     /** @internal Separated from process exit so output and status remain directly testable. */

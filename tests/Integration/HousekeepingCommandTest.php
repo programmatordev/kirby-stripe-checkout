@@ -6,11 +6,14 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use DateTimeImmutable;
 use Kirby\CLI\CLI;
+use Kirby\Filesystem\F;
 use League\CLImate\Util\Writer\Buffer;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Housekeeping\HousekeepingCommand;
 use ProgrammatorDev\StripeCheckout\Housekeeping\Internal\HousekeepingRunLock;
+use ProgrammatorDev\StripeCheckout\Housekeeping\Internal\HousekeepingState;
+use ProgrammatorDev\StripeCheckout\Housekeeping\Internal\HousekeepingStateStore;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
@@ -54,6 +57,26 @@ final class HousekeepingCommandTest extends KirbyTestCase
         $this->assertSame([
             'status' => 'failed',
             'errorCode' => 'configuration.credential_missing',
+        ], $result);
+    }
+
+    public function testReportsInvalidLocalStateAsRunFailure(): void
+    {
+        $this->withSecretKey();
+        $stateStore = new HousekeepingStateStore($this->kirby);
+        $stateStore->write(new HousekeepingState());
+        $statePath = $this->kirby->root('site') . '/storage/stripe-checkout/housekeeping.json';
+        $this->assertNotFalse(F::write($statePath, '{invalid'));
+        [$cli, $output] = $this->cli();
+
+        $exitCode = HousekeepingCommand::execute($cli);
+        $result = json_decode($output->get(), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertIsArray($result);
+        $this->assertSame(1, $exitCode);
+        $this->assertSame([
+            'status' => 'failed',
+            'errorCode' => 'housekeeping.state_invalid',
         ], $result);
     }
 
