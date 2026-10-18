@@ -50,7 +50,6 @@ final class Defaults
         ...self::RETENTION,
     ];
 
-    public const HOUSEKEEPING_INTERVAL_HOURS = 24;
     public const HOUSEKEEPING_BATCH_SIZE = 25;
     // Maximum lifecycle snapshot retention, not delivery metadata retention, Stripe's retry schedule or a payment action's validity.
     public const LIFECYCLE_DELIVERY_PAYLOAD_RETENTION_DAYS = 30;

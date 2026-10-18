@@ -100,21 +100,16 @@ final class ConfigurationResolverTest extends TestCase
     {
         $resolver = new ConfigurationResolver();
         $defaults = $resolver->housekeeping([]);
-        $this->assertSame(24, $defaults->intervalHours());
         $this->assertSame(25, $defaults->batchSize());
         $this->assertSame(30, $defaults->lifecycleDeliveryPayloadRetentionDays());
         $configured = $resolver->resolve([
-            self::PREFIX . '.housekeeping.intervalHours' => 12,
             self::PREFIX . '.housekeeping.batchSize' => 100,
             self::PREFIX . '.housekeeping.lifecycleDeliveryPayloadRetentionDays' => 14,
         ])->configurationOrFail()->housekeeping();
-        $this->assertSame(12, $configured->intervalHours());
         $this->assertSame(100, $configured->batchSize());
         $this->assertSame(14, $configured->lifecycleDeliveryPayloadRetentionDays());
         $invalid = [
-            ['intervalHours' => '24'],
-            ['intervalHours' => null],
-            ['intervalHours' => 0],
+            ['intervalHours' => 24],
             ['batchSize' => 0],
             ['batchSize' => 101],
             ['batchSize' => 2.5],

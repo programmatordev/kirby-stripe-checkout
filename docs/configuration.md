@@ -253,19 +253,18 @@ Shortening a period can make existing records eligible for cleanup. **Automatic 
 
 For existing development installations, rename `cleanupCreationFailures` to `cleanupIncompleteOrders` and `creationFailureRetentionDays` to `incompleteOrderRetentionDays` in PHP configuration and saved Settings content, retaining their values. The old names have been replaced.
 
-Request-load controls are separate, PHP-only values:
+Housekeeping work limits and lifecycle payload retention are separate, PHP-only values:
 
 ```php
 'programmatordev.stripe-checkout' => [
     'housekeeping' => [
-        'intervalHours' => 24,
         'batchSize' => 25,
         'lifecycleDeliveryPayloadRetentionDays' => 30,
     ],
 ],
 ```
 
-`intervalHours` is a positive integer; `batchSize` is an integer from 1 to 100. `lifecycleDeliveryPayloadRetentionDays` is a positive integer, defaulting to 30. These values are shown read-only in Diagnostics, not exposed as merchant Settings or editable Page fields. They do not start a scheduler or cleanup process.
+`batchSize` is an integer from 1 to 100. `lifecycleDeliveryPayloadRetentionDays` is a positive integer, defaulting to 30. These values are shown read-only in Diagnostics, not exposed as merchant Settings or editable Page fields. They do not start a scheduler or cleanup process; housekeeping invocation remains external to plugin configuration.
 
 Developers can retain payloads longer by setting `lifecycleDeliveryPayloadRetentionDays` to a larger value, such as `90`. The configured period applies to every new delivery regardless of whether its hook succeeds or fails; existing deliveries keep their original deadlines.
 

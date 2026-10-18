@@ -206,10 +206,7 @@ final class ConfigurationResolver
      */
     private function resolveHousekeeping(array $values): HousekeepingConfiguration
     {
-        $this->assertKnownKeys($values, ['intervalHours', 'batchSize', 'lifecycleDeliveryPayloadRetentionDays'], 'housekeeping');
-        $intervalHours = array_key_exists('intervalHours', $values)
-            ? $values['intervalHours']
-            : Defaults::HOUSEKEEPING_INTERVAL_HOURS;
+        $this->assertKnownKeys($values, ['batchSize', 'lifecycleDeliveryPayloadRetentionDays'], 'housekeeping');
         $batchSize = array_key_exists('batchSize', $values)
             ? $values['batchSize']
             : Defaults::HOUSEKEEPING_BATCH_SIZE;
@@ -217,14 +214,6 @@ final class ConfigurationResolver
         $lifecycleDeliveryPayloadRetentionDays = array_key_exists('lifecycleDeliveryPayloadRetentionDays', $values)
             ? $values['lifecycleDeliveryPayloadRetentionDays']
             : Defaults::LIFECYCLE_DELIVERY_PAYLOAD_RETENTION_DAYS;
-
-        if (is_int($intervalHours) === false) {
-            throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'housekeeping.intervalHours');
-        }
-
-        if ($intervalHours < 1) {
-            throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'housekeeping.intervalHours');
-        }
 
         if (is_int($batchSize) === false) {
             throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'housekeeping.batchSize');
@@ -243,7 +232,6 @@ final class ConfigurationResolver
         }
 
         return new HousekeepingConfiguration(
-            intervalHours: $intervalHours,
             batchSize: $batchSize,
             lifecycleDeliveryPayloadRetentionDays: $lifecycleDeliveryPayloadRetentionDays,
         );

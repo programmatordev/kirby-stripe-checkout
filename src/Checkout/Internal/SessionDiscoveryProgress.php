@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 
+use InvalidArgumentException;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutSessionException;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionDiscoveryPage;
+use Throwable;
 
 /**
  * Immutable continuation for one order's search under one credential and creation window.
@@ -17,6 +20,8 @@ use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionDiscoveryPage;
  */
 final readonly class SessionDiscoveryProgress
 {
+    private const INVALID_PROGRESS_MESSAGE = 'Invalid Checkout Session discovery progress.';
+
     public function __construct(
         public string $pageUuid,
         public string $credentialFingerprint,
@@ -25,7 +30,29 @@ final readonly class SessionDiscoveryProgress
         public ?string $startingAfter = null,
         public ?string $candidateSessionId = null,
         public bool $complete = false,
-    ) {}
+    ) {
+        OrderData::uuid($pageUuid);
+
+        if ($createdFrom < 0 || $createdBefore <= $createdFrom) {
+            throw new InvalidArgumentException(self::INVALID_PROGRESS_MESSAGE);
+        }
+
+        if ($credentialFingerprint === '') {
+            throw new InvalidArgumentException(self::INVALID_PROGRESS_MESSAGE);
+        }
+
+        if ($startingAfter === '') {
+            throw new InvalidArgumentException(self::INVALID_PROGRESS_MESSAGE);
+        }
+
+        if ($candidateSessionId === '') {
+            throw new InvalidArgumentException(self::INVALID_PROGRESS_MESSAGE);
+        }
+
+        if ($complete && $startingAfter !== null) {
+            throw new InvalidArgumentException(self::INVALID_PROGRESS_MESSAGE);
+        }
+    }
 
     public function advance(CheckoutSessionDiscoveryPage $page): self
     {
@@ -49,5 +76,84 @@ final readonly class SessionDiscoveryProgress
             candidateSessionId: $candidateSessionId,
             complete: $page->nextCursor === null,
         );
+    }
+
+    /** @return array<string, bool|int|string|null> */
+    public function toArray(): array
+    {
+        return [
+            'pageUuid' => $this->pageUuid,
+            'credentialFingerprint' => $this->credentialFingerprint,
+            'createdFrom' => $this->createdFrom,
+            'createdBefore' => $this->createdBefore,
+            'startingAfter' => $this->startingAfter,
+            'candidateSessionId' => $this->candidateSessionId,
+            'complete' => $this->complete,
+        ];
+    }
+
+    public static function fromArray(mixed $data): self
+    {
+        $keys = [
+            'pageUuid',
+            'credentialFingerprint',
+            'createdFrom',
+            'createdBefore',
+            'startingAfter',
+            'candidateSessionId',
+            'complete',
+        ];
+
+        if (is_array($data) === false) {
+            throw new InvalidArgumentException(self::INVALID_PROGRESS_MESSAGE);
+        }
+
+        if (array_diff(array_keys($data), $keys) !== []) {
+            throw new InvalidArgumentException(self::INVALID_PROGRESS_MESSAGE);
+        }
+
+        if (array_diff($keys, array_keys($data)) !== []) {
+            throw new InvalidArgumentException(self::INVALID_PROGRESS_MESSAGE);
+        }
+
+        try {
+            $pageUuid = $data['pageUuid'];
+            $credentialFingerprint = $data['credentialFingerprint'];
+            $startingAfter = $data['startingAfter'];
+            $candidateSessionId = $data['candidateSessionId'];
+            $complete = $data['complete'];
+
+            if (is_string($pageUuid) === false) {
+                throw new InvalidArgumentException(self::INVALID_PROGRESS_MESSAGE);
+            }
+
+            if (is_string($credentialFingerprint) === false) {
+                throw new InvalidArgumentException(self::INVALID_PROGRESS_MESSAGE);
+            }
+
+            if ($startingAfter !== null && is_string($startingAfter) === false) {
+                throw new InvalidArgumentException(self::INVALID_PROGRESS_MESSAGE);
+            }
+
+            if ($candidateSessionId !== null && is_string($candidateSessionId) === false) {
+                throw new InvalidArgumentException(self::INVALID_PROGRESS_MESSAGE);
+            }
+
+            if (is_bool($complete) === false) {
+                throw new InvalidArgumentException(self::INVALID_PROGRESS_MESSAGE);
+            }
+
+            return new self(
+                pageUuid: $pageUuid,
+                credentialFingerprint: $credentialFingerprint,
+                createdFrom: OrderData::integer($data['createdFrom']),
+                createdBefore: OrderData::integer($data['createdBefore']),
+                startingAfter: $startingAfter,
+                candidateSessionId: $candidateSessionId,
+                complete: $complete,
+            );
+        } catch (Throwable $error) {
+            throw new InvalidArgumentException(self::INVALID_PROGRESS_MESSAGE, previous: $error);
+        }
     }
 }
