@@ -51,6 +51,18 @@ final readonly class HousekeepingRunOutcome
             throw new InvalidArgumentException(self::INVALID_OUTCOME_MESSAGE);
         }
 
+        if ($recoveredOrders > $processedOrders) {
+            throw new InvalidArgumentException(self::INVALID_OUTCOME_MESSAGE);
+        }
+
+        if ($deletedOrders > $processedOrders) {
+            throw new InvalidArgumentException(self::INVALID_OUTCOME_MESSAGE);
+        }
+
+        if ($status === HousekeepingRunStatus::Success && $failedOrders !== 0) {
+            throw new InvalidArgumentException(self::INVALID_OUTCOME_MESSAGE);
+        }
+
         if (($status === HousekeepingRunStatus::Success) !== ($errorCode === null)) {
             throw new InvalidArgumentException(self::INVALID_OUTCOME_MESSAGE);
         }

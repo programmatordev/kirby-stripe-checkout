@@ -28,16 +28,15 @@ final readonly class HousekeepingState
             OrderData::uuid($lastOrderPageUuid);
         }
 
-        $keys = [];
+        // Credential rotation replaces an order's search; two continuations for one order cannot both remain resumable.
+        $pageUuids = [];
 
         foreach ($discoveryProgress as $progress) {
-            $key = self::progressKey($progress->pageUuid, $progress->credentialFingerprint);
-
-            if (isset($keys[$key])) {
+            if (isset($pageUuids[$progress->pageUuid])) {
                 throw new InvalidArgumentException(self::INVALID_STATE_MESSAGE);
             }
 
-            $keys[$key] = true;
+            $pageUuids[$progress->pageUuid] = true;
         }
 
         if ($lastSuccess !== null && $lastSuccess->status() !== HousekeepingRunStatus::Success) {
@@ -108,12 +107,11 @@ final readonly class HousekeepingState
         );
     }
 
-    public function withoutProgress(string $pageUuid, string $credentialFingerprint): self
+    public function withoutProgressForOrder(string $pageUuid): self
     {
         $discoveryProgress = array_values(array_filter(
             $this->discoveryProgress,
-            static fn(SessionDiscoveryProgress $progress): bool => $progress->pageUuid !== $pageUuid
-                || $progress->credentialFingerprint !== $credentialFingerprint,
+            static fn(SessionDiscoveryProgress $progress): bool => $progress->pageUuid !== $pageUuid,
         ));
 
         return new self(
@@ -190,10 +188,5 @@ final readonly class HousekeepingState
             lastAttempt: $data['lastAttempt'] === null ? null : HousekeepingRunOutcome::fromArray($data['lastAttempt']),
             lastSuccess: $data['lastSuccess'] === null ? null : HousekeepingRunOutcome::fromArray($data['lastSuccess']),
         );
-    }
-
-    private static function progressKey(string $pageUuid, string $credentialFingerprint): string
-    {
-        return $pageUuid . "\0" . $credentialFingerprint;
     }
 }

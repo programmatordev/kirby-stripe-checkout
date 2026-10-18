@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use DateTimeImmutable;
+use InvalidArgumentException;
 use Kirby\Cms\Page;
 use Kirby\Filesystem\F;
+use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionDiscoveryProgress;
 use ProgrammatorDev\StripeCheckout\Housekeeping\Exception\HousekeepingException;
 use ProgrammatorDev\StripeCheckout\Housekeeping\HousekeepingErrorCode;
@@ -104,6 +106,80 @@ final class HousekeepingFoundationTest extends KirbyTestCase
         $this->assertSame($progress->toArray(), $restored->progress('page://order-one', 'credential-one')?->toArray());
         $this->assertSame($failedOutcome->toArray(), $restored->lastAttempt()?->toArray());
         $this->assertSame($outcome->toArray(), $restored->lastSuccess()?->toArray());
+    }
+
+    public function testRemovesDiscoveryProgressByOrderAcrossCredentialRotation(): void
+    {
+        $progress = new SessionDiscoveryProgress(
+            pageUuid: 'page://order-one',
+            credentialFingerprint: 'old-credential',
+            createdFrom: 100,
+            createdBefore: 200,
+        );
+        $state = (new HousekeepingState())
+            ->withProgress($progress)
+            ->withoutProgressForOrder('page://order-one');
+
+        $this->assertSame([], $state->discoveryProgress());
+    }
+
+    public function testRejectsPersistedDiscoveryProgressForMultipleCredentialsOfOneOrder(): void
+    {
+        $progress = new SessionDiscoveryProgress(
+            pageUuid: 'page://order-one',
+            credentialFingerprint: 'first-credential',
+            createdFrom: 100,
+            createdBefore: 200,
+        );
+        $rotatedProgress = new SessionDiscoveryProgress(
+            pageUuid: 'page://order-one',
+            credentialFingerprint: 'second-credential',
+            createdFrom: 100,
+            createdBefore: 200,
+        );
+
+        $this->expectException(InvalidArgumentException::class);
+
+        HousekeepingState::fromArray([
+            'schemaVersion' => 1,
+            'lastOrderPageUuid' => null,
+            'discoveryProgress' => [$progress->toArray(), $rotatedProgress->toArray()],
+            'lastAttempt' => null,
+            'lastSuccess' => null,
+        ]);
+    }
+
+    #[DataProvider('invalidRunOutcomeProvider')]
+    public function testRejectsContradictoryRunOutcome(
+        int $processedOrders,
+        int $deletedOrders,
+        int $recoveredOrders,
+        int $failedOrders,
+    ): void {
+        $attemptedAt = new DateTimeImmutable('2026-10-18T10:00:00Z');
+
+        $this->expectException(InvalidArgumentException::class);
+
+        new HousekeepingRunOutcome(
+            attemptedAt: $attemptedAt,
+            completedAt: $attemptedAt,
+            status: HousekeepingRunStatus::Success,
+            selectedOrders: 1,
+            processedOrders: $processedOrders,
+            prunedDeliveries: 0,
+            deletedOrders: $deletedOrders,
+            recoveredOrders: $recoveredOrders,
+            failedOrders: $failedOrders,
+            errorCode: null,
+        );
+    }
+
+    /** @return iterable<string, array{int, int, int, int}> */
+    public static function invalidRunOutcomeProvider(): iterable
+    {
+        yield 'deleted orders exceed processed orders' => [1, 2, 0, 0];
+        yield 'recovered orders exceed processed orders' => [1, 0, 2, 0];
+        yield 'successful outcome contains a failed order' => [1, 0, 0, 1];
     }
 
     public function testRejectsCorruptPersistedStateWithoutReplacingIt(): void
