@@ -28,10 +28,25 @@ final readonly class HousekeepingStateStore
         }
 
         try {
-            $contents = F::read($this->path);
+            $handle = @fopen($this->path, 'r');
 
-            if ($contents === false) {
+            if ($handle === false) {
                 throw new HousekeepingException(HousekeepingErrorCode::STATE_INVALID);
+            }
+
+            try {
+                // F::update() holds an exclusive lock while rewriting; this prevents observing a partial document.
+                if (flock($handle, LOCK_SH) === false) {
+                    throw new HousekeepingException(HousekeepingErrorCode::STATE_INVALID);
+                }
+
+                $contents = stream_get_contents($handle);
+
+                if ($contents === false) {
+                    throw new HousekeepingException(HousekeepingErrorCode::STATE_INVALID);
+                }
+            } finally {
+                fclose($handle);
             }
 
             return HousekeepingState::fromArray(Json::decode($contents));

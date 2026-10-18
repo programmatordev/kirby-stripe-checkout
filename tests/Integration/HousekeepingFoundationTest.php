@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use Kirby\Cms\Page;
+use Kirby\Data\Json;
 use Kirby\Filesystem\F;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\SessionDiscoveryProgress;
@@ -197,6 +198,59 @@ final class HousekeepingFoundationTest extends KirbyTestCase
         }
     }
 
+    public function testStateReadWaitsForAnActiveWriteLock(): void
+    {
+        $store = new HousekeepingStateStore($this->kirby);
+        $store->write((new HousekeepingState())->withLastOrderPageUuid('page://order-one'));
+        $path = $this->kirby->root('site') . '/storage/stripe-checkout/housekeeping.json';
+        $handle = fopen($path, 'c+');
+        $this->assertIsResource($handle);
+        $process = null;
+        $pipes = [];
+
+        try {
+            $process = proc_open([PHP_BINARY, dirname(__DIR__) . '/Support/Housekeeping/concurrent-read.php'], [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ], $pipes);
+            $this->assertIsResource($process);
+            fwrite($pipes[0], json_encode(['roots' => $this->environment->workspace()->roots()], JSON_THROW_ON_ERROR) . "\n");
+            $this->assertSame("ready\n", $this->readWorkerLine($pipes[1]));
+            $this->assertTrue(flock($handle, LOCK_EX));
+            fwrite($pipes[0], "go\n");
+            $read = [$pipes[1]];
+            $write = $except = [];
+            // A reader must not observe the interval in which F::update() truncates and rewrites the state file.
+            $this->assertSame(0, stream_select($read, $write, $except, 0, 100000));
+            $replacement = Json::encode(
+                (new HousekeepingState())->withLastOrderPageUuid('page://order-two')->toArray(),
+                true,
+            );
+            $this->assertTrue(ftruncate($handle, 0));
+            $this->assertTrue(rewind($handle));
+            $this->assertSame(strlen($replacement), fwrite($handle, $replacement));
+            $this->assertTrue(fflush($handle));
+            flock($handle, LOCK_UN);
+            $this->assertSame("page://order-two\n", $this->readWorkerLine($pipes[1]));
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+
+            if (is_resource($process)) {
+                proc_terminate($process);
+
+                foreach ($pipes as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+
+                proc_close($process);
+            }
+        }
+    }
+
     public function testRejectsAnOverlappingRunWithoutWaiting(): void
     {
         $errorCode = HousekeepingRunLock::run($this->kirby, function (): string {
@@ -236,5 +290,15 @@ final class HousekeepingFoundationTest extends KirbyTestCase
         } finally {
             fclose($handle);
         }
+    }
+
+    /** @param resource $pipe */
+    private function readWorkerLine($pipe): string|false
+    {
+        $read = [$pipe];
+        $write = $except = [];
+        $this->assertSame(1, stream_select($read, $write, $except, 5), 'The housekeeping test worker timed out.');
+
+        return fgets($pipe);
     }
 }
