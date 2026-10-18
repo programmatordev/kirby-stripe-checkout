@@ -11,6 +11,8 @@ final class OrderErrorCode
 
     public const DATA_INVALID = 'order.data_invalid';
 
+    public const DELETION_NOT_ALLOWED = 'order.deletion_not_allowed';
+
     public const NUMBER_INVALID = 'order.number_invalid';
 
     public const QUERY_UNAVAILABLE = 'order.query_unavailable';
