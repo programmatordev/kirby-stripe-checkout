@@ -29,6 +29,7 @@ use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\OrdersPage;
+use ProgrammatorDev\StripeCheckout\Kirby\PersistenceErrorCode;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
@@ -48,6 +49,21 @@ use RuntimeException;
 
 final class OrderPageStoreTest extends KirbyTestCase
 {
+    #[DataProvider('storageFailureRetryability')]
+    public function testStorageFailuresClassifyWhetherAnotherExplicitAttemptCanHelp(string $errorCode, bool $retryable): void
+    {
+        $this->assertSame($retryable, (new OrderStorageException($errorCode))->isRetryable());
+    }
+
+    /** @return iterable<string, array{string, bool}> */
+    public static function storageFailureRetryability(): iterable
+    {
+        yield 'busy lock' => [PersistenceErrorCode::BUSY, true];
+        yield 'write failure' => [PersistenceErrorCode::WRITE_FAILED, true];
+        yield 'verification failure' => [PersistenceErrorCode::VERIFY_FAILED, true];
+        yield 'invalid content' => [PersistenceErrorCode::CONTENT_INVALID, false];
+    }
+
     public function testBootCreatesOnlyTheOwnedContainerAndSetupIsIdempotent(): void
     {
         $store = new OrderPageStore($this->kirby);

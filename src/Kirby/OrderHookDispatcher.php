@@ -144,11 +144,15 @@ final class OrderHookDispatcher
                 return $data;
             });
 
-            return $delivered ? DeliveryResult::delivered() : DeliveryResult::failed(LifecycleErrorCode::LISTENER_FAILED);
+            // A listener failure remains eligible until the fixed delivery deadline,
+            // but another attempt is always initiated explicitly by the caller.
+            return $delivered
+                ? DeliveryResult::delivered()
+                : DeliveryResult::failed(LifecycleErrorCode::LISTENER_FAILED, retryable: true);
         } catch (OrderStorageException $error) {
             error_log('Stripe Checkout: ' . LifecycleErrorCode::DELIVERY_RECORD_FAILED);
 
-            return DeliveryResult::failed($error->errorCode());
+            return DeliveryResult::failed($error->errorCode(), $error->isRetryable());
         } catch (Throwable) {
             // Bookkeeping failure cannot undo canonical success or expose private listener/storage exceptions.
             error_log('Stripe Checkout: ' . LifecycleErrorCode::DELIVERY_RECORD_FAILED);

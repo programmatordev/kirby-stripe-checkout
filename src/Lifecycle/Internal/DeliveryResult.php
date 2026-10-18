@@ -10,16 +10,19 @@ namespace ProgrammatorDev\StripeCheckout\Lifecycle\Internal;
  */
 final readonly class DeliveryResult
 {
-    private function __construct(private ?string $errorCode) {}
+    private function __construct(
+        private ?string $errorCode,
+        private bool $retryable = false,
+    ) {}
 
     public static function delivered(): self
     {
         return new self(null);
     }
 
-    public static function failed(string $errorCode): self
+    public static function failed(string $errorCode, bool $retryable = false): self
     {
-        return new self($errorCode);
+        return new self($errorCode, $retryable);
     }
 
     public function isDelivered(): bool
@@ -30,5 +33,11 @@ final readonly class DeliveryResult
     public function errorCode(): ?string
     {
         return $this->errorCode;
+    }
+
+    /** Another explicit attempt can help; this never schedules or performs one. */
+    public function isRetryable(): bool
+    {
+        return $this->retryable;
     }
 }

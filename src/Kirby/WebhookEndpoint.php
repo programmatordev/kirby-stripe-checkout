@@ -245,9 +245,7 @@ final class WebhookEndpoint
         }
 
         if ($error instanceof OrderStorageException) {
-            $recoverable = in_array($error->errorCode(), [PersistenceErrorCode::BUSY, PersistenceErrorCode::WRITE_FAILED, PersistenceErrorCode::VERIFY_FAILED], true);
-
-            return $recoverable ? self::HTTP_SERVICE_UNAVAILABLE : self::HTTP_INTERNAL_SERVER_ERROR;
+            return $error->isRetryable() ? self::HTTP_SERVICE_UNAVAILABLE : self::HTTP_INTERNAL_SERVER_ERROR;
         }
 
         return self::HTTP_INTERNAL_SERVER_ERROR;

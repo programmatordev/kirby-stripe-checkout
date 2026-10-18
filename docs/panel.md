@@ -41,7 +41,7 @@ permissions:
 
 The remaining permissions authorize explicit operational requests. `orders.reconcile` and `orders.delete` also require `orders.read`; `lifecycle.retry` requires `orders.read` when retrying one failed order hook. `housekeeping.run` starts one configured housekeeping batch using the same continuation state and non-overlapping lock as the CLI command. These permissions are disabled by default for custom roles. The authenticated request backend is available for the later Panel action UI; this version does not add its buttons or expose public mutation routes.
 
-Every operational request uses the same response envelope. `code` is the HTTP status, `status` is `success`, `partial_failure` or `failed`, `result` contains only operation-specific successful output, and `error` is either `null` or a safe code plus explicit retryability:
+Every authorized operational outcome uses the same response envelope. `code` is the HTTP status, `status` is `success`, `partial_failure` or `failed`, `result` contains only operation-specific successful output, and `error` is either `null` or a safe code plus explicit retryability:
 
 ```json
 {
@@ -54,7 +54,7 @@ Every operational request uses the same response envelope. `code` is the HTTP st
 }
 ```
 
-Failed requests set `result` to `null`. A completed housekeeping batch can return `partial_failure` with its sanitized counters in `result` and its stable issue in `error`. `retryable` is true only when the operation specifically classifies a later explicit invocation as useful; it never schedules or automatically replays an action.
+Failed requests set `result` to `null`. A completed housekeeping batch can return `partial_failure` with its sanitized counters in `result` and its stable issue in `error`. `retryable` is true only when the operation specifically classifies a later explicit invocation as useful; it never schedules or automatically replays an action. Authentication, area-access and permission failures keep Kirby's native Panel error response.
 
 ## Panel menu
 

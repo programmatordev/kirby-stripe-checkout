@@ -76,10 +76,7 @@ final class CheckoutSessionReconciler
         } catch (OrderDataException $error) {
             return ReconciliationResult::failed($error->errorCode());
         } catch (OrderStorageException $error) {
-            // Match the webhook's recoverable storage categories; invalid content needs repair before another sync.
-            $retryable = in_array($error->errorCode(), [PersistenceErrorCode::BUSY, PersistenceErrorCode::WRITE_FAILED, PersistenceErrorCode::VERIFY_FAILED], true);
-
-            return ReconciliationResult::failed(errorCode: $error->errorCode(), retryable: $retryable);
+            return ReconciliationResult::failed(errorCode: $error->errorCode(), retryable: $error->isRetryable());
         } catch (OrderQueryException $error) {
             return ReconciliationResult::failed(errorCode: $error->errorCode(), retryable: true);
         }

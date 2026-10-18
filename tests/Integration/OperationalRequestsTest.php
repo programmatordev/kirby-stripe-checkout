@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use DateTimeImmutable;
+use Kirby\Data\Yaml;
 use Kirby\Panel\Panel;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
 use ProgrammatorDev\StripeCheckout\Housekeeping\HousekeepingErrorCode;
@@ -20,14 +23,18 @@ use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\LifecycleNotification;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleErrorCode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Order\OrderErrorCode;
+use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ProgrammatorDev\StripeCheckout\Test\Support\OrderFixture;
+use ProgrammatorDev\StripeCheckout\Test\Support\Stripe\WebhookCheckoutClient;
 use RuntimeException;
+use Stripe\ApiRequestor;
 
 final class OperationalRequestsTest extends KirbyTestCase
 {
@@ -151,6 +158,55 @@ final class OperationalRequestsTest extends KirbyTestCase
         ], json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR));
     }
 
+    public function testOrderSyncReturnsTheCommittedOutcome(): void
+    {
+        $this->restartRequest([
+            'orders.read' => true,
+            'orders.reconcile' => true,
+        ]);
+        $createdAt = new DateTimeImmutable('2026-10-01T12:00:00Z');
+        $order = $this->createOpenOrder($createdAt);
+        ApiRequestor::setHttpClient(new WebhookCheckoutClient($order->uuid()->toString(), $createdAt->getTimestamp()));
+
+        $response = Panel::router(self::SYNC_PATH);
+
+        $this->assertNotNull($response);
+        $this->assertSame(200, $response->code(), $response->body());
+        $this->assertSame([
+            'code' => 200,
+            'status' => 'success',
+            'result' => ['outcome' => 'updated'],
+            'error' => null,
+        ], json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR));
+    }
+
+    public function testOrderSyncPreservesRetryableProviderFailure(): void
+    {
+        $this->restartRequest([
+            'orders.read' => true,
+            'orders.reconcile' => true,
+        ]);
+        $createdAt = new DateTimeImmutable('2026-10-01T12:00:00Z');
+        $order = $this->createOpenOrder($createdAt);
+        $client = new WebhookCheckoutClient($order->uuid()->toString(), $createdAt->getTimestamp());
+        $client->httpStatus = 500;
+        ApiRequestor::setHttpClient($client);
+
+        $response = Panel::router(self::SYNC_PATH);
+
+        $this->assertNotNull($response);
+        $this->assertSame(503, $response->code(), $response->body());
+        $this->assertSame([
+            'code' => 503,
+            'status' => 'failed',
+            'result' => null,
+            'error' => [
+                'code' => CheckoutErrorCode::SESSION_UNAVAILABLE,
+                'retryable' => true,
+            ],
+        ], json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR));
+    }
+
     /** @param array<string, bool> $permissions */
     #[DataProvider('operationalPermissionDenials')]
     public function testOrderOperationsRequireReadAndSpecificActionPermissions(array $permissions, string $path, string $method): void
@@ -194,45 +250,33 @@ final class OperationalRequestsTest extends KirbyTestCase
                 'orders.read' => true,
                 'lifecycle.retry' => true,
             ],
+            hooks: [
+                'programmatordev.stripe-checkout.session.created' => function () use (&$calls): void {
+                    $calls++;
+
+                    if ($calls <= 2) {
+                        throw new RuntimeException('Intentional listener failure');
+                    }
+                },
+            ],
         );
         $order = $this->createOrder(new DateTimeImmutable());
-        $store = new OrderPageStore($this->kirby);
-        $this->kirby->extend(['hooks' => [
-            'programmatordev.stripe-checkout.session.created' => function () use (&$calls): void {
-                $calls++;
-
-                if ($calls === 1) {
-                    throw new RuntimeException('Intentional listener failure');
-                }
-            },
-        ]]);
-        $order = $store->update(
-            uuid: $order->uuid()->toString(),
-            reduce: static fn(array $data): array => [
-                ...$data,
-                'checkoutStatus' => 'open',
-                'stripeCheckoutSessionId' => 'cs_test_operational_request',
-                'stripeShippingRateIds' => [],
-                'checkoutOpenedAt' => $data['createdAt'],
-            ],
-            notifications: [new LifecycleNotification(LifecycleEventType::SessionCreated)],
-        );
-        $deliveries = OrderData::list($store->data($order)['lifecycleDeliveries']);
-        $delivery = null;
-
-        foreach ($deliveries as $candidate) {
-            $candidate = OrderData::map($candidate);
-
-            if ($candidate['status'] === 'failed') {
-                $delivery = $candidate;
-                break;
-            }
-        }
-
-        $this->assertNotNull($delivery);
-        $event = OrderData::map($delivery['event']);
-        $deliveryId = OrderData::text($event['deliveryId']);
+        $deliveryId = $this->dispatchFailedSessionCreated($order);
         $path = 'stripe-checkout/orders/' . self::ORDER_ID . '/deliveries/' . $deliveryId . '/retry';
+
+        $response = Panel::router($path);
+
+        $this->assertNotNull($response);
+        $this->assertSame(503, $response->code(), $response->body());
+        $this->assertSame([
+            'code' => 503,
+            'status' => 'failed',
+            'result' => null,
+            'error' => [
+                'code' => LifecycleErrorCode::LISTENER_FAILED,
+                'retryable' => true,
+            ],
+        ], json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR));
 
         $response = Panel::router($path);
 
@@ -244,7 +288,8 @@ final class OperationalRequestsTest extends KirbyTestCase
             'result' => ['delivered' => true],
             'error' => null,
         ], json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR));
-        $this->assertSame(2, $calls);
+        $this->assertSame(3, $calls);
+        $store = new OrderPageStore($this->kirby);
         $order = $store->requirePage($order->id());
         $deliveries = OrderData::list($store->data($order)['lifecycleDeliveries']);
         $retriedDelivery = null;
@@ -261,7 +306,7 @@ final class OperationalRequestsTest extends KirbyTestCase
 
         $this->assertNotNull($retriedDelivery);
         $this->assertSame('delivered', $retriedDelivery['status']);
-        $this->assertSame(2, $retriedDelivery['attempts']);
+        $this->assertSame(3, $retriedDelivery['attempts']);
     }
 
     public function testMissingDeliveryReturnsItsSafeLifecycleFailure(): void
@@ -469,14 +514,40 @@ final class OperationalRequestsTest extends KirbyTestCase
         ], $body['error']);
     }
 
+    public function testFailedHousekeepingRunHasNoSuccessfulResultPayload(): void
+    {
+        $this->restartRequest(['housekeeping.run' => true]);
+        $container = (new OrderPageStore($this->kirby))->container();
+        $this->assertNotNull($container);
+        $container->version('latest')->update([
+            'stripeCheckout' => Yaml::encode(['owner' => 'invalid']),
+        ], 'default');
+
+        $response = Panel::router(self::HOUSEKEEPING_PATH);
+
+        $this->assertNotNull($response);
+        $this->assertSame(503, $response->code(), $response->body());
+        $this->assertSame([
+            'code' => 503,
+            'status' => 'failed',
+            'result' => null,
+            'error' => [
+                'code' => HousekeepingErrorCode::RUN_FAILED,
+                'retryable' => false,
+            ],
+        ], json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR));
+    }
+
     /**
      * @param array<string, bool>  $permissions
      * @param array<string, mixed> $pluginOptions
+     * @param array<string, callable|list<callable>> $hooks
      */
     private function restartRequest(
         array $permissions,
         string $method = 'POST',
         array $pluginOptions = [],
+        array $hooks = [],
     ): void {
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start(
@@ -501,6 +572,7 @@ final class OperationalRequestsTest extends KirbyTestCase
                 'email' => 'operator@example.com',
                 'role' => 'store-operator',
             ]],
+            hooks: $hooks,
             impersonate: 'store-operator',
             request: [
                 'method' => $method,
@@ -532,5 +604,92 @@ final class OperationalRequestsTest extends KirbyTestCase
             ),
             createdAt: $createdAt,
         );
+    }
+
+    private function createOpenOrder(DateTimeImmutable $createdAt): OrderPage
+    {
+        $lineItem = OrderFixture::lineItemData();
+        $lineItem['requiresShipping'] = false;
+        $context = new OrderCreationContext(
+            uuid: self::ORDER_ID,
+            orderNumber: (new OrderNumberFormatter())->format(self::ORDER_ID),
+            lineItems: [OrderLineItemSnapshot::fromArray($lineItem)],
+            currency: 'EUR',
+            checkoutSource: CheckoutSource::Direct,
+            cartRevision: null,
+            userUuid: null,
+            languageCode: null,
+            uiMode: UiMode::Hosted,
+        );
+        $metadata = [
+            PluginMetadata::OWNER_KEY => PluginMetadata::NAME,
+            PluginMetadata::ORDER_KEY => $context->pageUuid(),
+        ];
+        $request = new SessionRequest([
+            'mode' => 'payment',
+            'currency' => 'eur',
+            'client_reference_id' => $context->pageUuid(),
+            'expires_at' => $createdAt->getTimestamp() + 86400,
+            'integration_identifier' => 'kirby_stripe_checkout_abcdefgh',
+            'metadata' => $metadata,
+            'payment_intent_data' => ['metadata' => $metadata],
+            'line_items' => [[
+                'quantity' => 2,
+                'metadata' => [
+                    ...$metadata,
+                    PluginMetadata::LINE_KEY => 'line_0',
+                ],
+            ]],
+        ]);
+        $store = new OrderPageStore($this->kirby);
+        $order = $store->create(
+            context: $context,
+            checkoutAttempt: CheckoutAttemptFactory::create($context, $createdAt, request: $request),
+            createdAt: $createdAt,
+        );
+
+        return $store->update($order->uuid()->toString(), static fn(array $data): array => [
+            ...$data,
+            'checkoutStatus' => 'open',
+            'stripeCheckoutSessionId' => 'cs_webhook',
+            'stripeShippingRateIds' => [],
+            'checkoutOpenedAt' => $data['createdAt'],
+        ]);
+    }
+
+    private function dispatchFailedSessionCreated(OrderPage $order): string
+    {
+        $store = new OrderPageStore($this->kirby);
+        $order = $store->update(
+            uuid: $order->uuid()->toString(),
+            reduce: static fn(array $data): array => [
+                ...$data,
+                'checkoutStatus' => 'open',
+                'stripeCheckoutSessionId' => 'cs_test_operational_request',
+                'stripeShippingRateIds' => [],
+                'checkoutOpenedAt' => $data['createdAt'],
+            ],
+            notifications: [new LifecycleNotification(LifecycleEventType::SessionCreated)],
+        );
+
+        return $this->failedDeliveryId($order);
+    }
+
+    private function failedDeliveryId(OrderPage $order): string
+    {
+        $store = new OrderPageStore($this->kirby);
+        $deliveries = OrderData::list($store->data($order)['lifecycleDeliveries']);
+
+        foreach ($deliveries as $candidate) {
+            $candidate = OrderData::map($candidate);
+
+            if ($candidate['status'] !== 'failed') {
+                continue;
+            }
+
+            return OrderData::text(OrderData::map($candidate['event'])['deliveryId']);
+        }
+
+        $this->fail('The test setup did not create a failed delivery.');
     }
 }

@@ -120,7 +120,11 @@ final class OperationalRequests
         $errorCode = $result->errorCode();
 
         if ($errorCode !== null) {
-            return self::operationalFailure($errorCode, self::HTTP_CONFLICT);
+            return self::operationalFailure(
+                errorCode: $errorCode,
+                code: $result->isRetryable() ? self::HTTP_SERVICE_UNAVAILABLE : self::HTTP_CONFLICT,
+                retryable: $result->isRetryable(),
+            );
         }
 
         return self::operationalResponse(
@@ -145,7 +149,11 @@ final class OperationalRequests
         try {
             $deleted = (new RuntimeFactory($kirby))->orderPageStore()->deleteManually($pageUuid);
         } catch (OrderStorageException $error) {
-            return self::operationalFailure($error->errorCode(), self::HTTP_CONFLICT);
+            return self::operationalFailure(
+                errorCode: $error->errorCode(),
+                code: $error->isRetryable() ? self::HTTP_SERVICE_UNAVAILABLE : self::HTTP_CONFLICT,
+                retryable: $error->isRetryable(),
+            );
         }
 
         if ($deleted === false) {
@@ -188,14 +196,22 @@ final class OperationalRequests
 
         $result = $outcome->toArray();
         $errorCode = $result['errorCode'];
+
+        if ($outcome->status() === HousekeepingRunStatus::Failed) {
+            // A failed run has no operation result; partial failures below retain
+            // their sanitized counters because the batch itself completed.
+            return self::operationalFailure(
+                errorCode: is_string($errorCode) ? $errorCode : HousekeepingErrorCode::RUN_FAILED,
+                code: self::HTTP_SERVICE_UNAVAILABLE,
+            );
+        }
+
         // Promote the runner's control fields into the shared HTTP envelope;
         // only its sanitized timestamps and counters remain operation-specific.
         unset($result['status'], $result['errorCode']);
 
         return self::operationalResponse(
-            code: $outcome->status() === HousekeepingRunStatus::Failed
-                ? self::HTTP_SERVICE_UNAVAILABLE
-                : self::HTTP_OK,
+            code: self::HTTP_OK,
             status: $outcome->status()->value,
             result: $result,
             error: is_string($errorCode) ? self::operationalError($errorCode) : null,
