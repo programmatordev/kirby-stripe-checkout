@@ -249,7 +249,7 @@ For example, `$site->stripeCheckout()->settings()->unpaidOrderRetentionDays()` r
 
 Incomplete means Checkout never completed; it does not mean an unresolved attempt can be deleted by age alone. Still-creating, uncertain and open orders remain protected until a safe terminal outcome is established. A later expiry observation does not restart the incomplete order's creation-based retention period. Pending, paid and no-payment-required orders are protected; refunds and disputes do not erase historical payment success.
 
-Shortening a period can make existing records eligible for cleanup. **Automatic cleanup is not running yet**; these settings currently define the tested eligibility policy.
+Shortening a period can make existing records eligible on the next housekeeping run. The plugin does not schedule housekeeping itself; invoke its CLI command directly or through the host's scheduler.
 
 For existing development installations, rename `cleanupCreationFailures` to `cleanupIncompleteOrders` and `creationFailureRetentionDays` to `incompleteOrderRetentionDays` in PHP configuration and saved Settings content, retaining their values. The old names have been replaced.
 
@@ -264,13 +264,41 @@ Housekeeping work limits and lifecycle payload retention are separate, PHP-only 
 ],
 ```
 
-`batchSize` is an integer from 1 to 100. `lifecycleDeliveryPayloadRetentionDays` is a positive integer, defaulting to 30. These values are shown read-only in Diagnostics, not exposed as merchant Settings or editable Page fields. They do not start a scheduler or cleanup process; housekeeping invocation remains external to plugin configuration.
+`batchSize` is an integer from 1 to 100. `lifecycleDeliveryPayloadRetentionDays` is a positive integer, defaulting to 30. These values are shown read-only in Diagnostics, not exposed as merchant Settings or editable Page fields. They do not start a scheduler; housekeeping invocation remains external to plugin configuration.
 
 Developers can retain payloads longer by setting `lifecycleDeliveryPayloadRetentionDays` to a larger value, such as `90`. The configured period applies to every new delivery regardless of whether its hook succeeds or fails; existing deliveries keep their original deadlines.
 
-Every saved lifecycle delivery receives a fixed deadline when it is created locally, regardless of hook type. Pending and failed deliveries cannot be retried at or after that deadline, even before physical cleanup runs. Retries do not extend the deadline, and changing the PHP option affects new deliveries only. The one-shot order-deletion notification remains non-retryable. Payload deletion is implemented as an internal single-order operation; the automatic housekeeping runner is not implemented yet.
+Every saved lifecycle delivery receives a fixed deadline when it is created locally, regardless of hook type. Pending and failed deliveries cannot be retried at or after that deadline, even before physical cleanup runs. Retries do not extend the deadline, and changing the PHP option affects new deliveries only. The one-shot order-deletion notification remains non-retryable.
 
 The option limits retention of the full lifecycle snapshot, not the delivery record or the order. When invoked, cleanup preserves every saved payload until its original retention deadline, defaulting to 30 days from local delivery creation, and removes expired payloads regardless of pending, delivered or failed status. Successful delivery does not shorten retention or make the hook retryable. Order-deletion switches do not disable lifecycle payload pruning, including on paid orders. Sanitized delivery metadata remains for diagnostics and deduplication; a delivery without its payload cannot be retried.
+
+### Running housekeeping
+
+Composer installs the Kirby CLI with the plugin. Run housekeeping directly with its absolute path:
+
+```bash
+php /path/to/kirby/vendor/bin/kirby stripe-checkout:housekeeping
+```
+
+The command prints a JSON outcome with selected and processed Order counts, pruned lifecycle deliveries, deleted Orders, recovered Orders, failed Orders and a stable error code when applicable. One invocation processes its full selected batch of at most `batchSize` Orders. It saves continuation after each processed Order, so a later invocation resumes safely. Stripe recovery uses the same request and retry behavior as the plugin's other Stripe operations.
+
+Configure an external scheduler to invoke the command. A daily run is a reasonable default for a small store:
+
+```cron
+0 3 * * * /usr/bin/php /path/to/kirby/vendor/bin/kirby stripe-checkout:housekeeping
+```
+
+Run it more frequently when the store regularly creates more Orders than `batchSize` can cover in one pass. If the site's effective configuration depends on its hostname, prefix the command with `KIRBY_HOST=store.example.com` so Kirby loads the matching domain configuration.
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | The bounded pass completed without per-Order failures. |
+| `1` | The pass or its local state failed. |
+| `2` | The pass completed with one or more failed Orders. |
+| `3` | Another housekeeping invocation already holds the lock. |
+| `4` | Effective plugin configuration is invalid or incomplete. |
+
+Cron owns cadence. Without a cron entry or direct invocation, housekeeping does not run. The plugin does not add a request hook, worker, queue or internal scheduler, and it cannot detect whether the host configured cron.
 
 ## Built-in cart
 

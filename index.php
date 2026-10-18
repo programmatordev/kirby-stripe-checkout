@@ -6,6 +6,7 @@ use Kirby\Cms\App;
 use Kirby\Cms\Page;
 use Kirby\Content\Field;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
+use ProgrammatorDev\StripeCheckout\Housekeeping\HousekeepingCommand;
 use ProgrammatorDev\StripeCheckout\Kirby\CartRoutes;
 use ProgrammatorDev\StripeCheckout\Kirby\CheckoutRoutes;
 use ProgrammatorDev\StripeCheckout\Kirby\CustomFieldsField;
@@ -93,6 +94,9 @@ App::plugin(
             },
         ],
         'translations' => Catalogue::bundled(),
+        'commands' => [
+            'stripe-checkout:housekeeping' => HousekeepingCommand::class,
+        ],
         'routes' => static fn(App $kirby): array => [...CartRoutes::definition($kirby), ...CheckoutRoutes::definition($kirby), ...WebhookRoutes::definition($kirby)],
         'permissions' => [
             'settings.read' => false,
