@@ -790,10 +790,12 @@ final class OrderPageStoreTest extends KirbyTestCase
         $page = $this->createOrder();
         $page->version('latest')->update(['subtotal' => 'private-invalid-value'], 'default');
         $report = (new LocalDiagnostics($this->kirby))->report();
-        $checks = array_column($report['checks'], null, 'id');
-        $this->assertSame('fail', $checks['orders']['status']);
-        $this->assertSame(['count' => '1'], $checks['orders']['values']);
-        $this->assertStringNotContainsString('private-invalid-value', json_encode($report, JSON_THROW_ON_ERROR));
+        $check = $report->check('orders');
+
+        $this->assertNotNull($check);
+        $this->assertSame('fail', $check->status()->value);
+        $this->assertSame(['count' => '1'], $check->context());
+        $this->assertStringNotContainsString('private-invalid-value', json_encode($report->toArray(), JSON_THROW_ON_ERROR));
     }
 
     public function testCustomFieldHooksSeeTheirNativeBeforeAndAfterValuesOnly(): void

@@ -579,8 +579,10 @@ final class OrderHookDispatcherTest extends KirbyTestCase
         $this->assertSame('failed', $entry['status']);
         $this->assertSame('failed', $this->entries($second)[0]['status']);
         $this->assertStringNotContainsString('secret-and-customer', OrderData::json($entry));
-        $checks = array_column((new LocalDiagnostics($this->kirby))->report()['checks'], null, 'id');
-        $this->assertSame('2', $checks['lifecycle']['values']['failed']);
+        $check = (new LocalDiagnostics($this->kirby))->report()->check('lifecycle');
+
+        $this->assertNotNull($check);
+        $this->assertSame('2', $check->context()['failed']);
         $store = new OrderPageStore($this->kirby);
         $store->update($first->uuid()->toString(), static fn(array $data): array => [
             ...$data,

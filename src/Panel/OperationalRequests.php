@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Panel;
 
 use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\ReconciliationOutcome;
+use ProgrammatorDev\StripeCheckout\Diagnostics\DiagnosticsErrorCode;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Housekeeping\Exception\HousekeepingException;
 use ProgrammatorDev\StripeCheckout\Housekeeping\HousekeepingErrorCode;
@@ -56,6 +57,12 @@ final class OperationalRequests
             'method' => 'DELETE',
             'action' => function (string $orderId) use ($kirby): array {
                 return OperationalRequests::deleteOrder($kirby, $orderId);
+            },
+        ], [
+            'pattern' => 'stripe-checkout/diagnostics/run',
+            'method' => 'POST',
+            'action' => function () use ($kirby): array {
+                return OperationalRequests::runDiagnostics($kirby);
             },
         ], [
             'pattern' => 'stripe-checkout/housekeeping/run',
@@ -215,6 +222,29 @@ final class OperationalRequests
             status: $outcome->status()->value,
             result: $result,
             error: is_string($errorCode) ? self::operationalError($errorCode) : null,
+        );
+    }
+
+    /** @return array{code: int, status: string, result: array<string, mixed>|null, error: array{code: string, retryable: bool}|null} */
+    public static function runDiagnostics(App $kirby): array
+    {
+        PluginPermissions::require($kirby, 'diagnostics.read');
+
+        try {
+            $report = (new RuntimeFactory($kirby))->remoteDiagnostics()->run();
+        } catch (ConfigurationException $error) {
+            return self::operationalFailure($error->errorCode(), self::HTTP_CONFLICT);
+        } catch (Throwable) {
+            error_log('Stripe Checkout: ' . DiagnosticsErrorCode::REMOTE_UNAVAILABLE);
+
+            return self::operationalFailure(DiagnosticsErrorCode::REMOTE_UNAVAILABLE, self::HTTP_SERVICE_UNAVAILABLE);
+        }
+
+        // Failed checks are report findings; the explicit diagnostic operation itself completed successfully.
+        return self::operationalResponse(
+            code: self::HTTP_OK,
+            status: self::STATUS_SUCCESS,
+            result: $report->toArray(),
         );
     }
 

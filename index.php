@@ -38,9 +38,10 @@ App::plugin(
     name: PluginMetadata::NAME,
     extends: [
         // Business defaults stay in the resolver.
-        // This only enables Kirby's native caches for read-only Stripe resource catalogues.
+        // This only enables Kirby's native caches for replaceable provider-derived data.
         'options' => [
             'cache' => [
+                'diagnostics' => true,
                 'prices' => true,
                 'taxCodes' => true,
             ],

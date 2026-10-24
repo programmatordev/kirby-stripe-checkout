@@ -6,6 +6,9 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Kirby\Uuid\Uuid;
 use Kirby\Uuid\Uuids;
+use ProgrammatorDev\StripeCheckout\Diagnostics\DiagnosticCheck;
+use ProgrammatorDev\StripeCheckout\Diagnostics\DiagnosticReport;
+use ProgrammatorDev\StripeCheckout\Diagnostics\DiagnosticStatus;
 use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
 use ProgrammatorDev\StripeCheckout\Panel\DiagnosticsSections;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
@@ -19,29 +22,44 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $sections = DiagnosticsSections::build($this->kirby);
 
         $this->assertSame(
-            'PHP configuration: at most 25 candidates per run; lifecycle snapshot retention 30 days. Automatic cleanup is not running yet.',
+            'PHP configuration: at most 25 candidates per run; lifecycle snapshot retention 30 days. Configure the CLI command in cron or run it manually.',
             $sections['diagnostics-housekeeping']['text'],
+        );
+        $this->assertSame(
+            'Housekeeping has not run yet. The plugin cannot detect whether the host cron entry exists.',
+            $sections['diagnostics-housekeepingRun']['text'],
         );
     }
 
     public function testReportsDependenciesIncompleteCredentialsAndInitializedSettingsLocally(): void
     {
         $report = (new LocalDiagnostics($this->kirby))->report();
-        $checks = array_column($report['checks'], null, 'id');
+        $checks = $this->checks($report);
 
-        $this->assertSame(LocalDiagnostics::WARNING, $report['status']);
-        $this->assertSame(LocalDiagnostics::PASS, $checks['php']['status']);
-        $this->assertSame(LocalDiagnostics::PASS, $checks['kirby']['status']);
-        $this->assertSame(LocalDiagnostics::PASS, $checks['stripePhp']['status']);
-        $this->assertSame(LocalDiagnostics::PASS, $checks['orderIdentity']['status']);
-        $this->assertSame(LocalDiagnostics::PASS, $checks['configuration']['status']);
-        $this->assertSame(LocalDiagnostics::WARNING, $checks['secretKey']['status']);
-        $this->assertSame(LocalDiagnostics::PASS, $checks['publishableKey']['status']);
-        $this->assertSame(LocalDiagnostics::WARNING, $checks['webhookSecret']['status']);
-        $this->assertSame(LocalDiagnostics::WARNING, $checks['currency']['status']);
-        $this->assertSame(LocalDiagnostics::WARNING, $checks['defaultRequiresShipping']['status']);
-        $this->assertSame('shippingResolver.zones', $checks['shippingResolver']['message']);
-        $this->assertSame(LocalDiagnostics::PASS, $checks['hubPage']['status']);
+        $this->assertSame(DiagnosticStatus::Warning, $report->status());
+        $this->assertSame(DiagnosticStatus::Pass, $checks['php']->status());
+        $this->assertSame(DiagnosticStatus::Pass, $checks['kirby']->status());
+        $this->assertSame(DiagnosticStatus::Pass, $checks['stripePhp']->status());
+        $this->assertSame(DiagnosticStatus::Pass, $checks['intl']->status());
+        $this->assertSame(DiagnosticStatus::Pass, $checks['orderIdentity']->status());
+        $this->assertSame(DiagnosticStatus::Pass, $checks['webhookRoute']->status());
+        $this->assertSame(DiagnosticStatus::Pass, $checks['storageWriteAccess']->status());
+        $this->assertSame(DiagnosticStatus::Pass, $checks['configuration']->status());
+        $this->assertSame(DiagnosticStatus::Warning, $checks['secretKey']->status());
+        $this->assertSame(
+            ['checkout', 'webhook', 'order_sync', 'housekeeping', 'remote_diagnostics'],
+            $checks['secretKey']->blockedOperations(),
+        );
+        $this->assertSame(DiagnosticStatus::Pass, $checks['publishableKey']->status());
+        $this->assertSame(DiagnosticStatus::Warning, $checks['webhookSecret']->status());
+        $this->assertSame(DiagnosticStatus::Warning, $checks['currency']->status());
+        $this->assertSame(DiagnosticStatus::Warning, $checks['defaultRequiresShipping']->status());
+        $this->assertSame('shippingResolver.zones', $checks['shippingResolver']->message());
+        $this->assertSame(DiagnosticStatus::Pass, $checks['settingSources']->status());
+        $this->assertSame(DiagnosticStatus::Pass, $checks['hubPage']->status());
+        $this->assertSame(DiagnosticStatus::Pass, $checks['events']->status());
+        $this->assertSame(DiagnosticStatus::Pass, $checks['pendingPayments']->status());
+        $this->assertSame(DiagnosticStatus::Pass, $checks['housekeepingEligibility']->status());
     }
 
     public function testReportsMissingPublishableKeyOnlyForEmbeddedCheckout(): void
@@ -51,13 +69,9 @@ final class LocalDiagnosticsTest extends KirbyTestCase
             'programmatordev.stripe-checkout.settings.uiMode' => 'embedded',
         ]);
         $this->kirby = $this->environment->app();
-        $checks = array_column(
-            (new LocalDiagnostics($this->kirby))->report()['checks'],
-            null,
-            'id',
-        );
+        $checks = $this->checks((new LocalDiagnostics($this->kirby))->report());
 
-        $this->assertSame(LocalDiagnostics::WARNING, $checks['publishableKey']['status']);
+        $this->assertSame(DiagnosticStatus::Warning, $checks['publishableKey']->status());
     }
 
     public function testReportsCredentialPresenceAndModeWithoutTheirValues(): void
@@ -77,7 +91,7 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         ]);
         $this->kirby = $this->environment->app();
 
-        $encoded = json_encode((new LocalDiagnostics($this->kirby))->report(), JSON_THROW_ON_ERROR);
+        $encoded = json_encode((new LocalDiagnostics($this->kirby))->report()->toArray(), JSON_THROW_ON_ERROR);
 
         $this->assertStringNotContainsString($secret, $encoded);
         $this->assertStringNotContainsString($publishable, $encoded);
@@ -98,15 +112,15 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->kirby = $this->environment->app();
 
         $report = (new LocalDiagnostics($this->kirby))->report();
-        $encoded = json_encode($report, JSON_THROW_ON_ERROR);
-        $checks = array_column($report['checks'], null, 'id');
+        $encoded = json_encode($report->toArray(), JSON_THROW_ON_ERROR);
+        $checks = $this->checks($report);
 
-        $this->assertSame(LocalDiagnostics::FAIL, $report['status']);
-        $this->assertSame(LocalDiagnostics::FAIL, $checks['configuration']['status']);
-        $this->assertSame('configuration.option_unknown', $checks['configuration']['values']['code']);
-        $this->assertSame(LocalDiagnostics::UNKNOWN, $checks['secretKey']['status']);
-        $this->assertSame(LocalDiagnostics::UNKNOWN, $checks['currency']['status']);
-        $this->assertSame(LocalDiagnostics::UNKNOWN, $checks['defaultRequiresShipping']['status']);
+        $this->assertSame(DiagnosticStatus::Fail, $report->status());
+        $this->assertSame(DiagnosticStatus::Fail, $checks['configuration']->status());
+        $this->assertSame('configuration.option_unknown', $checks['configuration']->context()['code']);
+        $this->assertSame(DiagnosticStatus::NotVerifiable, $checks['secretKey']->status());
+        $this->assertSame(DiagnosticStatus::NotVerifiable, $checks['currency']->status());
+        $this->assertSame(DiagnosticStatus::NotVerifiable, $checks['defaultRequiresShipping']->status());
         $this->assertStringNotContainsString($secret, $encoded);
     }
 
@@ -122,14 +136,10 @@ final class LocalDiagnosticsTest extends KirbyTestCase
             ],
         ]);
         $this->kirby = $this->environment->app();
-        $checks = array_column(
-            (new LocalDiagnostics($this->kirby))->report()['checks'],
-            null,
-            'id',
-        );
+        $checks = $this->checks((new LocalDiagnostics($this->kirby))->report());
 
-        $this->assertSame(LocalDiagnostics::PASS, $checks['currency']['status']);
-        $this->assertSame(LocalDiagnostics::PASS, $checks['defaultRequiresShipping']['status']);
+        $this->assertSame(DiagnosticStatus::Pass, $checks['currency']->status());
+        $this->assertSame(DiagnosticStatus::Pass, $checks['defaultRequiresShipping']->status());
     }
 
     public function testReportsTheCustomShippingResolverWithoutCallingIt(): void
@@ -144,15 +154,11 @@ final class LocalDiagnosticsTest extends KirbyTestCase
             },
         ]);
         $this->kirby = $this->environment->app();
-        $checks = array_column(
-            (new LocalDiagnostics($this->kirby))->report()['checks'],
-            null,
-            'id',
-        );
+        $checks = $this->checks((new LocalDiagnostics($this->kirby))->report());
 
         $this->assertFalse($called);
-        $this->assertSame(LocalDiagnostics::PASS, $checks['shippingResolver']['status']);
-        $this->assertSame('shippingResolver.custom', $checks['shippingResolver']['message']);
+        $this->assertSame(DiagnosticStatus::Pass, $checks['shippingResolver']->status());
+        $this->assertSame('shippingResolver.custom', $checks['shippingResolver']->message());
     }
 
     public function testReportsPageSlugSettingsThatWouldChangeOrderUuids(): void
@@ -164,11 +170,11 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         ]);
         $this->kirby = $this->environment->app();
         $report = (new LocalDiagnostics($this->kirby))->report();
-        $checks = array_column($report['checks'], null, 'id');
+        $checks = $this->checks($report);
 
-        $this->assertSame(LocalDiagnostics::FAIL, $report['status']);
-        $this->assertSame(LocalDiagnostics::FAIL, $checks['orderIdentity']['status']);
-        $this->assertSame('orderIdentity.incompatible', $checks['orderIdentity']['message']);
+        $this->assertSame(DiagnosticStatus::Fail, $report->status());
+        $this->assertSame(DiagnosticStatus::Fail, $checks['orderIdentity']->status());
+        $this->assertSame('orderIdentity.incompatible', $checks['orderIdentity']->message());
     }
 
     public function testReportsDisabledContentUuids(): void
@@ -180,11 +186,11 @@ final class LocalDiagnosticsTest extends KirbyTestCase
 
         try {
             $report = (new LocalDiagnostics($this->kirby))->report();
-            $checks = array_column($report['checks'], null, 'id');
+            $checks = $this->checks($report);
 
-            $this->assertSame(LocalDiagnostics::FAIL, $report['status']);
-            $this->assertSame(LocalDiagnostics::FAIL, $checks['orderIdentity']['status']);
-            $this->assertSame('orderIdentity.disabled', $checks['orderIdentity']['message']);
+            $this->assertSame(DiagnosticStatus::Fail, $report->status());
+            $this->assertSame(DiagnosticStatus::Fail, $checks['orderIdentity']->status());
+            $this->assertSame('orderIdentity.disabled', $checks['orderIdentity']->message());
         } finally {
             Uuids::$enabled = $previousUuidState;
         }
@@ -201,14 +207,10 @@ final class LocalDiagnosticsTest extends KirbyTestCase
 
                 return 'custom-order-identity';
             };
-            $checks = array_column(
-                (new LocalDiagnostics($this->kirby))->report()['checks'],
-                null,
-                'id',
-            );
+            $checks = $this->checks((new LocalDiagnostics($this->kirby))->report());
 
             $this->assertSame(0, $calls);
-            $this->assertSame(LocalDiagnostics::UNKNOWN, $checks['orderIdentity']['status']);
+            $this->assertSame(DiagnosticStatus::NotVerifiable, $checks['orderIdentity']->status());
         } finally {
             Uuid::$generator = $previousGenerator;
         }
@@ -229,11 +231,23 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->kirby = $this->environment->app();
 
         $report = (new LocalDiagnostics($this->kirby))->report();
-        $checks = array_column($report['checks'], null, 'id');
+        $checks = $this->checks($report);
 
-        $this->assertSame(LocalDiagnostics::FAIL, $report['status']);
-        $this->assertSame(LocalDiagnostics::FAIL, $checks['hubPage']['status']);
-        $this->assertSame('persistence.model_mismatch', $checks['hubPage']['values']['code']);
-        $this->assertSame('stripe-checkout', $checks['hubPage']['values']['path']);
+        $this->assertSame(DiagnosticStatus::Fail, $report->status());
+        $this->assertSame(DiagnosticStatus::Fail, $checks['hubPage']->status());
+        $this->assertSame('persistence.model_mismatch', $checks['hubPage']->context()['code']);
+        $this->assertSame('stripe-checkout', $checks['hubPage']->context()['path']);
+    }
+
+    /** @return array<string, DiagnosticCheck> */
+    private function checks(DiagnosticReport $report): array
+    {
+        $checks = [];
+
+        foreach ($report->checks() as $check) {
+            $checks[$check->code()] = $check;
+        }
+
+        return $checks;
     }
 }

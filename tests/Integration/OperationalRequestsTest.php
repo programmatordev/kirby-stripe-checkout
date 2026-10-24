@@ -13,6 +13,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
+use ProgrammatorDev\StripeCheckout\Diagnostics\DiagnosticStatus;
 use ProgrammatorDev\StripeCheckout\Housekeeping\HousekeepingErrorCode;
 use ProgrammatorDev\StripeCheckout\Housekeeping\Internal\HousekeepingRunLock;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
@@ -28,18 +29,22 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Order\OrderErrorCode;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
+use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ProgrammatorDev\StripeCheckout\Test\Support\OrderFixture;
+use ProgrammatorDev\StripeCheckout\Test\Support\Stripe\DiagnosticsClient;
 use ProgrammatorDev\StripeCheckout\Test\Support\Stripe\WebhookCheckoutClient;
 use RuntimeException;
 use Stripe\ApiRequestor;
+use Stripe\Util\ApiVersion;
 
 final class OperationalRequestsTest extends KirbyTestCase
 {
     private const DELETION_PATTERN = 'stripe-checkout/orders/(:any)';
     private const DELETION_PATH = 'stripe-checkout/orders/' . self::ORDER_ID;
+    private const DIAGNOSTICS_PATH = 'stripe-checkout/diagnostics/run';
     private const HOUSEKEEPING_PATH = 'stripe-checkout/housekeeping/run';
     private const ORDER_ID = 'abc123def456ghi7';
     private const RETRY_PATTERN = 'stripe-checkout/orders/(:any)/deliveries/(:any)/retry';
@@ -56,6 +61,7 @@ final class OperationalRequestsTest extends KirbyTestCase
             ['pattern' => self::SYNC_PATTERN, 'method' => 'POST'],
             ['pattern' => self::RETRY_PATTERN, 'method' => 'POST'],
             ['pattern' => self::DELETION_PATTERN, 'method' => 'DELETE'],
+            ['pattern' => self::DIAGNOSTICS_PATH, 'method' => 'POST'],
             ['pattern' => self::HOUSEKEEPING_PATH, 'method' => 'POST'],
         ], array_map(static fn(array $request): array => [
             'pattern' => $request['pattern'],
@@ -394,6 +400,73 @@ final class OperationalRequestsTest extends KirbyTestCase
 
         $this->assertNotNull($response);
         $this->assertSame(403, $response->code(), $response->body());
+    }
+
+    public function testDiagnosticsRequiresReadPermission(): void
+    {
+        $this->restartRequest(['diagnostics.read' => false]);
+
+        $response = Panel::router(self::DIAGNOSTICS_PATH);
+
+        $this->assertNotNull($response);
+        $this->assertSame(403, $response->code(), $response->body());
+    }
+
+    public function testDiagnosticsRunsExplicitStripeReadsAndCachesTheSanitizedReport(): void
+    {
+        $this->restartRequest(['diagnostics.read' => true]);
+        $client = new DiagnosticsClient();
+        $client->webhookPages = ['' => [
+            'object' => 'list',
+            'has_more' => false,
+            'data' => [[
+                'id' => 'we_private_diagnostics',
+                'object' => 'webhook_endpoint',
+                'url' => 'https://kirby-stripe-checkout.test/stripe-checkout/webhook',
+                'enabled_events' => ['*'],
+                'livemode' => false,
+                'api_version' => ApiVersion::CURRENT,
+                'status' => 'enabled',
+            ]],
+        ]];
+        ApiRequestor::setHttpClient($client);
+
+        $response = Panel::router(self::DIAGNOSTICS_PATH);
+
+        $this->assertNotNull($response);
+        $this->assertSame(200, $response->code(), $response->body());
+        /** @var array{code: int, status: string, result: array{status: string}, error: mixed} $body */
+        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame(200, $body['code']);
+        $this->assertSame('success', $body['status']);
+        $this->assertSame(DiagnosticStatus::Pass->value, $body['result']['status']);
+        $this->assertNull($body['error']);
+        $this->assertCount(2, $client->requests);
+        $storedReport = (new RuntimeFactory($this->kirby))->diagnosticReportStore()->read();
+        $this->assertNotNull($storedReport);
+        $stored = json_encode($storedReport->toArray(), JSON_THROW_ON_ERROR);
+        $this->assertStringNotContainsString('we_private_diagnostics', $stored);
+        $this->assertStringNotContainsString('sk_test_operational_requests', $stored);
+    }
+
+    public function testDiagnosticsReturnsCheckFailuresAsACompletedRun(): void
+    {
+        $this->restartRequest(['diagnostics.read' => true]);
+        $client = new DiagnosticsClient();
+        $client->httpStatus = 401;
+        ApiRequestor::setHttpClient($client);
+
+        $response = Panel::router(self::DIAGNOSTICS_PATH);
+
+        $this->assertNotNull($response);
+        $this->assertSame(200, $response->code(), $response->body());
+        /** @var array{status: string, result: array{status: string}, error: mixed} $body */
+        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('success', $body['status']);
+        $this->assertSame(DiagnosticStatus::Fail->value, $body['result']['status']);
+        $this->assertNull($body['error']);
+        $this->assertStringNotContainsString('PRIVATE_DIAGNOSTICS_CANARY', $response->body());
+        $this->assertCount(1, $client->requests);
     }
 
     public function testHousekeepingReturnsTheSanitizedBatchOutcome(): void

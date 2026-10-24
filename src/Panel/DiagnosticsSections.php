@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Panel;
 
 use Kirby\Cms\App;
 use Kirby\Toolkit\I18n;
+use ProgrammatorDev\StripeCheckout\Diagnostics\DiagnosticStatus;
 use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 
@@ -23,30 +24,30 @@ final class DiagnosticsSections
         $sections = [
             'diagnostics-summary' => [
                 'type' => 'info',
-                'label' => self::translate('diagnostics.status.' . $report['status']),
+                'label' => self::translate('diagnostics.status.' . $report->status()->value),
                 'text' => self::translate('diagnostics.description'),
-                'icon' => self::statusIcon($report['status']),
-                'theme' => self::statusTheme($report['status']),
+                'icon' => self::statusIcon($report->status()),
+                'theme' => self::statusTheme($report->status()),
             ],
         ];
 
-        foreach ($report['checks'] as $check) {
-            $values = $check['values'];
+        foreach ($report->checks() as $check) {
+            $context = $check->context();
 
-            if (isset($values['mode'])) {
-                $values['mode'] = self::translate('credentialMode.' . $values['mode']);
+            if (isset($context['mode'])) {
+                $context['mode'] = self::translate('credentialMode.' . $context['mode']);
             }
 
-            if (isset($values['code'])) {
-                $values['code'] = self::translate('error.' . $values['code']);
+            if (isset($context['code'])) {
+                $context['code'] = self::translate('error.' . $context['code']);
             }
 
-            $sections['diagnostics-' . $check['id']] = [
+            $sections['diagnostics-' . $check->code()] = [
                 'type' => 'info',
-                'label' => self::translate('diagnostics.' . $check['id']),
-                'text' => self::template('diagnostics.' . $check['message'], $values),
-                'icon' => self::statusIcon($check['status']),
-                'theme' => self::statusTheme($check['status']),
+                'label' => self::translate('diagnostics.' . $check->code()),
+                'text' => self::template('diagnostics.' . $check->message(), $context),
+                'icon' => self::statusIcon($check->status()),
+                'theme' => self::statusTheme($check->status()),
             ];
         }
 
@@ -66,22 +67,22 @@ final class DiagnosticsSections
         return is_string($translation) ? $translation : $suffix;
     }
 
-    private static function statusIcon(string $status): string
+    private static function statusIcon(DiagnosticStatus $status): string
     {
         return match ($status) {
-            LocalDiagnostics::PASS => 'check',
-            LocalDiagnostics::FAIL => 'alert',
-            LocalDiagnostics::WARNING => 'alert',
+            DiagnosticStatus::Pass => 'check',
+            DiagnosticStatus::Fail => 'alert',
+            DiagnosticStatus::Warning => 'alert',
             default => 'question',
         };
     }
 
-    private static function statusTheme(string $status): string
+    private static function statusTheme(DiagnosticStatus $status): string
     {
         return match ($status) {
-            LocalDiagnostics::PASS => 'positive',
-            LocalDiagnostics::FAIL => 'negative',
-            LocalDiagnostics::WARNING => 'warning',
+            DiagnosticStatus::Pass => 'positive',
+            DiagnosticStatus::Fail => 'negative',
+            DiagnosticStatus::Warning => 'warning',
             default => 'info',
         };
     }

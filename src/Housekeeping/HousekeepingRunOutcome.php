@@ -77,6 +77,21 @@ final readonly class HousekeepingRunOutcome
         return $this->status;
     }
 
+    public function attemptedAt(): DateTimeImmutable
+    {
+        return $this->attemptedAt;
+    }
+
+    public function completedAt(): DateTimeImmutable
+    {
+        return $this->completedAt;
+    }
+
+    public function errorCode(): ?string
+    {
+        return $this->errorCode;
+    }
+
     /** @return array<string, int|string|null> */
     public function toArray(): array
     {

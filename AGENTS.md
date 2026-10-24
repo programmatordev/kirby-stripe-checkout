@@ -11,6 +11,7 @@
 ## Kirby conventions
 
 - Use Kirby's existing core functionality whenever it meets the requirement instead of implementing a plugin-owned equivalent. This applies to features, storage, models, permissions, validation, extension registries, and content APIs, not just alternatives to external dependencies.
+- Use Kirby's cache for derived, replaceable data that is safe to lose or reconstruct. Use durable content or operational storage when losing the data would affect business history, workflow progress, idempotency, or recovery. Never use cached data as authoritative evidence for permitting or rejecting an operation.
 - Before adding guards, wrappers, or infrastructure around a Kirby concern, inspect the supported Kirby version's public APIs and implementation, including what the relevant operation already enforces beyond the Panel UI. Add plugin-owned code only for a concrete, reproducible gap that affects a supported plugin operation, document that gap, and keep the solution narrower than the Kirby behavior it complements. During reviews, identify and remove redundant plugin code when Kirby already provides the required guarantee.
 - Composer is the supported installation path. The root plugin bootstrap is canonical; the development-site loader must load it rather than duplicate it.
 - Prefix plugin-owned HTTP and Panel request routes with `stripe-checkout`. Prefer resource-oriented paths that identify the target resource in the URL, and use an explicit action suffix for commands, such as `stripe-checkout/orders/{orderId}/sync`.

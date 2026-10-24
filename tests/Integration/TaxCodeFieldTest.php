@@ -225,10 +225,11 @@ final class TaxCodeFieldTest extends KirbyTestCase
         $client = $this->createMock(ClientInterface::class);
         $client->expects($this->never())->method('request');
         ApiRequestor::setHttpClient($client);
-        $checks = (new LocalDiagnostics($this->kirby))->report()['checks'];
-        $check = array_values(array_filter($checks, static fn(array $check): bool => $check['id'] === 'taxCodes'))[0];
-        $this->assertSame('taxCodes.ready', $check['message']);
-        $this->assertSame('1', $check['values']['count']);
+        $check = (new LocalDiagnostics($this->kirby))->report()->check('taxCodes');
+
+        $this->assertNotNull($check);
+        $this->assertSame('taxCodes.ready', $check->message());
+        $this->assertSame('1', $check->context()['count']);
     }
 
     private function restart(?bool $read = null, bool $automaticTax = true, ?string $secretKey = null): Page

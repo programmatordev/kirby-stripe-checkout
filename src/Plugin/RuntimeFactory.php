@@ -42,12 +42,15 @@ use ProgrammatorDev\StripeCheckout\Configuration\ProductConfiguration;
 use ProgrammatorDev\StripeCheckout\Configuration\Settings;
 use ProgrammatorDev\StripeCheckout\Configuration\ShippingConfiguration;
 use ProgrammatorDev\StripeCheckout\Configuration\StripeConfiguration;
+use ProgrammatorDev\StripeCheckout\Diagnostics\Internal\DiagnosticReportStore;
+use ProgrammatorDev\StripeCheckout\Diagnostics\RemoteDiagnostics;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Housekeeping\Internal\HousekeepingRunner;
 use ProgrammatorDev\StripeCheckout\Housekeeping\Internal\HousekeepingStateStore;
 use ProgrammatorDev\StripeCheckout\Housekeeping\Internal\OrderReferenceSelector;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
+use ProgrammatorDev\StripeCheckout\Kirby\WebhookRoutes;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
 use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
 use ProgrammatorDev\StripeCheckout\Product\Exception\InvalidProductException;
@@ -70,6 +73,7 @@ use ProgrammatorDev\StripeCheckout\Shipping\Internal\ShippingZoneResolver;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingResolverInterface;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionGatewayInterface;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\StripeApiCheckoutSessionGateway;
+use ProgrammatorDev\StripeCheckout\Stripe\Diagnostics\StripeApiDiagnosticsGateway;
 use ProgrammatorDev\StripeCheckout\Stripe\Dispute\StripeApiDisputeGateway;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogue;
 use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceProviderInterface;
@@ -479,6 +483,28 @@ final class RuntimeFactory
             checkoutSessionReconciler: $reconciler,
             batchSize: $configuration->housekeeping()->batchSize(),
             credentialFingerprint: $credentialFingerprint,
+        );
+    }
+
+    public function remoteDiagnostics(): RemoteDiagnostics
+    {
+        $stripe = $this->configurationReport()
+            ->configurationOrFail()
+            ->stripe();
+
+        return new RemoteDiagnostics(
+            gateway: new StripeApiDiagnosticsGateway($this->stripeClient()),
+            store: $this->diagnosticReportStore(),
+            configuredMode: $stripe->secretKeyMode(),
+            canonicalWebhookUrl: WebhookRoutes::url($this->kirby),
+        );
+    }
+
+    /** Reading a cached report must not require valid current credentials or construct a Stripe client. */
+    public function diagnosticReportStore(): DiagnosticReportStore
+    {
+        return new DiagnosticReportStore(
+            $this->kirby->cache('programmatordev.stripe-checkout.diagnostics'),
         );
     }
 
