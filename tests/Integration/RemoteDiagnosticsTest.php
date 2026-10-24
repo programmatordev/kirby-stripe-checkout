@@ -54,7 +54,7 @@ final class RemoteDiagnosticsTest extends KirbyTestCase
 
         $this->assertNotNull($liveCheck);
         $this->assertSame(DiagnosticStatus::Fail, $liveCheck->status());
-        $this->assertSame(['webhook'], $liveCheck->blockedOperations());
+        $this->assertSame(['webhook'], $liveCheck->affectedOperations());
 
         $gateway->accountMode = CredentialMode::Test;
         $testReport = $this->diagnostics($gateway, CredentialMode::Test)->run();
@@ -62,7 +62,7 @@ final class RemoteDiagnosticsTest extends KirbyTestCase
 
         $this->assertNotNull($testCheck);
         $this->assertSame(DiagnosticStatus::Warning, $testCheck->status());
-        $this->assertSame([], $testCheck->blockedOperations());
+        $this->assertSame([], $testCheck->affectedOperations());
     }
 
     public function testDuplicateExactEndpointsWarnAndUnrelatedEndpointsAreIgnored(): void
@@ -85,7 +85,7 @@ final class RemoteDiagnosticsTest extends KirbyTestCase
 
         $this->assertNotNull($check);
         $this->assertSame(DiagnosticStatus::Warning, $check->status());
-        $this->assertSame('stripeWebhook.duplicate', $check->message());
+        $this->assertSame('stripeWebhook.duplicate', $check->messageKey());
         $this->assertSame('2', $check->context()['matches']);
     }
 
@@ -106,9 +106,77 @@ final class RemoteDiagnosticsTest extends KirbyTestCase
 
         $this->assertNotNull($check);
         $this->assertSame(DiagnosticStatus::Fail, $check->status());
-        $this->assertSame('stripeWebhook.incomplete', $check->message());
+        $this->assertSame('stripeWebhook.incomplete', $check->messageKey());
         $this->assertSame('1', $check->context()['apiVersionMismatches']);
         $this->assertStringContainsString('refund.created', $check->context()['missingEvents']);
+    }
+
+    public function testDisabledLiveEndpointFailsConfiguration(): void
+    {
+        $gateway = new FakeDiagnosticsGateway();
+        $gateway->accountMode = CredentialMode::Live;
+        $gateway->webhookEndpoints = [new WebhookEndpointRecord(
+            endpointId: 'we_disabled',
+            url: self::WEBHOOK_URL,
+            enabledEvents: ['*'],
+            liveMode: true,
+            apiVersion: ApiVersion::CURRENT,
+            status: 'disabled',
+        )];
+        $report = $this->diagnostics($gateway, CredentialMode::Live)->run();
+        $check = $report->check('stripeWebhook');
+
+        $this->assertNotNull($check);
+        $this->assertSame(DiagnosticStatus::Fail, $check->status());
+        $this->assertSame('stripeWebhook.incomplete', $check->messageKey());
+        $this->assertSame('1', $check->context()['disabled']);
+        $this->assertSame(['webhook'], $check->affectedOperations());
+    }
+
+    public function testReportsConfiguredAndProviderAccountModeMismatch(): void
+    {
+        $gateway = new FakeDiagnosticsGateway();
+        $gateway->accountMode = CredentialMode::Live;
+        $gateway->webhookEndpoints = [new WebhookEndpointRecord(
+            endpointId: 'we_live',
+            url: self::WEBHOOK_URL,
+            enabledEvents: ['*'],
+            liveMode: true,
+            apiVersion: ApiVersion::CURRENT,
+            status: 'enabled',
+        )];
+        $report = $this->diagnostics($gateway, CredentialMode::Test)->run();
+        $accountCheck = $report->check('stripeAccount');
+        $webhookCheck = $report->check('stripeWebhook');
+
+        $this->assertNotNull($accountCheck);
+        $this->assertSame(DiagnosticStatus::Fail, $accountCheck->status());
+        $this->assertSame('stripeAccount.modeMismatch', $accountCheck->messageKey());
+        $this->assertSame('test', $accountCheck->context()['configuredMode']);
+        $this->assertSame('live', $accountCheck->context()['providerMode']);
+        $this->assertNotNull($webhookCheck);
+        $this->assertSame(DiagnosticStatus::Pass, $webhookCheck->status());
+    }
+
+    public function testReportsWebhookEndpointModeMismatch(): void
+    {
+        $gateway = new FakeDiagnosticsGateway();
+        $gateway->accountMode = CredentialMode::Test;
+        $gateway->webhookEndpoints = [new WebhookEndpointRecord(
+            endpointId: 'we_wrong_mode',
+            url: self::WEBHOOK_URL,
+            enabledEvents: ['*'],
+            liveMode: true,
+            apiVersion: ApiVersion::CURRENT,
+            status: 'enabled',
+        )];
+        $report = $this->diagnostics($gateway, CredentialMode::Test)->run();
+        $check = $report->check('stripeWebhook');
+
+        $this->assertNotNull($check);
+        $this->assertSame(DiagnosticStatus::Warning, $check->status());
+        $this->assertSame('stripeWebhook.incomplete', $check->messageKey());
+        $this->assertSame('1', $check->context()['modeMismatches']);
     }
 
     public function testRestrictedRemoteReadIsNotVerifiable(): void
@@ -120,7 +188,7 @@ final class RemoteDiagnosticsTest extends KirbyTestCase
 
         $this->assertNotNull($check);
         $this->assertSame(DiagnosticStatus::NotVerifiable, $check->status());
-        $this->assertSame('remote.permissionDenied', $check->message());
+        $this->assertSame('remote.permissionDenied', $check->messageKey());
     }
 
     public function testTreatsAnInvalidCachedReportAsMissing(): void
@@ -137,6 +205,32 @@ final class RemoteDiagnosticsTest extends KirbyTestCase
         $diagnostics = new RemoteDiagnostics(
             gateway: new FakeDiagnosticsGateway(),
             store: new DiagnosticReportStore(new NullCache()),
+            configuredMode: CredentialMode::Test,
+            canonicalWebhookUrl: self::WEBHOOK_URL,
+        );
+
+        $report = $diagnostics->run();
+
+        $this->assertNotNull($report->check('stripeAccount'));
+        $this->assertNull($diagnostics->latest());
+    }
+
+    public function testCompletesWhenDiagnosticCacheIsUnavailable(): void
+    {
+        $cache = new class extends NullCache {
+            public function get(string $key, mixed $default = null): mixed
+            {
+                throw new \RuntimeException('Cache unavailable.');
+            }
+
+            public function set(string $key, mixed $value, int $minutes = 0): bool
+            {
+                throw new \RuntimeException('Cache unavailable.');
+            }
+        };
+        $diagnostics = new RemoteDiagnostics(
+            gateway: new FakeDiagnosticsGateway(),
+            store: new DiagnosticReportStore($cache),
             configuredMode: CredentialMode::Test,
             canonicalWebhookUrl: self::WEBHOOK_URL,
         );

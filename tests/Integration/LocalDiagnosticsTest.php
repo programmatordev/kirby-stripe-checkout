@@ -4,15 +4,24 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
+use DateTimeImmutable;
 use Kirby\Uuid\Uuid;
 use Kirby\Uuid\Uuids;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Diagnostics\DiagnosticCheck;
 use ProgrammatorDev\StripeCheckout\Diagnostics\DiagnosticReport;
 use ProgrammatorDev\StripeCheckout\Diagnostics\DiagnosticStatus;
 use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Panel\DiagnosticsSections;
+use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
+use ProgrammatorDev\StripeCheckout\Test\Support\OrderFixture;
 use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
 
 final class LocalDiagnosticsTest extends KirbyTestCase
@@ -48,13 +57,13 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->assertSame(DiagnosticStatus::Warning, $checks['secretKey']->status());
         $this->assertSame(
             ['checkout', 'webhook', 'order_sync', 'housekeeping', 'remote_diagnostics'],
-            $checks['secretKey']->blockedOperations(),
+            $checks['secretKey']->affectedOperations(),
         );
         $this->assertSame(DiagnosticStatus::Pass, $checks['publishableKey']->status());
         $this->assertSame(DiagnosticStatus::Warning, $checks['webhookSecret']->status());
         $this->assertSame(DiagnosticStatus::Warning, $checks['currency']->status());
         $this->assertSame(DiagnosticStatus::Warning, $checks['defaultRequiresShipping']->status());
-        $this->assertSame('shippingResolver.zones', $checks['shippingResolver']->message());
+        $this->assertSame('shippingResolver.zones', $checks['shippingResolver']->messageKey());
         $this->assertSame(DiagnosticStatus::Pass, $checks['settingSources']->status());
         $this->assertSame(DiagnosticStatus::Pass, $checks['hubPage']->status());
         $this->assertSame(DiagnosticStatus::Pass, $checks['events']->status());
@@ -158,7 +167,7 @@ final class LocalDiagnosticsTest extends KirbyTestCase
 
         $this->assertFalse($called);
         $this->assertSame(DiagnosticStatus::Pass, $checks['shippingResolver']->status());
-        $this->assertSame('shippingResolver.custom', $checks['shippingResolver']->message());
+        $this->assertSame('shippingResolver.custom', $checks['shippingResolver']->messageKey());
     }
 
     public function testReportsPageSlugSettingsThatWouldChangeOrderUuids(): void
@@ -174,7 +183,7 @@ final class LocalDiagnosticsTest extends KirbyTestCase
 
         $this->assertSame(DiagnosticStatus::Fail, $report->status());
         $this->assertSame(DiagnosticStatus::Fail, $checks['orderIdentity']->status());
-        $this->assertSame('orderIdentity.incompatible', $checks['orderIdentity']->message());
+        $this->assertSame('orderIdentity.incompatible', $checks['orderIdentity']->messageKey());
     }
 
     public function testReportsDisabledContentUuids(): void
@@ -190,7 +199,7 @@ final class LocalDiagnosticsTest extends KirbyTestCase
 
             $this->assertSame(DiagnosticStatus::Fail, $report->status());
             $this->assertSame(DiagnosticStatus::Fail, $checks['orderIdentity']->status());
-            $this->assertSame('orderIdentity.disabled', $checks['orderIdentity']->message());
+            $this->assertSame('orderIdentity.disabled', $checks['orderIdentity']->messageKey());
         } finally {
             Uuids::$enabled = $previousUuidState;
         }
@@ -237,6 +246,52 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->assertSame(DiagnosticStatus::Fail, $checks['hubPage']->status());
         $this->assertSame('persistence.model_mismatch', $checks['hubPage']->context()['code']);
         $this->assertSame('stripe-checkout', $checks['hubPage']->context()['path']);
+    }
+
+    public function testReportsFailedEventsAndIncompleteOrdersDueForRecovery(): void
+    {
+        $checkedAt = new DateTimeImmutable('2026-10-24T12:00:00Z');
+        $createdAt = $checkedAt->modify('-8 days');
+        $context = new OrderCreationContext(
+            uuid: 'diagnostic-order',
+            orderNumber: 'ORDER-DIAGNOSTIC',
+            checkoutSource: CheckoutSource::Direct,
+            cartRevision: null,
+            userUuid: null,
+            languageCode: null,
+            uiMode: UiMode::Hosted,
+            currency: 'EUR',
+            lineItems: [OrderFixture::lineItem()],
+        );
+        $store = new OrderPageStore($this->kirby);
+        $store->create(
+            context: $context,
+            checkoutAttempt: CheckoutAttemptFactory::create($context, $createdAt),
+            createdAt: $createdAt,
+        );
+        $store->update($context->pageUuid(), static function (array $data) use ($createdAt): array {
+            $data['events'] = [[
+                'id' => 'evt_diagnostic',
+                'type' => 'checkout.session.completed',
+                'createdAt' => $createdAt->getTimestamp(),
+                'resourceId' => 'cs_diagnostic',
+                'status' => 'failed',
+                'attempts' => 1,
+                'lastAttemptAt' => OrderData::timestamp($createdAt),
+                'errorCode' => CheckoutErrorCode::SESSION_UNAVAILABLE,
+            ]];
+
+            return $data;
+        });
+
+        $checks = $this->checks((new LocalDiagnostics($this->kirby, $checkedAt))->report());
+
+        $this->assertSame(DiagnosticStatus::Warning, $checks['events']->status());
+        $this->assertSame('0', $checks['events']->context()['pending']);
+        $this->assertSame('1', $checks['events']->context()['failed']);
+        $this->assertSame(DiagnosticStatus::Warning, $checks['housekeepingEligibility']->status());
+        $this->assertSame('0', $checks['housekeepingEligibility']->context()['eligible']);
+        $this->assertSame('1', $checks['housekeepingEligibility']->context()['recoveryDue']);
     }
 
     /** @return array<string, DiagnosticCheck> */

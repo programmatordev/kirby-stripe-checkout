@@ -24,6 +24,8 @@ use ProgrammatorDev\StripeCheckout\Checkout\Internal\RefundRetriever;
 use ProgrammatorDev\StripeCheckout\Checkout\SessionRequest;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
+use ProgrammatorDev\StripeCheckout\Diagnostics\DiagnosticStatus;
+use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderHookDispatcher;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
@@ -153,6 +155,21 @@ final class CheckoutSessionReconcilerTest extends KirbyTestCase
         yield 'delayed success' => ['checkout.session.async_payment_succeeded', 'complete', 'paid', 'succeeded', 'paid', 'payment.succeeded'];
         yield 'delayed failure' => ['checkout.session.async_payment_failed', 'complete', 'unpaid', 'requires_payment_method', 'failed', 'payment.failed'];
         yield 'expired checkout' => ['checkout.session.expired', 'expired', 'unpaid', 'canceled', 'unpaid', 'checkout.expired'];
+    }
+
+    public function testLocalDiagnosticsReportsPendingPaymentAge(): void
+    {
+        $page = $this->reconciler($this->gateway($this->record()))
+            ->reconcile($this->order->pageUuid(), 'cs_current', $this->event());
+        $checkoutCompletedAt = OrderData::date($this->data($page)['checkoutCompletedAt']);
+        $checkedAt = $checkoutCompletedAt->modify('+2 hours');
+        $check = (new LocalDiagnostics($this->kirby, $checkedAt))->report()->check('pendingPayments');
+
+        $this->assertNotNull($check);
+        $this->assertSame(DiagnosticStatus::Pass, $check->status());
+        $this->assertSame('1', $check->context()['count']);
+        $this->assertSame(OrderData::timestamp($checkoutCompletedAt), $check->context()['oldestAt']);
+        $this->assertSame('7200', $check->context()['oldestAgeSeconds']);
     }
 
     public function testCapturesActionsAfterPendingAndReplaysTheFrozenFactsAfterPayment(): void

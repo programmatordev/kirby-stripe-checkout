@@ -18,14 +18,14 @@ final readonly class DiagnosticCheck
 
     /**
      * @param array<string, string> $context
-     * @param list<string> $blockedOperations
+     * @param list<string> $affectedOperations
      */
     public function __construct(
         private string $code,
         private DiagnosticStatus $status,
-        private string $message,
+        private string $messageKey,
         private array $context = [],
-        private array $blockedOperations = [],
+        private array $affectedOperations = [],
     ) {}
 
     public function code(): string
@@ -38,9 +38,9 @@ final readonly class DiagnosticCheck
         return $this->status;
     }
 
-    public function message(): string
+    public function messageKey(): string
     {
-        return $this->message;
+        return $this->messageKey;
     }
 
     /** @return array<string, string> */
@@ -50,20 +50,20 @@ final readonly class DiagnosticCheck
     }
 
     /** @return list<string> */
-    public function blockedOperations(): array
+    public function affectedOperations(): array
     {
-        return $this->blockedOperations;
+        return $this->affectedOperations;
     }
 
-    /** @return array{code: string, status: string, message: string, context: array<string, string>, blockedOperations: list<string>} */
+    /** @return array{code: string, status: string, messageKey: string, context: array<string, string>, affectedOperations: list<string>} */
     public function toArray(): array
     {
         return [
             'code' => $this->code,
             'status' => $this->status->value,
-            'message' => $this->message,
+            'messageKey' => $this->messageKey,
             'context' => $this->context,
-            'blockedOperations' => $this->blockedOperations,
+            'affectedOperations' => $this->affectedOperations,
         ];
     }
 
@@ -82,7 +82,7 @@ final readonly class DiagnosticCheck
 
             $status = is_string($data['status']) ? DiagnosticStatus::tryFrom($data['status']) : null;
             $context = OrderData::map($data['context']);
-            $blockedOperations = OrderData::list($data['blockedOperations']);
+            $affectedOperations = OrderData::list($data['affectedOperations']);
 
             if ($status === null) {
                 throw new InvalidArgumentException(self::INVALID_CHECK_MESSAGE);
@@ -91,9 +91,9 @@ final readonly class DiagnosticCheck
             return new self(
                 code: OrderData::text($data['code']),
                 status: $status,
-                message: OrderData::text($data['message']),
+                messageKey: OrderData::text($data['messageKey']),
                 context: array_map(OrderData::string(...), $context),
-                blockedOperations: array_map(OrderData::text(...), $blockedOperations),
+                affectedOperations: array_map(OrderData::text(...), $affectedOperations),
             );
         } catch (Throwable $error) {
             throw new InvalidArgumentException(self::INVALID_CHECK_MESSAGE, previous: $error);
@@ -106,9 +106,9 @@ final readonly class DiagnosticCheck
         return [
             'code',
             'status',
-            'message',
+            'messageKey',
             'context',
-            'blockedOperations',
+            'affectedOperations',
         ];
     }
 }

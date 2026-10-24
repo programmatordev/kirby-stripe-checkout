@@ -40,10 +40,10 @@ final readonly class RemoteDiagnostics
             $accountCheck = $this->remoteFailure('stripeAccount', $error);
         }
 
-        // A rejected account credential cannot have different permissions on the next Stripe read.
+        // Stripe will reject every subsequent read made with the same unauthenticated credential.
         $webhookCheck = $accountFailure?->errorCode() === DiagnosticsErrorCode::AUTHENTICATION_FAILED
             ? $this->remoteFailure('stripeWebhook', $accountFailure)
-            : $this->webhook($accountMode);
+            : $this->webhookCheck($accountMode);
 
         $report = new DiagnosticReport($checkedAt, [
             $accountCheck,
@@ -70,21 +70,21 @@ final readonly class RemoteDiagnostics
             return new DiagnosticCheck(
                 code: 'stripeAccount',
                 status: DiagnosticStatus::Fail,
-                message: 'stripeAccount.modeMismatch',
+                messageKey: 'stripeAccount.modeMismatch',
                 context: $context,
-                blockedOperations: ['checkout', 'webhook', 'order_sync', 'housekeeping'],
+                affectedOperations: ['checkout', 'webhook', 'order_sync', 'housekeeping'],
             );
         }
 
         return new DiagnosticCheck(
             code: 'stripeAccount',
             status: DiagnosticStatus::Pass,
-            message: 'stripeAccount.ready',
+            messageKey: 'stripeAccount.ready',
             context: $context,
         );
     }
 
-    private function webhook(?CredentialMode $accountMode): DiagnosticCheck
+    private function webhookCheck(?CredentialMode $accountMode): DiagnosticCheck
     {
         $canonicalUrl = self::normalizeWebhookUrl($this->canonicalWebhookUrl);
 
@@ -92,9 +92,9 @@ final readonly class RemoteDiagnostics
             return new DiagnosticCheck(
                 code: 'stripeWebhook',
                 status: DiagnosticStatus::Fail,
-                message: 'stripeWebhook.canonicalInvalid',
+                messageKey: 'stripeWebhook.canonicalInvalid',
                 context: ['url' => $this->canonicalWebhookUrl],
-                blockedOperations: ['webhook'],
+                affectedOperations: ['webhook'],
             );
         }
 
@@ -115,21 +115,21 @@ final readonly class RemoteDiagnostics
                 return new DiagnosticCheck(
                     code: 'stripeWebhook',
                     status: DiagnosticStatus::NotVerifiable,
-                    message: 'stripeWebhook.missingUnknownMode',
+                    messageKey: 'stripeWebhook.missingUnknownMode',
                     context: ['url' => $this->canonicalWebhookUrl],
                 );
             }
 
-            // Missing test configuration is actionable but cannot interrupt live commerce.
+            // A missing live endpoint blocks deliveries; test mode can still use local Stripe CLI forwarding.
             return new DiagnosticCheck(
                 code: 'stripeWebhook',
                 status: $mode === CredentialMode::Live ? DiagnosticStatus::Fail : DiagnosticStatus::Warning,
-                message: 'stripeWebhook.missing',
+                messageKey: 'stripeWebhook.missing',
                 context: [
                     'mode' => $mode->value,
                     'url' => $this->canonicalWebhookUrl,
                 ],
-                blockedOperations: $mode === CredentialMode::Live ? ['webhook'] : [],
+                affectedOperations: $mode === CredentialMode::Live ? ['webhook'] : [],
             );
         }
 
@@ -188,9 +188,9 @@ final readonly class RemoteDiagnostics
             return new DiagnosticCheck(
                 code: 'stripeWebhook',
                 status: $mode === CredentialMode::Live ? DiagnosticStatus::Fail : DiagnosticStatus::Warning,
-                message: 'stripeWebhook.incomplete',
+                messageKey: 'stripeWebhook.incomplete',
                 context: $context,
-                blockedOperations: $mode === CredentialMode::Live ? ['webhook'] : [],
+                affectedOperations: $mode === CredentialMode::Live ? ['webhook'] : [],
             );
         }
 
@@ -198,7 +198,7 @@ final readonly class RemoteDiagnostics
             return new DiagnosticCheck(
                 code: 'stripeWebhook',
                 status: DiagnosticStatus::Warning,
-                message: 'stripeWebhook.duplicate',
+                messageKey: 'stripeWebhook.duplicate',
                 context: $context,
             );
         }
@@ -206,7 +206,7 @@ final readonly class RemoteDiagnostics
         return new DiagnosticCheck(
             code: 'stripeWebhook',
             status: DiagnosticStatus::Pass,
-            message: 'stripeWebhook.ready',
+            messageKey: 'stripeWebhook.ready',
             context: $context,
         );
     }
@@ -228,7 +228,7 @@ final readonly class RemoteDiagnostics
             DiagnosticsErrorCode::REMOTE_UNAVAILABLE => DiagnosticStatus::NotVerifiable,
             default => DiagnosticStatus::Fail,
         };
-        $message = match ($error->errorCode()) {
+        $messageKey = match ($error->errorCode()) {
             DiagnosticsErrorCode::AUTHENTICATION_FAILED => 'remote.authenticationFailed',
             DiagnosticsErrorCode::PERMISSION_DENIED => 'remote.permissionDenied',
             DiagnosticsErrorCode::REMOTE_UNAVAILABLE => 'remote.unavailable',
@@ -236,7 +236,7 @@ final readonly class RemoteDiagnostics
             default => 'remote.incompatible',
         };
         // A failed diagnostic read does not prove commerce is unavailable; rejected credentials do.
-        $blockedOperations = match (true) {
+        $affectedOperations = match (true) {
             $error->errorCode() !== DiagnosticsErrorCode::AUTHENTICATION_FAILED => [],
             $code === 'stripeAccount' => ['checkout', 'webhook', 'order_sync', 'housekeeping', 'remote_diagnostics'],
             default => ['webhook', 'remote_diagnostics'],
@@ -245,9 +245,9 @@ final readonly class RemoteDiagnostics
         return new DiagnosticCheck(
             code: $code,
             status: $status,
-            message: $message,
+            messageKey: $messageKey,
             context: ['code' => $error->errorCode()],
-            blockedOperations: $blockedOperations,
+            affectedOperations: $affectedOperations,
         );
     }
 

@@ -228,7 +228,7 @@ final class TaxCodeFieldTest extends KirbyTestCase
         $check = (new LocalDiagnostics($this->kirby))->report()->check('taxCodes');
 
         $this->assertNotNull($check);
-        $this->assertSame('taxCodes.ready', $check->message());
+        $this->assertSame('taxCodes.ready', $check->messageKey());
         $this->assertSame('1', $check->context()['count']);
     }
 

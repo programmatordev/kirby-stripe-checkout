@@ -69,7 +69,7 @@ final class LocalDiagnostics
             $checks[] = $this->failure(
                 code: 'configuration',
                 error: $error,
-                blockedOperations: ['checkout', 'webhook', 'order_sync', 'housekeeping', 'remote_diagnostics'],
+                affectedOperations: ['checkout', 'webhook', 'order_sync', 'housekeeping', 'remote_diagnostics'],
             );
 
             foreach (['secretKey', 'publishableKey', 'webhookSecret'] as $id) {
@@ -105,21 +105,21 @@ final class LocalDiagnostics
                 code: 'secretKey',
                 configured: $stripe->hasSecretKey(),
                 mode: $stripe->secretKeyMode(),
-                blockedOperations: ['checkout', 'webhook', 'order_sync', 'housekeeping', 'remote_diagnostics'],
+                affectedOperations: ['checkout', 'webhook', 'order_sync', 'housekeeping', 'remote_diagnostics'],
             );
             $checks[] = $settings->uiMode() === UiMode::Embedded || $stripe->hasPublishableKey()
                 ? $this->credential(
                     code: 'publishableKey',
                     configured: $stripe->hasPublishableKey(),
                     mode: $stripe->publishableKeyMode(),
-                    blockedOperations: ['checkout'],
+                    affectedOperations: ['checkout'],
                 )
                 : $this->check('publishableKey', DiagnosticStatus::Pass, 'credential.notRequired');
             $checks[] = $this->credential(
                 code: 'webhookSecret',
                 configured: $stripe->hasWebhookSecret(),
                 mode: CredentialMode::Unknown,
-                blockedOperations: ['webhook'],
+                affectedOperations: ['webhook'],
             );
             $housekeeping = $configuration->housekeeping();
             $checks[] = $this->check('housekeeping', DiagnosticStatus::Pass, 'housekeeping.configured', [
@@ -131,7 +131,7 @@ final class LocalDiagnostics
                 'unpaidOrderRetentionDays' => (string) $settings->unpaidOrderRetentionDays(),
             ]);
             $checks[] = $settings->currency() === null
-                ? $this->check('currency', DiagnosticStatus::Warning, 'setting.missing', blockedOperations: ['checkout'])
+                ? $this->check('currency', DiagnosticStatus::Warning, 'setting.missing', affectedOperations: ['checkout'])
                 : $this->check('currency', DiagnosticStatus::Pass, 'setting.ready');
             $checks[] = $settings->defaultRequiresShipping() === null
                 ? $this->check('defaultRequiresShipping', DiagnosticStatus::Warning, 'setting.missing')
@@ -147,29 +147,42 @@ final class LocalDiagnostics
             $checks[] = $this->failure(
                 code: 'hubPage',
                 error: $error,
-                message: 'hubPage.invalid',
-                blockedOperations: ['panel'],
+                messageKey: 'hubPage.invalid',
+                affectedOperations: ['panel'],
             );
         }
 
+        $checks = [...$checks, ...$this->orderChecks($retentionPolicy)];
+
+        if ((new OrderHookDispatcher($this->kirby))->hasFailedDeletionDelivery()) {
+            $checks[] = $this->check('lifecycleDeletion', DiagnosticStatus::Warning, 'lifecycleDeletion.failed');
+        }
+
+        $checks[] = $this->housekeepingRun();
+
+        return new DiagnosticReport($this->checkedAt, $checks);
+    }
+
+    /** @return list<DiagnosticCheck> */
+    private function orderChecks(?RetentionPolicy $retentionPolicy): array
+    {
         try {
             $store = new OrderPageStore($this->kirby);
             $container = $store->container();
             $orders = $store->orders();
             $validCount = $orders->count();
             $invalidCount = ($container?->childrenAndDrafts()->count() ?? 0) - $validCount;
-            $checks[] = $container === null
-                ? $this->check('orders', DiagnosticStatus::Warning, 'orders.missing')
-                : ($invalidCount > 0
-                    ? $this->check(
-                        code: 'orders',
-                        status: DiagnosticStatus::Fail,
-                        message: 'orders.invalidChildren',
-                        context: ['count' => (string) $invalidCount],
-                        blockedOperations: ['checkout', 'webhook', 'order_sync', 'housekeeping'],
-                    )
-                    : $this->check('orders', DiagnosticStatus::Pass, 'orders.ready'));
-            // Reuse this validated Order enumeration for every local summary in the report.
+            $orderCheck = match (true) {
+                $container === null => $this->check('orders', DiagnosticStatus::Warning, 'orders.missing'),
+                $invalidCount > 0 => $this->check(
+                    code: 'orders',
+                    status: DiagnosticStatus::Fail,
+                    messageKey: 'orders.invalidChildren',
+                    context: ['count' => (string) $invalidCount],
+                    affectedOperations: ['webhook', 'order_sync', 'housekeeping'],
+                ),
+                default => $this->check('orders', DiagnosticStatus::Pass, 'orders.ready'),
+            };
             $pendingCount = 0;
             $failedCount = 0;
             $pendingEventCount = 0;
@@ -180,6 +193,7 @@ final class LocalDiagnostics
             $recoveryDueCount = 0;
 
             foreach ($orders as $order) {
+                // Re-read the current snapshot because an Order can change after the validated Page enumeration.
                 $data = $store->data($order);
 
                 foreach (OrderData::list($data['lifecycleDeliveries'] ?? []) as $entry) {
@@ -208,50 +222,47 @@ final class LocalDiagnostics
                 }
             }
 
-            $checks[] = $this->check('lifecycle', $pendingCount + $failedCount > 0 ? DiagnosticStatus::Warning : DiagnosticStatus::Pass, 'lifecycle.summary', [
-                'pending' => (string) $pendingCount,
-                'failed' => (string) $failedCount,
-            ]);
-            $checks[] = $this->check('events', $pendingEventCount + $failedEventCount > 0 ? DiagnosticStatus::Warning : DiagnosticStatus::Pass, 'events.summary', [
-                'pending' => (string) $pendingEventCount,
-                'failed' => (string) $failedEventCount,
-            ]);
-            // Pending is a normal asynchronous payment state; expose its age without classifying it as a failure.
-            $checks[] = $this->check('pendingPayments', DiagnosticStatus::Pass, 'pendingPayments.summary', [
-                'count' => (string) $pendingPaymentCount,
-                'oldestAt' => $oldestPendingPaymentAt === null ? '—' : OrderData::timestamp($oldestPendingPaymentAt),
-                'oldestAgeSeconds' => $oldestPendingPaymentAt === null
-                    ? '0'
-                    : (string) max(0, $this->checkedAt->getTimestamp() - $oldestPendingPaymentAt->getTimestamp()),
-            ]);
+            $checks = [
+                $orderCheck,
+                $this->check('lifecycle', $pendingCount + $failedCount > 0 ? DiagnosticStatus::Warning : DiagnosticStatus::Pass, 'lifecycle.summary', [
+                    'pending' => (string) $pendingCount,
+                    'failed' => (string) $failedCount,
+                ]),
+                $this->check('events', $pendingEventCount + $failedEventCount > 0 ? DiagnosticStatus::Warning : DiagnosticStatus::Pass, 'events.summary', [
+                    'pending' => (string) $pendingEventCount,
+                    'failed' => (string) $failedEventCount,
+                ]),
+                // Pending is a normal asynchronous payment state; expose its age without classifying it as a failure.
+                $this->check('pendingPayments', DiagnosticStatus::Pass, 'pendingPayments.summary', [
+                    'count' => (string) $pendingPaymentCount,
+                    'oldestAt' => $oldestPendingPaymentAt === null ? '—' : OrderData::timestamp($oldestPendingPaymentAt),
+                    'oldestAgeSeconds' => $oldestPendingPaymentAt === null
+                        ? '0'
+                        : (string) max(0, $this->checkedAt->getTimestamp() - $oldestPendingPaymentAt->getTimestamp()),
+                ]),
+            ];
             $checks[] = $retentionPolicy === null
                 ? $this->check('housekeepingEligibility', DiagnosticStatus::NotVerifiable, 'housekeepingEligibility.unknown')
                 : $this->check(
                     code: 'housekeepingEligibility',
                     status: $eligibleHousekeepingCount + $recoveryDueCount > 0 ? DiagnosticStatus::Warning : DiagnosticStatus::Pass,
-                    message: 'housekeepingEligibility.summary',
+                    messageKey: 'housekeepingEligibility.summary',
                     context: [
                         'eligible' => (string) $eligibleHousekeepingCount,
                         'recoveryDue' => (string) $recoveryDueCount,
                     ],
                 );
+
+            return $checks;
         } catch (OrderStorageException|OrderQueryException $error) {
-            $checks[] = $this->check(
+            return [$this->check(
                 code: 'orders',
                 status: DiagnosticStatus::Fail,
-                message: 'orders.invalid',
+                messageKey: 'orders.invalid',
                 context: ['code' => $error->errorCode()],
-                blockedOperations: ['checkout', 'webhook', 'order_sync', 'housekeeping'],
-            );
+                affectedOperations: ['checkout', 'webhook', 'order_sync', 'housekeeping'],
+            )];
         }
-
-        if ((new OrderHookDispatcher($this->kirby))->hasFailedDeletionDelivery()) {
-            $checks[] = $this->check('lifecycleDeletion', DiagnosticStatus::Warning, 'lifecycleDeletion.failed');
-        }
-
-        $checks[] = $this->housekeepingRun();
-
-        return new DiagnosticReport($this->checkedAt, $checks);
     }
 
     private function housekeepingRun(): DiagnosticCheck
@@ -262,9 +273,9 @@ final class LocalDiagnostics
             return $this->check(
                 code: 'housekeepingRun',
                 status: DiagnosticStatus::Fail,
-                message: 'housekeepingRun.invalid',
+                messageKey: 'housekeepingRun.invalid',
                 context: ['code' => $error->errorCode()],
-                blockedOperations: ['housekeeping'],
+                affectedOperations: ['housekeeping'],
             );
         }
 
@@ -322,9 +333,9 @@ final class LocalDiagnostics
             : $this->check(
                 code: 'webhookRoute',
                 status: DiagnosticStatus::Fail,
-                message: 'webhookRoute.invalid',
+                messageKey: 'webhookRoute.invalid',
                 context: ['url' => $url],
-                blockedOperations: ['webhook'],
+                affectedOperations: ['webhook'],
             );
     }
 
@@ -354,9 +365,9 @@ final class LocalDiagnostics
             : $this->check(
                 code: 'storageWriteAccess',
                 status: DiagnosticStatus::Fail,
-                message: 'storageWriteAccess.unavailable',
+                messageKey: 'storageWriteAccess.unavailable',
                 context: $context,
-                blockedOperations: ['checkout', 'webhook', 'order_sync', 'housekeeping', 'remote_diagnostics'],
+                affectedOperations: ['checkout', 'webhook', 'order_sync', 'housekeeping'],
             );
     }
 
@@ -429,19 +440,19 @@ final class LocalDiagnostics
         );
     }
 
-    /** @param list<string> $blockedOperations */
+    /** @param list<string> $affectedOperations */
     private function credential(
         string $code,
         bool $configured,
         CredentialMode $mode,
-        array $blockedOperations,
+        array $affectedOperations,
     ): DiagnosticCheck {
         if ($configured === false) {
             return $this->check(
                 code: $code,
                 status: DiagnosticStatus::Warning,
-                message: 'credential.missing',
-                blockedOperations: $blockedOperations,
+                messageKey: 'credential.missing',
+                affectedOperations: $affectedOperations,
             );
         }
 
@@ -459,8 +470,8 @@ final class LocalDiagnostics
             return $this->check(
                 code: 'orderIdentity',
                 status: DiagnosticStatus::Fail,
-                message: 'orderIdentity.disabled',
-                blockedOperations: ['checkout'],
+                messageKey: 'orderIdentity.disabled',
+                affectedOperations: ['checkout'],
             );
         }
 
@@ -486,44 +497,44 @@ final class LocalDiagnostics
             return $this->check(
                 code: 'orderIdentity',
                 status: DiagnosticStatus::Fail,
-                message: 'orderIdentity.incompatible',
-                blockedOperations: ['checkout'],
+                messageKey: 'orderIdentity.incompatible',
+                affectedOperations: ['checkout'],
             );
         }
 
         return $this->check('orderIdentity', DiagnosticStatus::Pass, 'orderIdentity.ready');
     }
 
-    /** @param list<string> $blockedOperations */
+    /** @param list<string> $affectedOperations */
     private function failure(
         string $code,
         ?ConfigurationException $error,
-        string $message = 'configuration.invalid',
-        array $blockedOperations = [],
+        string $messageKey = 'configuration.invalid',
+        array $affectedOperations = [],
     ): DiagnosticCheck {
-        return $this->check($code, DiagnosticStatus::Fail, $message, [
+        return $this->check($code, DiagnosticStatus::Fail, $messageKey, [
             'code' => $error?->errorCode() ?? ConfigurationErrorCode::ROOT_INVALID,
             'path' => $error?->path() ?? 'programmatordev.stripe-checkout',
-        ], $blockedOperations);
+        ], $affectedOperations);
     }
 
     /**
      * @param array<string, string> $context
-     * @param list<string> $blockedOperations
+     * @param list<string> $affectedOperations
      */
     private function check(
         string $code,
         DiagnosticStatus $status,
-        string $message,
+        string $messageKey,
         array $context = [],
-        array $blockedOperations = [],
+        array $affectedOperations = [],
     ): DiagnosticCheck {
         return new DiagnosticCheck(
             code: $code,
             status: $status,
-            message: $message,
+            messageKey: $messageKey,
             context: $context,
-            blockedOperations: $blockedOperations,
+            affectedOperations: $affectedOperations,
         );
     }
 }

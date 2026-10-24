@@ -21,14 +21,14 @@ final class DiagnosticReportTest extends TestCase
                 new DiagnosticCheck(
                     code: 'configuration',
                     status: DiagnosticStatus::Fail,
-                    message: 'configuration.invalid',
+                    messageKey: 'configuration.invalid',
                     context: ['code' => 'configuration.required_missing'],
-                    blockedOperations: ['checkout'],
+                    affectedOperations: ['checkout'],
                 ),
                 new DiagnosticCheck(
                     code: 'provider',
                     status: DiagnosticStatus::NotVerifiable,
-                    message: 'provider.permissionDenied',
+                    messageKey: 'provider.permissionDenied',
                 ),
             ],
         );
@@ -39,7 +39,7 @@ final class DiagnosticReportTest extends TestCase
         $this->assertSame(DiagnosticStatus::Fail, $restored->status());
         $this->assertSame('2026-10-23T10:15:00Z', $restored->toArray()['checkedAt']);
         $this->assertNotNull($configuration);
-        $this->assertSame(['checkout'], $configuration->blockedOperations());
+        $this->assertSame(['checkout'], $configuration->affectedOperations());
         $this->assertSame(
             ['code' => 'configuration.required_missing'],
             $configuration->context(),
@@ -56,9 +56,9 @@ final class DiagnosticReportTest extends TestCase
             'checks' => [[
                 'code' => 'provider',
                 'status' => 'fail',
-                'message' => 'provider.failed',
+                'messageKey' => 'provider.failed',
                 'context' => [],
-                'blockedOperations' => [],
+                'affectedOperations' => [],
             ]],
         ]);
     }

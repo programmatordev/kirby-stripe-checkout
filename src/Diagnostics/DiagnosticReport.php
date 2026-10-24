@@ -66,7 +66,7 @@ final readonly class DiagnosticReport
         };
     }
 
-    /** @return array{checkedAt: string, status: string, checks: list<array{code: string, status: string, message: string, context: array<string, string>, blockedOperations: list<string>}>} */
+    /** @return array{checkedAt: string, status: string, checks: list<array{code: string, status: string, messageKey: string, context: array<string, string>, affectedOperations: list<string>}>} */
     public function toArray(): array
     {
         return [

@@ -45,7 +45,7 @@ final class DiagnosticsSections
             $sections['diagnostics-' . $check->code()] = [
                 'type' => 'info',
                 'label' => self::translate('diagnostics.' . $check->code()),
-                'text' => self::template('diagnostics.' . $check->message(), $context),
+                'text' => self::template('diagnostics.' . $check->messageKey(), $context),
                 'icon' => self::statusIcon($check->status()),
                 'theme' => self::statusTheme($check->status()),
             ];
