@@ -141,7 +141,7 @@ final readonly class RemoteDiagnostics
         $modeMismatches = 0;
         $apiVersionMismatches = 0;
         $missingEvents = [];
-        $invalidEnabledEndpoints = 0;
+        $validEndpointCount = 0;
 
         foreach ($matches as $endpoint) {
             if ($endpoint->status() !== self::WEBHOOK_STATUS_ENABLED) {
@@ -171,7 +171,9 @@ final readonly class RemoteDiagnostics
                 $invalid = true;
             }
 
-            $invalidEnabledEndpoints += $invalid ? 1 : 0;
+            if ($invalid === false) {
+                $validEndpointCount++;
+            }
         }
 
         $context = [
@@ -184,7 +186,7 @@ final readonly class RemoteDiagnostics
             'url' => $this->canonicalWebhookUrl,
         ];
 
-        if ($invalidEnabledEndpoints > 0 || $disabled === count($matches)) {
+        if ($validEndpointCount === 0) {
             return new DiagnosticCheck(
                 code: 'stripeWebhook',
                 status: $mode === CredentialMode::Live ? DiagnosticStatus::Fail : DiagnosticStatus::Warning,

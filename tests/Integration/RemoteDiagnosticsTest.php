@@ -89,6 +89,40 @@ final class RemoteDiagnosticsTest extends KirbyTestCase
         $this->assertSame('2', $check->context()['matches']);
     }
 
+    public function testValidLiveEndpointWithAnIncompleteDuplicateWarns(): void
+    {
+        $gateway = new FakeDiagnosticsGateway();
+        $gateway->accountMode = CredentialMode::Live;
+        $gateway->webhookEndpoints = [
+            new WebhookEndpointRecord(
+                endpointId: 'we_valid',
+                url: self::WEBHOOK_URL,
+                enabledEvents: ['*'],
+                liveMode: true,
+                apiVersion: ApiVersion::CURRENT,
+                status: 'enabled',
+            ),
+            new WebhookEndpointRecord(
+                endpointId: 'we_incomplete',
+                url: self::WEBHOOK_URL,
+                enabledEvents: ['checkout.session.completed'],
+                liveMode: true,
+                apiVersion: null,
+                status: 'enabled',
+            ),
+        ];
+        $report = $this->diagnostics($gateway, CredentialMode::Live)->run();
+        $check = $report->check('stripeWebhook');
+
+        $this->assertNotNull($check);
+        $this->assertSame(DiagnosticStatus::Warning, $check->status());
+        $this->assertSame('stripeWebhook.duplicate', $check->messageKey());
+        $this->assertSame([], $check->affectedOperations());
+        $this->assertSame('2', $check->context()['matches']);
+        $this->assertSame('1', $check->context()['apiVersionMismatches']);
+        $this->assertStringContainsString('refund.created', $check->context()['missingEvents']);
+    }
+
     public function testIncompleteLiveEndpointReportsMissingConfiguration(): void
     {
         $gateway = new FakeDiagnosticsGateway();
