@@ -45,7 +45,7 @@ The action URL targets the plugin's fixed, language-aware POST endpoint. Route r
 
 A normal form posts to `actionUrl()`. Successful creation responds with `303` directly to the validated Stripe Checkout URL. A safely attributable failure responds with `303` back to the initiating page; call `checkout()` there and display its safe error.
 
-For a Cart checkout, render the issued submission data directly. This example needs no JavaScript:
+For a Cart checkout, render the issued submission data directly. The optional `stripe-checkout/submission-fields` snippet renders only the hidden fields; the project retains the form, button, error presentation and JavaScript:
 
 ```php
 <?php
@@ -56,6 +56,18 @@ $checkout = $site->stripeCheckout()->checkout();
     <p><?= esc($error->message()) ?></p>
 <?php endif ?>
 
+<form action="<?= esc($checkout->actionUrl(), 'attr') ?>" method="post">
+    <?php snippet('stripe-checkout/submission-fields', [
+        'checkoutBootstrap' => $checkout,
+    ]) ?>
+
+    <button type="submit">Checkout</button>
+</form>
+```
+
+The snippet is a convenience, not a checkout dependency. A project can render the Cart fields itself:
+
+```php
 <form action="<?= esc($checkout->actionUrl(), 'attr') ?>" method="post">
     <?php foreach ($checkout->submissionData() as $name => $value): ?>
         <input
@@ -69,7 +81,7 @@ $checkout = $site->stripeCheckout()->checkout();
 </form>
 ```
 
-Direct forms submit `items[index][reference]`, optional `items[index][quantity]`, optional `items[index][options][optionId]`, and optional `shippingCountry` alongside the issued CSRF, source and attempt token. When returned `submissionData()` contains `items`, render those values unchanged: the plugin retained them because starting a fresh action could duplicate or abandon an existing Session attempt.
+That direct loop is sufficient for Cart submission data, whose values are scalar. Direct forms also submit nested `items[index][reference]`, optional `items[index][quantity]`, optional `items[index][options][optionId]`, and optional `shippingCountry`. The optional snippet renders those nested names correctly. A custom Direct renderer must recursively preserve the same bracketed names and values. When returned `submissionData()` contains `items`, render those values unchanged: the plugin retained them because starting a fresh action could duplicate or abandon an existing Session attempt.
 
 `CheckoutError` exposes `code()`, translated `message()` and `retryable()`. The initiating template owns presentation; the plugin registers no error/pending page, template, snippet or configurable error destination. Failures that cannot be safely tied to an issued browser action, including invalid CSRF or malformed action identity, remain direct HTTP errors and do not trust a request or Referer destination.
 

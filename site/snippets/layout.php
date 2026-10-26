@@ -31,7 +31,7 @@ $settings = $site->stripeCheckout()->settings();
             <details class="test-menu">
                 <summary>Test pages</summary>
                 <div>
-                    <?php foreach (['checkout-hosted', 'checkout-embedded', 'checkout-success', 'checkout-cancel', 'checkout-return'] as $id): ?>
+                    <?php foreach (['checkout-embedded', 'checkout-success', 'checkout-cancel', 'checkout-return'] as $id): ?>
                         <?php if ($testPage = $site->find($id)): ?>
                             <a href="<?= esc($testPage->url(), 'attr') ?>"><?= esc($testPage->title()) ?></a>
                         <?php endif ?>
@@ -47,7 +47,7 @@ $settings = $site->stripeCheckout()->settings();
         </nav>
     </header>
     <div class="store-context">
-        <span><span class="status-dot" aria-hidden="true"></span> Development store · No payments</span>
+        <span><span class="status-dot" aria-hidden="true"></span> Development store · Stripe test mode</span>
         <span><?= esc(ucfirst($settings->priceSource()->value)) ?> prices · <?= esc($settings->currency() ?? 'Currency not set') ?></span>
     </div>
     <div class="store-layout <?= $cart === null ? 'without-cart' : '' ?>">
@@ -62,11 +62,12 @@ $settings = $site->stripeCheckout()->settings();
                 </div>
             </aside>
             <?php snippet('cart-script') ?>
+            <?php snippet('hosted-checkout-script') ?>
         <?php endif ?>
     </div>
     <footer class="site-footer">
         <span>A small store for testing products, options and your cart.</span>
-        <span>Checkout is not available yet.</span>
+        <span>Hosted Checkout is available from the cart.</span>
     </footer>
     <noscript><p class="notice">Cart controls need JavaScript in this development storefront.</p></noscript>
 </body>

@@ -62,6 +62,9 @@ App::plugin(
             'fields/stripe-checkout/requires-shipping' => [ProductBlueprint::class, 'requiresShipping'],
             'fields/stripe-checkout/options' => [ProductBlueprint::class, 'options'],
         ],
+        'snippets' => [
+            'stripe-checkout/submission-fields' => __DIR__ . '/snippets/submission-fields.php',
+        ],
         'pageModels' => [
             'stripe-checkout' => StripeCheckoutPage::class,
             'stripe-checkout-order' => OrderPage::class,

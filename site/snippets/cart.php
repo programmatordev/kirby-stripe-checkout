@@ -1,14 +1,29 @@
 <?php
 
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+
 /** @var Kirby\Cms\Site $site */
 /** @var ProgrammatorDev\StripeCheckout\Cart\Cart|null $cart */
 /** @var ProgrammatorDev\StripeCheckout\Cart\CartRenderContext|null $context */
 
 $endpoint = $site->url() . '/stripe-checkout/cart';
 $error = isset($context) ? $context->error() : null;
-$checkout = $site->stripeCheckout();
+$stripeCheckout = $site->stripeCheckout();
+$settings = $stripeCheckout->settings();
+$checkoutBootstrap = null;
+$checkoutBootstrapUnavailable = false;
 $shippingQuote = $cart?->shippingQuote();
 $shippingCountryOptions = $cart?->shippingCountryOptions() ?? [];
+
+if ($cart !== null && $cart->isEmpty() === false && $settings->uiMode() === UiMode::Hosted) {
+    try {
+        $checkoutBootstrap = $stripeCheckout->checkout(CheckoutSource::Cart);
+    } catch (Throwable) {
+        // Keep the development storefront usable while configuration or credentials are incomplete.
+        $checkoutBootstrapUnavailable = true;
+    }
+}
 ?>
 <details class="cart-panel" data-cart-view data-cart-url="<?= esc($endpoint, 'attr') ?>" open>
     <summary>
@@ -44,11 +59,11 @@ $shippingCountryOptions = $cart?->shippingCountryOptions() ?? [];
                                 <p class="cart-options"><?= esc($option->optionName()) ?>: <?= esc($option->valueName()) ?></p>
                             <?php endforeach ?>
                             <?php if ($item->price() !== null): ?>
-                                <p class="cart-unit-price"><?= esc($checkout->formatMoney($item->price())) ?> each</p>
+                                <p class="cart-unit-price"><?= esc($stripeCheckout->formatMoney($item->price())) ?> each</p>
                             <?php endif ?>
                         </div>
                         <?php if ($item->subtotal() !== null): ?>
-                            <span class="cart-item-total"><?= esc($checkout->formatMoney($item->subtotal())) ?></span>
+                            <span class="cart-item-total"><?= esc($stripeCheckout->formatMoney($item->subtotal())) ?></span>
                         <?php endif ?>
                     </div>
                     <div class="cart-item-controls">
@@ -72,7 +87,7 @@ $shippingCountryOptions = $cart?->shippingCountryOptions() ?? [];
             <?php endforeach ?>
             <div class="cart-total">
                 <span>Subtotal</span>
-                <span><?= $cart->subtotal() === null ? 'Unavailable' : esc($checkout->formatMoney($cart->subtotal())) ?></span>
+                <span><?= $cart->subtotal() === null ? 'Unavailable' : esc($stripeCheckout->formatMoney($cart->subtotal())) ?></span>
             </div>
             <?php if ($shippingQuote !== null): ?>
                 <section class="cart-shipping" aria-labelledby="cart-shipping-title">
@@ -118,7 +133,7 @@ $shippingCountryOptions = $cart?->shippingCountryOptions() ?? [];
                                             <small><?= esc($range . ' ' . $plural) ?></small>
                                         <?php endif ?>
                                     </span>
-                                    <strong><?= esc($checkout->formatMoney($shippingOption->amount())) ?></strong>
+                                    <strong><?= esc($stripeCheckout->formatMoney($shippingOption->amount())) ?></strong>
                                 </li>
                             <?php endforeach ?>
                         </ul>
@@ -128,7 +143,24 @@ $shippingCountryOptions = $cart?->shippingCountryOptions() ?? [];
             <?php endif ?>
             <p class="cart-note">Tax is calculated later in Checkout when configured.</p>
             <?php if (!$cart->isEmpty()): ?>
-                <button class="cart-checkout" type="button" disabled>Checkout — coming later</button>
+                <?php if ($settings->uiMode() !== UiMode::Hosted): ?>
+                    <p class="notice">Embedded Checkout is not connected to this development cart yet.</p>
+                <?php elseif ($checkoutBootstrapUnavailable || $checkoutBootstrap === null): ?>
+                    <p class="notice error" role="alert">Checkout is unavailable. Check the store configuration and Stripe credentials.</p>
+                <?php else: ?>
+                    <?php $checkoutError = $checkoutBootstrap->error() ?>
+                    <form class="checkout-form" action="<?= esc($checkoutBootstrap->actionUrl(), 'attr') ?>" method="post" data-hosted-checkout>
+                        <p class="notice error" data-checkout-error role="alert" tabindex="-1" <?= $checkoutError === null ? 'hidden' : '' ?>><?= $checkoutError === null ? '' : esc($checkoutError->message()) ?></p>
+                        <fieldset>
+                            <?php snippet('stripe-checkout/submission-fields', ['checkoutBootstrap' => $checkoutBootstrap]) ?>
+                            <div class="checkout-actions">
+                                <button class="cart-checkout" type="submit" data-checkout-transport="json">Checkout with JavaScript</button>
+                                <button class="cart-checkout checkout-native" type="submit" data-checkout-transport="html">Checkout without JavaScript</button>
+                            </div>
+                        </fieldset>
+                    </form>
+                    <p class="checkout-note">Both options submit the same data. The native form lets the server redirect directly to Stripe Checkout.</p>
+                <?php endif ?>
                 <form class="cart-clear" action="<?= esc($endpoint, 'attr') ?>" method="post" data-cart-method="DELETE">
                     <fieldset>
                         <input type="hidden" name="csrf" value="<?= esc(csrf(), 'attr') ?>">

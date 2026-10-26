@@ -801,6 +801,10 @@ final class CartRoutesTest extends KirbyTestCase
     {
         $snippet = dirname(__DIR__, 2) . '/site/snippets/cart.php';
         $this->restart([
+            'stripe' => [
+                'secretKey' => 'sk_test_server',
+                'webhookSecret' => 'whsec_test_hook',
+            ],
             'settings' => [
                 'defaultRequiresShipping' => true,
                 'shippingZones' => [[
@@ -833,12 +837,21 @@ final class CartRoutesTest extends KirbyTestCase
         $response = $this->send('GET', headers: ['Accept' => 'text/html']);
         $this->assertStringContainsString('name="shippingCountry"', $response->body());
         $this->assertStringContainsString('Choose a shipping country to preview', $response->body());
+        $html = html_entity_decode($response->body(), ENT_QUOTES | ENT_HTML5);
+        $this->assertStringContainsString('data-hosted-checkout', $html);
+        $this->assertStringContainsString('action="https://kirby-stripe-checkout.test/stripe-checkout/checkout"', $html);
+        $this->assertStringContainsString('name="source" value="cart"', $html);
+        $this->assertStringContainsString('name="attemptToken"', $html);
+        $this->assertStringContainsString('name="revision"', $html);
+        $this->assertStringContainsString('data-checkout-transport="json">Checkout with JavaScript', $html);
+        $this->assertStringContainsString('data-checkout-transport="html">Checkout without JavaScript', $html);
         $response = $this->send('PATCH', body: [
             'revision' => $cart->revision(),
             'shippingCountry' => 'PT',
         ], headers: ['Accept' => 'text/html']);
         $this->assertStringContainsString('Standard delivery', $response->body());
         $this->assertStringContainsString('€4.90', $response->body());
+        $this->assertStringContainsString('data-hosted-checkout', $response->body());
     }
 
     private function product(): Page

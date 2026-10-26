@@ -138,6 +138,15 @@
     .notice { padding: 1rem; border: 1px solid var(--border); background: var(--soft); border-radius: .5rem; font-size: .85rem; margin-block: 1rem; }
     .notice p { margin-top: .5rem; }
     .notice.error { color: var(--error); }
+    .checkout-form fieldset { display: grid; }
+    .checkout-actions { display: grid; gap: .5rem; }
+    .checkout-form button { width: 100%; }
+    .checkout-native { border-color: var(--border); background: var(--soft); color: var(--text); }
+    .checkout-note { margin-block: .75rem 1.5rem; color: var(--muted); font-size: .75rem; }
+    .checkout-result { display: grid; gap: .65rem; margin-block: 1.5rem; }
+    .checkout-result > div { display: grid; grid-template-columns: minmax(8rem, 1fr) 2fr; gap: 1rem; border-bottom: 1px solid var(--border); padding-bottom: .65rem; }
+    .checkout-result dt { color: var(--muted); }
+    .checkout-result dd { margin: 0; overflow-wrap: anywhere; }
     .site-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem; border-top: 1px solid var(--border); padding-block: 1.5rem; color: var(--muted); font-size: .75rem; }
     @media (min-width: 80rem) {
         .product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
