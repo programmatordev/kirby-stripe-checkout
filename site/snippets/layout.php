@@ -1,5 +1,7 @@
 <?php
 
+use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+
 /** @var Kirby\Cms\App $kirby */
 /** @var Kirby\Cms\Page $page */
 /** @var Kirby\Cms\Site $site */
@@ -62,7 +64,9 @@ $settings = $site->stripeCheckout()->settings();
                 </div>
             </aside>
             <?php snippet('cart-script') ?>
-            <?php snippet('hosted-checkout-script') ?>
+            <?php if ($settings->uiMode() === UiMode::Hosted): ?>
+                <?php snippet('hosted-checkout-script') ?>
+            <?php endif ?>
         <?php endif ?>
     </div>
     <footer class="site-footer">

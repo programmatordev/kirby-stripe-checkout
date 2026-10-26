@@ -2,6 +2,7 @@
 
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 
 /** @var Kirby\Cms\Site $site */
 /** @var ProgrammatorDev\StripeCheckout\Cart\Cart|null $cart */
@@ -12,16 +13,14 @@ $error = isset($context) ? $context->error() : null;
 $stripeCheckout = $site->stripeCheckout();
 $settings = $stripeCheckout->settings();
 $checkoutBootstrap = null;
-$checkoutBootstrapUnavailable = false;
 $shippingQuote = $cart?->shippingQuote();
 $shippingCountryOptions = $cart?->shippingCountryOptions() ?? [];
 
 if ($cart !== null && $cart->isEmpty() === false && $settings->uiMode() === UiMode::Hosted) {
     try {
         $checkoutBootstrap = $stripeCheckout->checkout(CheckoutSource::Cart);
-    } catch (Throwable) {
-        // Keep the development storefront usable while configuration or credentials are incomplete.
-        $checkoutBootstrapUnavailable = true;
+    } catch (ConfigurationException) {
+        // Keep the development storefront usable while Checkout configuration is incomplete.
     }
 }
 ?>
@@ -145,7 +144,7 @@ if ($cart !== null && $cart->isEmpty() === false && $settings->uiMode() === UiMo
             <?php if (!$cart->isEmpty()): ?>
                 <?php if ($settings->uiMode() !== UiMode::Hosted): ?>
                     <p class="notice">Embedded Checkout is not connected to this development cart yet.</p>
-                <?php elseif ($checkoutBootstrapUnavailable || $checkoutBootstrap === null): ?>
+                <?php elseif ($checkoutBootstrap === null): ?>
                     <p class="notice error" role="alert">Checkout is unavailable. Check the store configuration and Stripe credentials.</p>
                 <?php else: ?>
                     <?php $checkoutError = $checkoutBootstrap->error() ?>

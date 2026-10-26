@@ -1,7 +1,5 @@
 <script>
     (() => {
-        let checkoutRedirectPending = false;
-
         document.addEventListener('submit', async event => {
             const checkoutForm = event.target.closest('[data-hosted-checkout]');
             if (!checkoutForm) return;
@@ -19,6 +17,7 @@
             checkoutError.textContent = '';
             checkoutFieldset.disabled = true;
             checkoutForm.setAttribute('aria-busy', 'true');
+            let checkoutRedirectPending = false;
 
             try {
                 const response = await fetch(checkoutForm.action, {
