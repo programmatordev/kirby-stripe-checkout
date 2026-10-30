@@ -112,7 +112,7 @@ The Panel shows success and cancellation destinations for hosted Checkout, and t
 
 Live Stripe credentials require HTTPS destinations, except for local hosts such as DDEV. Query strings are retained and fragments are removed. Destination values come only from trusted Settings or PHP configuration; they are never accepted from the Checkout form body.
 
-These destination values are available through Settings now. The current package does not yet expose a public Checkout endpoint that consumes them.
+Checkout creation resolves these destinations for the initiating language and stores the resulting URLs with the Order attempt. Browser return routes use those snapshots, so later Settings changes cannot redirect an existing Checkout elsewhere.
 
 The collection controls are independent. Tax-ID collection does not enable Automatic Tax, and billing-address collection set to `auto` does not promise a complete address. The defaults match Stripe's disabled or automatic behavior except for the individual name, which this plugin asks for optionally by default. Enabling phone collection makes the field required in Stripe Checkout. Terms acceptance requires the store's terms URL to be configured in Stripe. Stripe currently restricts promotional-email consent to US merchants and US customers.
 
