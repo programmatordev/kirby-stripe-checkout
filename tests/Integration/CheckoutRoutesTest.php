@@ -14,8 +14,10 @@ use Kirby\Http\Request;
 use Kirby\Http\Response;
 use Kirby\Session\AutoSession;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutResultReason;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutSessionException;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\AttemptToken;
 use ProgrammatorDev\StripeCheckout\Checkout\Internal\BrowserAttemptContext;
@@ -1044,6 +1046,36 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $resumed = $this->send($resumeData, languageCode: 'pt');
         $this->assertSame(200, $resumed->code());
         $this->assertSame(['post', 'get', 'get', 'get'], array_column($this->requests, 'method'));
+        $this->assertCount(1, array_filter($this->requests, static fn(array $request): bool => $request['method'] === 'post'));
+    }
+
+    public function testEmbeddedOpenReturnRejectsResumeAfterTheCartChanges(): void
+    {
+        $this->restart(UiMode::Embedded, ['settings' => ['returnDestination' => '/continue']]);
+        $body = $this->submission(CheckoutSource::Cart);
+        $this->assertSame(201, $this->send($body)->code());
+        $cart = (new StripeCheckout($this->kirby))->cart();
+        $this->assertNotNull($cart);
+        $cart->add('product');
+        $parameters = $this->requests[0]['parameters'];
+        $this->assertIsString($parameters['return_url']);
+        $returned = $this->sendNavigation(str_replace('{CHECKOUT_SESSION_ID}', 'cs_test_browser', $parameters['return_url']));
+        $location = $returned->headers()['Location'] ?? null;
+        $this->assertIsString($location);
+
+        $this->setRequest($location);
+        $stripeCheckout = new StripeCheckout($this->kirby);
+        $result = $stripeCheckout->checkoutResult();
+        $this->assertTrue($result?->canResumeCheckout());
+
+        try {
+            $stripeCheckout->checkout(CheckoutSource::Cart);
+            $this->fail('A changed Cart must not resume an accepted Checkout attempt.');
+        } catch (CheckoutInputException $error) {
+            $this->assertSame(CheckoutErrorCode::ATTEMPT_CONFLICT, $error->errorCode());
+        }
+
+        $this->assertCount(1, (new OrderPageStore($this->kirby))->orders());
         $this->assertCount(1, array_filter($this->requests, static fn(array $request): bool => $request['method'] === 'post'));
     }
 

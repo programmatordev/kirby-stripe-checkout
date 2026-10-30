@@ -90,7 +90,12 @@ final class CheckoutBootstrapFactory
 
         if ($attempt === null && $error === null && $uiMode === UiMode::Embedded && $resumablePageUuid !== null) {
             $attempt = $this->attemptStore->findAcceptedAttemptForOrder($resumablePageUuid, $context, $now);
-            $submissionInput = $attempt?->acceptedInput();
+
+            if ($attempt === null) {
+                throw new CheckoutInputException(CheckoutErrorCode::ATTEMPT_CONFLICT);
+            }
+
+            $submissionInput = $attempt->acceptedInput();
         }
 
         $attempt ??= $this->attemptStore->issue(
