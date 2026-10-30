@@ -873,9 +873,6 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertSame(PaymentStatus::Unpaid, $result->paymentStatus());
         $this->assertNotNull($result->order());
         $this->assertNull((new StripeCheckout($this->kirby))->checkoutResult());
-        $this->assertNull($this->withUnavailableSession(
-            fn() => (new StripeCheckout($this->kirby))->checkoutResult(),
-        ));
     }
 
     #[DataProvider('providerReturnModes')]

@@ -84,12 +84,17 @@ final readonly class DisputeCollection
             return DisputeStatus::None;
         }
 
+        // Appeal phases remain active and keep the same operator-facing response/review summaries
+        // as the original dispute phases.
+        // https://docs.stripe.com/changelog/endive/2026-10-28/evidence-submission-appeal-dispute-decisions
         // Active cases take precedence; the independent lost flag still exposes terminal losses.
         if ($this->disputeRequiresResponse()) {
             return DisputeStatus::NeedsResponse;
         }
 
-        if ($this->hasStatus(Dispute::STATUS_UNDER_REVIEW) || $this->hasStatus(Dispute::STATUS_WARNING_UNDER_REVIEW)) {
+        if ($this->hasStatus(Dispute::STATUS_UNDER_REVIEW)
+            || $this->hasStatus(Dispute::STATUS_APPEAL_UNDER_REVIEW)
+            || $this->hasStatus(Dispute::STATUS_WARNING_UNDER_REVIEW)) {
             return DisputeStatus::UnderReview;
         }
 
@@ -108,7 +113,9 @@ final readonly class DisputeCollection
 
     public function disputeRequiresResponse(): bool
     {
-        return $this->hasStatus(Dispute::STATUS_NEEDS_RESPONSE) || $this->hasStatus(Dispute::STATUS_WARNING_NEEDS_RESPONSE);
+        return $this->hasStatus(Dispute::STATUS_NEEDS_RESPONSE)
+            || $this->hasStatus(Dispute::STATUS_APPEAL_NEEDS_RESPONSE)
+            || $this->hasStatus(Dispute::STATUS_WARNING_NEEDS_RESPONSE);
     }
 
     public function disputeHasLost(): bool

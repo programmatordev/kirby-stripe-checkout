@@ -128,7 +128,7 @@ final class CartViewFactory
         $resolvedSubtotal = $errors === [] ? $subtotal : null;
 
         if ($snapshot->entries() !== []) {
-            if ($checkoutContext === null || $resolver === null) {
+            if ($checkoutContext === null) {
                 // Without one complete valid Checkout context, neither the need for shipping nor its available options can be trusted.
                 $shippingQuote = ShippingQuote::unavailable();
             } else {

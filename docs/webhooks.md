@@ -12,7 +12,7 @@ In the matching Stripe sandbox or live account, create an account webhook destin
 https://your-site.example/stripe-checkout/webhook
 ```
 
-Use snapshot events and the API version pinned by the installed Stripe PHP SDK. The current dependency baseline uses `2026-09-30.endive`; after an SDK upgrade, check `Stripe\Util\ApiVersion::CURRENT` and update the destination deliberately.
+Use snapshot events and the API version pinned by the installed Stripe PHP SDK. The current dependency baseline uses `2026-10-28.endive`; after an SDK upgrade, check `Stripe\Util\ApiVersion::CURRENT` and update the destination deliberately.
 
 Select these thirteen events for all supported features:
 

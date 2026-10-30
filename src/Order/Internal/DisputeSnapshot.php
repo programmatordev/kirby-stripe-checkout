@@ -90,7 +90,18 @@ final readonly class DisputeSnapshot
         }
 
         $data['amount'] = (string) $amount->getAmount();
-        $statuses = [Dispute::STATUS_NEEDS_RESPONSE, Dispute::STATUS_UNDER_REVIEW, Dispute::STATUS_WON, Dispute::STATUS_LOST, Dispute::STATUS_PREVENTED, Dispute::STATUS_WARNING_NEEDS_RESPONSE, Dispute::STATUS_WARNING_UNDER_REVIEW, Dispute::STATUS_WARNING_CLOSED];
+        $statuses = [
+            Dispute::STATUS_NEEDS_RESPONSE,
+            Dispute::STATUS_UNDER_REVIEW,
+            Dispute::STATUS_APPEAL_NEEDS_RESPONSE,
+            Dispute::STATUS_APPEAL_UNDER_REVIEW,
+            Dispute::STATUS_WON,
+            Dispute::STATUS_LOST,
+            Dispute::STATUS_PREVENTED,
+            Dispute::STATUS_WARNING_NEEDS_RESPONSE,
+            Dispute::STATUS_WARNING_UNDER_REVIEW,
+            Dispute::STATUS_WARNING_CLOSED,
+        ];
 
         if (in_array($data['status'], $statuses, true) === false) {
             throw new OrderDataException();

@@ -93,11 +93,11 @@ final class StripePriceFieldTest extends KirbyTestCase
         $this->assertSame('price_canvas', $stripePrice->priceId());
         $this->assertSame('txcd_stripe', $stripePrice->taxCode());
         $this->assertSame('16.00', $stripePrice->price()->getAmount()->toString());
-        $this->assertNull($variant->toArray()['price']);
-        $this->assertSame(
-            '16.00',
-            $variant->toArray()['stripePrice']['price']['amount'] ?? null,
-        );
+        $variantData = $variant->toArray();
+        $stripePriceData = $variantData['stripePrice'];
+        $this->assertNull($variantData['price']);
+        $this->assertIsArray($stripePriceData);
+        $this->assertSame('16.00', $stripePriceData['price']['amount']);
     }
 
     public function testUnavailableStoredPriceCannotBeConverted(): void

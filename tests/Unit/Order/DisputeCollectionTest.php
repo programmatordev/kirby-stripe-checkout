@@ -36,9 +36,11 @@ final class DisputeCollectionTest extends TestCase
     {
         yield [[], 'none', false, false];
         yield [['needs_response'], 'needs_response', true, false];
+        yield [['appeal_needs_response'], 'needs_response', true, false];
         yield [['warning_needs_response', 'lost'], 'needs_response', true, true];
         yield [['under_review', 'needs_response'], 'needs_response', true, false];
         yield [['under_review', 'lost'], 'under_review', false, true];
+        yield [['appeal_under_review', 'won'], 'under_review', false, false];
         yield [['warning_under_review', 'won'], 'under_review', false, false];
         yield [['won'], 'resolved_favorable', false, false];
         yield [['prevented'], 'resolved_favorable', false, false];
