@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Kirby\Cms\App;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutResult;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutResultReason;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
@@ -96,14 +97,17 @@ final readonly class CheckoutResultResolver
                 && $state->reason() === CheckoutResultReason::EmbeddedReturn
                 && $checkoutStatus === CheckoutStatus::Open
                 && OrderData::date($data['checkoutExpiresAt']) > new DateTimeImmutable();
+            $resumableCheckoutSource = $canResumeCheckout
+                ? CheckoutSource::from(OrderData::string(OrderData::map($data['checkoutAttempt'])['source']))
+                : null;
 
             return new CheckoutResult(
                 reason: $state->reason(),
                 order: $page,
+                resumableCheckoutSource: $resumableCheckoutSource,
                 checkoutStatus: $checkoutStatus,
                 paymentStatus: $paymentStatus,
                 payment: $payment,
-                canResumeCheckout: $canResumeCheckout,
             );
         } catch (OrderDataException|OrderQueryException|OrderStorageException|ValueError) {
             return $this->unavailable($state->reason());
@@ -115,10 +119,10 @@ final readonly class CheckoutResultResolver
         return new CheckoutResult(
             reason: $reason,
             order: null,
+            resumableCheckoutSource: null,
             checkoutStatus: null,
             paymentStatus: null,
             payment: null,
-            canResumeCheckout: false,
         );
     }
 }

@@ -868,9 +868,9 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertSame($result, $stripeCheckout->checkoutResult());
         $this->assertSame(CheckoutResultReason::HostedCancel, $result->reason());
         $this->assertTrue($result->isAvailable());
+        $this->assertNull($result->resumableCheckoutSource());
         $this->assertSame(CheckoutStatus::Open, $result->checkoutStatus());
         $this->assertSame(PaymentStatus::Unpaid, $result->paymentStatus());
-        $this->assertFalse($result->canResumeCheckout());
         $this->assertNotNull($result->order());
         $this->assertNull((new StripeCheckout($this->kirby))->checkoutResult());
         $this->assertNull($this->withUnavailableSession(
@@ -919,7 +919,7 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertTrue($result->isAvailable());
         $this->assertSame(CheckoutStatus::Complete, $result->checkoutStatus());
         $this->assertSame(PaymentStatus::Paid, $result->paymentStatus());
-        $this->assertFalse($result->canResumeCheckout());
+        $this->assertNull($result->resumableCheckoutSource());
     }
 
     /** @return iterable<string, array{UiMode, string, CheckoutResultReason}> */
@@ -1071,9 +1071,11 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $result = $stripeCheckout->checkoutResult();
         $this->assertNotNull($result);
         $this->assertTrue($result->isAvailable());
+        $checkoutSource = $result->resumableCheckoutSource();
+        $this->assertInstanceOf(CheckoutSource::class, $checkoutSource);
+        $this->assertSame(CheckoutSource::Cart, $checkoutSource);
         $this->assertSame(CheckoutStatus::Open, $result->checkoutStatus());
-        $this->assertTrue($result->canResumeCheckout());
-        $resumeData = $stripeCheckout->checkout(CheckoutSource::Cart)->submissionData();
+        $resumeData = $stripeCheckout->checkout($checkoutSource)->submissionData();
         $this->assertArrayHasKey('revision', $body);
         $this->assertArrayHasKey('revision', $resumeData);
         $this->assertSame($body['attemptToken'], $resumeData['attemptToken']);
@@ -1102,7 +1104,7 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->setRequest($location);
         $stripeCheckout = new StripeCheckout($this->kirby);
         $result = $stripeCheckout->checkoutResult();
-        $this->assertTrue($result?->canResumeCheckout());
+        $this->assertSame(CheckoutSource::Cart, $result?->resumableCheckoutSource());
 
         try {
             $stripeCheckout->checkout(CheckoutSource::Cart);
@@ -1131,11 +1133,13 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $stripeCheckout = $this->kirby->site()->stripeCheckout();
         $this->assertInstanceOf(StripeCheckout::class, $stripeCheckout);
         $checkoutResult = $stripeCheckout->checkoutResult();
-        $this->assertTrue($checkoutResult?->canResumeCheckout());
+        $checkoutSource = $checkoutResult?->resumableCheckoutSource();
+        $this->assertInstanceOf(CheckoutSource::class, $checkoutSource);
+        $this->assertSame(CheckoutSource::Direct, $checkoutSource);
         /** @phpstan-ignore-next-line method.notFound */
         $reusedStripeCheckout = $this->kirby->site()->stripeCheckout();
         $this->assertSame($stripeCheckout, $reusedStripeCheckout);
-        $resumeData = $reusedStripeCheckout->checkout(CheckoutSource::Direct)->submissionData();
+        $resumeData = $reusedStripeCheckout->checkout($checkoutSource)->submissionData();
         $this->assertSame($body['attemptToken'], $resumeData['attemptToken']);
         $this->assertArrayHasKey('items', $resumeData);
         $this->assertSame([[
@@ -1246,7 +1250,7 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertNotNull($result);
         $this->assertSame(CheckoutStatus::Expired, $result->checkoutStatus());
         $this->assertSame(PaymentStatus::Unpaid, $result->paymentStatus());
-        $this->assertFalse($result->canResumeCheckout());
+        $this->assertNull($result->resumableCheckoutSource());
         $this->assertNotSame($body['attemptToken'], $stripeCheckout->checkout()->submissionData()['attemptToken']);
     }
 
@@ -1349,6 +1353,7 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertNotNull($result);
         $this->assertSame(CheckoutResultReason::EmbeddedReturn, $result->reason());
         $this->assertFalse($result->isAvailable());
+        $this->assertNull($result->resumableCheckoutSource());
         $this->assertNull($result->order());
         $this->assertNull($result->checkoutStatus());
         $this->assertNull($result->paymentStatus());

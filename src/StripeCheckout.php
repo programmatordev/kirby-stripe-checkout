@@ -55,7 +55,7 @@ final class StripeCheckout
     public function checkout(CheckoutSource $checkoutSource = CheckoutSource::Cart): CheckoutBootstrap
     {
         $checkoutResult = $this->checkoutResult();
-        $resumablePageUuid = $checkoutResult?->canResumeCheckout()
+        $resumablePageUuid = $checkoutResult?->resumableCheckoutSource() !== null
             ? $checkoutResult->order()?->uuid()->toString()
             : null;
 

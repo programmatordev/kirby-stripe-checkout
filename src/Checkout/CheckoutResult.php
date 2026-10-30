@@ -19,10 +19,10 @@ final readonly class CheckoutResult
     public function __construct(
         private CheckoutResultReason $reason,
         private ?Page $order,
+        private ?CheckoutSource $resumableCheckoutSource,
         private ?CheckoutStatus $checkoutStatus,
         private ?PaymentStatus $paymentStatus,
         private ?Payment $payment,
-        private bool $canResumeCheckout,
     ) {
         $available = $order !== null;
 
@@ -53,11 +53,11 @@ final readonly class CheckoutResult
             throw new InvalidArgumentException(self::INCONSISTENT_MESSAGE);
         }
 
-        if ($canResumeCheckout && $available === false) {
+        if ($resumableCheckoutSource !== null && $available === false) {
             throw new InvalidArgumentException(self::INCONSISTENT_MESSAGE);
         }
 
-        if ($canResumeCheckout && $reason !== CheckoutResultReason::EmbeddedReturn) {
+        if ($resumableCheckoutSource !== null && $reason !== CheckoutResultReason::EmbeddedReturn) {
             throw new InvalidArgumentException(self::INCONSISTENT_MESSAGE);
         }
     }
@@ -77,6 +77,12 @@ final readonly class CheckoutResult
         return $this->order;
     }
 
+    /** Returns the exact source required to resume, or null when this result cannot resume Checkout. */
+    public function resumableCheckoutSource(): ?CheckoutSource
+    {
+        return $this->resumableCheckoutSource;
+    }
+
     public function checkoutStatus(): ?CheckoutStatus
     {
         return $this->checkoutStatus;
@@ -91,10 +97,5 @@ final readonly class CheckoutResult
     public function payment(): ?Payment
     {
         return $this->payment;
-    }
-
-    public function canResumeCheckout(): bool
-    {
-        return $this->canResumeCheckout;
     }
 }

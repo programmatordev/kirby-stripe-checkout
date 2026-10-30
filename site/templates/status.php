@@ -32,16 +32,17 @@ if ($checkoutResult?->reason() === CheckoutResultReason::HostedSuccess) {
     $checkoutResultMessage = 'The browser returned from Embedded Checkout. Review the current status below.';
 }
 
-if ($checkoutResult?->canResumeCheckout()) {
+if (($checkoutSource = $checkoutResult?->resumableCheckoutSource()) !== null) {
     if ($stripeCheckout->settings()->uiMode() !== UiMode::Embedded) {
         $embeddedResumeMessage = 'This Checkout cannot be resumed while the store uses hosted mode.';
     } else {
         try {
-            $embeddedCheckoutBootstrap = $stripeCheckout->checkout(CheckoutSource::Cart);
+            $embeddedCheckoutBootstrap = $stripeCheckout->checkout($checkoutSource);
         } catch (CheckoutInputException $error) {
-            $embeddedResumeMessage = $error->errorCode() === CheckoutErrorCode::ATTEMPT_CONFLICT
-                ? 'The cart changed after Checkout started. Return to the cart to start a new Checkout.'
-                : 'This Checkout can no longer be resumed.';
+            $embeddedResumeMessage = match ([$error->errorCode(), $checkoutSource]) {
+                [CheckoutErrorCode::ATTEMPT_CONFLICT, CheckoutSource::Cart] => 'The cart changed after Checkout started. Return to the cart to start a new Checkout.',
+                default => 'This Checkout can no longer be resumed.',
+            };
         } catch (ConfigurationException) {
             $embeddedResumeMessage = 'This Checkout cannot be resumed until the store configuration is complete.';
         }

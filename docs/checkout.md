@@ -112,6 +112,8 @@ $checkoutResult = $stripeCheckout->checkoutResult();
 
 `reason()` describes the route used, while `checkoutStatus()` and `paymentStatus()` expose the reconciled facts. `payment()` returns the current typed payment facts when the Order has them. A complete Checkout may still have `PaymentStatus::Pending`; fulfillment must follow authoritative payment state and lifecycle hooks. A temporary provider read or correlation failure can produce a result whose `isAvailable()` is false and whose Order, payment and status methods return `null`.
 
+`resumableCheckoutSource()` returns the required Cart or Direct source only while an embedded Checkout can resume. It returns `null` for unavailable, completed, expired, hosted and otherwise non-resumable results.
+
 The meaningful status combinations are:
 
 | Checkout status | Payment status | Meaning |
@@ -138,17 +140,15 @@ If a webhook completes Checkout and the browser never follows the return URL, th
 
 Embedded resume is intended for a customer who leaves Embedded Checkout for an external payment step and returns without completing Checkout. For example, a bank authorization may be cancelled or fail while the Stripe Checkout Session remains open. The return destination can then mount that same Session again so the customer can retry or choose another payment method without creating another Order or Session.
 
-After a correlated same-browser return, `canResumeCheckout()` is `true` only while that original Session is open and unexpired. Use it to decide whether the return page should mount Embedded Checkout again:
+After a correlated same-browser return, `resumableCheckoutSource()` returns a source only while that original Session is open and unexpired. Use it to decide whether the return page should mount Embedded Checkout again:
 
 ```php
 <?php
-use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
-
 $stripeCheckout = $site->stripeCheckout();
 $checkoutResult = $stripeCheckout->checkoutResult();
 
-if ($checkoutResult?->canResumeCheckout()) {
-    $checkoutBootstrap = $stripeCheckout->checkout(CheckoutSource::Cart);
+if (($checkoutSource = $checkoutResult?->resumableCheckoutSource()) !== null) {
+    $checkoutBootstrap = $stripeCheckout->checkout($checkoutSource);
 
     // Use the normal embedded JSON integration with this bootstrap.
 }
@@ -177,7 +177,7 @@ $checkoutResult = $stripeCheckout->checkoutResult();
 <?php endif ?>
 ```
 
-An available cancellation result exposes the protected Order Page through `order()` and its current local `checkoutStatus()` and `paymentStatus()`. It can expose existing canonical facts through `payment()`, but never a return-time payment action. The navigation reason does not claim Checkout completion or payment success. `canResumeCheckout()` is always false for hosted cancellation.
+An available cancellation result exposes the protected Order Page through `order()` and its current local `checkoutStatus()` and `paymentStatus()`. It can expose existing canonical facts through `payment()`, but never a return-time payment action. The navigation reason does not claim Checkout completion or payment success. `resumableCheckoutSource()` is always `null` for hosted cancellation.
 
 Cancellation performs no Stripe read or mutation, does not change the Order, and does not clear the Cart. The result reference is native-session-bound, expires after 15 minutes and is consumed once. Keep the same `$stripeCheckout` object when reading it more than once in one template; that object memoizes the consumed result. External cancellation destinations receive no result reference because they cannot read the Kirby session API.
 
