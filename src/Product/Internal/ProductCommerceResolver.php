@@ -95,7 +95,7 @@ final class ProductCommerceResolver
 
         // Omission delegates to Stripe's account preset; never invent a code.
         // https://docs.stripe.com/tax/products-prices-tax-codes-tax-behavior
-        if ($value === null || (is_string($value) && trim($value) === '')) {
+        if ($value === null) {
             return null;
         }
 
@@ -103,7 +103,9 @@ final class ProductCommerceResolver
             throw new InvalidProductException(TaxErrorCode::CODE_INVALID);
         }
 
-        return new TaxCode(trim($value));
+        $value = trim($value);
+
+        return $value === '' ? null : new TaxCode($value);
     }
 
     private function shippingValue(mixed $value): ?bool

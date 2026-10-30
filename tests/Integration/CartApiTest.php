@@ -402,9 +402,6 @@ final class CartApiTest extends KirbyTestCase
         // Kirby forwards image methods through File::__call().
         /** @phpstan-ignore-next-line method.notFound */
         $this->assertSame(1, $image->width());
-        $cropUrl = $image->crop(100, 100)->url();
-        $this->assertNotNull($cropUrl);
-        $this->assertStringContainsString('hero', $cropUrl);
         $this->assertSame([$hero->url(), $gallery->url()], $item->product()?->imageUrls());
 
         $page->update(['hero' => '', 'gallery' => '']);

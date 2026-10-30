@@ -448,7 +448,7 @@ final class ConfigurationResolver
                 throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, $path);
             }
 
-            if (is_string($value) && ($value === '' || trim($value) !== $value)) {
+            if ($value !== null && ($value === '' || trim($value) !== $value)) {
                 throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, $path);
             }
         }
@@ -477,33 +477,27 @@ final class ConfigurationResolver
     ): Settings {
         $this->assertKnownKeys($settings, array_keys(Defaults::SETTINGS), 'settings');
 
-        if (
-            array_key_exists('priceSource', $settings)
-            && $settings['priceSource'] !== null
-            && is_string($settings['priceSource']) === false
-        ) {
+        $priceSource = $settings['priceSource'] ?? null;
+
+        if ($priceSource !== null && is_string($priceSource) === false) {
             throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.priceSource');
         }
 
         if (
-            is_string($settings['priceSource'] ?? null)
-            && PriceSource::tryFrom($settings['priceSource']) === null
+            $priceSource !== null
+            && PriceSource::tryFrom($priceSource) === null
         ) {
             throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'settings.priceSource');
         }
 
-        if (
-            array_key_exists('currency', $settings)
-            && $settings['currency'] !== null
-            && is_string($settings['currency']) === false
-        ) {
+        $currency = $settings['currency'] ?? null;
+
+        if ($currency !== null && is_string($currency) === false) {
             throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.currency');
         }
 
-        $currency = $settings['currency'] ?? null;
-
         if (
-            is_string($currency)
+            $currency !== null
             && $this->currencies->supports($currency) === false
         ) {
             throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'settings.currency');
@@ -526,7 +520,7 @@ final class ConfigurationResolver
             throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.uiMode');
         }
 
-        if (is_string($uiMode) && UiMode::tryFrom($uiMode) === null) {
+        if ($uiMode !== null && UiMode::tryFrom($uiMode) === null) {
             throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'settings.uiMode');
         }
 
@@ -537,7 +531,7 @@ final class ConfigurationResolver
                 throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.' . $name);
             }
 
-            if (is_string($destination) && ($destination === '' || trim($destination) !== $destination)) {
+            if ($destination !== null && ($destination === '' || trim($destination) !== $destination)) {
                 throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'settings.' . $name);
             }
         }
@@ -559,7 +553,7 @@ final class ConfigurationResolver
                 throw new ConfigurationException(ConfigurationErrorCode::TYPE_INVALID, 'settings.' . $name);
             }
 
-            if (is_string($value) && in_array($value, $allowedValues, true) === false) {
+            if ($value !== null && in_array($value, $allowedValues, true) === false) {
                 throw new ConfigurationException(ConfigurationErrorCode::VALUE_INVALID, 'settings.' . $name);
             }
         }

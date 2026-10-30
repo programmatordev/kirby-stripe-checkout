@@ -514,28 +514,32 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertCount(1, (new OrderPageStore($this->kirby))->orders());
     }
 
+    /** @param array<string, string> $expectedData */
     #[DataProvider('formEncodedJsonModes')]
-    public function testFormEncodedRequestCanNegotiateJson(UiMode $uiMode, string $resultKey): void
+    public function testFormEncodedRequestCanNegotiateJson(UiMode $uiMode, array $expectedData): void
     {
         $this->restart($uiMode);
         $response = $this->sendForm($this->submission(), 'application/json');
         $body = $this->body($response);
-        $data = $body['data'] ?? null;
 
         $this->assertSame(201, $response->code());
         $this->assertTrue($body['ok'] ?? false);
-        $this->assertIsArray($data);
-        $this->assertSame($uiMode->value, $data['uiMode'] ?? null);
-        $this->assertIsString($data[$resultKey] ?? null);
+        $this->assertSame($expectedData, $body['data'] ?? null);
         $this->assertCount(1, $this->requests);
         $this->assertCount(1, (new OrderPageStore($this->kirby))->orders());
     }
 
-    /** @return iterable<string, array{UiMode, string}> */
+    /** @return iterable<string, array{UiMode, array<string, string>}> */
     public static function formEncodedJsonModes(): iterable
     {
-        yield 'hosted' => [UiMode::Hosted, 'redirectUrl'];
-        yield 'embedded' => [UiMode::Embedded, 'clientSecret'];
+        yield 'hosted' => [UiMode::Hosted, [
+            'uiMode' => UiMode::Hosted->value,
+            'redirectUrl' => 'https://checkout.stripe.com/c/pay/cs_test_browser',
+        ]];
+        yield 'embedded' => [UiMode::Embedded, [
+            'uiMode' => UiMode::Embedded->value,
+            'clientSecret' => 'cs_test_browser_secret_private',
+        ]];
     }
 
     public function testHostedFormReturnsSafePreAttemptFailureWithAFreshAction(): void

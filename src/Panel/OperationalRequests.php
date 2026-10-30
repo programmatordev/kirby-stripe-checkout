@@ -202,13 +202,13 @@ final class OperationalRequests
         }
 
         $result = $outcome->toArray();
-        $errorCode = $result['errorCode'];
+        $errorCode = $outcome->errorCode();
 
         if ($outcome->status() === HousekeepingRunStatus::Failed) {
             // A failed run has no operation result; partial failures below retain
             // their sanitized counters because the batch itself completed.
             return self::operationalFailure(
-                errorCode: is_string($errorCode) ? $errorCode : HousekeepingErrorCode::RUN_FAILED,
+                errorCode: $errorCode ?? HousekeepingErrorCode::RUN_FAILED,
                 code: self::HTTP_SERVICE_UNAVAILABLE,
             );
         }
@@ -221,7 +221,7 @@ final class OperationalRequests
             code: self::HTTP_OK,
             status: $outcome->status()->value,
             result: $result,
-            error: is_string($errorCode) ? self::operationalError($errorCode) : null,
+            error: $errorCode === null ? null : self::operationalError($errorCode),
         );
     }
 

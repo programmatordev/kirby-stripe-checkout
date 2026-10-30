@@ -100,12 +100,16 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         ]);
         $this->kirby = $this->environment->app();
 
-        $encoded = json_encode((new LocalDiagnostics($this->kirby))->report()->toArray(), JSON_THROW_ON_ERROR);
+        $report = (new LocalDiagnostics($this->kirby))->report();
+        $encoded = json_encode($report->toArray(), JSON_THROW_ON_ERROR);
+        $checks = $this->checks($report);
 
         $this->assertStringNotContainsString($secret, $encoded);
         $this->assertStringNotContainsString($publishable, $encoded);
         $this->assertStringNotContainsString($webhook, $encoded);
-        $this->assertStringContainsString('"mode":"test"', $encoded);
+        $this->assertSame('test', $checks['secretKey']->context()['mode']);
+        $this->assertSame('test', $checks['publishableKey']->context()['mode']);
+        $this->assertSame('unknown', $checks['webhookSecret']->context()['mode']);
     }
 
     public function testInvalidConfigurationRemainsInspectable(): void

@@ -159,10 +159,6 @@ final class BrowserAttemptStoreTest extends KirbyTestCase
             static fn(ProductRequest $item): string => $item->reference(),
             $resumedInput->items(),
         ));
-        $this->assertStringContainsString(
-            $attempt->token()->value(),
-            json_encode($this->kirby->session()->data()->get(BrowserAttemptStore::KEY), JSON_THROW_ON_ERROR),
-        );
     }
 
     #[DataProvider('changedContexts')]

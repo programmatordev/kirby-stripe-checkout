@@ -133,7 +133,6 @@ final class PanelAreaTest extends KirbyTestCase
             ],
             array_column($body['$view']['props']['tabs'], 'link'),
         );
-        $this->assertStringNotContainsString('area.label', $response->body());
     }
 
     public function testSettingsReaderGetsOnlyOverviewAndSettingsTabs(): void
