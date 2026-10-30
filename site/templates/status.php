@@ -1,14 +1,22 @@
 <?php
 
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutResultReason;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
+use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 
 /** @var Kirby\Cms\Page $page */
 /** @var Kirby\Cms\Site $site */
 
-$checkoutResult = $site->stripeCheckout()->checkoutResult();
+$stripeCheckout = $site->stripeCheckout();
+$checkoutResult = $stripeCheckout->checkoutResult();
 $checkoutResultMessage = null;
+$embeddedCheckoutBootstrap = null;
+$embeddedResumeMessage = null;
 
 if ($checkoutResult?->reason() === CheckoutResultReason::HostedSuccess) {
     $checkoutResultMessage = match ([$checkoutResult->checkoutStatus(), $checkoutResult->paymentStatus()]) {
@@ -20,6 +28,24 @@ if ($checkoutResult?->reason() === CheckoutResultReason::HostedSuccess) {
     };
 } elseif ($checkoutResult?->reason() === CheckoutResultReason::HostedCancel) {
     $checkoutResultMessage = 'Checkout was cancelled. The cart and Order remain unchanged.';
+} elseif ($checkoutResult?->reason() === CheckoutResultReason::EmbeddedReturn) {
+    $checkoutResultMessage = 'The browser returned from Embedded Checkout. Review the current status below.';
+}
+
+if ($checkoutResult?->canResumeCheckout()) {
+    if ($stripeCheckout->settings()->uiMode() !== UiMode::Embedded) {
+        $embeddedResumeMessage = 'This Checkout cannot be resumed while the store uses hosted mode.';
+    } else {
+        try {
+            $embeddedCheckoutBootstrap = $stripeCheckout->checkout(CheckoutSource::Cart);
+        } catch (CheckoutInputException $error) {
+            $embeddedResumeMessage = $error->errorCode() === CheckoutErrorCode::ATTEMPT_CONFLICT
+                ? 'The cart changed after Checkout started. Return to the cart to start a new Checkout.'
+                : 'This Checkout can no longer be resumed.';
+        } catch (ConfigurationException) {
+            $embeddedResumeMessage = 'This Checkout cannot be resumed until the store configuration is complete.';
+        }
+    }
 }
 
 snippet('layout', ['title' => $page->title()], slots: true);
@@ -44,6 +70,13 @@ snippet('layout', ['title' => $page->title()], slots: true);
         <?php if ($checkoutResult->payment()?->nextAction() !== null): ?>
             <p class="notice">The payment method requires another customer action. This browser result contains the current provider instructions.</p>
         <?php endif ?>
+    <?php endif ?>
+    <?php if ($embeddedCheckoutBootstrap !== null): ?>
+        <h2>Resume Checkout</h2>
+        <p class="checkout-note">The original Stripe Checkout Session is still open, so it can continue without creating another Order.</p>
+        <?php snippet('embedded-checkout', ['checkoutBootstrap' => $embeddedCheckoutBootstrap]) ?>
+    <?php elseif ($embeddedResumeMessage !== null): ?>
+        <p class="notice"><?= esc($embeddedResumeMessage) ?></p>
     <?php endif ?>
     <p class="checkout-note">Browser navigation is not payment proof. Verified Stripe events remain authoritative for later payment changes.</p>
     <p><a class="button" href="<?= esc($site->find('products')?->url(), 'attr') ?>">Back to products →</a></p>

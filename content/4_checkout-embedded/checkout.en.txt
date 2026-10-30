@@ -6,7 +6,7 @@ Mode: embedded
 
 ----
 
-Text: Embedded mode mounts Stripe Checkout inside a Kirby page. This fixture remains illustrative until the redesigned Checkout pipeline is implemented.
+Text: Embedded mode submits the current cart through the plugin's JSON Checkout endpoint and mounts Stripe Checkout inside this Kirby page.
 
 ----
 

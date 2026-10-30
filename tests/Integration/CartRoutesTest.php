@@ -799,7 +799,8 @@ final class CartRoutesTest extends KirbyTestCase
 
     public function testDevelopmentSnippetCanRenderTheTypedContext(): void
     {
-        $snippet = dirname(__DIR__, 2) . '/site/snippets/cart.php';
+        $cartSnippet = dirname(__DIR__, 2) . '/site/snippets/cart.php';
+        $hostedCheckoutSnippet = dirname(__DIR__, 2) . '/site/snippets/hosted-checkout.php';
         $this->restart([
             'stripe' => [
                 'secretKey' => 'sk_test_server',
@@ -828,7 +829,8 @@ final class CartRoutesTest extends KirbyTestCase
         $root = $this->kirby->root('snippets');
         $this->assertIsString($root);
         Dir::make($root);
-        F::copy($snippet, $root . '/cart.php');
+        F::copy($cartSnippet, $root . '/cart.php');
+        F::copy($hostedCheckoutSnippet, $root . '/hosted-checkout.php');
         $response = $this->send('GET', headers: ['Accept' => 'text/html']);
         $this->assertSame(200, $response->code());
         $this->assertStringContainsString('Your cart is empty.', $response->body());
@@ -852,6 +854,36 @@ final class CartRoutesTest extends KirbyTestCase
         $this->assertStringContainsString('Standard delivery', $response->body());
         $this->assertStringContainsString('€4.90', $response->body());
         $this->assertStringContainsString('data-hosted-checkout', $response->body());
+    }
+
+    public function testDevelopmentSnippetLinksToTheEmbeddedCheckoutFixture(): void
+    {
+        $snippet = dirname(__DIR__, 2) . '/site/snippets/cart.php';
+        $this->restart([
+            'stripe' => [
+                'secretKey' => 'sk_test_server',
+                'publishableKey' => 'pk_test_browser',
+                'webhookSecret' => 'whsec_test_hook',
+            ],
+            'settings' => ['uiMode' => 'embedded'],
+        ]);
+        $root = $this->kirby->root('snippets');
+        $this->assertIsString($root);
+        Dir::make($root);
+        F::copy($snippet, $root . '/cart.php');
+        $this->kirby->site()->createChild([
+            'slug' => 'checkout-embedded',
+            'template' => 'default',
+            'content' => ['title' => 'Embedded Checkout'],
+        ])->changeStatus('unlisted');
+        $cart = $this->cart()->add($this->product()->id());
+        $html = $this->kirby->snippet('cart', ['cart' => $cart, 'site' => $this->kirby->site()], true);
+
+        $this->assertIsString($html);
+        $html = html_entity_decode($html, ENT_QUOTES | ENT_HTML5);
+        $this->assertStringContainsString('href="https://kirby-stripe-checkout.test/checkout-embedded"', $html);
+        $this->assertStringContainsString('>Open Embedded Checkout</a>', $html);
+        $this->assertStringNotContainsString('data-hosted-checkout', $html);
     }
 
     private function product(): Page

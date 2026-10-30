@@ -71,7 +71,7 @@ $settings = $site->stripeCheckout()->settings();
     </div>
     <footer class="site-footer">
         <span>A small store for testing products, options and your cart.</span>
-        <span>Hosted Checkout is available from the cart.</span>
+        <span><?= $settings->uiMode() === UiMode::Hosted ? 'Hosted Checkout is available from the cart.' : 'Embedded Checkout is available from its test page.' ?></span>
     </footer>
     <noscript><p class="notice">Cart controls need JavaScript in this development storefront.</p></noscript>
 </body>

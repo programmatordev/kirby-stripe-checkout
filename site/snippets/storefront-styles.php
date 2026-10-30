@@ -143,6 +143,7 @@
     .checkout-form button { width: 100%; }
     .checkout-native { border-color: var(--border); background: var(--soft); color: var(--text); }
     .checkout-note { margin-block: .75rem 1.5rem; color: var(--muted); font-size: .75rem; }
+    [data-embedded-checkout-mount] { min-height: 12rem; }
     .checkout-result { display: grid; gap: .65rem; margin-block: 1.5rem; }
     .checkout-result > div { display: grid; grid-template-columns: minmax(8rem, 1fr) 2fr; gap: 1rem; border-bottom: 1px solid var(--border); padding-bottom: .65rem; }
     .checkout-result dt { color: var(--muted); }

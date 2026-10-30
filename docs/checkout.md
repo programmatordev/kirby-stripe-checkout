@@ -158,6 +158,8 @@ Submit the returned bootstrap through the ordinary embedded JSON flow. The endpo
 
 Direct checkout reuses the accepted canonical items and shipping country; it never reconstructs them from current storefront content. Cart checkout requires the same Cart identity and revision. A completed return should present completion, and an expired return should present expiration or an explicit new-checkout action. Do not automatically submit a fresh bootstrap for either result. An ordinary Checkout page without a return result calls `checkout()` normally to issue a new action.
 
+If the Cart changed before a resumable return is rendered, `checkout()` throws `CheckoutInputException` with `CheckoutErrorCode::ATTEMPT_CONFLICT`. Present a separate action that starts again from the current Cart; the plugin does not silently replace the resume with a fresh Order or Session.
+
 ## Hosted cancellation
 
 Stripe's hosted back action returns through the fixed plugin cancel route and redirects to the saved `cancelDestination`. When that destination is on the Kirby site and the same browser still owns the attempt, its template can consume the result:
