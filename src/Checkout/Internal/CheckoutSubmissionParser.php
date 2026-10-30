@@ -78,7 +78,6 @@ final class CheckoutSubmissionParser
             cartRevision: $cartRevision,
             items: $items,
             shippingCountry: $shippingCountry,
-            json: $requestParser->isJson(),
         );
     }
 

@@ -23,7 +23,6 @@ final readonly class CheckoutSubmissionInput
         private ?string $cartRevision,
         private array $items,
         private ?string $shippingCountry,
-        private bool $json,
     ) {}
 
     public function checkoutSource(): CheckoutSource
@@ -50,11 +49,6 @@ final readonly class CheckoutSubmissionInput
     public function shippingCountry(): ?string
     {
         return $this->shippingCountry;
-    }
-
-    public function isJson(): bool
-    {
-        return $this->json;
     }
 
     /**
@@ -164,7 +158,6 @@ final readonly class CheckoutSubmissionInput
             cartRevision: $cartRevision,
             items: $items,
             shippingCountry: $shippingCountry,
-            json: false,
         );
     }
 }

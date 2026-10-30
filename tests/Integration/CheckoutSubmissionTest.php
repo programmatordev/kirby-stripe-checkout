@@ -383,31 +383,11 @@ final class CheckoutSubmissionTest extends KirbyTestCase
         }
     }
 
-    public function testEmbeddedFormIsRejectedBeforePurchaseBinding(): void
-    {
-        $this->restart(['settings' => ['uiMode' => 'embedded'], 'stripe' => ['publishableKey' => 'pk_test_browser']]);
-        $submissionData = $this->bootstrapData(json: false);
-        $body = [...$submissionData, 'items' => [['reference' => 'shirt']]];
-        $this->request(http_build_query($body), headers: ['Content-Type' => 'application/x-www-form-urlencoded', 'X-CSRF' => null]);
-
-        try {
-            (new RuntimeFactory($this->kirby))->checkoutSubmissionFactory()->create(input: CheckoutSubmissionParser::parse($this->kirby), acceptedAt: new DateTimeImmutable());
-            $this->fail('Embedded Checkout is JSON-only.');
-        } catch (CheckoutInputException $error) {
-            $this->assertSame(RequestErrorCode::UNSUPPORTED_REPRESENTATION, $error->errorCode());
-            $this->assertSame([], $this->resolved);
-            /** @var array{attempts: array<string, array{boundAt: int|null}>} $state */
-            $state = $this->kirby->session()->data()->get(BrowserAttemptStore::KEY);
-            $this->assertNull($state['attempts'][hash('sha256', $submissionData['attemptToken'])]['boundAt']);
-        }
-    }
-
     public function testFormNormalizationPreservesOnlyTheDocumentedTransportValues(): void
     {
         $body = [...$this->bootstrapData(json: false), 'items' => [['reference' => 'shirt', 'quantity' => '2', 'options' => ['size' => 'large']]], 'shippingCountry' => ''];
         $this->request(http_build_query($body), headers: ['Content-Type' => 'application/x-www-form-urlencoded', 'X-CSRF' => null]);
         $input = CheckoutSubmissionParser::parse($this->kirby);
-        $this->assertFalse($input->isJson());
         $this->assertSame(2, $input->items()[0]->quantity());
         $this->assertSame(['size' => 'large'], $input->items()[0]->selectedOptions());
         $this->assertNull($input->shippingCountry());

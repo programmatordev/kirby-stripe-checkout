@@ -21,11 +21,6 @@
         }
 
         const formData = new FormData(checkoutForm);
-        const csrf = formData.get('csrf');
-
-        formData.delete('csrf');
-
-        const submissionData = checkoutSubmissionData(formData);
 
         checkoutError.hidden = true;
         checkoutError.textContent = '';
@@ -39,10 +34,8 @@
                 method: 'POST',
                 headers: {
                     Accept: 'application/json',
-                    'Content-Type': 'application/json',
-                    'X-CSRF': String(csrf ?? ''),
                 },
-                body: JSON.stringify(submissionData),
+                body: new URLSearchParams(formData),
             });
             const responsePayload = await response.json();
 

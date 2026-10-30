@@ -33,7 +33,6 @@ final class SubmissionFieldsSnippetTest extends KirbyTestCase
                 cartRevision: null,
                 items: [new ProductRequest('shirt', 2, ['size' => 'large'])],
                 shippingCountry: 'PT',
-                json: false,
             ),
         );
         $html = $this->kirby->snippet(

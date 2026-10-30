@@ -12,13 +12,13 @@ use ProgrammatorDev\StripeCheckout\Product\ProductOption;
 /** @var list<ProductOption> $options */
 /** @var list<array{options: array<string, string>, enabled: bool, price: ?string, requiresShipping: bool, sku: ?string}> $variants */
 /** @var bool $requiresShipping */
-/** @var bool $canRequireShipping */
+/** @var bool $mayRequireShipping */
 
 $checkoutError = $checkoutBootstrap->error();
 $submissionData = $checkoutBootstrap->submissionData();
 $retainsAcceptedSubmission = isset($submissionData['items']);
 $embeddedCheckout = $checkoutBootstrap->uiMode() === UiMode::Embedded;
-$shippingCountryOptions = $canRequireShipping ? (new ShippingCountryOptions())->all() : [];
+$shippingCountryOptions = $mayRequireShipping ? (new ShippingCountryOptions())->all() : [];
 ?>
 <section class="direct-checkout" aria-labelledby="direct-checkout-title">
     <h2 id="direct-checkout-title">Direct Checkout</h2>

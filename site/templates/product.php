@@ -48,11 +48,11 @@ try {
 }
 
 $requiresShipping = $initialVariant?->requiresShipping() ?? $page->requiresShipping()->toBool();
-$canRequireShipping = $requiresShipping;
+$mayRequireShipping = $requiresShipping;
 
 foreach ($variants as $variant) {
     if ($variant['requiresShipping']) {
-        $canRequireShipping = true;
+        $mayRequireShipping = true;
         break;
     }
 }
@@ -88,7 +88,7 @@ snippet('layout', ['title' => $page->title(), 'cart' => $cart], slots: true);
             <?php endif ?>
         </div>
         <div>
-            <p class="eyebrow" data-product-shipping><?= ($initialVariant?->requiresShipping() ?? $page->requiresShipping()->toBool()) ? 'Shipping required' : 'No shipping required' ?></p>
+            <p class="eyebrow" data-product-shipping><?= $requiresShipping ? 'Shipping required' : 'No shipping required' ?></p>
             <h1><?= esc($page->title()) ?></h1>
             <p class="product-description"><?= esc($page->description()) ?></p>
             <?php if ($options !== []): ?>
@@ -141,7 +141,7 @@ snippet('layout', ['title' => $page->title(), 'cart' => $cart], slots: true);
                         'options' => $options,
                         'variants' => $variants,
                         'requiresShipping' => $requiresShipping,
-                        'canRequireShipping' => $canRequireShipping,
+                        'mayRequireShipping' => $mayRequireShipping,
                     ]) ?>
                 <?php endif ?>
             <?php endif ?>

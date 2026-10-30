@@ -7,12 +7,14 @@ namespace ProgrammatorDev\StripeCheckout\Checkout\Internal;
 use DateTimeImmutable;
 use Kirby\Cms\App;
 use Kirby\Http\Response;
+use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
+use ProgrammatorDev\StripeCheckout\Checkout\RequestErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Http\ResponseNegotiator;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use Throwable;
 
-/** @internal Adapts browser-authorized Checkout creation to JSON or hosted-form responses. */
+/** @internal Adapts browser-authorized Checkout creation to negotiated JSON or hosted HTML responses. */
 final class CheckoutEndpoint
 {
     public const HEADERS = [
@@ -39,20 +41,18 @@ final class CheckoutEndpoint
 
         $authorization = null;
         $submission = null;
-        // Before request media is known, use the negotiated representation for direct parsing failures.
         $htmlResponse = $responseType === 'text/html';
         $acceptedAt = new DateTimeImmutable();
         $runtime = new RuntimeFactory($this->kirby);
 
         try {
-            $requestParser = new CheckoutHttpRequestParser($this->kirby);
-            $responseType = $requestParser->isJson() ? 'application/json' : 'text/html';
-
-            if (ResponseNegotiator::preferred($this->kirby, [$responseType]) === null) {
-                return new Response('', code: self::HTTP_NOT_ACCEPTABLE, headers: self::HEADERS);
+            // Embedded Checkout has no HTML representation; reject it before parsing or creating anything.
+            if ($htmlResponse && $runtime->settings()->uiMode() === UiMode::Embedded) {
+                throw new CheckoutInputException(RequestErrorCode::UNSUPPORTED_REPRESENTATION);
             }
 
-            $htmlResponse = $requestParser->isJson() === false;
+            // Content-Type owns request decoding independently from the negotiated response representation.
+            $requestParser = new CheckoutHttpRequestParser($this->kirby);
             $input = CheckoutSubmissionParser::parse($this->kirby, $requestParser);
             $submissionFactory = $runtime->checkoutSubmissionFactory();
             // Retain the authorized attempt so later commerce/provider failures can safely return to its initiating page.

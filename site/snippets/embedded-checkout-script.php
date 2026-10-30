@@ -25,20 +25,15 @@
 
         const fetchClientSecret = async () => {
             const formData = new FormData(checkoutForm);
-            const csrf = formData.get('csrf');
             let responsePayload;
-
-            formData.delete('csrf');
 
             try {
                 const response = await fetch(checkoutForm.action, {
                     method: 'POST',
                     headers: {
                         Accept: 'application/json',
-                        'Content-Type': 'application/json',
-                        'X-CSRF': String(csrf ?? ''),
                     },
-                    body: JSON.stringify(checkoutSubmissionData(formData)),
+                    body: new URLSearchParams(formData),
                 });
                 responsePayload = await response.json();
             } catch (error) {

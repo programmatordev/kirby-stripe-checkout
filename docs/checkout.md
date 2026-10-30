@@ -181,9 +181,19 @@ An available cancellation result exposes the protected Order Page through `order
 
 Cancellation performs no Stripe read or mutation, does not change the Order, and does not clear the Cart. The result reference is native-session-bound, expires after 15 minutes and is consumed once. Keep the same `$stripeCheckout` object when reading it more than once in one template; that object memoizes the consumed result. External cancellation destinations receive no result reference because they cannot read the Kirby session API.
 
-## JSON submission
+## JavaScript submission
 
-Submit JSON to the issued `actionUrl`, request an `application/json` response, and retain the native browser session cookie. Put `csrf` in the `X-CSRF` header and the remaining issued fields in the body. Cart selections and shipping country come from the saved cart; do not add replacement `items` or `shippingCountry` fields to Cart submissions.
+Request encoding and response negotiation are independent. JavaScript can submit the native form fields as `application/x-www-form-urlencoded` while requesting an `application/json` response. This lets the browser and PHP preserve nested Direct field names without reconstructing them in JavaScript:
+
+```js
+const response = await fetch(form.action, {
+  method: "POST",
+  headers: { Accept: "application/json" },
+  body: new URLSearchParams(new FormData(form))
+});
+```
+
+The form's `csrf` field remains in that encoded body. A client may instead submit JSON to the issued `actionUrl`; retain the native browser session cookie, put `csrf` in the `X-CSRF` header and send the remaining issued fields in the body. Cart selections and shipping country come from the saved cart; do not add replacement `items` or `shippingCountry` fields to Cart submissions.
 
 Direct submissions additionally require an `items` list. Each item accepts `reference`, optional integer `quantity` (default `1`) and optional `options` object using the same option/value identifiers as Cart. Physical Direct purchases need a supported `shippingCountry`. Review and select that country before submitting. Unknown fields, prices, destination URLs and other protected commerce values are rejected.
 

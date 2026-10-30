@@ -322,7 +322,6 @@ final class BrowserAttemptStoreTest extends KirbyTestCase
             cartRevision: null,
             items: [new ProductRequest('shirt')],
             shippingCountry: null,
-            json: false,
         );
     }
 }

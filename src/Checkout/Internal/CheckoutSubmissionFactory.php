@@ -13,9 +13,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
-use ProgrammatorDev\StripeCheckout\Checkout\RequestErrorCode;
 use ProgrammatorDev\StripeCheckout\Checkout\SelectionErrorCode;
-use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\Configuration;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
@@ -54,10 +52,6 @@ final readonly class CheckoutSubmissionFactory
     public function authorize(CheckoutSubmissionInput $input, DateTimeImmutable $checkedAt): CheckoutSubmissionAuthorization
     {
         $uiMode = $this->configuration->settings()->uiMode();
-
-        if ($uiMode === UiMode::Embedded && $input->isJson() === false) {
-            throw new CheckoutInputException(RequestErrorCode::UNSUPPORTED_REPRESENTATION);
-        }
 
         if ($input->checkoutSource() === CheckoutSource::Cart && $this->configuration->cartEnabled() === false) {
             throw new CheckoutInputException(CheckoutErrorCode::CART_DISABLED);
@@ -173,7 +167,6 @@ final readonly class CheckoutSubmissionFactory
             cartRevision: $input->cartRevision(),
             items: $items,
             shippingCountry: $direct ? $shipping->shippingCountry() : null,
-            json: false,
         );
     }
 

@@ -318,7 +318,6 @@ final class CheckoutRoutesTest extends KirbyTestCase
             cartRevision: null,
             items: [new ProductRequest('product', 2)],
             shippingCountry: null,
-            json: true,
         );
         $submission = $runtime->checkoutSubmissionFactory()->create($input, $acceptedAt);
 
@@ -451,11 +450,10 @@ final class CheckoutRoutesTest extends KirbyTestCase
     /** @return iterable<string, array{string}> */
     public static function negotiationFailures(): iterable
     {
-        yield 'html' => ['text/html'];
         yield 'other representation' => ['image/png'];
         yield 'zero quality' => ['application/json;q=0'];
-        yield 'specific exclusion beats wildcard' => ['*/*;q=1, application/json;q=0'];
-        yield 'type exclusion beats wildcard' => ['application/*;q=0, */*;q=1'];
+        yield 'specific exclusions beat wildcard' => ['*/*;q=1, application/json;q=0, text/html;q=0'];
+        yield 'type exclusions beat wildcard' => ['application/*;q=0, text/*;q=0, */*;q=1'];
     }
 
     #[DataProvider('acceptedRepresentations')]
@@ -504,6 +502,40 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertCount(1, $this->requests);
         $this->assertSame(1, $this->resolutions);
         $this->assertNull($this->kirby->session()->data()->get(CheckoutFormResultStore::KEY));
+    }
+
+    public function testJsonRequestCanNegotiateHostedHtml(): void
+    {
+        $response = $this->send($this->submission(), headers: ['Accept' => 'text/html']);
+
+        $this->assertSame(303, $response->code());
+        $this->assertSame('https://checkout.stripe.com/c/pay/cs_test_browser', $response->headers()['Location']);
+        $this->assertCount(1, $this->requests);
+        $this->assertCount(1, (new OrderPageStore($this->kirby))->orders());
+    }
+
+    #[DataProvider('formEncodedJsonModes')]
+    public function testFormEncodedRequestCanNegotiateJson(UiMode $uiMode, string $resultKey): void
+    {
+        $this->restart($uiMode);
+        $response = $this->sendForm($this->submission(), 'application/json');
+        $body = $this->body($response);
+        $data = $body['data'] ?? null;
+
+        $this->assertSame(201, $response->code());
+        $this->assertTrue($body['ok'] ?? false);
+        $this->assertIsArray($data);
+        $this->assertSame($uiMode->value, $data['uiMode'] ?? null);
+        $this->assertIsString($data[$resultKey] ?? null);
+        $this->assertCount(1, $this->requests);
+        $this->assertCount(1, (new OrderPageStore($this->kirby))->orders());
+    }
+
+    /** @return iterable<string, array{UiMode, string}> */
+    public static function formEncodedJsonModes(): iterable
+    {
+        yield 'hosted' => [UiMode::Hosted, 'redirectUrl'];
+        yield 'embedded' => [UiMode::Embedded, 'clientSecret'];
     }
 
     public function testHostedFormReturnsSafePreAttemptFailureWithAFreshAction(): void
@@ -677,7 +709,7 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertCount(0, (new OrderPageStore($this->kirby))->orders());
     }
 
-    public function testEmbeddedFormRemainsUnsupported(): void
+    public function testEmbeddedHtmlResponseRemainsUnsupported(): void
     {
         $this->restart(UiMode::Embedded);
         $response = $this->sendForm($this->submission());
@@ -1778,12 +1810,12 @@ final class CheckoutRoutesTest extends KirbyTestCase
     }
 
     /** @param array<string, mixed> $body */
-    private function sendForm(array $body): Response
+    private function sendForm(array $body, string $accept = 'text/html'): Response
     {
         $body['csrf'] ??= (string) $this->kirby->csrf();
 
         return $this->send(http_build_query($body), headers: [
-            'Accept' => 'text/html',
+            'Accept' => $accept,
             'Content-Type' => 'application/x-www-form-urlencoded',
             'X-CSRF' => null,
         ]);

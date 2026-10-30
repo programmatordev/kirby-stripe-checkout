@@ -22,7 +22,6 @@ $settings = $site->stripeCheckout()->settings();
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= esc($documentTitle) ?></title>
     <?php snippet('storefront-styles') ?>
-    <?php snippet('checkout-submission-script') ?>
 </head>
 <body>
     <a class="skip-link" href="#content">Skip to content</a>
