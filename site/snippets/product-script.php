@@ -3,7 +3,7 @@
         const product = document.currentScript.closest('.product-detail');
         const forms = [...product.querySelectorAll('[data-product-selection]')];
 
-        const resolve = form => {
+        const updateVariantPresentation = form => {
             const selects = [...form.querySelectorAll('[data-option-id]')];
 
             if (!selects.length) {
@@ -44,9 +44,9 @@
 
         forms.forEach(form => {
             form.querySelectorAll('[data-option-id]').forEach(select => {
-                select.addEventListener('change', () => resolve(form));
+                select.addEventListener('change', () => updateVariantPresentation(form));
             });
-            resolve(form);
+            updateVariantPresentation(form);
         });
     })();
 </script>

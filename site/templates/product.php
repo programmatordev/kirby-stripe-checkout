@@ -8,8 +8,8 @@ use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 /** @var Kirby\Cms\Page $page */
 /** @var Kirby\Cms\Site $site */
 
-$checkout = $site->stripeCheckout();
-$cart = $checkout->cart();
+$stripeCheckout = $site->stripeCheckout();
+$cart = $stripeCheckout->cart();
 $options = [];
 $variants = [];
 $initialVariant = null;
@@ -37,7 +37,7 @@ try {
         $variants[] = [
             'options' => $variant->selectedOptions(),
             'enabled' => $variant->enabled(),
-            'price' => $money === null ? null : $checkout->formatMoney($money),
+            'price' => $money === null ? null : $stripeCheckout->formatMoney($money),
             'requiresShipping' => $variant->requiresShipping(),
             'sku' => $variant->sku(),
         ];
@@ -59,7 +59,7 @@ foreach ($variants as $variant) {
 
 if ($optionsAvailable) {
     try {
-        $directCheckoutBootstrap = $checkout->checkout(CheckoutSource::Direct);
+        $directCheckoutBootstrap = $stripeCheckout->checkout(CheckoutSource::Direct);
     } catch (CheckoutInputException|ConfigurationException) {
         $directCheckoutUnavailableMessage = 'Direct Checkout is unavailable. Review the product and store configuration.';
     }
@@ -93,7 +93,7 @@ snippet('layout', ['title' => $page->title(), 'cart' => $cart], slots: true);
             <p class="product-description"><?= esc($page->description()) ?></p>
             <?php if ($options !== []): ?>
                 <?php $initialPrice = $initialVariant?->price() ?? $initialVariant?->stripePrice()?->price(); ?>
-                <p class="product-price" data-product-price><?= $initialPrice === null ? 'Unavailable' : esc($checkout->formatMoney($initialPrice)) ?></p>
+                <p class="product-price" data-product-price><?= $initialPrice === null ? 'Unavailable' : esc($stripeCheckout->formatMoney($initialPrice)) ?></p>
             <?php else: ?>
                 <?php snippet('product-price', ['product' => $page, 'site' => $site]) ?>
             <?php endif ?>
