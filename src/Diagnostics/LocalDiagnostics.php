@@ -23,7 +23,6 @@ use ProgrammatorDev\StripeCheckout\Kirby\PluginPermissions;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\WebhookRoutes;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
-use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderUuidValidator;
@@ -169,20 +168,7 @@ final class LocalDiagnostics
         try {
             $store = new OrderPageStore($this->kirby);
             $container = $store->container();
-            $orders = $store->orders();
-            $validCount = $orders->count();
-            $invalidCount = ($container?->childrenAndDrafts()->count() ?? 0) - $validCount;
-            $orderCheck = match (true) {
-                $container === null => $this->check('orders', DiagnosticStatus::Warning, 'orders.missing'),
-                $invalidCount > 0 => $this->check(
-                    code: 'orders',
-                    status: DiagnosticStatus::Fail,
-                    messageKey: 'orders.invalidChildren',
-                    context: ['count' => (string) $invalidCount],
-                    affectedOperations: ['webhook', 'order_sync', 'housekeeping'],
-                ),
-                default => $this->check('orders', DiagnosticStatus::Pass, 'orders.ready'),
-            };
+            $invalidCount = 0;
             $pendingCount = 0;
             $failedCount = 0;
             $pendingEventCount = 0;
@@ -192,9 +178,14 @@ final class LocalDiagnostics
             $eligibleHousekeepingCount = 0;
             $recoveryDueCount = 0;
 
-            foreach ($orders as $order) {
-                // Re-read the current snapshot because an Order can change after the validated Page enumeration.
-                $data = $store->data($order);
+            foreach ($container?->childrenAndDrafts() ?? [] as $order) {
+                try {
+                    $data = $store->data($order);
+                } catch (OrderStorageException) {
+                    $invalidCount++;
+
+                    continue;
+                }
 
                 foreach (OrderData::list($data['lifecycleDeliveries'] ?? []) as $entry) {
                     $entry = OrderData::map($entry);
@@ -221,6 +212,18 @@ final class LocalDiagnostics
                     $recoveryDueCount += $retentionPolicy->needsCheckoutRecovery($data, $this->checkedAt) ? 1 : 0;
                 }
             }
+
+            $orderCheck = match (true) {
+                $container === null => $this->check('orders', DiagnosticStatus::Warning, 'orders.missing'),
+                $invalidCount > 0 => $this->check(
+                    code: 'orders',
+                    status: DiagnosticStatus::Fail,
+                    messageKey: 'orders.invalidChildren',
+                    context: ['count' => (string) $invalidCount],
+                    affectedOperations: ['webhook', 'order_sync', 'housekeeping'],
+                ),
+                default => $this->check('orders', DiagnosticStatus::Pass, 'orders.ready'),
+            };
 
             $checks = [
                 $orderCheck,
@@ -254,7 +257,7 @@ final class LocalDiagnostics
                 );
 
             return $checks;
-        } catch (OrderStorageException|OrderQueryException $error) {
+        } catch (OrderStorageException $error) {
             return [$this->check(
                 code: 'orders',
                 status: DiagnosticStatus::Fail,

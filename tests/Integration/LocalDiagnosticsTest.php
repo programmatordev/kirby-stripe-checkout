@@ -298,6 +298,41 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->assertSame('1', $checks['housekeepingEligibility']->context()['recoveryDue']);
     }
 
+    public function testReportsInvalidChildrenWhileSummarizingValidOrders(): void
+    {
+        $checkedAt = new DateTimeImmutable('2026-10-24T12:00:00Z');
+        $createdAt = $checkedAt->modify('-8 days');
+        $context = new OrderCreationContext(
+            uuid: 'valid-diagnostic-order',
+            orderNumber: 'ORDER-VALID-DIAGNOSTIC',
+            checkoutSource: CheckoutSource::Direct,
+            cartRevision: null,
+            userUuid: null,
+            languageCode: null,
+            uiMode: UiMode::Hosted,
+            currency: 'EUR',
+            lineItems: [OrderFixture::lineItem()],
+        );
+        $store = new OrderPageStore($this->kirby);
+        $store->create(
+            context: $context,
+            checkoutAttempt: CheckoutAttemptFactory::create($context, $createdAt),
+            createdAt: $createdAt,
+        );
+        $this->environment->workspace()->writeDraftPage(
+            'stripe-checkout-orders/invalid-diagnostic-order',
+            'default',
+            ['title' => 'Invalid diagnostic order'],
+        );
+
+        $checks = $this->checks((new LocalDiagnostics($this->kirby, $checkedAt))->report());
+
+        $this->assertSame(DiagnosticStatus::Fail, $checks['orders']->status());
+        $this->assertSame('1', $checks['orders']->context()['count']);
+        $this->assertSame(DiagnosticStatus::Warning, $checks['housekeepingEligibility']->status());
+        $this->assertSame('1', $checks['housekeepingEligibility']->context()['recoveryDue']);
+    }
+
     /** @return array<string, DiagnosticCheck> */
     private function checks(DiagnosticReport $report): array
     {
