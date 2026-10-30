@@ -62,6 +62,7 @@ final class SubmissionFieldsSnippetTest extends KirbyTestCase
         $this->assertIsString($root);
         Dir::make($root);
         F::copy($snippet, $root . '/embedded-checkout.php');
+        $this->copyDevelopmentSnippet('embedded-checkout-script.php');
         $attemptToken = AttemptToken::generate();
         $checkoutBootstrap = new CheckoutBootstrap(
             uiMode: UiMode::Embedded,
@@ -88,5 +89,13 @@ final class SubmissionFieldsSnippetTest extends KirbyTestCase
         $this->assertStringContainsString('name="revision" value="cart-revision"', $html);
         $this->assertStringContainsString('https://js.stripe.com/endive/stripe.js', $html);
         $this->assertStringContainsString('data-embedded-checkout-mount aria-busy="true" hidden', $html);
+    }
+
+    private function copyDevelopmentSnippet(string $name): void
+    {
+        $root = $this->kirby->root('snippets');
+        $this->assertIsString($root);
+        Dir::make($root);
+        F::copy(dirname(__DIR__, 2) . '/site/snippets/' . $name, $root . '/' . $name);
     }
 }

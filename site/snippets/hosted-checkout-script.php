@@ -25,8 +25,7 @@
 
         formData.delete('csrf');
 
-        // This development form uses Cart submission data, whose body fields are scalar.
-        const submissionData = Object.fromEntries(formData);
+        const submissionData = checkoutSubmissionData(formData);
 
         checkoutError.hidden = true;
         checkoutError.textContent = '';

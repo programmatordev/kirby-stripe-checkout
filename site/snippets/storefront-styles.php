@@ -138,7 +138,9 @@
     .notice { padding: 1rem; border: 1px solid var(--border); background: var(--soft); border-radius: .5rem; font-size: .85rem; margin-block: 1rem; }
     .notice p { margin-top: .5rem; }
     .notice.error { color: var(--error); }
-    .checkout-form fieldset { display: grid; }
+    .direct-checkout { border-top: 1px solid var(--border); margin-top: 2rem; padding-top: 1.5rem; }
+    .checkout-form fieldset { display: grid; gap: 1rem; }
+    .direct-checkout-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr)); gap: 1rem; }
     .checkout-actions { display: grid; gap: .5rem; }
     .checkout-form button { width: 100%; }
     .checkout-native { border-color: var(--border); background: var(--soft); color: var(--text); }

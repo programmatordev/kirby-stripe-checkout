@@ -1,6 +1,9 @@
 <?php
 
 use Kirby\Data\Json;
+use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
+use ProgrammatorDev\StripeCheckout\Checkout\Exception\CheckoutInputException;
+use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 
 /** @var Kirby\Cms\Page $page */
 /** @var Kirby\Cms\Site $site */
@@ -11,6 +14,8 @@ $options = [];
 $variants = [];
 $initialVariant = null;
 $optionsAvailable = true;
+$directCheckoutBootstrap = null;
+$directCheckoutUnavailableMessage = null;
 $images = $page->productImages()->toFiles();
 
 try {
@@ -40,6 +45,24 @@ try {
 } catch (Throwable) {
     // Incomplete fixtures should stay browsable, without leaking provider errors.
     $optionsAvailable = false;
+}
+
+$requiresShipping = $initialVariant?->requiresShipping() ?? $page->requiresShipping()->toBool();
+$canRequireShipping = $requiresShipping;
+
+foreach ($variants as $variant) {
+    if ($variant['requiresShipping']) {
+        $canRequireShipping = true;
+        break;
+    }
+}
+
+if ($optionsAvailable) {
+    try {
+        $directCheckoutBootstrap = $checkout->checkout(CheckoutSource::Direct);
+    } catch (CheckoutInputException|ConfigurationException) {
+        $directCheckoutUnavailableMessage = 'Direct Checkout is unavailable. Review the product and store configuration.';
+    }
 }
 
 snippet('layout', ['title' => $page->title(), 'cart' => $cart], slots: true);
@@ -77,36 +100,50 @@ snippet('layout', ['title' => $page->title(), 'cart' => $cart], slots: true);
 
             <?php if (!$optionsAvailable): ?>
                 <p class="notice error">Product options are unavailable. Check this product and the active price source in the Panel.</p>
-            <?php elseif ($cart === null): ?>
-                <p class="notice">The cart is disabled in the site configuration.</p>
             <?php else: ?>
-                <form class="product-form" data-variants="<?= esc(Json::encode($variants), 'attr') ?>"
-                    action="<?= esc($site->url() . '/stripe-checkout/cart/items', 'attr') ?>"
-                    method="post" data-cart-method="POST">
-                    <fieldset>
-                        <input type="hidden" name="csrf" value="<?= esc(csrf(), 'attr') ?>">
-                        <input type="hidden" name="reference" value="<?= esc($page->id(), 'attr') ?>">
-                        <?php if ($options !== []): ?>
-                            <div class="option-fields">
-                                <?php foreach ($options as $option): ?>
-                                    <label>
-                                        <?= esc($option->name()) ?>
-                                        <select name="options[<?= esc($option->id(), 'attr') ?>]" data-option-id="<?= esc($option->id(), 'attr') ?>">
-                                            <?php foreach ($option->values() as $value): ?>
-                                                <option value="<?= esc($value->id(), 'attr') ?>"><?= esc($value->name()) ?></option>
-                                            <?php endforeach ?>
-                                        </select>
-                                    </label>
-                                <?php endforeach ?>
+                <?php if ($cart === null): ?>
+                    <p class="notice">The cart is disabled in the site configuration. Direct Checkout remains available.</p>
+                <?php else: ?>
+                    <form class="product-form" data-product-selection data-variants="<?= esc(Json::encode($variants), 'attr') ?>"
+                        action="<?= esc($site->url() . '/stripe-checkout/cart/items', 'attr') ?>"
+                        method="post" data-cart-method="POST">
+                        <fieldset>
+                            <input type="hidden" name="csrf" value="<?= esc(csrf(), 'attr') ?>">
+                            <input type="hidden" name="reference" value="<?= esc($page->id(), 'attr') ?>">
+                            <?php if ($options !== []): ?>
+                                <div class="option-fields">
+                                    <?php foreach ($options as $option): ?>
+                                        <label>
+                                            <?= esc($option->name()) ?>
+                                            <select name="options[<?= esc($option->id(), 'attr') ?>]" data-option-id="<?= esc($option->id(), 'attr') ?>">
+                                                <?php foreach ($option->values() as $value): ?>
+                                                    <option value="<?= esc($value->id(), 'attr') ?>"><?= esc($value->name()) ?></option>
+                                                <?php endforeach ?>
+                                            </select>
+                                        </label>
+                                    <?php endforeach ?>
+                                </div>
+                                <p class="variant-status" data-variant-status role="status" aria-live="polite"></p>
+                            <?php endif ?>
+                            <div class="purchase-row">
+                                <label>Quantity <input type="number" name="quantity" min="1" step="1" value="1" required></label>
+                                <button type="submit" data-product-submit <?= $options !== [] && $initialVariant === null ? 'disabled' : '' ?>>Add to cart</button>
                             </div>
-                            <p class="variant-status" data-variant-status role="status" aria-live="polite"></p>
-                        <?php endif ?>
-                        <div class="purchase-row">
-                            <label>Quantity <input type="number" name="quantity" min="1" step="1" value="1" required></label>
-                            <button type="submit" <?= $options !== [] && $initialVariant === null ? 'disabled' : '' ?>>Add to cart</button>
-                        </div>
-                    </fieldset>
-                </form>
+                        </fieldset>
+                    </form>
+                <?php endif ?>
+                <?php if ($directCheckoutUnavailableMessage !== null): ?>
+                    <p class="notice error" role="alert"><?= esc($directCheckoutUnavailableMessage) ?></p>
+                <?php elseif ($directCheckoutBootstrap !== null): ?>
+                    <?php snippet('direct-checkout', [
+                        'checkoutBootstrap' => $directCheckoutBootstrap,
+                        'product' => $page,
+                        'options' => $options,
+                        'variants' => $variants,
+                        'requiresShipping' => $requiresShipping,
+                        'canRequireShipping' => $canRequireShipping,
+                    ]) ?>
+                <?php endif ?>
             <?php endif ?>
             <details class="technical-details">
                 <summary>Product details & testing</summary>
@@ -115,7 +152,7 @@ snippet('layout', ['title' => $page->title(), 'cart' => $cart], slots: true);
                 <p><a href="<?= esc($page->panel()->url(), 'attr') ?>">Edit product in Panel ↗</a></p>
             </details>
         </div>
-        <?php if ($optionsAvailable && $cart !== null): ?>
+        <?php if ($optionsAvailable): ?>
             <?php snippet('product-script') ?>
         <?php endif ?>
     </article>

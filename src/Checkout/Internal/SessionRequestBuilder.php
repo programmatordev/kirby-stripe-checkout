@@ -20,6 +20,7 @@ use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
+use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Shipping\DeliveryEstimate;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingOption;
 use ProgrammatorDev\StripeCheckout\Tax\TaxBehavior;
@@ -292,7 +293,7 @@ final class SessionRequestBuilder
     private function inlinePrice(OrderLineItemSnapshot $lineItem): array
     {
         $productData = [
-            'name' => $lineItem->name(),
+            'name' => $this->lineItemName($lineItem),
         ];
 
         if ($lineItem->description() !== null) {
@@ -324,6 +325,22 @@ final class SessionRequestBuilder
         }
 
         return $priceData;
+    }
+
+    private function lineItemName(OrderLineItemSnapshot $lineItem): string
+    {
+        if ($lineItem->options() === []) {
+            return $lineItem->name();
+        }
+
+        // Checkout has no customer-visible variant field, so inline Product names carry the selected values.
+        // https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-line_items-price_data-product_data-name
+        $values = array_map(
+            static fn(SelectedOption $option): string => $option->valueName(),
+            $lineItem->options(),
+        );
+
+        return $lineItem->name() . ' (' . implode(' / ', $values) . ')';
     }
 
     /** @return array<string, mixed> */

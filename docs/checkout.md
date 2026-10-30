@@ -187,6 +187,10 @@ Submit JSON to the issued `actionUrl`, request an `application/json` response, a
 
 Direct submissions additionally require an `items` list. Each item accepts `reference`, optional integer `quantity` (default `1`) and optional `options` object using the same option/value identifiers as Cart. Physical Direct purchases need a supported `shippingCountry`. Review and select that country before submitting. Unknown fields, prices, destination URLs and other protected commerce values are rejected.
 
+The repository development store demonstrates Direct Checkout from product pages in both UI modes. Hosted mode keeps JavaScript and native-form controls side by side; embedded mode submits the selected product before mounting Stripe. These are test fixtures rather than a required storefront or theme integration.
+
+For Kirby-priced products with selected options, Checkout identifies the chosen variant in the customer-visible Product name, for example `Poster (Printed / Portuguese)`. The values use the frozen localized Order snapshot and follow the configured option order. Products backed by an existing Stripe Price keep their Stripe Product presentation; give those Products distinct customer-facing names in Stripe when their variants need to be distinguishable in Checkout.
+
 For example, serialize `$checkoutBootstrap` into private, escaped page data and use that value as `checkoutBootstrap`:
 
 ```js

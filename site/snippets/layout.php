@@ -22,6 +22,7 @@ $settings = $site->stripeCheckout()->settings();
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= esc($documentTitle) ?></title>
     <?php snippet('storefront-styles') ?>
+    <?php snippet('checkout-submission-script') ?>
 </head>
 <body>
     <a class="skip-link" href="#content">Skip to content</a>
@@ -64,14 +65,14 @@ $settings = $site->stripeCheckout()->settings();
                 </div>
             </aside>
             <?php snippet('cart-script') ?>
-            <?php if ($settings->uiMode() === UiMode::Hosted): ?>
-                <?php snippet('hosted-checkout-script') ?>
-            <?php endif ?>
         <?php endif ?>
     </div>
+    <?php if ($settings->uiMode() === UiMode::Hosted): ?>
+        <?php snippet('hosted-checkout-script') ?>
+    <?php endif ?>
     <footer class="site-footer">
         <span>A small store for testing products, options and your cart.</span>
-        <span><?= $settings->uiMode() === UiMode::Hosted ? 'Hosted Checkout is available from the cart.' : 'Embedded Checkout is available from its test page.' ?></span>
+        <span><?= $settings->uiMode() === UiMode::Hosted ? 'Hosted Checkout is available from the cart and product pages.' : 'Embedded Checkout is available from its test and product pages.' ?></span>
     </footer>
     <noscript><p class="notice">Cart controls need JavaScript in this development storefront.</p></noscript>
 </body>

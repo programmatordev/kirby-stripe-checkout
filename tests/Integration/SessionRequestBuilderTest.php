@@ -24,6 +24,7 @@ use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
+use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Product\StripePriceReference;
 use ProgrammatorDev\StripeCheckout\Shipping\DeliveryEstimate;
 use ProgrammatorDev\StripeCheckout\Shipping\DeliveryEstimateUnit;
@@ -374,6 +375,37 @@ final class SessionRequestBuilderTest extends KirbyTestCase
         $this->assertArrayNotHasKey('price_data', $lineItem);
         $this->assertArrayNotHasKey('shipping_address_collection', $parameters);
         $this->assertArrayNotHasKey('shipping_options', $parameters);
+    }
+
+    public function testInlineProductNameIdentifiesTheSelectedVariant(): void
+    {
+        $product = new Product(
+            request: new ProductRequest('poster', selectedOptions: [
+                'format' => 'printed',
+                'language' => 'portuguese',
+            ]),
+            name: 'Poster',
+            requiresShipping: true,
+            price: new Price(Money::of('22.00', 'EUR')),
+            selectedOptions: [
+                new SelectedOption('format', 'Format', 'printed', 'Printed'),
+                new SelectedOption('language', 'Language', 'portuguese', 'Portuguese'),
+            ],
+            variantId: 'printedPortuguese',
+        );
+        $parameters = $this
+            ->build($this->checkout(new CheckoutLineItem($product)))
+            ->parameters();
+        $lineItems = $parameters['line_items'] ?? null;
+
+        $this->assertIsArray($lineItems);
+        $lineItem = $lineItems[0] ?? null;
+        $this->assertIsArray($lineItem);
+        $priceData = $lineItem['price_data'] ?? null;
+        $this->assertIsArray($priceData);
+        $productData = $priceData['product_data'] ?? null;
+        $this->assertIsArray($productData);
+        $this->assertSame('Poster (Printed / Portuguese)', $productData['name'] ?? null);
     }
 
     public function testKeepsTheInstallationIdentifierStable(): void
