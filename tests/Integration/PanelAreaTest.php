@@ -212,14 +212,14 @@ final class PanelAreaTest extends KirbyTestCase
         /** @var array<string, array<string, mixed>> $sections */
         $sections = $tabs['orders']['sections'];
         $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
-        /** @var array{orders: list<mixed>, type: string} $response */
+        /** @var array{data: list<mixed>, type: string} $response */
         $response = $page->blueprint()->section('orders')?->toResponse() ?? [];
 
         $this->assertSame(['orders'], array_column($props['tabs'], 'name'));
         $this->assertFalse($props['permissions']['update']);
         $this->assertSame('stripe-checkout-orders', $sections['orders']['type']);
         $this->assertSame('stripe-checkout-orders', $response['type']);
-        $this->assertSame([], $response['orders']);
+        $this->assertSame([], $response['data']);
     }
 
     public function testRequestedNativeTabRemainsInsideTheArea(): void

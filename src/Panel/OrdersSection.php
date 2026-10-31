@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Panel;
 use InvalidArgumentException;
 use Kirby\Cms\App;
 use Kirby\Exception\ErrorPageException;
+use Kirby\Panel\Ui\Item\PageItem;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Money\MoneyFormatter;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
@@ -16,22 +17,7 @@ use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 use ProgrammatorDev\StripeCheckout\Order\RefundStatus;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 
-/**
- * Presents the local Order listing through Kirby's native custom-section endpoint.
- *
- * @phpstan-type Badge array{group: string, status: string, theme: string}
- * @phpstan-type Status array{group: string, kind: 'status', status: string, theme: string}
- * @phpstan-type OrderRow array{
- *     attention: array{badges: list<Badge>, kind: 'attention'},
- *     createdAt: array{kind: 'datetime', value: string},
- *     customer: array{email: ?string, kind: 'customer', name: ?string},
- *     id: string,
- *     order: array{kind: 'link', link: string, text: string},
- *     paymentStatus: Status,
- *     total: ?string
- * }
- * @internal
- */
+/** @internal Presents the local Order listing through Kirby's native custom-section endpoint. */
 final class OrdersSection
 {
     /** @return array<string, mixed> */
@@ -45,9 +31,10 @@ final class OrdersSection
 
     /**
      * @return array{
+     *     data: list<array<mixed>>,
      *     error: ?string,
-     *     filters: array{attention: string, checkoutStatus: string, dispute: string, paymentStatus: string, refundStatus: string, search: string},
-     *     orders: list<OrderRow>,
+     *     filters: array{attention: string, checkoutStatus: string, dispute: string, paymentStatus: string, refundStatus: string},
+     *     options: array<string, mixed>,
      *     pagination: array<string, int>
      * }
      */
@@ -68,40 +55,42 @@ final class OrdersSection
             $query = new OrderListQuery();
 
             return [
+                'data' => [],
                 'error' => self::errorMessage($error),
                 'filters' => self::filters($query),
-                'orders' => [],
+                'options' => self::options($query),
                 'pagination' => self::emptyPagination(),
             ];
         }
 
         $moneyFormatter = new MoneyFormatter($kirby);
-        $orders = [];
+        $data = [];
 
         foreach ($result->summaries() as $summary) {
-            $orders[] = self::order($summary, $moneyFormatter);
+            $data[] = self::order($summary, $moneyFormatter);
         }
 
         return [
+            'data' => $data,
             'error' => null,
             'filters' => self::filters($query),
-            'orders' => $orders,
+            'options' => self::options($query),
             'pagination' => self::pagination($result),
         ];
     }
 
     private static function query(App $kirby, ?int $page = null): OrderListQuery
     {
-        $query = $kirby->request()->query();
-        $checkoutStatus = $query->get('checkoutStatus');
-        $paymentStatus = $query->get('paymentStatus');
-        $refundStatus = $query->get('refundStatus');
-        $dispute = $query->get('dispute');
-        $attention = $query->get('attention');
+        $requestQuery = $kirby->request()->query();
+        $checkoutStatus = $requestQuery->get('checkoutStatus');
+        $paymentStatus = $requestQuery->get('paymentStatus');
+        $refundStatus = $requestQuery->get('refundStatus');
+        $dispute = $requestQuery->get('dispute');
+        $attention = $requestQuery->get('attention');
 
         return new OrderListQuery(
-            page: $page ?? self::page($query->get('page')),
-            search: self::string($query->get('search')),
+            page: $page ?? self::page($requestQuery->get('page')),
+            search: self::string($requestQuery->get('searchterm')),
             checkoutStatus: $checkoutStatus === 'all'
                 ? null
                 : (is_string($checkoutStatus) ? CheckoutStatus::tryFrom($checkoutStatus) : null) ?? CheckoutStatus::Complete,
@@ -112,7 +101,7 @@ final class OrdersSection
         );
     }
 
-    /** @return array{attention: string, checkoutStatus: string, dispute: string, paymentStatus: string, refundStatus: string, search: string} */
+    /** @return array{attention: string, checkoutStatus: string, dispute: string, paymentStatus: string, refundStatus: string} */
     private static function filters(OrderListQuery $query): array
     {
         return [
@@ -121,152 +110,154 @@ final class OrdersSection
             'dispute' => $query->disputeFilter()->value ?? 'all',
             'paymentStatus' => $query->paymentStatus()->value ?? 'all',
             'refundStatus' => $query->refundStatus()->value ?? 'all',
-            'search' => $query->search() ?? '',
         ];
     }
 
-    /** @return OrderRow */
+    /** @return array<mixed> */
     private static function order(OrderSummary $summary, MoneyFormatter $moneyFormatter): array
     {
+        // Preserve the native Pages section's row links, permissions and actions.
+        $item = (new PageItem(
+            page: $summary->orderPage(),
+            image: false,
+            layout: 'table',
+            text: $summary->orderNumber(),
+        ))->props();
+
         return [
-            'id' => $summary->pageUuid(),
-            'order' => [
-                'kind' => 'link',
-                'link' => $summary->orderPage()->panel()->url(),
+            ...$item,
+            'title' => [
+                'href' => $summary->orderPage()->panel()->url(),
                 'text' => $summary->orderNumber(),
             ],
-            'createdAt' => [
-                'kind' => 'datetime',
-                'value' => $summary->createdAt()->format(DATE_ATOM),
-            ],
-            'customer' => [
-                'kind' => 'customer',
-                'email' => $summary->customerEmail(),
-                'name' => $summary->customerName(),
-            ],
-            'paymentStatus' => self::status(
-                group: 'payment',
-                status: $summary->paymentStatus()->value,
-                theme: self::paymentTheme($summary->paymentStatus()),
-            ),
+            'createdAt' => $summary->createdAt()->format(DATE_ATOM),
+            'customer' => self::customer($summary),
+            'paymentStatus' => self::translation('orders.index.status.payment.' . $summary->paymentStatus()->value),
             'total' => $summary->total() === null
                 ? null
                 : $moneyFormatter->format($summary->total()),
-            'attention' => [
-                'kind' => 'attention',
-                'badges' => self::attention($summary),
-            ],
+            'attention' => self::attention($summary),
         ];
     }
 
-    /**
-     * @return Status
-     */
-    private static function status(string $group, string $status, string $theme): array
+    /** @return array<string, mixed> */
+    private static function options(OrderListQuery $query): array
     {
         return [
-            'group' => $group,
-            'kind' => 'status',
-            'status' => $status,
-            'theme' => $theme,
+            'add' => false,
+            'batch' => false,
+            'columns' => [
+                'title' => [
+                    'label' => self::translation('orders.fields.orderNumber'),
+                    'mobile' => true,
+                    'type' => 'url',
+                    'width' => '1/6',
+                ],
+                'createdAt' => [
+                    'display' => 'DD MMM YYYY',
+                    'label' => self::translation('orders.fields.createdAt'),
+                    'time' => ['display' => 'HH:mm'],
+                    'type' => 'date',
+                    'width' => '1/6',
+                ],
+                'customer' => [
+                    'label' => self::translation('orders.fields.customer'),
+                    'type' => 'text',
+                    'width' => '1/4',
+                ],
+                'paymentStatus' => [
+                    'label' => self::translation('orders.fields.paymentStatus'),
+                    'type' => 'tag',
+                    'width' => '1/8',
+                ],
+                'total' => [
+                    'align' => 'end',
+                    'label' => self::translation('orders.fields.total'),
+                    'width' => '1/8',
+                ],
+                'attention' => [
+                    'label' => self::translation('orders.index.attention.label'),
+                    'type' => 'tags',
+                    'width' => '1/4',
+                ],
+            ],
+            'empty' => self::translation(self::isFiltered($query)
+                ? 'orders.index.emptyFiltered'
+                : 'orders.index.empty'),
+            'headline' => self::translation('orders.title'),
+            'help' => null,
+            'layout' => 'table',
+            'link' => null,
+            'max' => null,
+            'min' => null,
+            'search' => true,
+            'size' => 'auto',
+            'sortable' => false,
         ];
     }
 
-    /** @return list<Badge> */
+    private static function isFiltered(OrderListQuery $query): bool
+    {
+        return $query->search() !== null
+            || $query->checkoutStatus() !== CheckoutStatus::Complete
+            || $query->paymentStatus() !== null
+            || $query->refundStatus() !== null
+            || $query->disputeFilter() !== null
+            || $query->attentionFilter() !== null;
+    }
+
+    private static function customer(OrderSummary $summary): string
+    {
+        $customer = array_filter([
+            $summary->customerName(),
+            $summary->customerEmail(),
+        ], static fn(?string $value): bool => $value !== null && $value !== '');
+
+        return $customer === []
+            ? self::translation('orders.index.customerUnavailable')
+            : implode(' · ', $customer);
+    }
+
+    /** @return list<string> */
     private static function attention(OrderSummary $summary): array
     {
-        $badges = [[
-            'group' => 'checkout',
-            'status' => $summary->checkoutStatus()->value,
-            'theme' => self::checkoutTheme($summary->checkoutStatus()),
-        ]];
+        $attention = [self::translation(
+            'orders.index.status.checkout.' . $summary->checkoutStatus()->value,
+        )];
 
         if ($summary->refundStatus() !== RefundStatus::None) {
-            $badges[] = [
-                'group' => 'refund',
-                'status' => $summary->refundStatus()->value,
-                'theme' => self::refundTheme($summary),
-            ];
+            // Mixed collections can hide actionable entries.
+            // Prefer their aggregate flags in text-only native tags.
+            $refundStatus = match (true) {
+                $summary->refundHasFailed() => RefundStatus::Failed,
+                $summary->refundRequiresAction() => RefundStatus::Pending,
+                default => $summary->refundStatus(),
+            };
+            $attention[] = self::translation('orders.index.status.refund.' . $refundStatus->value);
         }
 
         if ($summary->disputeStatus() !== DisputeStatus::None) {
-            $badges[] = [
-                'group' => 'dispute',
-                'status' => $summary->disputeStatus()->value,
-                'theme' => self::disputeTheme($summary),
-            ];
+            $disputeStatus = match (true) {
+                $summary->disputeHasLost() => DisputeStatus::ResolvedLost,
+                $summary->disputeRequiresResponse() => DisputeStatus::NeedsResponse,
+                default => $summary->disputeStatus(),
+            };
+            $attention[] = self::translation('orders.index.status.dispute.' . $disputeStatus->value);
         }
 
         if ($summary->failedEvents()) {
-            $badges[] = [
-                'group' => 'attention',
-                'status' => OrderAttentionFilter::FailedEvents->value,
-                'theme' => 'negative',
-            ];
+            $attention[] = self::translation(
+                'orders.index.status.attention.' . OrderAttentionFilter::FailedEvents->value,
+            );
         }
 
         if ($summary->failedHooks()) {
-            $badges[] = [
-                'group' => 'attention',
-                'status' => OrderAttentionFilter::FailedHooks->value,
-                'theme' => 'negative',
-            ];
+            $attention[] = self::translation(
+                'orders.index.status.attention.' . OrderAttentionFilter::FailedHooks->value,
+            );
         }
 
-        return $badges;
-    }
-
-    private static function checkoutTheme(CheckoutStatus $status): string
-    {
-        return match ($status) {
-            CheckoutStatus::Complete => 'positive',
-            CheckoutStatus::Open => 'info',
-            CheckoutStatus::Creating => 'notice',
-            CheckoutStatus::CreationUncertain => 'warning',
-            CheckoutStatus::CreationFailed => 'negative',
-            CheckoutStatus::Expired => 'passive',
-        };
-    }
-
-    private static function paymentTheme(PaymentStatus $status): string
-    {
-        return match ($status) {
-            PaymentStatus::Paid, PaymentStatus::NoPaymentRequired => 'positive',
-            PaymentStatus::Pending => 'notice',
-            PaymentStatus::Failed => 'negative',
-            PaymentStatus::Unpaid => 'passive',
-        };
-    }
-
-    private static function refundTheme(OrderSummary $summary): string
-    {
-        if ($summary->refundHasFailed()) {
-            return 'negative';
-        }
-
-        if ($summary->refundRequiresAction()) {
-            return 'warning';
-        }
-
-        return $summary->refundHasActive() ? 'notice' : 'info';
-    }
-
-    private static function disputeTheme(OrderSummary $summary): string
-    {
-        if ($summary->disputeHasLost()) {
-            return 'negative';
-        }
-
-        if ($summary->disputeRequiresResponse()) {
-            return 'warning';
-        }
-
-        return match ($summary->disputeStatus()) {
-            DisputeStatus::ResolvedFavorable => 'positive',
-            DisputeStatus::UnderReview => 'notice',
-            DisputeStatus::Mixed => 'warning',
-            default => 'passive',
-        };
+        return $attention;
     }
 
     private static function errorMessage(InvalidArgumentException|OrderQueryException $error): string
@@ -274,6 +265,12 @@ final class OrdersSection
         $key = $error instanceof OrderQueryException
             ? 'error.' . $error->errorCode()
             : 'orders.index.error';
+
+        return self::translation($key);
+    }
+
+    private static function translation(string $key): string
+    {
         $translation = I18n::translate(Catalogue::PREFIX . $key);
 
         return is_string($translation) ? $translation : $key;

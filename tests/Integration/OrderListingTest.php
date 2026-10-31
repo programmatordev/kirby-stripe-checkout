@@ -174,15 +174,16 @@ final class OrderListingTest extends KirbyTestCase
 
         $this->assertNull($response['error']);
         $this->assertSame(1, $response['pagination']['total']);
-        $this->assertCount(1, $response['orders']);
-        $row = $response['orders'][0];
-        $this->assertSame($order->uuid()->toString(), $row['id']);
-        $this->assertSame($order->panel()->url(), $row['order']['link']);
-        $this->assertSame('Ana Silva', $row['customer']['name']);
-        $this->assertSame('buyer@example.test', $row['customer']['email']);
-        $this->assertSame('pending', $row['paymentStatus']['status']);
-        $this->assertSame('notice', $row['paymentStatus']['theme']);
-        $this->assertSame('complete', $row['attention']['badges'][0]['status']);
+        $this->assertCount(1, $response['data']);
+        $row = $response['data'][0];
+        $this->assertSame($order->uuid()->toString(), $row['uuid']);
+        $this->assertSame([
+            'href' => $order->panel()->url(),
+            'text' => $order->title()->value(),
+        ], $row['title']);
+        $this->assertSame('Ana Silva · buyer@example.test', $row['customer']);
+        $this->assertSame('Pending', $row['paymentStatus']);
+        $this->assertSame(['Checkout complete'], $row['attention']);
     }
 
     public function testNativePaginationUsesTwentyFiveNewestOrdersPerPage(): void
@@ -223,7 +224,7 @@ final class OrderListingTest extends KirbyTestCase
         $response = OrdersSection::response($this->kirby);
 
         $this->assertSame(1, $response['pagination']['page']);
-        $this->assertSame($order->uuid()->toString(), $response['orders'][0]['id']);
+        $this->assertSame($order->uuid()->toString(), $response['data'][0]['uuid']);
     }
 
     public function testQueryRejectsUnsupportedOrUnboundedInputs(): void

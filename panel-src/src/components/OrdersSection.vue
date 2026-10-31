@@ -1,136 +1,10 @@
-<template>
-	<section class="k-stripe-checkout-orders-section">
-		<header class="k-section-header">
-			<k-headline>{{ $t("programmatordev.stripe-checkout.orders.title") }}</k-headline>
-		</header>
-
-		<form class="k-stripe-checkout-orders-section__filters" @submit.prevent="applyFilters">
-			<k-field
-				:help="$t('programmatordev.stripe-checkout.orders.index.search.help')"
-				:label="$t('programmatordev.stripe-checkout.orders.index.search.label')"
-			>
-				<k-input
-					:disabled="isLoading"
-					:placeholder="$t('programmatordev.stripe-checkout.orders.index.search.placeholder')"
-					:value="filters.search"
-					icon="search"
-					type="search"
-					@input="filters.search = $event"
-				/>
-			</k-field>
-
-			<k-field :label="$t('programmatordev.stripe-checkout.orders.fields.checkoutStatus')">
-				<k-input
-					:disabled="isLoading"
-					:empty="false"
-					:options="checkoutOptions"
-					:value="filters.checkoutStatus"
-					type="select"
-					@input="filters.checkoutStatus = $event"
-				/>
-			</k-field>
-
-			<k-field :label="$t('programmatordev.stripe-checkout.orders.fields.paymentStatus')">
-				<k-input
-					:disabled="isLoading"
-					:empty="false"
-					:options="paymentOptions"
-					:value="filters.paymentStatus"
-					type="select"
-					@input="filters.paymentStatus = $event"
-				/>
-			</k-field>
-
-			<k-field :label="$t('programmatordev.stripe-checkout.orders.fields.refundStatus')">
-				<k-input
-					:disabled="isLoading"
-					:empty="false"
-					:options="refundOptions"
-					:value="filters.refundStatus"
-					type="select"
-					@input="filters.refundStatus = $event"
-				/>
-			</k-field>
-
-			<k-field :label="$t('programmatordev.stripe-checkout.orders.index.dispute.label')">
-				<k-input
-					:disabled="isLoading"
-					:empty="false"
-					:options="disputeOptions"
-					:value="filters.dispute"
-					type="select"
-					@input="filters.dispute = $event"
-				/>
-			</k-field>
-
-			<k-field :label="$t('programmatordev.stripe-checkout.orders.index.attention.label')">
-				<k-input
-					:disabled="isLoading"
-					:empty="false"
-					:options="attentionOptions"
-					:value="filters.attention"
-					type="select"
-					@input="filters.attention = $event"
-				/>
-			</k-field>
-
-			<div class="k-stripe-checkout-orders-section__filter-actions">
-				<k-button
-					:disabled="isLoading"
-					:icon="isLoading ? 'loader' : 'filter'"
-					type="submit"
-					variant="filled"
-				>
-					{{ $t("programmatordev.stripe-checkout.orders.index.apply") }}
-				</k-button>
-				<k-button
-					v-if="hasNonDefaultFilters"
-					:disabled="isLoading"
-					icon="cancel-small"
-					variant="dimmed"
-					@click="resetFilters"
-				>
-					{{ $t("programmatordev.stripe-checkout.orders.index.reset") }}
-				</k-button>
-			</div>
-		</form>
-
-		<k-box
-			v-if="isLoading"
-			:aria-label="$t('programmatordev.stripe-checkout.orders.index.loading')"
-			:text="$t('programmatordev.stripe-checkout.orders.index.loading')"
-			aria-live="polite"
-			icon="loader"
-			role="status"
-			theme="info"
-		/>
-		<k-box
-			v-else-if="error"
-			:text="error"
-			icon="alert"
-			role="alert"
-			theme="negative"
-		/>
-		<k-collection
-			v-else
-			:columns="columns"
-			:empty="{ icon: 'cart', text: emptyText }"
-			:items="orders"
-			:pagination="collectionPagination"
-			layout="table"
-			@paginate="fetchOrders"
-		/>
-	</section>
-</template>
-
 <script>
 const defaultFilters = () => ({
 	attention: "all",
 	checkoutStatus: "complete",
 	dispute: "all",
 	paymentStatus: "all",
-	refundStatus: "all",
-	search: ""
+	refundStatus: "all"
 });
 
 const queryKeys = [
@@ -143,150 +17,188 @@ const queryKeys = [
 	"search"
 ];
 
+const locationState = () => {
+	const query = new URL(window.location.href).searchParams;
+	const filters = defaultFilters();
+
+	for (const key of Object.keys(filters)) {
+		filters[key] = query.get(key) ?? filters[key];
+	}
+
+	const page = Number.parseInt(query.get("page"), 10);
+
+	return {
+		filters,
+		page: Number.isInteger(page) && page > 0 ? page : 1,
+		searchterm: query.get("search")
+	};
+};
+
 export default {
-	name: "OrdersSection",
+	extends: "k-pages-section",
 	data() {
+		const state = locationState();
+
 		return {
-			error: null,
-			filters: defaultFilters(),
-			isLoading: true,
-			orders: [],
-			pagination: { limit: 25, offset: 0, page: 0, pages: 0, total: 0 }
+			filters: state.filters,
+			pagination: { page: state.page },
+			searchterm: state.searchterm
 		};
 	},
 	computed: {
-		attentionOptions() {
-			return this.options("attention", ["all", "failed_events", "failed_hooks"]);
-		},
-		checkoutOptions() {
-			return this.options("checkout", [
-				"all",
-				"complete",
-				"open",
-				"creating",
-				"creation_uncertain",
-				"creation_failed",
-				"expired"
-			]);
-		},
-		collectionPagination() {
-			return { ...this.pagination, details: true, keys: true };
-		},
-		columns() {
-			const type = "stripe-checkout-order-table";
+		buttons() {
+			const buttons = [{
+				click: this.onSearchToggle,
+				icon: "search",
+				responsive: true,
+				text: this.$t("programmatordev.stripe-checkout.orders.index.search.label")
+			}, {
+				click: this.openFilters,
+				icon: "filter",
+				responsive: true,
+				text: this.$t("programmatordev.stripe-checkout.orders.index.filters"),
+				theme: this.hasNonDefaultFilters ? "notice" : undefined
+			}];
 
+			if (this.hasNonDefaultFilters) {
+				buttons.push({
+					click: this.resetFilters,
+					icon: "cancel-small",
+					responsive: true,
+					text: this.$t("programmatordev.stripe-checkout.orders.index.reset")
+				});
+			}
+
+			return buttons;
+		},
+		filterFields() {
 			return {
-				order: {
-					label: this.$t("programmatordev.stripe-checkout.orders.fields.orderNumber"),
-					mobile: true,
-					type,
-					width: "1/6"
-				},
-				createdAt: {
-					label: this.$t("programmatordev.stripe-checkout.orders.fields.createdAt"),
-					type,
-					width: "1/6"
-				},
-				customer: {
-					label: this.$t("programmatordev.stripe-checkout.orders.fields.customer"),
-					type,
-					width: "1/4"
+				checkoutStatus: {
+					empty: false,
+					label: this.$t("programmatordev.stripe-checkout.orders.fields.checkoutStatus"),
+					options: this.filterOptions("checkout", [
+						"all",
+						"complete",
+						"open",
+						"creating",
+						"creation_uncertain",
+						"creation_failed",
+						"expired"
+					]),
+					type: "select"
 				},
 				paymentStatus: {
+					empty: false,
 					label: this.$t("programmatordev.stripe-checkout.orders.fields.paymentStatus"),
-					type,
-					width: "1/8"
+					options: this.filterOptions("payment", [
+						"all",
+						"pending",
+						"paid",
+						"failed",
+						"no_payment_required"
+					]),
+					type: "select"
 				},
-				total: {
-					align: "end",
-					label: this.$t("programmatordev.stripe-checkout.orders.fields.total"),
-					width: "1/8"
+				refundStatus: {
+					empty: false,
+					label: this.$t("programmatordev.stripe-checkout.orders.fields.refundStatus"),
+					options: this.filterOptions("refundFilter", ["all", "partial", "full"]),
+					type: "select"
+				},
+				dispute: {
+					empty: false,
+					label: this.$t("programmatordev.stripe-checkout.orders.index.dispute.label"),
+					options: this.filterOptions("disputeFilter", [
+						"all",
+						"any",
+						"requires_response"
+					]),
+					type: "select"
 				},
 				attention: {
+					empty: false,
 					label: this.$t("programmatordev.stripe-checkout.orders.index.attention.label"),
-					type,
-					width: "1/4"
+					options: this.filterOptions("attention", [
+						"all",
+						"failed_events",
+						"failed_hooks"
+					]),
+					type: "select"
 				}
 			};
 		},
-		disputeOptions() {
-			return this.options("disputeFilter", ["all", "any", "requires_response"]);
-		},
-		emptyText() {
-			return this.hasNonDefaultFilters
-				? this.$t("programmatordev.stripe-checkout.orders.index.emptyFiltered")
-				: this.$t("programmatordev.stripe-checkout.orders.index.empty");
-		},
 		hasNonDefaultFilters() {
 			return JSON.stringify(this.filters) !== JSON.stringify(defaultFilters());
-		},
-		paymentOptions() {
-			return this.options("payment", ["all", "pending", "paid", "failed", "no_payment_required"]);
-		},
-		refundOptions() {
-			return this.options("refundFilter", ["all", "partial", "full"]);
 		}
 	},
-	mounted() {
-		this.filters = this.filtersFromLocation();
-		this.fetchOrders(this.pageFromLocation());
-	},
 	methods: {
-		applyFilters() {
-			this.fetchOrders(1);
+		applyFilters(filters) {
+			this.filters = { ...defaultFilters(), ...filters };
+			this.pagination.page = 1;
+			this.$panel.drawer.close();
+			this.reload();
 		},
-		async fetchOrders(page = 1) {
-			// The initial request starts in the loading state; later requests remain single-flight.
-			if (this.isLoading && this.orders.length > 0) {
-				return;
-			}
-
-			this.error = null;
-			this.isLoading = true;
-
-			try {
-				const response = await this.$api.get(
-					`${this.parent}/sections/${this.name}`,
-					this.requestQuery(page)
-				);
-				this.error = response.error;
-				this.filters = response.filters;
-				this.orders = response.orders;
-				this.pagination = response.pagination;
-				this.updateLocation(response.pagination.page || page);
-			} catch (error) {
-				this.error = this.$t("programmatordev.stripe-checkout.orders.index.error");
-			} finally {
-				this.isLoading = false;
-			}
-		},
-		filtersFromLocation() {
-			const query = new URL(window.location.href).searchParams;
-			const filters = defaultFilters();
-
-			for (const key of Object.keys(filters)) {
-				filters[key] = query.get(key) ?? filters[key];
-			}
-
-			return filters;
-		},
-		options(group, values) {
+		filterOptions(group, values) {
 			return values.map(value => ({
 				text: this.$t(`programmatordev.stripe-checkout.orders.index.option.${group}.${value}`),
 				value
 			}));
 		},
-		pageFromLocation() {
-			const page = Number.parseInt(new URL(window.location.href).searchParams.get("page"), 10);
+		async load(silent = false) {
+			// Extend the native Pages request with the commerce filters it does not know about.
+			this.isProcessing = true;
+			this.error = null;
 
-			return Number.isInteger(page) && page > 0 ? page : 1;
+			if (silent === false) {
+				this.isLoading = true;
+			}
+
+			try {
+				const response = await this.$api.get(`${this.parent}/sections/${this.name}`, {
+					...this.filters,
+					page: this.pagination.page,
+					searchterm: this.searchterm
+				});
+				this.options = response.options;
+				this.pagination = response.pagination;
+				this.filters = response.filters;
+
+				if (response.error) {
+					this.data = [];
+					this.error = response.error;
+					return;
+				}
+
+				this.data = response.data;
+				this.updateLocation(response.pagination.page);
+			} catch (error) {
+				this.error = this.$t("programmatordev.stripe-checkout.orders.index.error");
+			} finally {
+				this.isProcessing = false;
+				this.isLoading = false;
+			}
 		},
-		requestQuery(page) {
-			return { ...this.filters, page };
+		openFilters() {
+			this.$panel.drawer.open({
+				component: "k-form-drawer",
+				on: {
+					input: filters => {
+						this.$panel.drawer.props.value = filters;
+					},
+					submit: this.applyFilters
+				},
+				props: {
+					fields: this.filterFields,
+					icon: "filter",
+					title: this.$t("programmatordev.stripe-checkout.orders.index.filters"),
+					value: { ...this.filters }
+				}
+			});
 		},
 		resetFilters() {
 			this.filters = defaultFilters();
-			this.fetchOrders(1);
+			this.pagination.page = 1;
+			this.reload();
 		},
 		updateLocation(page) {
 			const url = new URL(window.location.href);
@@ -304,45 +216,17 @@ export default {
 				}
 			}
 
+			if (this.searchterm) {
+				url.searchParams.set("search", this.searchterm);
+			}
+
 			if (page > 1) {
 				url.searchParams.set("page", page);
 			}
 
-			// Keep reloads and browser history aligned with the asynchronously loaded section state.
+			// Keep shared URLs aligned with the native section's asynchronous state.
 			window.history.replaceState(window.history.state, "", url);
 		}
 	}
 };
 </script>
-
-<style>
-.k-stripe-checkout-orders-section {
-	display: grid;
-	gap: var(--spacing-6);
-}
-
-.k-stripe-checkout-orders-section__filters {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-	gap: var(--spacing-4);
-	align-items: start;
-}
-
-.k-stripe-checkout-orders-section__filters > :first-child {
-	grid-column: span 2;
-}
-
-.k-stripe-checkout-orders-section__filter-actions {
-	display: flex;
-	gap: var(--spacing-2);
-	align-items: center;
-	align-self: end;
-	min-height: var(--input-height);
-}
-
-@media (max-width: 40rem) {
-	.k-stripe-checkout-orders-section__filters > :first-child {
-		grid-column: auto;
-	}
-}
-</style>
