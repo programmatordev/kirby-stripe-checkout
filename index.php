@@ -24,6 +24,7 @@ use ProgrammatorDev\StripeCheckout\Kirby\StripePriceField;
 use ProgrammatorDev\StripeCheckout\Kirby\TaxCodeField;
 use ProgrammatorDev\StripeCheckout\Kirby\WebhookRoutes;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
+use ProgrammatorDev\StripeCheckout\Panel\OrdersSection;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
@@ -76,6 +77,9 @@ App::plugin(
             'stripe-checkout-price' => StripePriceField::class,
             'stripe-checkout-shipping-zones' => ShippingZonesField::class,
             'stripe-checkout-tax-code' => TaxCodeField::class,
+        ],
+        'sections' => [
+            'stripe-checkout-orders' => OrdersSection::definition(),
         ],
         'fieldMethods' => [
             'toProductOptions' => static function (Field $field): ProductOptions {

@@ -55,14 +55,22 @@ final class PanelAreaTest extends KirbyTestCase
 
         $this->assertFalse($menu([], [PluginPermissions::CATEGORY => [
             'settings.read' => false,
+            'orders.read' => false,
             'diagnostics.read' => false,
         ]]));
         $this->assertTrue($menu([], [PluginPermissions::CATEGORY => [
             'settings.read' => true,
+            'orders.read' => false,
             'diagnostics.read' => false,
         ]]));
         $this->assertTrue($menu([], [PluginPermissions::CATEGORY => [
             'settings.read' => false,
+            'orders.read' => true,
+            'diagnostics.read' => false,
+        ]]));
+        $this->assertTrue($menu([], [PluginPermissions::CATEGORY => [
+            'settings.read' => false,
+            'orders.read' => false,
             'diagnostics.read' => true,
         ]]));
         $this->assertSame(['stripe-checkout'], array_column($area['views'], 'pattern'));
@@ -122,12 +130,13 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertSame('k-page-view', $body['$view']['component']);
         $this->assertSame('Stripe Checkout', $body['$view']['title']);
         $this->assertSame(
-            ['Visão geral', 'Definições', 'Diagnóstico'],
+            ['Visão geral', 'Encomendas', 'Definições', 'Diagnóstico'],
             array_column($body['$view']['props']['tabs'], 'label'),
         );
         $this->assertSame(
             [
                 Panel::url('stripe-checkout'),
+                Panel::url('stripe-checkout') . '?tab=orders',
                 Panel::url('stripe-checkout') . '?tab=settings',
                 Panel::url('stripe-checkout') . '?tab=diagnostics',
             ],
@@ -176,7 +185,7 @@ final class PanelAreaTest extends KirbyTestCase
         /** @var array<string, array<string, mixed>> $sections */
         $sections = $tabs['diagnostics']['sections'];
 
-        $this->assertSame(['overview', 'diagnostics'], array_column($props['tabs'], 'name'));
+        $this->assertSame(['diagnostics'], array_column($props['tabs'], 'name'));
         $this->assertFalse($props['permissions']['update']);
         $this->assertTrue($options['access']);
         $this->assertTrue($options['read']);
@@ -184,6 +193,33 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertArrayHasKey('diagnostics-summary', $sections);
         $this->assertArrayHasKey('diagnostics-php', $sections);
         $this->assertSame('info', $sections['diagnostics-php']['type']);
+    }
+
+    public function testOrdersReaderGetsOnlyTheNativeOrdersTabAndSection(): void
+    {
+        $this->restartWithPermissions([
+            'settings.read' => false,
+            'settings.update' => false,
+            'orders.read' => true,
+            'diagnostics.read' => false,
+        ]);
+        $blueprint = SettingsBlueprint::load($this->kirby);
+        $view = $this->view();
+        /** @var array{tabs: list<array{name: string}>, permissions: array{update: bool}} $props */
+        $props = $view['props'];
+        /** @var array<string, array<string, mixed>> $tabs */
+        $tabs = $blueprint['tabs'];
+        /** @var array<string, array<string, mixed>> $sections */
+        $sections = $tabs['orders']['sections'];
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
+        /** @var array{orders: list<mixed>, type: string} $response */
+        $response = $page->blueprint()->section('orders')?->toResponse() ?? [];
+
+        $this->assertSame(['orders'], array_column($props['tabs'], 'name'));
+        $this->assertFalse($props['permissions']['update']);
+        $this->assertSame('stripe-checkout-orders', $sections['orders']['type']);
+        $this->assertSame('stripe-checkout-orders', $response['type']);
+        $this->assertSame([], $response['orders']);
     }
 
     public function testRequestedNativeTabRemainsInsideTheArea(): void

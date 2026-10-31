@@ -22,6 +22,12 @@ tabs:
         type: info
         text: programmatordev.stripe-checkout.overview.description
         theme: info
+  orders:
+    label: programmatordev.stripe-checkout.tabs.orders
+    icon: cart
+    sections:
+      orders:
+        type: stripe-checkout-orders
   settings:
     label: programmatordev.stripe-checkout.tabs.settings
     icon: settings

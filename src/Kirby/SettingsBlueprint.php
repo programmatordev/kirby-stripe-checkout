@@ -59,8 +59,9 @@ final class SettingsBlueprint
         $blueprint['tabs'] = $tabs;
 
         $canReadSettings = PluginPermissions::allows($kirby, 'settings.read');
+        $canReadOrders = PluginPermissions::allows($kirby, 'orders.read');
         $canReadDiagnostics = PluginPermissions::allows($kirby, 'diagnostics.read');
-        $canReadArea = $canReadSettings || $canReadDiagnostics;
+        $canReadArea = $canReadSettings || $canReadOrders || $canReadDiagnostics;
         $blueprintOptions = $blueprint['options'] ?? [];
         $blueprintOptions = is_array($blueprintOptions) ? $blueprintOptions : [];
         $blueprintOptions['access'] = $canReadArea;
@@ -74,7 +75,12 @@ final class SettingsBlueprint
         $tabs = $blueprint['tabs'];
 
         if ($canReadSettings === false) {
+            unset($tabs['overview']);
             unset($tabs['settings']);
+        }
+
+        if ($canReadOrders === false) {
+            unset($tabs['orders']);
         }
 
         if ($canReadDiagnostics === true) {

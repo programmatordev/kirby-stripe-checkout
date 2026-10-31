@@ -28,6 +28,7 @@ use ProgrammatorDev\StripeCheckout\Panel\OrderAttentionFilter;
 use ProgrammatorDev\StripeCheckout\Panel\OrderDisputeFilter;
 use ProgrammatorDev\StripeCheckout\Panel\OrderListing;
 use ProgrammatorDev\StripeCheckout\Panel\OrderListQuery;
+use ProgrammatorDev\StripeCheckout\Panel\OrdersSection;
 use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
@@ -156,6 +157,34 @@ final class OrderListingTest extends KirbyTestCase
         }
     }
 
+    public function testOrdersSectionPresentsNativeOrderRowsWithoutProviderReads(): void
+    {
+        $order = $this->complete(
+            $this->createOrder(new DateTimeImmutable('2026-10-02T10:00:00Z')),
+            PaymentStatus::Pending,
+            ['customer' => [
+                'email' => 'buyer@example.test',
+                'individualName' => 'Ana Silva',
+                'businessName' => null,
+                'phone' => null,
+                'taxIds' => [],
+            ]],
+        );
+        $response = OrdersSection::response($this->kirby);
+
+        $this->assertNull($response['error']);
+        $this->assertSame(1, $response['pagination']['total']);
+        $this->assertCount(1, $response['orders']);
+        $row = $response['orders'][0];
+        $this->assertSame($order->uuid()->toString(), $row['id']);
+        $this->assertSame($order->panel()->url(), $row['order']['link']);
+        $this->assertSame('Ana Silva', $row['customer']['name']);
+        $this->assertSame('buyer@example.test', $row['customer']['email']);
+        $this->assertSame('pending', $row['paymentStatus']['status']);
+        $this->assertSame('notice', $row['paymentStatus']['theme']);
+        $this->assertSame('complete', $row['attention']['badges'][0]['status']);
+    }
+
     public function testNativePaginationUsesTwentyFiveNewestOrdersPerPage(): void
     {
         $oldest = null;
@@ -176,6 +205,25 @@ final class OrderListingTest extends KirbyTestCase
         $this->assertSame(1, $first->pagination()->page());
         $this->assertSame(2, $second->pagination()->page());
         $this->assertSame($oldest->uuid()->toString(), $second->summaries()[0]->pageUuid());
+    }
+
+    public function testOrdersSectionReturnsToTheFirstPageWhenASharedPageIsStale(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(request: [
+            'method' => 'GET',
+            'query' => ['page' => '2'],
+            'url' => 'https://kirby-stripe-checkout.test/panel/stripe-checkout?tab=orders&page=2',
+        ]);
+        $this->kirby = $this->environment->app();
+        $order = $this->complete(
+            $this->createOrder(new DateTimeImmutable('2026-10-02T10:00:00Z')),
+            PaymentStatus::Paid,
+        );
+        $response = OrdersSection::response($this->kirby);
+
+        $this->assertSame(1, $response['pagination']['page']);
+        $this->assertSame($order->uuid()->toString(), $response['orders'][0]['id']);
     }
 
     public function testQueryRejectsUnsupportedOrUnboundedInputs(): void

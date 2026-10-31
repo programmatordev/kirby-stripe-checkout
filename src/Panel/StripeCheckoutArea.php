@@ -45,6 +45,7 @@ final class StripeCheckoutArea
                 }
 
                 return ($plugin['settings.read'] ?? false) === true
+                    || ($plugin['orders.read'] ?? false) === true
                     || ($plugin['diagnostics.read'] ?? false) === true;
             },
             'requests' => OperationalRequests::definition($kirby),
@@ -197,6 +198,7 @@ final class StripeCheckoutArea
     private static function canRead(App $kirby): bool
     {
         return PluginPermissions::allows($kirby, 'settings.read')
+            || PluginPermissions::allows($kirby, 'orders.read')
             || PluginPermissions::allows($kirby, 'diagnostics.read');
     }
 
