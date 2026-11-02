@@ -1,10 +1,10 @@
 <template>
 	<ul class="k-stripe-checkout-payment-status-preview k-tags-field-preview k-tags">
-		<li>
+		<li v-for="status in value" :key="status.key">
 			<k-tag
 				element="div"
-				:text="value.text"
-				:theme="value.theme"
+				:text="status.text"
+				:theme="status.theme"
 			/>
 		</li>
 	</ul>
@@ -14,7 +14,7 @@
 export default {
 	props: {
 		value: {
-			type: Object,
+			type: Array,
 			required: true
 		}
 	}

@@ -174,7 +174,7 @@ final class OrdersSection
             ],
             'createdAt' => $summary->createdAt()->format(DATE_ATOM),
             'customer' => self::customer($summary),
-            'paymentStatus' => self::paymentStatus($summary),
+            'paymentStatus' => self::paymentStatusTags($summary),
             'total' => $summary->total() === null
                 ? null
                 : $moneyFormatter->format($summary->total()),
@@ -208,7 +208,7 @@ final class OrdersSection
                 'paymentStatus' => [
                     'label' => self::translation('orders.fields.paymentStatus'),
                     'type' => 'stripe-checkout-payment-status',
-                    'width' => '1/8',
+                    'width' => '1/5',
                 ],
                 'total' => [
                     'align' => 'end',
@@ -256,12 +256,13 @@ final class OrdersSection
             : implode(' · ', $customer);
     }
 
-    /** @return array{text: string, theme: string} */
-    private static function paymentStatus(OrderSummary $summary): array
+    /** @return list<array{key: string, text: string, theme: string}> */
+    private static function paymentStatusTags(OrderSummary $summary): array
     {
         $paymentStatus = $summary->paymentStatus();
-
-        return [
+        // Payment remains the primary state; related financial states follow only when they apply.
+        $tags = [[
+            'key' => 'payment-' . $paymentStatus->value,
             'text' => self::translation('orders.index.status.payment.' . $paymentStatus->value),
             'theme' => match ($paymentStatus) {
                 PaymentStatus::Paid,
@@ -270,7 +271,40 @@ final class OrdersSection
                 PaymentStatus::Failed => 'negative',
                 PaymentStatus::Unpaid => 'passive',
             },
-        ];
+        ]];
+
+        $refundStatus = $summary->refundStatus();
+
+        if ($refundStatus !== RefundStatus::None) {
+            $tags[] = [
+                'key' => 'refund-' . $refundStatus->value,
+                'text' => self::translation('orders.index.status.refund.' . $refundStatus->value),
+                'theme' => match ($refundStatus) {
+                    RefundStatus::Pending,
+                    RefundStatus::Partial => 'notice',
+                    RefundStatus::Full => 'passive',
+                    RefundStatus::Failed => 'negative',
+                },
+            ];
+        }
+
+        $disputeStatus = $summary->disputeStatus();
+
+        if ($disputeStatus !== DisputeStatus::None) {
+            $tags[] = [
+                'key' => 'dispute-' . $disputeStatus->value,
+                'text' => self::translation('orders.index.status.dispute.' . $disputeStatus->value),
+                'theme' => match ($disputeStatus) {
+                    DisputeStatus::NeedsResponse,
+                    DisputeStatus::ResolvedLost => 'negative',
+                    DisputeStatus::UnderReview,
+                    DisputeStatus::Mixed => 'notice',
+                    DisputeStatus::ResolvedFavorable => 'positive',
+                },
+            ];
+        }
+
+        return $tags;
     }
 
     /**

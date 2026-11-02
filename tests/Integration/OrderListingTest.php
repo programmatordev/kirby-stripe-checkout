@@ -187,17 +187,21 @@ final class OrderListingTest extends KirbyTestCase
 
     public function testOrdersSectionPresentsNativeOrderRowsWithoutProviderReads(): void
     {
-        $order = $this->complete(
+        $order = $this->completeFinancial(
             $this->createOrder(new DateTimeImmutable('2026-10-02T10:00:00Z')),
-            PaymentStatus::Paid,
-            ['customer' => [
+            refundAmount: '16.00',
+            dispute: true,
+        );
+        $order = (new OrderPageStore($this->kirby))->update($order->uuid()->toString(), static fn(array $data): array => [
+            ...$data,
+            'customer' => [
                 'email' => 'buyer@example.test',
                 'individualName' => 'Ana Silva',
                 'businessName' => null,
                 'phone' => null,
                 'taxIds' => [],
-            ]],
-        );
+            ],
+        ]);
         $response = OrdersSection::response($this->kirby);
 
         $this->assertNull($response['error']);
@@ -210,10 +214,19 @@ final class OrderListingTest extends KirbyTestCase
             'text' => $order->title()->value(),
         ], $row['title']);
         $this->assertSame('Ana Silva · buyer@example.test', $row['customer']);
-        $this->assertSame([
+        $this->assertSame([[
+            'key' => 'payment-paid',
             'text' => 'Paid',
             'theme' => 'positive',
-        ], $row['paymentStatus']);
+        ], [
+            'key' => 'refund-partial',
+            'text' => 'Partially refunded',
+            'theme' => 'notice',
+        ], [
+            'key' => 'dispute-needs_response',
+            'text' => 'Dispute needs response',
+            'theme' => 'negative',
+        ]], $row['paymentStatus']);
         $this->assertArrayNotHasKey('attention', $row);
 
         $options = $response['options'];
