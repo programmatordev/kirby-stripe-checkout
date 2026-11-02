@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Panel;
 
 use InvalidArgumentException;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
+use ProgrammatorDev\StripeCheckout\Order\DisputeStatus;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
@@ -16,36 +17,51 @@ final readonly class OrderListQuery
 {
     private const INVALID_QUERY_MESSAGE = 'Invalid Order list query.';
 
+    /** @var list<CheckoutStatus> */
+    private array $checkoutStatuses;
+
+    /** @var list<PaymentStatus> */
+    private array $paymentStatuses;
+
+    /** @var list<RefundStatus> */
+    private array $refundStatuses;
+
+    /** @var list<DisputeStatus> */
+    private array $disputeStatuses;
+
+    /** @var list<OrderAttentionFilter> */
+    private array $attentionFilters;
+
     private ?string $search;
 
+    /**
+     * @param list<CheckoutStatus>|null $checkoutStatuses
+     * @param list<PaymentStatus>|null $paymentStatuses
+     * @param list<RefundStatus> $refundStatuses
+     * @param list<DisputeStatus> $disputeStatuses
+     * @param list<OrderAttentionFilter> $attentionFilters
+     */
     public function __construct(
         private int $page = 1,
         ?string $search = null,
-        private ?CheckoutStatus $checkoutStatus = CheckoutStatus::Complete,
-        private ?PaymentStatus $paymentStatus = null,
-        private ?RefundStatus $refundStatus = null,
-        private ?OrderDisputeFilter $disputeFilter = null,
-        private ?OrderAttentionFilter $attentionFilter = null,
+        ?array $checkoutStatuses = null,
+        ?array $paymentStatuses = null,
+        array $refundStatuses = [],
+        array $disputeStatuses = [],
+        array $attentionFilters = [],
     ) {
         if ($this->page < 1) {
             throw new InvalidArgumentException(self::INVALID_QUERY_MESSAGE);
         }
 
-        if ($this->paymentStatus !== null && in_array($this->paymentStatus, [
-            PaymentStatus::Pending,
+        $this->checkoutStatuses = $checkoutStatuses ?? [CheckoutStatus::Complete];
+        $this->paymentStatuses = $paymentStatuses ?? [
             PaymentStatus::Paid,
-            PaymentStatus::Failed,
             PaymentStatus::NoPaymentRequired,
-        ], true) === false) {
-            throw new InvalidArgumentException(self::INVALID_QUERY_MESSAGE);
-        }
-
-        if ($this->refundStatus !== null && in_array($this->refundStatus, [
-            RefundStatus::Partial,
-            RefundStatus::Full,
-        ], true) === false) {
-            throw new InvalidArgumentException(self::INVALID_QUERY_MESSAGE);
-        }
+        ];
+        $this->refundStatuses = $refundStatuses;
+        $this->disputeStatuses = $disputeStatuses;
+        $this->attentionFilters = $attentionFilters;
 
         $search = $search === null ? null : trim($search);
 
@@ -68,28 +84,33 @@ final readonly class OrderListQuery
         return $this->search;
     }
 
-    public function checkoutStatus(): ?CheckoutStatus
+    /** @return list<CheckoutStatus> */
+    public function checkoutStatuses(): array
     {
-        return $this->checkoutStatus;
+        return $this->checkoutStatuses;
     }
 
-    public function paymentStatus(): ?PaymentStatus
+    /** @return list<PaymentStatus> */
+    public function paymentStatuses(): array
     {
-        return $this->paymentStatus;
+        return $this->paymentStatuses;
     }
 
-    public function refundStatus(): ?RefundStatus
+    /** @return list<RefundStatus> */
+    public function refundStatuses(): array
     {
-        return $this->refundStatus;
+        return $this->refundStatuses;
     }
 
-    public function disputeFilter(): ?OrderDisputeFilter
+    /** @return list<DisputeStatus> */
+    public function disputeStatuses(): array
     {
-        return $this->disputeFilter;
+        return $this->disputeStatuses;
     }
 
-    public function attentionFilter(): ?OrderAttentionFilter
+    /** @return list<OrderAttentionFilter> */
+    public function attentionFilters(): array
     {
-        return $this->attentionFilter;
+        return $this->attentionFilters;
     }
 }

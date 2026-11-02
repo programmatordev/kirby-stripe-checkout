@@ -43,6 +43,14 @@ function section(get) {
 		section[name] = (...args) => method.call(section, ...args);
 	}
 
+	for (const [name, computed] of Object.entries(options.computed)) {
+		Object.defineProperty(section, name, {
+			get: () => typeof computed === "function"
+				? computed.call(section)
+				: computed.get.call(section)
+		});
+	}
+
 	return section;
 }
 
@@ -53,11 +61,11 @@ test("Orders section extends Kirby's native Pages table and sends its additional
 		data: [{ id: "order-1" }],
 		error: null,
 		filters: {
-			attention: "all",
-			checkoutStatus: "complete",
-			dispute: "all",
-			paymentStatus: "pending",
-			refundStatus: "all"
+			attention: [],
+			checkoutStatus: ["complete"],
+			dispute: [],
+			payment: ["pending"],
+			refundStatus: []
 		},
 		options: { layout: "table", search: true },
 		pagination: { limit: 25, offset: 50, page: 3, pages: 4, total: 76 }
@@ -66,7 +74,7 @@ test("Orders section extends Kirby's native Pages table and sends its additional
 		calls.push({ endpoint, query });
 		return response;
 	});
-	component.filters.paymentStatus = "pending";
+	component.filters.payment = ["pending"];
 	component.pagination.page = 3;
 	component.searchterm = "ORDER-1";
 
@@ -76,7 +84,11 @@ test("Orders section extends Kirby's native Pages table and sends its additional
 	assert.deepEqual(calls, [{
 		endpoint: "/pages/stripe-checkout/sections/orders",
 		query: {
-			...component.filters,
+			attention: "",
+			checkoutStatus: "complete",
+			dispute: "",
+			payment: "pending",
+			refundStatus: "",
 			page: 3,
 			searchterm: "ORDER-1"
 		}
@@ -87,19 +99,20 @@ test("Orders section extends Kirby's native Pages table and sends its additional
 	const query = new URL(window.location.href).searchParams;
 	assert.equal(query.get("tab"), "orders");
 	assert.equal(query.get("checkoutStatus"), null);
-	assert.equal(query.get("paymentStatus"), "pending");
+	assert.equal(query.get("payment"), "pending");
 	assert.equal(query.get("search"), "ORDER-1");
 	assert.equal(query.get("page"), "3");
 });
 
 test("Orders section restores shareable state and keeps request failures generic", async () => {
-	location("https://example.test/panel/stripe-checkout?tab=orders&checkoutStatus=all&attention=failed_hooks&search=ORDER-2&page=2");
+	location("https://example.test/panel/stripe-checkout?tab=orders&checkoutStatus=&payment=unpaid,failed&attention=failed_hooks&search=ORDER-2&page=2");
 	const component = section(async () => {
 		throw new Error("Storage details must not be exposed");
 	});
 
-	assert.equal(component.filters.checkoutStatus, "all");
-	assert.equal(component.filters.attention, "failed_hooks");
+	assert.deepEqual(component.filters.checkoutStatus, []);
+	assert.deepEqual(component.filters.payment, ["unpaid", "failed"]);
+	assert.deepEqual(component.filters.attention, ["failed_hooks"]);
 	assert.equal(component.searchterm, "ORDER-2");
 	assert.equal(component.pagination.page, 2);
 
@@ -107,4 +120,67 @@ test("Orders section restores shareable state and keeps request failures generic
 
 	assert.equal(component.error, "programmatordev.stripe-checkout.orders.index.error");
 	assert.equal(component.isLoading, false);
+});
+
+test("Orders section resets changed filters to its completed successful default", () => {
+	location("https://example.test/panel/stripe-checkout?tab=orders");
+	const component = section(async () => ({}));
+	let reloads = 0;
+	component.reload = () => reloads++;
+	component.filters.attention = ["failed_hooks"];
+	component.filters.checkoutStatus = [];
+	component.filters.payment = ["pending"];
+	component.pagination.page = 3;
+
+	component.resetFilters();
+
+	assert.deepEqual(component.filters, {
+		attention: [],
+		checkoutStatus: ["complete"],
+		dispute: [],
+		payment: ["paid", "no_payment_required"],
+		refundStatus: []
+	});
+	assert.equal(component.pagination.page, 1);
+	assert.equal(reloads, 1);
+});
+
+test("Orders section exposes complete multiselect filters on its native controls", () => {
+	location("https://example.test/panel/stripe-checkout?tab=orders");
+	const component = section(async () => ({}));
+
+	assert.equal(component.activeFilterCount, 2);
+	assert.deepEqual(component.buttons.map(button => button.text), [
+		"programmatordev.stripe-checkout.orders.index.search.label",
+		"programmatordev.stripe-checkout.orders.index.filters"
+	]);
+	assert.deepEqual(component.buttons[1].badge, { text: 2, theme: "notice" });
+	assert.equal(component.buttons.length, 2);
+	assert.equal(component.filterFields.checkoutStatus.type, "multiselect");
+	assert.equal(component.filterFields.payment.type, "multiselect");
+	assert.equal(component.filterFields.refundStatus.type, "multiselect");
+	assert.equal(component.filterFields.dispute.type, "multiselect");
+	assert.equal(component.filterFields.attention.type, "multiselect");
+	assert.equal(
+		component.filterFields.payment.options.some(option => option.value === "unpaid"),
+		true
+	);
+	assert.equal(
+		component.filterFields.payment.options.some(option => option.value === "successful"),
+		false
+	);
+	assert.equal(component.filterFields.refundStatus.options.length, 5);
+	assert.equal(component.filterFields.dispute.options.length, 6);
+
+	component.filters.payment = [];
+	component.filters.refundStatus = ["partial", "full"];
+
+	assert.equal(component.activeFilterCount, 2);
+	assert.deepEqual(component.buttons[1].badge, { text: 2, theme: "notice" });
+	assert.equal(component.buttons[2].icon, "cancel-small");
+	assert.equal(
+		component.buttons[2].title,
+		"programmatordev.stripe-checkout.orders.index.reset"
+	);
+	assert.equal(component.buttons[2].text, undefined);
 });

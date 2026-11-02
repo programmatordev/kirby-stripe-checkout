@@ -25,7 +25,6 @@ use ProgrammatorDev\StripeCheckout\Order\Payment;
 use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 use ProgrammatorDev\StripeCheckout\Order\RefundStatus;
 use ProgrammatorDev\StripeCheckout\Panel\OrderAttentionFilter;
-use ProgrammatorDev\StripeCheckout\Panel\OrderDisputeFilter;
 use ProgrammatorDev\StripeCheckout\Panel\OrderListing;
 use ProgrammatorDev\StripeCheckout\Panel\OrderListQuery;
 use ProgrammatorDev\StripeCheckout\Panel\OrdersSection;
@@ -38,12 +37,12 @@ final class OrderListingTest extends KirbyTestCase
 {
     private int $sequence = 0;
 
-    public function testDefaultAndExactSearchUseValidatedCanonicalFacts(): void
+    public function testDefaultAndNativePartialSearchUseValidatedCanonicalFacts(): void
     {
         $older = $this->createOrder(new DateTimeImmutable('2026-10-01T10:00:00Z'));
         $completed = $this->complete(
             $this->createOrder(new DateTimeImmutable('2026-10-02T10:00:00Z')),
-            PaymentStatus::Failed,
+            PaymentStatus::Paid,
             [
                 'stripeCheckoutSessionId' => 'cs_listing',
                 'stripeCustomerId' => 'cus_listing',
@@ -64,7 +63,7 @@ final class OrderListingTest extends KirbyTestCase
         $this->assertSame($completed->uuid()->toString(), $summary->pageUuid());
         $this->assertSame('Ana Silva', $summary->customerName());
         $this->assertSame('Buyer@Example.test', $summary->customerEmail());
-        $this->assertSame(PaymentStatus::Failed, $summary->paymentStatus());
+        $this->assertSame(PaymentStatus::Paid, $summary->paymentStatus());
         $this->assertSame('32.00', (string) $summary->total()?->getAmount());
         $this->assertFalse($summary->refundHasActive());
         $this->assertFalse($summary->refundRequiresAction());
@@ -72,22 +71,33 @@ final class OrderListingTest extends KirbyTestCase
         $this->assertFalse($summary->disputeRequiresResponse());
         $this->assertFalse($summary->disputeHasLost());
 
-        $all = $listing->query(new OrderListQuery(checkoutStatus: null));
+        $all = $listing->query(new OrderListQuery(
+            checkoutStatuses: [],
+            paymentStatuses: [],
+        ));
         $this->assertSame(
             [$completed->uuid()->toString(), $older->uuid()->toString()],
             array_map(static fn($item): string => $item->pageUuid(), $all->summaries()),
         );
         $this->assertSame(
             [$older->uuid()->toString()],
-            array_map(static fn($item): string => $item->pageUuid(), $listing->query(new OrderListQuery(checkoutStatus: CheckoutStatus::Creating))->summaries()),
+            array_map(
+                static fn($item): string => $item->pageUuid(),
+                $listing->query(new OrderListQuery(
+                    checkoutStatuses: [CheckoutStatus::Creating],
+                    paymentStatuses: [],
+                ))->summaries(),
+            ),
         );
 
         $searches = [
             $summary->orderNumber(),
-            $completed->uuid()->toString(),
-            'cs_listing',
-            'cus_listing',
-            'buyer@example.TEST',
+            substr($summary->orderNumber(), 4, 8),
+            substr($completed->uuid()->toString(), 7, 8),
+            'cs_list',
+            'CUS_LIST',
+            'buyer@EXAMPLE',
+            'ana sil',
         ];
 
         foreach ($searches as $search) {
@@ -95,10 +105,14 @@ final class OrderListingTest extends KirbyTestCase
             $this->assertSame([$completed->uuid()->toString()], array_map(static fn($item): string => $item->pageUuid(), $result->summaries()));
         }
 
-        $this->assertSame([], $listing->query(new OrderListQuery(search: 'cs_list'))->summaries());
+        $this->assertSame([], $listing->query(new OrderListQuery(search: 'x'))->summaries());
+        $this->assertSame([], $listing->query(new OrderListQuery(search: 'missing'))->summaries());
         $broken = $this->createOrder(new DateTimeImmutable('2026-10-03T10:00:00Z'));
         $broken->version('latest')->update(['subtotal' => 'invalid'], 'default');
-        $this->assertCount(2, $listing->query(new OrderListQuery(checkoutStatus: null))->summaries());
+        $this->assertCount(2, $listing->query(new OrderListQuery(
+            checkoutStatuses: [],
+            paymentStatuses: [],
+        ))->summaries());
     }
 
     public function testFixedCommerceAndAttentionFiltersRemainIndependent(): void
@@ -130,15 +144,14 @@ final class OrderListingTest extends KirbyTestCase
         $listing = new OrderListing($this->kirby);
 
         $cases = [
-            [new OrderListQuery(paymentStatus: PaymentStatus::Pending), $pending],
-            [new OrderListQuery(paymentStatus: PaymentStatus::Failed), $failed],
-            [new OrderListQuery(paymentStatus: PaymentStatus::NoPaymentRequired), $free],
-            [new OrderListQuery(refundStatus: RefundStatus::Partial), $partial],
-            [new OrderListQuery(refundStatus: RefundStatus::Full), $full],
-            [new OrderListQuery(disputeFilter: OrderDisputeFilter::Any), $partial],
-            [new OrderListQuery(disputeFilter: OrderDisputeFilter::RequiresResponse), $partial],
-            [new OrderListQuery(attentionFilter: OrderAttentionFilter::FailedEvents), $partial],
-            [new OrderListQuery(attentionFilter: OrderAttentionFilter::FailedHooks), $partial],
+            [new OrderListQuery(paymentStatuses: [PaymentStatus::Pending]), $pending],
+            [new OrderListQuery(paymentStatuses: [PaymentStatus::Failed]), $failed],
+            [new OrderListQuery(paymentStatuses: [PaymentStatus::NoPaymentRequired]), $free],
+            [new OrderListQuery(refundStatuses: [RefundStatus::Partial]), $partial],
+            [new OrderListQuery(refundStatuses: [RefundStatus::Full]), $full],
+            [new OrderListQuery(disputeStatuses: [DisputeStatus::NeedsResponse]), $partial],
+            [new OrderListQuery(attentionFilters: [OrderAttentionFilter::FailedEvents]), $partial],
+            [new OrderListQuery(attentionFilters: [OrderAttentionFilter::FailedHooks]), $partial],
         ];
 
         foreach ($cases as [$query, $expected]) {
@@ -148,7 +161,22 @@ final class OrderListingTest extends KirbyTestCase
 
         $this->assertSame(
             [$full->uuid()->toString(), $partial->uuid()->toString()],
-            array_map(static fn($item): string => $item->pageUuid(), $listing->query(new OrderListQuery(paymentStatus: PaymentStatus::Paid))->summaries()),
+            array_map(
+                static fn($item): string => $item->pageUuid(),
+                $listing->query(new OrderListQuery(
+                    paymentStatuses: [PaymentStatus::Paid],
+                ))->summaries(),
+            ),
+        );
+        $this->assertSame(
+            [$free->uuid()->toString(), $full->uuid()->toString(), $partial->uuid()->toString()],
+            array_map(
+                static fn($item): string => $item->pageUuid(),
+                $listing->query(new OrderListQuery(paymentStatuses: [
+                    PaymentStatus::Paid,
+                    PaymentStatus::NoPaymentRequired,
+                ]))->summaries(),
+            ),
         );
 
         foreach (['pi_listing-order-01', 'pm_listing-order-01', 're_listing-order-01', 'du_listing-order-01', 'evt_listing'] as $search) {
@@ -161,7 +189,7 @@ final class OrderListingTest extends KirbyTestCase
     {
         $order = $this->complete(
             $this->createOrder(new DateTimeImmutable('2026-10-02T10:00:00Z')),
-            PaymentStatus::Pending,
+            PaymentStatus::Paid,
             ['customer' => [
                 'email' => 'buyer@example.test',
                 'individualName' => 'Ana Silva',
@@ -182,8 +210,56 @@ final class OrderListingTest extends KirbyTestCase
             'text' => $order->title()->value(),
         ], $row['title']);
         $this->assertSame('Ana Silva · buyer@example.test', $row['customer']);
-        $this->assertSame('Pending', $row['paymentStatus']);
-        $this->assertSame(['Checkout complete'], $row['attention']);
+        $this->assertSame([
+            'text' => 'Paid',
+            'theme' => 'positive',
+        ], $row['paymentStatus']);
+        $this->assertArrayNotHasKey('attention', $row);
+
+        $options = $response['options'];
+        $columns = $options['columns'] ?? null;
+        $this->assertIsArray($columns);
+        $paymentStatusColumn = $columns['paymentStatus'] ?? null;
+        $this->assertIsArray($paymentStatusColumn);
+        $this->assertSame(
+            'stripe-checkout-payment-status',
+            $paymentStatusColumn['type'] ?? null,
+        );
+        $titleColumn = $columns['title'] ?? null;
+        $this->assertIsArray($titleColumn);
+        $this->assertArrayNotHasKey('width', $titleColumn);
+        $this->assertArrayNotHasKey('attention', $columns);
+    }
+
+    public function testOrdersSectionAppliesMultiplePaymentStatuses(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(request: [
+            'method' => 'GET',
+            'query' => ['payment' => 'paid,no_payment_required'],
+            'url' => 'https://kirby-stripe-checkout.test/panel/stripe-checkout?tab=orders&payment=paid,no_payment_required',
+        ]);
+        $this->kirby = $this->environment->app();
+        $paid = $this->complete(
+            $this->createOrder(new DateTimeImmutable('2026-10-01T10:00:00Z')),
+            PaymentStatus::Paid,
+        );
+        $free = $this->complete(
+            $this->createOrder(new DateTimeImmutable('2026-10-02T10:00:00Z')),
+            PaymentStatus::NoPaymentRequired,
+        );
+        $this->complete(
+            $this->createOrder(new DateTimeImmutable('2026-10-03T10:00:00Z')),
+            PaymentStatus::Pending,
+        );
+
+        $response = OrdersSection::response($this->kirby);
+
+        $this->assertSame(['paid', 'no_payment_required'], $response['filters']['payment']);
+        $this->assertSame(
+            [$free->uuid()->toString(), $paid->uuid()->toString()],
+            array_column($response['data'], 'uuid'),
+        );
     }
 
     public function testNativePaginationUsesTwentyFiveNewestOrdersPerPage(): void
@@ -196,8 +272,15 @@ final class OrderListingTest extends KirbyTestCase
         }
 
         $listing = new OrderListing($this->kirby);
-        $first = $listing->query(new OrderListQuery(checkoutStatus: null));
-        $second = $listing->query(new OrderListQuery(page: 2, checkoutStatus: null));
+        $first = $listing->query(new OrderListQuery(
+            checkoutStatuses: [],
+            paymentStatuses: [],
+        ));
+        $second = $listing->query(new OrderListQuery(
+            page: 2,
+            checkoutStatuses: [],
+            paymentStatuses: [],
+        ));
 
         $this->assertCount(OrderListing::LIMIT, $first->summaries());
         $this->assertCount(1, $second->summaries());
@@ -231,8 +314,6 @@ final class OrderListingTest extends KirbyTestCase
     {
         foreach ([
             static fn(): OrderListQuery => new OrderListQuery(page: 0),
-            static fn(): OrderListQuery => new OrderListQuery(paymentStatus: PaymentStatus::Unpaid),
-            static fn(): OrderListQuery => new OrderListQuery(refundStatus: RefundStatus::Pending),
             static fn(): OrderListQuery => new OrderListQuery(search: str_repeat('a', 2049)),
         ] as $createQuery) {
             try {

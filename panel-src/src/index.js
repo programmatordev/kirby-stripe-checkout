@@ -11,11 +11,13 @@ import TaxCodeDialog from "./components/TaxCodeDialog.vue";
 import CatalogueDialogHeader from "./components/CatalogueDialogHeader.vue";
 import MoneyPreview from "./components/MoneyPreview.vue";
 import OrdersSection from "./components/OrdersSection.vue";
+import PaymentStatusPreview from "./components/PaymentStatusPreview.vue";
 
 panel.plugin("programmatordev/stripe-checkout", {
 	components: {
 		"k-stripe-checkout-catalogue-dialog-header": CatalogueDialogHeader,
 		"k-stripe-checkout-money-field-preview": MoneyPreview,
+		"k-stripe-checkout-payment-status-field-preview": PaymentStatusPreview,
 		"k-stripe-checkout-synchronized-structure-drawer": SynchronizedStructureDrawer,
 		"k-stripe-checkout-price-dialog": StripePriceDialog,
 		"k-stripe-checkout-tax-code-dialog": TaxCodeDialog,

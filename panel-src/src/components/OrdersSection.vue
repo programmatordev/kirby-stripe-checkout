@@ -1,10 +1,10 @@
 <script>
 const defaultFilters = () => ({
-	attention: "all",
-	checkoutStatus: "complete",
-	dispute: "all",
-	paymentStatus: "all",
-	refundStatus: "all"
+	attention: [],
+	checkoutStatus: ["complete"],
+	dispute: [],
+	payment: ["paid", "no_payment_required"],
+	refundStatus: []
 });
 
 const queryKeys = [
@@ -12,7 +12,7 @@ const queryKeys = [
 	"checkoutStatus",
 	"dispute",
 	"page",
-	"paymentStatus",
+	"payment",
 	"refundStatus",
 	"search"
 ];
@@ -22,7 +22,11 @@ const locationState = () => {
 	const filters = defaultFilters();
 
 	for (const key of Object.keys(filters)) {
-		filters[key] = query.get(key) ?? filters[key];
+		const value = query.get(key);
+
+		if (value !== null) {
+			filters[key] = value === "" ? [] : value.split(",");
+		}
 	}
 
 	const page = Number.parseInt(query.get("page"), 10);
@@ -46,26 +50,34 @@ export default {
 		};
 	},
 	computed: {
+		activeFilterCount() {
+			return Object.values(this.filters)
+				.filter(value => value.length > 0)
+				.length;
+		},
 		buttons() {
-			const buttons = [{
-				click: this.onSearchToggle,
-				icon: "search",
-				responsive: true,
-				text: this.$t("programmatordev.stripe-checkout.orders.index.search.label")
-			}, {
-				click: this.openFilters,
-				icon: "filter",
-				responsive: true,
-				text: this.$t("programmatordev.stripe-checkout.orders.index.filters"),
-				theme: this.hasNonDefaultFilters ? "notice" : undefined
-			}];
+			const buttons = [
+				{
+					click: this.onSearchToggle,
+					icon: "search",
+					responsive: true,
+					text: this.$t("programmatordev.stripe-checkout.orders.index.search.label")
+				}, {
+					click: this.openFilters,
+					icon: "filter",
+					responsive: true,
+					text: this.$t("programmatordev.stripe-checkout.orders.index.filters"),
+					badge: this.activeFilterCount > 0
+						? { text: this.activeFilterCount, theme: "notice" }
+						: undefined
+				}
+			];
 
 			if (this.hasNonDefaultFilters) {
 				buttons.push({
 					click: this.resetFilters,
 					icon: "cancel-small",
-					responsive: true,
-					text: this.$t("programmatordev.stripe-checkout.orders.index.reset")
+					title: this.$t("programmatordev.stripe-checkout.orders.index.reset")
 				});
 			}
 
@@ -74,10 +86,8 @@ export default {
 		filterFields() {
 			return {
 				checkoutStatus: {
-					empty: false,
 					label: this.$t("programmatordev.stripe-checkout.orders.fields.checkoutStatus"),
 					options: this.filterOptions("checkout", [
-						"all",
 						"complete",
 						"open",
 						"creating",
@@ -85,50 +95,59 @@ export default {
 						"creation_failed",
 						"expired"
 					]),
-					type: "select"
+					type: "multiselect"
 				},
-				paymentStatus: {
-					empty: false,
+				payment: {
 					label: this.$t("programmatordev.stripe-checkout.orders.fields.paymentStatus"),
 					options: this.filterOptions("payment", [
-						"all",
+						"unpaid",
 						"pending",
 						"paid",
 						"failed",
 						"no_payment_required"
 					]),
-					type: "select"
+					type: "multiselect"
 				},
 				refundStatus: {
-					empty: false,
 					label: this.$t("programmatordev.stripe-checkout.orders.fields.refundStatus"),
-					options: this.filterOptions("refundFilter", ["all", "partial", "full"]),
-					type: "select"
+					options: this.filterOptions("refundFilter", [
+						"none",
+						"pending",
+						"partial",
+						"full",
+						"failed"
+					]),
+					type: "multiselect"
 				},
 				dispute: {
-					empty: false,
 					label: this.$t("programmatordev.stripe-checkout.orders.index.dispute.label"),
 					options: this.filterOptions("disputeFilter", [
-						"all",
-						"any",
-						"requires_response"
+						"none",
+						"needs_response",
+						"under_review",
+						"resolved_favorable",
+						"resolved_lost",
+						"mixed"
 					]),
-					type: "select"
+					type: "multiselect"
 				},
 				attention: {
-					empty: false,
 					label: this.$t("programmatordev.stripe-checkout.orders.index.attention.label"),
 					options: this.filterOptions("attention", [
-						"all",
 						"failed_events",
 						"failed_hooks"
 					]),
-					type: "select"
+					type: "multiselect"
 				}
 			};
 		},
 		hasNonDefaultFilters() {
-			return JSON.stringify(this.filters) !== JSON.stringify(defaultFilters());
+			const defaults = defaultFilters();
+
+			return Object.entries(this.filters).some(([key, value]) => {
+				return value.length !== defaults[key].length
+					|| value.some((entry, index) => entry !== defaults[key][index]);
+			});
 		}
 	},
 	methods: {
@@ -155,7 +174,7 @@ export default {
 
 			try {
 				const response = await this.$api.get(`${this.parent}/sections/${this.name}`, {
-					...this.filters,
+					...this.serializedFilters(),
 					page: this.pagination.page,
 					searchterm: this.searchterm
 				});
@@ -200,6 +219,11 @@ export default {
 			this.pagination.page = 1;
 			this.reload();
 		},
+		serializedFilters() {
+			return Object.fromEntries(
+				Object.entries(this.filters).map(([key, value]) => [key, value.join(",")])
+			);
+		},
 		updateLocation(page) {
 			const url = new URL(window.location.href);
 			const defaults = defaultFilters();
@@ -211,8 +235,12 @@ export default {
 			url.searchParams.set("tab", "orders");
 
 			for (const [key, value] of Object.entries(this.filters)) {
-				if (value !== defaults[key]) {
-					url.searchParams.set(key, value);
+				const defaultValue = defaults[key];
+				const isDefault = value.length === defaultValue.length
+					&& value.every((entry, index) => entry === defaultValue[index]);
+
+				if (isDefault === false) {
+					url.searchParams.set(key, value.join(","));
 				}
 			}
 

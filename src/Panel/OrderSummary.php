@@ -15,7 +15,6 @@ use ProgrammatorDev\StripeCheckout\Order\RefundStatus;
 /** @internal Validated facts needed by one Orders index row. */
 final readonly class OrderSummary
 {
-    /** @param list<string> $references Exact searchable local and Stripe references. */
     public function __construct(
         private OrderPage $orderPage,
         private string $pageUuid,
@@ -35,7 +34,6 @@ final readonly class OrderSummary
         private bool $disputeHasLost,
         private bool $failedEvents,
         private bool $failedHooks,
-        private array $references,
     ) {}
 
     public function orderPage(): OrderPage
@@ -126,15 +124,5 @@ final readonly class OrderSummary
     public function failedHooks(): bool
     {
         return $this->failedHooks;
-    }
-
-    public function matchesSearch(string $search): bool
-    {
-        if (in_array($search, $this->references, true)) {
-            return true;
-        }
-
-        return $this->customerEmail !== null
-            && mb_strtolower(trim($this->customerEmail)) === mb_strtolower($search);
     }
 }

@@ -37,7 +37,7 @@ permissions:
 
 `taxCodes.read` permits reading, searching, and refreshing the full Tax Code catalogue from product/variant pickers. Saving a selection still requires native Page-update permission. The Tax Code catalogue diagnostic reports only cached counts and successful/failed refresh times; it never checks Stripe Tax setup or account readiness and never refreshes Stripe itself.
 
-`orders.read` permits viewing native order Pages. `orders.update` additionally permits editing project-owned fields; canonical payment/order fields remain protected. See [Orders](orders.md) for blueprint customization. The orders container is also initialized automatically; the main hub does not yet include an Orders tab.
+`orders.read` permits viewing the Orders index and native order Pages. `orders.update` additionally permits editing project-owned fields; canonical payment/order fields remain protected. See [Orders](orders.md) for blueprint customization. The orders container and Orders tab are initialized automatically.
 
 The remaining permissions authorize explicit operational requests. `orders.reconcile` and `orders.delete` also require `orders.read`; `lifecycle.retry` requires `orders.read` when retrying one failed order hook. `housekeeping.run` starts one configured housekeeping batch using the same continuation state and non-overlapping lock as the CLI command. These permissions are disabled by default for custom roles. The authenticated request backend is available for the later Panel action UI; this version does not add its buttons or expose public mutation routes.
 
@@ -55,6 +55,12 @@ Every authorized operational outcome uses the same response envelope. `code` is 
 ```
 
 Failed requests set `result` to `null`. A completed housekeeping batch can return `partial_failure` with its sanitized counters in `result` and its stable issue in `error`. `retryable` is true only when the operation specifically classifies a later explicit invocation as useful; it never schedules or automatically replays an action. Authentication, area-access and permission failures keep Kirby's native Panel error response.
+
+## Orders index
+
+The Orders tab uses Kirby's native Pages table, newest first and 25 records per page. It opens with completed Checkouts whose payment state is either paid or no payment required. The Filters drawer uses multiselect fields for every Checkout, payment, refund and dispute state, plus operational Event and hook failures. Clearing a field removes that category's constraint. The filter badge reports constrained categories, and the adjacent reset action restores the default completed and successful-payment view. Search remains independent.
+
+Payment status uses Kirby's compact native tags. The other states remain available as filters and in the individual Order rather than competing for space in the index table. Native partial search covers the validated order number, Page UUID, customer name and email, and known Stripe references. Filter, search and pagination state is reflected in the Panel URL so an index view can be shared or restored.
 
 ## Panel menu
 

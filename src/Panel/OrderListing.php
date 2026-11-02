@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Panel;
 
 use Brick\Money\Money;
 use Kirby\Cms\App;
+use Kirby\Cms\Pages;
 use Kirby\Toolkit\Collection;
 use Kirby\Uuid\Uuids;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
@@ -27,26 +28,19 @@ final readonly class OrderListing
 {
     public const LIMIT = 25;
 
-    private const STRIPE_REFERENCE_FIELDS = [
+    private const SEARCH_FIELDS = [
+        'uuid',
+        'orderNumber',
+        'customer',
+        'stripeShippingRateIds',
         ...OrderSchema::REFERENCES,
-        'stripePaymentMethodId',
-        'stripeRefundId',
-        'stripeDisputeId',
-        'stripeBalanceTransactionId',
-        'stripePriceId',
-        'stripeProductId',
-        'discountId',
-        'couponId',
-        'promotionCodeId',
-    ];
-
-    private const SEARCH_REFERENCE_SNAPSHOTS = [
         'payment',
         'refunds',
         'disputes',
         'initiatingLineItems',
         'lineItems',
         'discounts',
+        'events',
     ];
 
     private OrderPageStore $orders;
@@ -63,6 +57,11 @@ final readonly class OrderListing
     {
         PluginPermissions::require($this->kirby, 'orders.read');
         $summaries = $this->summaries();
+
+        if ($query->search() !== null) {
+            $summaries = $this->search($summaries, $query->search());
+        }
+
         $summaries = array_values(array_filter(
             $summaries,
             fn(OrderSummary $summary): bool => $this->matches($summary, $query),
@@ -193,7 +192,6 @@ final readonly class OrderListing
             disputeHasLost: $disputeHasLost,
             failedEvents: $this->hasFailedEntry($events),
             failedHooks: $this->hasFailedEntry($lifecycleDeliveries),
-            references: $this->references($pageUuid, $orderNumber, $data),
         );
     }
 
@@ -210,71 +208,6 @@ final readonly class OrderListing
         ));
     }
 
-    /**
-     * @param array<string, mixed> $data
-     * @return list<string>
-     */
-    private function references(string $pageUuid, string $orderNumber, array $data): array
-    {
-        $references = [
-            $pageUuid => true,
-            $orderNumber => true,
-        ];
-
-        foreach (OrderSchema::REFERENCES as $field) {
-            if (isset($data[$field]) && is_string($data[$field])) {
-                $references[$data[$field]] = true;
-            }
-        }
-
-        /** @var list<string> $stripeShippingRateIds */
-        $stripeShippingRateIds = $data['stripeShippingRateIds'] ?? [];
-
-        foreach ($stripeShippingRateIds as $stripeShippingRateId) {
-            $references[$stripeShippingRateId] = true;
-        }
-
-        // Search current canonical facts only; lifecycle payloads are historical, duplicated and eventually pruned.
-        foreach (self::SEARCH_REFERENCE_SNAPSHOTS as $field) {
-            $this->collectStripeReferences($data[$field] ?? null, $references);
-        }
-
-        /** @var list<array{id: string, resourceId: string}> $events */
-        $events = $data['events'] ?? [];
-
-        foreach ($events as $event) {
-            $references[$event['id']] = true;
-            $references[$event['resourceId']] = true;
-            $this->collectStripeReferences($event, $references);
-        }
-
-        /** @var list<string> $result */
-        $result = array_keys($references);
-
-        return $result;
-    }
-
-    /** @param array<string, true> $references */
-    private function collectStripeReferences(mixed $value, array &$references): void
-    {
-        if (is_array($value) === false) {
-            return;
-        }
-
-        foreach ($value as $field => $item) {
-            if (
-                is_string($field)
-                && in_array($field, self::STRIPE_REFERENCE_FIELDS, true)
-                && is_string($item)
-                && $item !== ''
-            ) {
-                $references[$item] = true;
-            }
-
-            $this->collectStripeReferences($item, $references);
-        }
-    }
-
     /** @param list<array<string, mixed>> $entries */
     private function hasFailedEntry(array $entries): bool
     {
@@ -289,34 +222,68 @@ final readonly class OrderListing
 
     private function matches(OrderSummary $summary, OrderListQuery $query): bool
     {
-        if ($query->search() !== null && $summary->matchesSearch($query->search()) === false) {
+        if (
+            $query->checkoutStatuses() !== []
+            && in_array($summary->checkoutStatus(), $query->checkoutStatuses(), true) === false
+        ) {
             return false;
         }
 
-        if ($query->checkoutStatus() !== null && $summary->checkoutStatus() !== $query->checkoutStatus()) {
+        if (
+            $query->paymentStatuses() !== []
+            && in_array($summary->paymentStatus(), $query->paymentStatuses(), true) === false
+        ) {
             return false;
         }
 
-        if ($query->paymentStatus() !== null && $summary->paymentStatus() !== $query->paymentStatus()) {
+        if (
+            $query->refundStatuses() !== []
+            && in_array($summary->refundStatus(), $query->refundStatuses(), true) === false
+        ) {
             return false;
         }
 
-        if ($query->refundStatus() !== null && $summary->refundStatus() !== $query->refundStatus()) {
+        if (
+            $query->disputeStatuses() !== []
+            && in_array($summary->disputeStatus(), $query->disputeStatuses(), true) === false
+        ) {
             return false;
         }
 
-        if ($query->disputeFilter() === OrderDisputeFilter::Any && $summary->disputeStatus() === DisputeStatus::None) {
-            return false;
+        if ($query->attentionFilters() === []) {
+            return true;
         }
 
-        if ($query->disputeFilter() === OrderDisputeFilter::RequiresResponse && $summary->disputeRequiresResponse() === false) {
-            return false;
+        foreach ($query->attentionFilters() as $attentionFilter) {
+            $matches = match ($attentionFilter) {
+                OrderAttentionFilter::FailedEvents => $summary->failedEvents(),
+                OrderAttentionFilter::FailedHooks => $summary->failedHooks(),
+            };
+
+            if ($matches) {
+                return true;
+            }
         }
 
-        return match ($query->attentionFilter()) {
-            OrderAttentionFilter::FailedEvents => $summary->failedEvents(),
-            OrderAttentionFilter::FailedHooks => $summary->failedHooks(),
-            null => true,
-        };
+        return false;
+    }
+
+    /**
+     * @param list<OrderSummary> $summaries
+     * @return list<OrderSummary>
+     */
+    private function search(array $summaries, string $search): array
+    {
+        // Build the native search collection only from Pages that passed Order validation above.
+        $pages = new Pages(array_map(
+            static fn(OrderSummary $summary): OrderPage => $summary->orderPage(),
+            $summaries,
+        ));
+        $matches = $pages->search($search, ['fields' => self::SEARCH_FIELDS]);
+
+        return array_values(array_filter(
+            $summaries,
+            static fn(OrderSummary $summary): bool => $matches->has($summary->orderPage()->id()),
+        ));
     }
 }
