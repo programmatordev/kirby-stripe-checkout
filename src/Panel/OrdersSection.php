@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use Kirby\Cms\App;
 use Kirby\Panel\Ui\Item\PageItem;
 use Kirby\Toolkit\I18n;
+use Kirby\Toolkit\Pagination;
 use ProgrammatorDev\StripeCheckout\Money\MoneyFormatter;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\DisputeStatus;
@@ -57,7 +58,11 @@ final class OrdersSection
                 'error' => self::errorMessage($error),
                 'filters' => self::filters($query),
                 'options' => self::options($query),
-                'pagination' => self::emptyPagination(),
+                'pagination' => self::pagination(new Pagination([
+                    'limit' => OrderListing::LIMIT,
+                    'page' => 1,
+                    'total' => 0,
+                ])),
             ];
         }
 
@@ -73,7 +78,7 @@ final class OrdersSection
             'error' => null,
             'filters' => self::filters($query),
             'options' => self::options($query),
-            'pagination' => self::pagination($result),
+            'pagination' => self::pagination($result->pagination()),
         ];
     }
 
@@ -353,37 +358,14 @@ final class OrdersSection
         return is_string($translation) ? $translation : $key;
     }
 
-    /** @return array{end: int, firstPage: int, lastPage: int, limit: int, offset: int, page: int, pages: int, start: int, total: int} */
-    private static function pagination(OrderListResult $result): array
+    /** @return array{limit: int, offset: int, page: int, total: int} */
+    private static function pagination(Pagination $pagination): array
     {
-        $pagination = $result->pagination();
-
         return [
-            'end' => $pagination->end(),
-            'firstPage' => $pagination->firstPage(),
-            'lastPage' => $pagination->lastPage(),
             'limit' => $pagination->limit(),
             'offset' => $pagination->offset(),
             'page' => $pagination->page(),
-            'pages' => $pagination->pages(),
-            'start' => $pagination->start(),
             'total' => $pagination->total(),
-        ];
-    }
-
-    /** @return array{end: int, firstPage: int, lastPage: int, limit: int, offset: int, page: int, pages: int, start: int, total: int} */
-    private static function emptyPagination(): array
-    {
-        return [
-            'end' => 0,
-            'firstPage' => 0,
-            'lastPage' => 0,
-            'limit' => OrderListing::LIMIT,
-            'offset' => 0,
-            'page' => 0,
-            'pages' => 0,
-            'start' => 0,
-            'total' => 0,
         ];
     }
 

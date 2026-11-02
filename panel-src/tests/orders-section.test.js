@@ -68,7 +68,7 @@ test("Orders section extends Kirby's native Pages table and sends its additional
 			refundStatus: []
 		},
 		options: { layout: "table", search: true },
-		pagination: { limit: 25, offset: 50, page: 3, pages: 4, total: 76 }
+		pagination: { limit: 25, offset: 50, page: 3, total: 76 }
 	};
 	const component = section(async (endpoint, query) => {
 		calls.push({ endpoint, query });

@@ -205,7 +205,12 @@ final class OrderListingTest extends KirbyTestCase
         $response = OrdersSection::response($this->kirby);
 
         $this->assertNull($response['error']);
-        $this->assertSame(1, $response['pagination']['total']);
+        $this->assertSame([
+            'limit' => 25,
+            'offset' => 0,
+            'page' => 1,
+            'total' => 1,
+        ], $response['pagination']);
         $this->assertCount(1, $response['data']);
         $row = $response['data'][0];
         $this->assertSame($order->uuid()->toString(), $row['uuid']);
