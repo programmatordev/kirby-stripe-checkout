@@ -46,6 +46,7 @@ export default {
 		return {
 			filters: state.filters,
 			pagination: { page: state.page },
+			searching: Boolean(state.searchterm),
 			searchterm: state.searchterm
 		};
 	},

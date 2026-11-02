@@ -113,6 +113,7 @@ test("Orders section restores shareable state and keeps request failures generic
 	assert.deepEqual(component.filters.checkoutStatus, []);
 	assert.deepEqual(component.filters.payment, ["unpaid", "failed"]);
 	assert.deepEqual(component.filters.attention, ["failed_hooks"]);
+	assert.equal(component.searching, true);
 	assert.equal(component.searchterm, "ORDER-2");
 	assert.equal(component.pagination.page, 2);
 
