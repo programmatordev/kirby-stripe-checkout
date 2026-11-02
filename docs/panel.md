@@ -60,7 +60,7 @@ Failed requests set `result` to `null`. A completed housekeeping batch can retur
 
 The Orders tab uses Kirby's native Pages table, newest first and 25 records per page. It opens with completed Checkouts whose payment state is either paid or no payment required. The Filters drawer uses multiselect fields for every Checkout, payment, refund and dispute state, plus operational Event and hook failures. Clearing a field removes that category's constraint. The filter badge reports constrained categories, and the adjacent reset action restores the default completed and successful-payment view. Search remains independent.
 
-Payment status uses Kirby's compact native tags. The other states remain available as filters and in the individual Order rather than competing for space in the index table. Native partial search covers the validated order number, Page UUID, customer name and email, and known Stripe references. Filter, search and pagination state is reflected in the Panel URL so an index view can be shared or restored.
+The payment-status column uses Kirby's compact native tags. Payment remains the primary state, followed by refund and dispute states when they apply. Checkout and operational states remain available as filters and in the individual Order rather than competing for space in the index table. Native partial search covers the validated order number, Page UUID, customer name and email, and known Stripe references. Filter, search and pagination state is reflected in the Panel URL so an index view can be shared or restored.
 
 ## Panel menu
 
