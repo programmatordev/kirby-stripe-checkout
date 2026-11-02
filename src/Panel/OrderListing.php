@@ -7,6 +7,7 @@ namespace ProgrammatorDev\StripeCheckout\Panel;
 use Brick\Money\Money;
 use Kirby\Cms\App;
 use Kirby\Cms\Pages;
+use Kirby\Exception\ErrorPageException;
 use Kirby\Toolkit\Collection;
 use Kirby\Uuid\Uuids;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
@@ -84,7 +85,14 @@ final readonly class OrderListing
 
         /** @var Collection<OrderSummary> $collection */
         $collection = new Collection($indexed);
-        $page = $collection->paginate(self::LIMIT, $query->page());
+
+        try {
+            $page = $collection->paginate(self::LIMIT, $query->page());
+        } catch (ErrorPageException) {
+            // A previously valid shared URL can outlive the page it referenced as Orders are removed.
+            $page = $collection->paginate(self::LIMIT, 1);
+        }
+
         $pagination = $collection->pagination();
 
         if ($pagination === null) {

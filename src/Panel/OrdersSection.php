@@ -6,7 +6,6 @@ namespace ProgrammatorDev\StripeCheckout\Panel;
 
 use InvalidArgumentException;
 use Kirby\Cms\App;
-use Kirby\Exception\ErrorPageException;
 use Kirby\Panel\Ui\Item\PageItem;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Money\MoneyFormatter;
@@ -49,14 +48,7 @@ final class OrdersSection
         try {
             $query = self::query($kirby);
             $listing = new OrderListing($kirby);
-
-            try {
-                $result = $listing->query($query);
-            } catch (ErrorPageException) {
-                // A previously valid shared URL can outlive the page it referenced as Orders are removed.
-                $query = self::query($kirby, 1);
-                $result = $listing->query($query);
-            }
+            $result = $listing->query($query);
         } catch (InvalidArgumentException|OrderQueryException $error) {
             $query = new OrderListQuery();
 
@@ -85,7 +77,7 @@ final class OrdersSection
         ];
     }
 
-    private static function query(App $kirby, ?int $page = null): OrderListQuery
+    private static function query(App $kirby): OrderListQuery
     {
         $requestQuery = $kirby->request()->query();
         $checkoutStatus = $requestQuery->get('checkoutStatus');
@@ -95,7 +87,7 @@ final class OrdersSection
         $attention = $requestQuery->get('attention');
 
         return new OrderListQuery(
-            page: $page ?? self::page($requestQuery->get('page')),
+            page: self::page($requestQuery->get('page')),
             search: self::string($requestQuery->get('searchterm')),
             checkoutStatuses: self::parseFilters(
                 $checkoutStatus,

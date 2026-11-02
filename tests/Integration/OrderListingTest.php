@@ -304,23 +304,16 @@ final class OrderListingTest extends KirbyTestCase
         $this->assertSame($oldest->uuid()->toString(), $second->summaries()[0]->pageUuid());
     }
 
-    public function testOrdersSectionReturnsToTheFirstPageWhenASharedPageIsStale(): void
+    public function testListingReturnsToTheFirstPageWhenASharedPageIsStale(): void
     {
-        $this->environment->close();
-        $this->environment = KirbyTestEnvironment::start(request: [
-            'method' => 'GET',
-            'query' => ['page' => '2'],
-            'url' => 'https://kirby-stripe-checkout.test/panel/stripe-checkout?tab=orders&page=2',
-        ]);
-        $this->kirby = $this->environment->app();
         $order = $this->complete(
             $this->createOrder(new DateTimeImmutable('2026-10-02T10:00:00Z')),
             PaymentStatus::Paid,
         );
-        $response = OrdersSection::response($this->kirby);
+        $result = (new OrderListing($this->kirby))->query(new OrderListQuery(page: 2));
 
-        $this->assertSame(1, $response['pagination']['page']);
-        $this->assertSame($order->uuid()->toString(), $response['data'][0]['uuid']);
+        $this->assertSame(1, $result->pagination()->page());
+        $this->assertSame($order->uuid()->toString(), $result->summaries()[0]->pageUuid());
     }
 
     public function testQueryRejectsUnsupportedOrUnboundedInputs(): void
