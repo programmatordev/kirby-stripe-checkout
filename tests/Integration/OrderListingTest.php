@@ -65,11 +65,6 @@ final class OrderListingTest extends KirbyTestCase
         $this->assertSame('Buyer@Example.test', $summary->customerEmail());
         $this->assertSame(PaymentStatus::Paid, $summary->paymentStatus());
         $this->assertSame('32.00', (string) $summary->total()?->getAmount());
-        $this->assertFalse($summary->refundHasActive());
-        $this->assertFalse($summary->refundRequiresAction());
-        $this->assertFalse($summary->refundHasFailed());
-        $this->assertFalse($summary->disputeRequiresResponse());
-        $this->assertFalse($summary->disputeHasLost());
 
         $all = $listing->query(new OrderListQuery(
             checkoutStatuses: [],

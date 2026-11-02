@@ -165,16 +165,6 @@ final readonly class OrderListing
         $refundStatus = $data['refundStatus'];
         /** @var string $disputeStatus */
         $disputeStatus = $data['disputeStatus'];
-        /** @var bool $refundHasActive */
-        $refundHasActive = $data['refundHasActive'];
-        /** @var bool $refundRequiresAction */
-        $refundRequiresAction = $data['refundRequiresAction'];
-        /** @var bool $refundHasFailed */
-        $refundHasFailed = $data['refundHasFailed'];
-        /** @var bool $disputeRequiresResponse */
-        $disputeRequiresResponse = $data['disputeRequiresResponse'];
-        /** @var bool $disputeHasLost */
-        $disputeHasLost = $data['disputeHasLost'];
         /** @var list<array<string, mixed>> $events */
         $events = $data['events'] ?? [];
         /** @var list<array<string, mixed>> $lifecycleDeliveries */
@@ -193,11 +183,6 @@ final readonly class OrderListing
             refundStatus: RefundStatus::from($refundStatus),
             disputeStatus: DisputeStatus::from($disputeStatus),
             total: $this->total($data),
-            refundHasActive: $refundHasActive,
-            refundRequiresAction: $refundRequiresAction,
-            refundHasFailed: $refundHasFailed,
-            disputeRequiresResponse: $disputeRequiresResponse,
-            disputeHasLost: $disputeHasLost,
             failedEvents: $this->hasFailedEntry($events),
             failedHooks: $this->hasFailedEntry($lifecycleDeliveries),
         );

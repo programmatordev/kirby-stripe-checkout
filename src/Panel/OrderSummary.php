@@ -27,11 +27,6 @@ final readonly class OrderSummary
         private RefundStatus $refundStatus,
         private DisputeStatus $disputeStatus,
         private ?Money $total,
-        private bool $refundHasActive,
-        private bool $refundRequiresAction,
-        private bool $refundHasFailed,
-        private bool $disputeRequiresResponse,
-        private bool $disputeHasLost,
         private bool $failedEvents,
         private bool $failedHooks,
     ) {}
@@ -89,31 +84,6 @@ final readonly class OrderSummary
     public function total(): ?Money
     {
         return $this->total;
-    }
-
-    public function refundHasActive(): bool
-    {
-        return $this->refundHasActive;
-    }
-
-    public function refundRequiresAction(): bool
-    {
-        return $this->refundRequiresAction;
-    }
-
-    public function refundHasFailed(): bool
-    {
-        return $this->refundHasFailed;
-    }
-
-    public function disputeRequiresResponse(): bool
-    {
-        return $this->disputeRequiresResponse;
-    }
-
-    public function disputeHasLost(): bool
-    {
-        return $this->disputeHasLost;
     }
 
     public function failedEvents(): bool
