@@ -77,6 +77,7 @@ final class OrderCustomFieldsTest extends TestCase
             'field' => null,
             'FIELD' => 'value',
         ]];
+        yield 'Panel presentation namespace' => [[OrderSchema::PRESENTATION_FIELD_PREFIX . 'Note' => 'value']];
         yield 'list' => [['one']];
         yield 'not map' => [false];
     }

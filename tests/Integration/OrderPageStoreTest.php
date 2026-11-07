@@ -27,6 +27,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderPagePanel;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\OrdersPage;
 use ProgrammatorDev\StripeCheckout\Kirby\PersistenceErrorCode;
@@ -88,6 +89,40 @@ final class OrderPageStoreTest extends KirbyTestCase
         $this->assertNull($api->order($page->id()));
         $this->assertNull($api->order($page->slug()));
         $this->assertNull($api->order('page://missing'));
+    }
+
+    public function testPanelProjectionExposesNestedOrderFactsWithoutChangingContent(): void
+    {
+        $page = $this->createOrder(createdAt: new DateTimeImmutable('2026-01-01T12:00:00Z'));
+        $versions = $page->panel()->versions();
+        $requestHandle = strtolower(OrderPagePanel::handle('checkoutSessionRequest'));
+        $tokenHandle = strtolower(OrderPagePanel::handle('checkoutAttemptTokenHash'));
+
+        foreach (['latest', 'changes'] as $version) {
+            $values = $versions[$version] ?? null;
+            $this->assertIsArray($values);
+            $this->assertSame($page->title()->value(), $values['title'] ?? null);
+            $this->assertNotEmpty($values[$tokenHandle] ?? null);
+            $request = $values[$requestHandle] ?? null;
+            $this->assertIsArray($request);
+            $this->assertContains(['path' => 'client_reference_id', 'value' => $page->uuid()->toString()], $request);
+            $this->assertContains(['path' => 'mode', 'value' => 'payment'], $request);
+            $this->assertIsArray($values['initiatinglineitems'] ?? null);
+            $deliveries = $values['lifecycledeliveries'] ?? null;
+            $this->assertIsArray($deliveries);
+            $this->assertCount(1, $deliveries);
+            $delivery = $deliveries[0] ?? null;
+            $this->assertIsArray($delivery);
+            $this->assertSame('order.created', $delivery['type'] ?? null);
+            $this->assertNotEmpty($delivery['deliveryid'] ?? null);
+            $this->assertSame($page->uuid()->toString(), $delivery['pageuuid'] ?? null);
+            $this->assertSame('2026-01-01 12:00:00', $delivery['occurredat'] ?? null);
+            $this->assertIsArray($delivery['payload'] ?? null);
+        }
+
+        $content = $page->content('default')->toArray();
+        $this->assertArrayNotHasKey($requestHandle, $content);
+        $this->assertArrayNotHasKey($tokenHandle, $content);
     }
 
     public function testUserQueriesDoNotDiscloseOtherUsersOrGuestOrders(): void

@@ -11,6 +11,7 @@ use Kirby\Content\VersionId;
 use Kirby\Data\Yaml;
 use Kirby\Exception\PermissionException;
 use Kirby\Form\Form;
+use Kirby\Panel\Page as PanelPage;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
@@ -27,6 +28,11 @@ use Throwable;
 final class OrderPage extends ProtectedOrderPage
 {
     private bool $deletingStoredOrder = false;
+
+    public function panel(): PanelPage
+    {
+        return new OrderPagePanel($this);
+    }
 
     /** @internal Used only by the store after reloading and checking eligibility. */
     public function deleteStoredOrder(): bool
@@ -93,11 +99,11 @@ final class OrderPage extends ProtectedOrderPage
         return (new ModelCommit($this, 'update'))->call($arguments, function (OrderPage $page, array $values, array $strings, ?string $languageCode) use ($baseline): OrderPage {
             // Read-only Object/Structure fields may have a display-only subset of the snapshot schema.
             // Never persist their Form re-encoding.
-            $customFields = array_filter(
-                OrderData::map($strings),
+            $customFields = OrderData::map(array_filter(
+                $strings,
                 static fn(string $field): bool => $field !== 'lock' && OrderSchema::isReserved($field) === false,
                 ARRAY_FILTER_USE_KEY,
-            );
+            ));
             $changes = [];
 
             foreach ($customFields as $field => $value) {

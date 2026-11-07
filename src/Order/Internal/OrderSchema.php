@@ -9,6 +9,9 @@ use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 /** @internal Single registry for content serialization and reserved field protection. */
 final class OrderSchema
 {
+    /** Reserved namespace for values derived only for the Panel's read model. */
+    public const PRESENTATION_FIELD_PREFIX = 'orderView';
+
     public const OWNER = PluginMetadata::NAME;
     public const VERSION = 1;
     public const ORDER_PAGE_TEMPLATE = 'stripe-checkout-order';
@@ -52,6 +55,9 @@ final class OrderSchema
 
     public static function isReserved(string $field): bool
     {
-        return in_array(strtolower($field), array_map(strtolower(...), [...self::fields(), 'slug', 'template']), true);
+        $field = strtolower($field);
+
+        return str_starts_with($field, strtolower(self::PRESENTATION_FIELD_PREFIX))
+            || in_array($field, array_map(strtolower(...), [...self::fields(), 'slug', 'template']), true);
     }
 }
