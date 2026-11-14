@@ -64,8 +64,14 @@ final class OrderPagePanel extends Page
     /** @return array<mixed> */
     public function buttons(): array
     {
+        $model = $this->model;
+
         return ViewButtons::view($this)
-            ->bind(['stripeDashboardUrl' => $this->stripeDashboardUrl()])
+            ->bind([
+                'orderId' => $model instanceof OrderPage ? $model->slug() : null,
+                'stripeCheckoutSessionId' => $this->stripeCheckoutSessionId(),
+                'stripeDashboardUrl' => $this->stripeDashboardUrl(),
+            ])
             ->defaults('open', 'preview', '-', 'settings', 'languages', 'status')
             ->render();
     }
@@ -126,6 +132,21 @@ final class OrderPagePanel extends Page
         }
 
         return self::stripeDashboardUrlFor($this->orderData($model));
+    }
+
+    private function stripeCheckoutSessionId(): ?string
+    {
+        $model = $this->model;
+
+        if ($model instanceof OrderPage === false) {
+            return null;
+        }
+
+        $data = $this->orderData($model);
+        /** @var string|null $stripeCheckoutSessionId The stored order has already crossed the Order schema boundary. */
+        $stripeCheckoutSessionId = $data['stripeCheckoutSessionId'] ?? null;
+
+        return $stripeCheckoutSessionId;
     }
 
     public static function handle(string $name): string

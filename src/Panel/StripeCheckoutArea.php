@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Panel;
 
 use Kirby\Cms\App;
+use Kirby\Exception\Exception as KirbyException;
 use Kirby\Exception\InvalidArgumentException;
 use Kirby\Exception\PermissionException;
 use Kirby\Form\Fields;
@@ -35,7 +36,23 @@ final class StripeCheckoutArea
             'icon' => 'credit-card',
             // Kirby collects named buttons from every area, but renders this one only where a blueprint references it.
             'buttons' => [
+                'page.stripeCheckoutOrderSync' => static fn(?string $orderId = null, ?string $stripeCheckoutSessionId = null): ?ViewButton => self::syncOrderButton(
+                    kirby: $kirby,
+                    orderId: $orderId,
+                    stripeCheckoutSessionId: $stripeCheckoutSessionId,
+                ),
                 'page.stripeCheckoutOrderOpenInStripe' => static fn(?string $stripeDashboardUrl = null): ?ViewButton => self::openInStripeButton($stripeDashboardUrl),
+            ],
+            'dialogs' => [
+                'order.sync' => [
+                    'pattern' => 'stripe-checkout/orders/(:any)/sync',
+                    'load' => function (string $orderId) use ($kirby): array {
+                        return StripeCheckoutArea::syncOrderDialog($kirby);
+                    },
+                    'submit' => function (string $orderId) use ($kirby): array {
+                        return StripeCheckoutArea::submitOrderSyncDialog($kirby, $orderId);
+                    },
+                ],
             ],
             'menu' => static function (array $areas = [], array $permissions = []) use ($kirby): bool {
                 // Kirby calls menu callbacks with context while building the menu, then without arguments while normalizing the active area view.
@@ -63,8 +80,8 @@ final class StripeCheckoutArea
         ];
     }
 
-    // Kirby rebinds route closures to its Route object.
-    // This public handler keeps the actual work independent from that closure scope.
+    // Kirby rebinds area route closures to its Route object.
+    // Public route handlers keep the actual work independent from that closure scope.
     /** @return array<string, mixed> */
     public static function view(App $kirby): array
     {
@@ -219,6 +236,80 @@ final class StripeCheckoutArea
             target: '_blank',
             text: 'programmatordev.stripe-checkout.orders.actions.openInStripe',
             rel: 'noopener noreferrer',
+        );
+    }
+
+    private static function syncOrderButton(App $kirby, ?string $orderId, ?string $stripeCheckoutSessionId): ?ViewButton
+    {
+        if ($orderId === null) {
+            return null;
+        }
+
+        if (PluginPermissions::allows($kirby, 'orders.read') === false) {
+            return null;
+        }
+
+        if (PluginPermissions::allows($kirby, 'orders.reconcile') === false) {
+            return null;
+        }
+
+        // This validated Order value controls presentation only.
+        // The operational request reloads the Order and rechecks eligibility on submit.
+        $disabled = $stripeCheckoutSessionId === null;
+
+        return new ViewButton(
+            dialog: $disabled ? null : 'stripe-checkout/orders/' . rawurlencode($orderId) . '/sync',
+            disabled: $disabled,
+            icon: 'refresh',
+            text: 'programmatordev.stripe-checkout.orders.actions.sync',
+            title: $disabled ? 'programmatordev.stripe-checkout.orders.actions.syncUnavailable' : null,
+        );
+    }
+
+    /** @return array<string, mixed> */
+    public static function syncOrderDialog(App $kirby): array
+    {
+        PluginPermissions::require($kirby, 'orders.read');
+        PluginPermissions::require($kirby, 'orders.reconcile');
+
+        return [
+            'component' => 'k-text-dialog',
+            'props' => [
+                'size' => 'medium',
+                'text' => self::translate('orders.actions.syncConfirm'),
+                'submitButton' => [
+                    'icon' => 'refresh',
+                    'text' => self::translate('orders.actions.sync'),
+                ],
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public static function submitOrderSyncDialog(App $kirby, string $orderId): array
+    {
+        // Keep reconciliation in its existing operational owner.
+        // This adapter only maps the shared response envelope to Kirby's native dialog result.
+        $response = OperationalRequests::syncOrder($kirby, $orderId);
+
+        if ($response['status'] === 'success') {
+            $message = ($response['result']['outcome'] ?? null) === 'updated'
+                ? self::translate('orders.actions.syncUpdated')
+                : self::translate('orders.actions.syncUnchanged');
+
+            return [
+                'event' => 'stripe-checkout.order.sync',
+                'message' => $message,
+            ];
+        }
+
+        $retryable = $response['error']['retryable'] ?? false;
+
+        throw new KirbyException(
+            message: self::translate($retryable
+                ? 'orders.actions.syncRetryableFailure'
+                : 'orders.actions.syncFailure'),
+            httpCode: $response['code'],
         );
     }
 

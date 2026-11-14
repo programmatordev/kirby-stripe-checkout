@@ -162,7 +162,19 @@ final class OrderPageStoreTest extends KirbyTestCase
         );
         $this->kirby = $this->environment->app();
         $page = $this->createOrder(createdAt: new DateTimeImmutable('2026-01-01T12:00:00Z'));
-        $this->assertSame([], $page->panel()->buttons());
+        $buttons = $page->panel()->buttons();
+        $this->assertCount(1, $buttons);
+        $syncButton = $buttons[0] ?? null;
+        $this->assertIsArray($syncButton);
+        $syncProps = $syncButton['props'] ?? null;
+        $this->assertIsArray($syncProps);
+        $this->assertSame('refresh', $syncProps['icon'] ?? null);
+        $this->assertSame('Sync with Stripe', $syncProps['text'] ?? null);
+        $this->assertTrue($syncProps['disabled'] ?? false);
+        $this->assertSame(
+            'This order has no Stripe Checkout Session to sync.',
+            $syncProps['title'] ?? null,
+        );
 
         $updated = (new OrderPageStore($this->kirby))->update($page->uuid()->toString(), static fn(array $data): array => [
             ...$data,
@@ -172,7 +184,18 @@ final class OrderPageStoreTest extends KirbyTestCase
             'checkoutOpenedAt' => $data['createdAt'],
         ]);
         $expected = 'https://dashboard.stripe.com/test/checkout/sessions/cs_test_dashboard%2Freference';
-        $button = $updated->panel()->buttons()[0] ?? null;
+        $buttons = $updated->panel()->buttons();
+        $this->assertCount(2, $buttons);
+        $syncButton = $buttons[0] ?? null;
+        $this->assertIsArray($syncButton);
+        $syncProps = $syncButton['props'] ?? null;
+        $this->assertIsArray($syncProps);
+        $this->assertFalse($syncProps['disabled'] ?? true);
+        $this->assertSame(
+            'stripe-checkout/orders/' . $updated->slug() . '/sync',
+            $syncProps['dialog'] ?? null,
+        );
+        $button = $buttons[1] ?? null;
         $this->assertIsArray($button);
         $this->assertSame('k-view-button', $button['component'] ?? null);
         $props = $button['props'] ?? null;
@@ -194,7 +217,7 @@ final class OrderPageStoreTest extends KirbyTestCase
             'stripeShippingRateIds' => [],
             'checkoutOpenedAt' => $data['createdAt'],
         ]);
-        $liveButton = $livePage->panel()->buttons()[0] ?? null;
+        $liveButton = $livePage->panel()->buttons()[1] ?? null;
         $this->assertIsArray($liveButton);
         $liveProps = $liveButton['props'] ?? null;
         $this->assertIsArray($liveProps);

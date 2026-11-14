@@ -76,6 +76,19 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertSame(['stripe-checkout'], array_column($area['views'], 'pattern'));
     }
 
+    public function testOrderSyncButtonIsHiddenWithoutReconcilePermission(): void
+    {
+        $this->restartWithPermissions([
+            'orders.read' => true,
+            'orders.reconcile' => false,
+        ]);
+        $area = $this->area();
+        /** @var callable(?string, ?string): mixed $button */
+        $button = $area['buttons']['page.stripeCheckoutOrderSync'];
+
+        $this->assertNull($button('abc123def456ghi7', 'cs_test_panel'));
+    }
+
     public function testAreaNormalizesTheNativePageView(): void
     {
         $definition = $this->area();
@@ -668,6 +681,7 @@ final class PanelAreaTest extends KirbyTestCase
 
     /**
      * @return array{
+     *   buttons: array<string, callable>,
      *   menu: callable(array<mixed>, array<mixed>): bool,
      *   views: array{0: array{pattern: string, action: callable(): array<string, mixed>}}
      * }
@@ -675,6 +689,7 @@ final class PanelAreaTest extends KirbyTestCase
     private function area(): array
     {
         /** @var array{
+         *   buttons: array<string, callable>,
          *   menu: callable(array<mixed>, array<mixed>): bool,
          *   views: array{0: array{pattern: string, action: callable(): array<string, mixed>}}
          * } $area

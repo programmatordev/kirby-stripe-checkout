@@ -82,6 +82,43 @@ final class OperationalRequestsTest extends KirbyTestCase
         $this->assertSame(403, $response->code(), $response->body());
     }
 
+    public function testOrderSyncDialogUsesKirbysNativeConfirmation(): void
+    {
+        $this->restartRequest([
+            'orders.read' => true,
+            'orders.reconcile' => true,
+        ], 'GET');
+
+        $response = Panel::router('dialogs/' . self::SYNC_PATH);
+
+        $this->assertNotNull($response);
+        $this->assertSame(200, $response->code(), $response->body());
+        /** @var array{'$dialog': array{component: string, props: array{size: string, text: string, submitButton: array{icon: string, text: string}}}} $body */
+        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
+        $dialog = $body['$dialog'];
+        $this->assertSame('k-text-dialog', $dialog['component']);
+        $this->assertSame('medium', $dialog['props']['size']);
+        $this->assertSame('refresh', $dialog['props']['submitButton']['icon']);
+        $this->assertSame('Sync with Stripe', $dialog['props']['submitButton']['text']);
+        $this->assertSame(
+            'Retrieve the latest Checkout, payment, refund and dispute information from Stripe? Changes may trigger connected store workflows.',
+            $dialog['props']['text'],
+        );
+    }
+
+    public function testOrderSyncDialogRequiresReconcilePermissionBeforeConfirmation(): void
+    {
+        $this->restartRequest([
+            'orders.read' => true,
+            'orders.reconcile' => false,
+        ], 'GET');
+
+        $response = Panel::router('dialogs/' . self::SYNC_PATH);
+
+        $this->assertNotNull($response);
+        $this->assertSame(403, $response->code(), $response->body());
+    }
+
     public function testOrderSyncPermissionDoesNotRevealAnUnreadableOrder(): void
     {
         $this->restartRequest([
@@ -184,6 +221,42 @@ final class OperationalRequestsTest extends KirbyTestCase
             'result' => ['outcome' => 'updated'],
             'error' => null,
         ], json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR));
+    }
+
+    public function testOrderSyncDialogReportsTheCommittedOutcome(): void
+    {
+        $this->restartRequest([
+            'orders.read' => true,
+            'orders.reconcile' => true,
+        ]);
+        $createdAt = new DateTimeImmutable('2026-10-01T12:00:00Z');
+        $order = $this->createOpenOrder($createdAt);
+        ApiRequestor::setHttpClient(new WebhookCheckoutClient($order->uuid()->toString(), $createdAt->getTimestamp()));
+
+        $response = Panel::router('dialogs/' . self::SYNC_PATH);
+
+        $this->assertNotNull($response);
+        $this->assertSame(200, $response->code(), $response->body());
+        /** @var array{'$dialog': array{event: string, message: string}} $body */
+        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('stripe-checkout.order.sync', $body['$dialog']['event']);
+        $this->assertSame('The order was updated from Stripe.', $body['$dialog']['message']);
+    }
+
+    public function testOrderSyncDialogPresentsASafeOperationFailure(): void
+    {
+        $this->restartRequest([
+            'orders.read' => true,
+            'orders.reconcile' => true,
+        ]);
+
+        $response = Panel::router('dialogs/' . self::SYNC_PATH);
+
+        $this->assertNotNull($response);
+        $this->assertSame(409, $response->code(), $response->body());
+        /** @var array{'$dialog': array{error: string}} $body */
+        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('The order could not be synced with Stripe.', $body['$dialog']['error']);
     }
 
     public function testOrderSyncPreservesRetryableProviderFailure(): void
