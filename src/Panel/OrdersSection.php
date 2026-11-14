@@ -67,10 +67,13 @@ final class OrdersSection
         }
 
         $moneyFormatter = new MoneyFormatter($kirby);
+        // Content language selects translated settings; operator-facing amounts follow the authenticated Panel user.
+        $panelLanguage = $kirby->user()?->language() ?? $kirby->panelLanguage();
+        $panelLocale = $kirby->translation($panelLanguage)->locale();
         $data = [];
 
         foreach ($result->summaries() as $summary) {
-            $data[] = self::order($summary, $moneyFormatter);
+            $data[] = self::order($summary, $moneyFormatter, $panelLocale);
         }
 
         return [
@@ -153,8 +156,11 @@ final class OrdersSection
     }
 
     /** @return array<mixed> */
-    private static function order(OrderSummary $summary, MoneyFormatter $moneyFormatter): array
-    {
+    private static function order(
+        OrderSummary $summary,
+        MoneyFormatter $moneyFormatter,
+        string $panelLocale,
+    ): array {
         // Preserve the native Pages section's row links, permissions and actions.
         $item = (new PageItem(
             page: $summary->orderPage(),
@@ -174,7 +180,7 @@ final class OrdersSection
             'paymentStatus' => self::paymentStatusTags($summary),
             'total' => $summary->total() === null
                 ? null
-                : $moneyFormatter->format($summary->total()),
+                : $moneyFormatter->format($summary->total(), locale: $panelLocale),
         ];
     }
 

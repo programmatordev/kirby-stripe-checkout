@@ -244,6 +244,42 @@ final class OrderListingTest extends KirbyTestCase
         $this->assertArrayNotHasKey('attention', $columns);
     }
 
+    public function testOrdersSectionFormatsMoneyForThePanelUserInsteadOfTheContentLanguage(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(
+            languages: [[
+                'code' => 'en',
+                'default' => true,
+                'locale' => 'en_US',
+                'name' => 'English',
+            ], [
+                'code' => 'pt',
+                'locale' => 'pt_PT',
+                'name' => 'Português',
+            ]],
+            users: [[
+                'id' => 'panel-admin',
+                'email' => 'panel-admin@example.com',
+                'language' => 'pt_PT',
+                'role' => 'admin',
+            ]],
+            impersonate: 'panel-admin',
+        );
+        $this->kirby = $this->environment->app();
+        $this->complete(
+            $this->createOrder(new DateTimeImmutable('2026-10-02T10:00:00Z')),
+            PaymentStatus::Paid,
+        );
+        $expected = Money::of('32.00', 'EUR')->formatToLocale('pt_PT');
+
+        $this->assertSame($expected, OrdersSection::response($this->kirby)['data'][0]['total']);
+
+        $this->kirby->setCurrentLanguage('pt');
+
+        $this->assertSame($expected, OrdersSection::response($this->kirby)['data'][0]['total']);
+    }
+
     public function testOrdersSectionAppliesMultiplePaymentStatuses(): void
     {
         $this->environment->close();
