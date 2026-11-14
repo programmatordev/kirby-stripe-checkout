@@ -18,6 +18,7 @@ use Kirby\Exception\PermissionException;
 use Kirby\Filesystem\Dir;
 use Kirby\Filesystem\F;
 use Kirby\Form\Form;
+use Kirby\Panel\Panel;
 use Kirby\Panel\Ui\Buttons\ViewButton;
 use Kirby\Toolkit\I18n;
 use Kirby\Uuid\Uri;
@@ -126,6 +127,24 @@ final class OrderPageStoreTest extends KirbyTestCase
         $content = $page->content('default')->toArray();
         $this->assertArrayNotHasKey($requestHandle, $content);
         $this->assertArrayNotHasKey($tokenHandle, $content);
+    }
+
+    public function testPanelBreadcrumbReturnsToTheStripeCheckoutOrderList(): void
+    {
+        $page = $this->createOrder();
+        $panel = $page->panel();
+        $view = $panel->view();
+
+        $this->assertSame('Stripe Checkout', $view['breadcrumbLabel'] ?? null);
+        $this->assertSame('credit-card', $view['icon'] ?? null);
+        $this->assertSame(Panel::url('stripe-checkout'), $view['link'] ?? null);
+        $this->assertSame([[
+            'label' => 'Orders',
+            'link' => Panel::url('stripe-checkout') . '?tab=orders',
+        ], [
+            'label' => $page->title()->toString(),
+            'link' => $panel->url(true),
+        ]], $view['breadcrumb'] ?? null);
     }
 
     public function testPanelLinksAnAssociatedSessionToTheMatchingStripeDashboardMode(): void

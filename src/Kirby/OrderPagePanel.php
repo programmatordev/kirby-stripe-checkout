@@ -7,11 +7,14 @@ namespace ProgrammatorDev\StripeCheckout\Kirby;
 use Kirby\Cms\Language;
 use Kirby\Form\Fields;
 use Kirby\Panel\Page;
+use Kirby\Panel\Panel;
+use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
+use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 
-/** @internal Adds display-only values to the native Order Page view. */
+/** @internal Customizes the native Order Page presentation without replacing its route or form. */
 final class OrderPagePanel extends Page
 {
     public const PREFIX = OrderSchema::PRESENTATION_FIELD_PREFIX;
@@ -36,6 +39,31 @@ final class OrderPagePanel extends Page
         'cancelUrl',
         'returnUrl',
     ];
+
+    /** @return list<array{label: string, link: string}> */
+    public function breadcrumb(): array
+    {
+        return [[
+            'label' => self::translate('tabs.orders'),
+            'link' => Panel::url('stripe-checkout') . '?tab=orders',
+        ], [
+            'label' => $this->model->title()->toString(),
+            'link' => $this->url(true),
+        ]];
+    }
+
+    /** @return array<mixed> */
+    public function view(): array
+    {
+        // Orders use Kirby's native Page route; replace only its site-area
+        // navigation metadata with the owning plugin area.
+        return [
+            ...parent::view(),
+            'breadcrumbLabel' => self::translate('area.label'),
+            'icon' => 'credit-card',
+            'link' => Panel::url('stripe-checkout'),
+        ];
+    }
 
     /** @return array<string, array<string, mixed>> */
     public function versions(): array
@@ -155,6 +183,13 @@ final class OrderPagePanel extends Page
         $modePath = $credentialMode === CredentialMode::Test ? 'test/' : '';
 
         return 'https://dashboard.stripe.com/' . $modePath . 'checkout/sessions/' . rawurlencode($stripeCheckoutSessionId);
+    }
+
+    private static function translate(string $suffix): string
+    {
+        $translation = I18n::translate(Catalogue::PREFIX . $suffix);
+
+        return is_string($translation) ? $translation : $suffix;
     }
 
     /** @return list<array<string, mixed>> */
