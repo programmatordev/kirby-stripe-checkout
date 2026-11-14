@@ -117,6 +117,7 @@ return [
     'programmatordev.stripe-checkout.orders.index.status.dispute.resolved_favorable' => 'Dispute won',
     'programmatordev.stripe-checkout.orders.index.status.dispute.resolved_lost' => 'Dispute lost',
     'programmatordev.stripe-checkout.orders.index.status.dispute.mixed' => 'Mixed disputes',
+    'programmatordev.stripe-checkout.orders.actions.openInStripe' => 'Open in Stripe',
     'programmatordev.stripe-checkout.orders.tabs.overview' => 'Overview',
     'programmatordev.stripe-checkout.orders.tabs.purchase' => 'Items',
     'programmatordev.stripe-checkout.orders.tabs.customer' => 'Customer',

@@ -28,6 +28,7 @@ final class CheckoutAttemptFactory
         ?string $guestReference = 'guest',
         ?AttemptToken $token = null,
         ?SessionRequest $request = null,
+        CredentialMode $credentialMode = CredentialMode::Test,
     ): CheckoutAttempt {
         $context = new SessionRequestContext(
             order: $order,
@@ -81,8 +82,8 @@ final class CheckoutAttemptFactory
             token: $token,
             guestReference: $guestReference,
             stripeApiVersion: '2026-07-29.dahlia',
-            credentialMode: CredentialMode::Test,
-            credentialFingerprint: hash('sha256', 'test-credential'),
+            credentialMode: $credentialMode,
+            credentialFingerprint: hash('sha256', $credentialMode->value . '-credential'),
             createdAt: $createdAt,
         );
     }

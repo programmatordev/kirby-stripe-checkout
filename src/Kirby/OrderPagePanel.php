@@ -7,6 +7,8 @@ namespace ProgrammatorDev\StripeCheckout\Kirby;
 use Kirby\Cms\Language;
 use Kirby\Form\Fields;
 use Kirby\Panel\Page;
+use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
 
 /** @internal Adds display-only values to the native Order Page view. */
@@ -69,6 +71,17 @@ final class OrderPagePanel extends Page
         ];
     }
 
+    public function stripeDashboardUrl(): ?string
+    {
+        $model = $this->model;
+
+        if ($model instanceof OrderPage === false) {
+            return null;
+        }
+
+        return self::stripeDashboardUrlFor((new OrderPageStore($model->kirby()))->data($model));
+    }
+
     public static function handle(string $name): string
     {
         return self::PREFIX . ucfirst($name);
@@ -124,6 +137,24 @@ final class OrderPagePanel extends Page
         }
 
         return $normalized;
+    }
+
+    /** @param array<string, mixed> $order */
+    private static function stripeDashboardUrlFor(array $order): ?string
+    {
+        $stripeCheckoutSessionId = OrderData::nullableString($order['stripeCheckoutSessionId'] ?? null);
+        $checkoutAttempt = OrderData::map($order['checkoutAttempt'] ?? null);
+        $credentialMode = CredentialMode::from(OrderData::string($checkoutAttempt['credentialMode'] ?? null));
+
+        if ($stripeCheckoutSessionId === null || $credentialMode === CredentialMode::Unknown) {
+            return null;
+        }
+
+        // Stripe Dashboard deep links insert /test for sandbox resources.
+        // https://docs.stripe.com/stripe-apps/deep-links
+        $modePath = $credentialMode === CredentialMode::Test ? 'test/' : '';
+
+        return 'https://dashboard.stripe.com/' . $modePath . 'checkout/sessions/' . rawurlencode($stripeCheckoutSessionId);
     }
 
     /** @return list<array<string, mixed>> */

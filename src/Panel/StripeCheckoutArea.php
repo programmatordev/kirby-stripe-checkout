@@ -9,9 +9,12 @@ use Kirby\Exception\InvalidArgumentException;
 use Kirby\Exception\PermissionException;
 use Kirby\Form\Fields;
 use Kirby\Panel\Panel;
+use Kirby\Panel\Ui\Buttons\ViewButton;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Collection\CustomField;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderPagePanel;
 use ProgrammatorDev\StripeCheckout\Kirby\PluginPermissions;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
@@ -32,6 +35,10 @@ final class StripeCheckoutArea
         return [
             'label' => self::translate('area.label'),
             'icon' => 'credit-card',
+            // Kirby collects named buttons from every area, but renders this one only where a blueprint references it.
+            'buttons' => [
+                'page.stripeCheckoutOrderOpenInStripe' => static fn(OrderPage $page): ?ViewButton => self::openInStripeButton($page),
+            ],
             'menu' => static function (array $areas = [], array $permissions = []) use ($kirby): bool {
                 // Kirby calls menu callbacks with context while building the menu, then without arguments while normalizing the active area view.
                 if ($permissions === []) {
@@ -200,6 +207,29 @@ final class StripeCheckoutArea
         return PluginPermissions::allows($kirby, 'settings.read')
             || PluginPermissions::allows($kirby, 'orders.read')
             || PluginPermissions::allows($kirby, 'diagnostics.read');
+    }
+
+    private static function openInStripeButton(OrderPage $page): ?ViewButton
+    {
+        $panel = $page->panel();
+
+        if ($panel instanceof OrderPagePanel === false) {
+            return null;
+        }
+
+        $stripeDashboardUrl = $panel->stripeDashboardUrl();
+
+        if ($stripeDashboardUrl === null) {
+            return null;
+        }
+
+        return new ViewButton(
+            icon: 'open',
+            link: $stripeDashboardUrl,
+            target: '_blank',
+            text: 'programmatordev.stripe-checkout.orders.actions.openInStripe',
+            rel: 'noopener noreferrer',
+        );
     }
 
     private static function requireRead(App $kirby): void

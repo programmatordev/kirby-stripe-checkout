@@ -17,6 +17,7 @@ final class OrderBlueprintTest extends TestCase
         $tabs = $blueprint['tabs'] ?? null;
         $this->assertIsArray($tabs);
         $this->assertSame(['overview', 'purchase', 'customer', 'payment', 'technical'], array_keys($tabs));
+        $this->assertSame(['stripeCheckoutOrderOpenInStripe'], $blueprint['buttons'] ?? null);
 
         $fields = [];
         $handles = [];

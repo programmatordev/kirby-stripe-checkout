@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Brick\Money\Money;
+use Closure;
 use DateTimeImmutable;
 use Kirby\Api\Controller\Changes;
 use Kirby\Cms\App;
@@ -17,6 +18,7 @@ use Kirby\Exception\PermissionException;
 use Kirby\Filesystem\Dir;
 use Kirby\Filesystem\F;
 use Kirby\Form\Form;
+use Kirby\Panel\Ui\Buttons\ViewButton;
 use Kirby\Toolkit\I18n;
 use Kirby\Uuid\Uri;
 use Kirby\Uuid\Uuid;
@@ -25,6 +27,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\CheckoutContext;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutLineItem;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutSource;
 use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
+use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPage;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPagePanel;
@@ -123,6 +126,61 @@ final class OrderPageStoreTest extends KirbyTestCase
         $content = $page->content('default')->toArray();
         $this->assertArrayNotHasKey($requestHandle, $content);
         $this->assertArrayNotHasKey($tokenHandle, $content);
+    }
+
+    public function testPanelLinksAnAssociatedSessionToTheMatchingStripeDashboardMode(): void
+    {
+        $area = $this->kirby->load()->areas()['stripe-checkout'] ?? null;
+        $this->assertIsArray($area);
+        $buttons = $area['buttons'] ?? null;
+        $this->assertIsArray($buttons);
+        $buttonFactory = $buttons['page.stripeCheckoutOrderOpenInStripe'] ?? null;
+        $this->assertInstanceOf(Closure::class, $buttonFactory);
+        $page = $this->createOrder(createdAt: new DateTimeImmutable('2026-01-01T12:00:00Z'));
+        $this->assertNull($buttonFactory($page));
+
+        $updated = (new OrderPageStore($this->kirby))->update($page->uuid()->toString(), static fn(array $data): array => [
+            ...$data,
+            'checkoutStatus' => 'open',
+            'stripeCheckoutSessionId' => 'cs_test_dashboard/reference',
+            'stripeShippingRateIds' => [],
+            'checkoutOpenedAt' => $data['createdAt'],
+        ]);
+        $expected = 'https://dashboard.stripe.com/test/checkout/sessions/cs_test_dashboard%2Freference';
+        $viewButton = $buttonFactory($updated);
+        $this->assertInstanceOf(ViewButton::class, $viewButton);
+        $button = $viewButton->render();
+        $this->assertIsArray($button);
+        $this->assertSame('k-view-button', $button['component'] ?? null);
+        $props = $button['props'] ?? null;
+        $this->assertIsArray($props);
+        $this->assertSame('open', $props['icon'] ?? null);
+        $this->assertSame($expected, $props['link'] ?? null);
+        $this->assertSame('_blank', $props['target'] ?? null);
+        $this->assertSame('noopener noreferrer', $props['rel'] ?? null);
+        $this->assertSame('Open in Stripe', $props['text'] ?? null);
+
+        $livePage = $this->createOrder(
+            createdAt: new DateTimeImmutable('2026-01-02T12:00:00Z'),
+            credentialMode: CredentialMode::Live,
+        );
+        $livePage = (new OrderPageStore($this->kirby))->update($livePage->uuid()->toString(), static fn(array $data): array => [
+            ...$data,
+            'checkoutStatus' => 'open',
+            'stripeCheckoutSessionId' => 'cs_live_dashboard',
+            'stripeShippingRateIds' => [],
+            'checkoutOpenedAt' => $data['createdAt'],
+        ]);
+        $liveViewButton = $buttonFactory($livePage);
+        $this->assertInstanceOf(ViewButton::class, $liveViewButton);
+        $liveButton = $liveViewButton->render();
+        $this->assertIsArray($liveButton);
+        $liveProps = $liveButton['props'] ?? null;
+        $this->assertIsArray($liveProps);
+        $this->assertSame(
+            'https://dashboard.stripe.com/checkout/sessions/cs_live_dashboard',
+            $liveProps['link'] ?? null,
+        );
     }
 
     public function testUserQueriesDoNotDiscloseOtherUsersOrGuestOrders(): void
@@ -876,8 +934,11 @@ final class OrderPageStoreTest extends KirbyTestCase
         return $page?->content('default')->data()[strtolower($field)] ?? null;
     }
 
-    private function createOrder(?string $userUuid = null, ?DateTimeImmutable $createdAt = null): OrderPage
-    {
+    private function createOrder(
+        ?string $userUuid = null,
+        ?DateTimeImmutable $createdAt = null,
+        CredentialMode $credentialMode = CredentialMode::Test,
+    ): OrderPage {
         $price = Money::of('16', 'EUR');
         $product = new Product(new ProductRequest('product', 2), 'Product', false, new Price($price));
         $checkout = new CheckoutContext(
@@ -901,6 +962,7 @@ final class OrderPageStoreTest extends KirbyTestCase
                 order: $context,
                 createdAt: $createdAt,
                 guestReference: $userUuid === null ? 'guest' : null,
+                credentialMode: $credentialMode,
             ),
             createdAt: $createdAt,
         );
