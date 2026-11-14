@@ -8,6 +8,7 @@ use Kirby\Cms\Language;
 use Kirby\Form\Fields;
 use Kirby\Panel\Page;
 use Kirby\Panel\Panel;
+use Kirby\Panel\Ui\Buttons\ViewButtons;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
@@ -19,6 +20,13 @@ use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 final class OrderPagePanel extends Page
 {
     public const PREFIX = OrderSchema::PRESENTATION_FIELD_PREFIX;
+
+    /**
+     * Share one validated snapshot between the native versions and buttons projections.
+     *
+     * @var array<string, mixed>|null
+     */
+    private ?array $orderData = null;
 
     /** @var list<string> */
     public const CHECKOUT_ATTEMPT_FIELDS = [
@@ -54,6 +62,15 @@ final class OrderPagePanel extends Page
     }
 
     /** @return array<mixed> */
+    public function buttons(): array
+    {
+        return ViewButtons::view($this)
+            ->bind(['stripeDashboardUrl' => $this->stripeDashboardUrl()])
+            ->defaults('open', 'preview', '-', 'settings', 'languages', 'status')
+            ->render();
+    }
+
+    /** @return array<mixed> */
     public function view(): array
     {
         // Orders use Kirby's native Page route; replace only its site-area
@@ -81,7 +98,7 @@ final class OrderPagePanel extends Page
             ];
         }
 
-        $projectionInput = self::projection((new OrderPageStore($model->kirby()))->data($model));
+        $projectionInput = self::projection($this->orderData($model));
 
         // Fields formats the entire blueprint. Keep only the supplied projection
         // so empty display fields cannot overwrite the native version values.
@@ -108,7 +125,7 @@ final class OrderPagePanel extends Page
             return null;
         }
 
-        return self::stripeDashboardUrlFor((new OrderPageStore($model->kirby()))->data($model));
+        return self::stripeDashboardUrlFor($this->orderData($model));
     }
 
     public static function handle(string $name): string
@@ -191,6 +208,12 @@ final class OrderPagePanel extends Page
         $translation = I18n::translate(Catalogue::PREFIX . $suffix);
 
         return is_string($translation) ? $translation : $suffix;
+    }
+
+    /** @return array<string, mixed> */
+    private function orderData(OrderPage $model): array
+    {
+        return $this->orderData ??= (new OrderPageStore($model->kirby()))->data($model);
     }
 
     /** @return list<array<string, mixed>> */

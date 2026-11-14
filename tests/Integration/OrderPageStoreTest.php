@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use Brick\Money\Money;
-use Closure;
 use DateTimeImmutable;
 use Kirby\Api\Controller\Changes;
 use Kirby\Cms\App;
@@ -19,7 +18,6 @@ use Kirby\Filesystem\Dir;
 use Kirby\Filesystem\F;
 use Kirby\Form\Form;
 use Kirby\Panel\Panel;
-use Kirby\Panel\Ui\Buttons\ViewButton;
 use Kirby\Toolkit\I18n;
 use Kirby\Uuid\Uri;
 use Kirby\Uuid\Uuid;
@@ -153,14 +151,18 @@ final class OrderPageStoreTest extends KirbyTestCase
 
     public function testPanelLinksAnAssociatedSessionToTheMatchingStripeDashboardMode(): void
     {
-        $area = $this->kirby->load()->areas()['stripe-checkout'] ?? null;
-        $this->assertIsArray($area);
-        $buttons = $area['buttons'] ?? null;
-        $this->assertIsArray($buttons);
-        $buttonFactory = $buttons['page.stripeCheckoutOrderOpenInStripe'] ?? null;
-        $this->assertInstanceOf(Closure::class, $buttonFactory);
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(
+            users: [[
+                'id' => 'panel-admin',
+                'email' => 'panel-admin@example.com',
+                'role' => 'admin',
+            ]],
+            impersonate: 'panel-admin',
+        );
+        $this->kirby = $this->environment->app();
         $page = $this->createOrder(createdAt: new DateTimeImmutable('2026-01-01T12:00:00Z'));
-        $this->assertNull($buttonFactory($page));
+        $this->assertSame([], $page->panel()->buttons());
 
         $updated = (new OrderPageStore($this->kirby))->update($page->uuid()->toString(), static fn(array $data): array => [
             ...$data,
@@ -170,9 +172,7 @@ final class OrderPageStoreTest extends KirbyTestCase
             'checkoutOpenedAt' => $data['createdAt'],
         ]);
         $expected = 'https://dashboard.stripe.com/test/checkout/sessions/cs_test_dashboard%2Freference';
-        $viewButton = $buttonFactory($updated);
-        $this->assertInstanceOf(ViewButton::class, $viewButton);
-        $button = $viewButton->render();
+        $button = $updated->panel()->buttons()[0] ?? null;
         $this->assertIsArray($button);
         $this->assertSame('k-view-button', $button['component'] ?? null);
         $props = $button['props'] ?? null;
@@ -194,9 +194,7 @@ final class OrderPageStoreTest extends KirbyTestCase
             'stripeShippingRateIds' => [],
             'checkoutOpenedAt' => $data['createdAt'],
         ]);
-        $liveViewButton = $buttonFactory($livePage);
-        $this->assertInstanceOf(ViewButton::class, $liveViewButton);
-        $liveButton = $liveViewButton->render();
+        $liveButton = $livePage->panel()->buttons()[0] ?? null;
         $this->assertIsArray($liveButton);
         $liveProps = $liveButton['props'] ?? null;
         $this->assertIsArray($liveProps);
