@@ -155,8 +155,9 @@ final class OrderBlueprintTest extends TestCase
         $lifecycleDeliveries = self::map($fields['lifecycleDeliveries'] ?? null);
         $this->assertSame('structure', $lifecycleDeliveries['type'] ?? null);
         $deliveryFields = self::map($lifecycleDeliveries['fields'] ?? null);
-        $payload = self::map($deliveryFields['payload'] ?? null);
-        $this->assertSame('structure', $payload['type'] ?? null);
+        $this->assertSame('toggle', self::map($deliveryFields['payloadRetained'] ?? null)['type'] ?? null);
+        $this->assertArrayHasKey('nextActionType', $deliveryFields);
+        $this->assertArrayNotHasKey('payload', $deliveryFields);
 
         $checkoutAttempt = self::map($sections['checkoutAttempt'] ?? null);
         $attemptFields = self::map($checkoutAttempt['fields'] ?? null);

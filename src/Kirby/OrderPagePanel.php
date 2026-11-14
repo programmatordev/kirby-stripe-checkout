@@ -12,6 +12,7 @@ use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
+use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 
 /** @internal Customizes the native Order Page presentation without replacing its route or form. */
@@ -220,15 +221,18 @@ final class OrderPagePanel extends Page
         foreach (self::list($value) as $delivery) {
             $delivery = self::map($delivery);
             $event = self::map($delivery['event'] ?? null);
-            $payload = [
-                'orderSnapshot' => $event['orderSnapshot'] ?? null,
-                'nextAction' => self::nextAction($event['nextAction'] ?? null),
-            ];
+            $payloadRetained = array_key_exists('orderSnapshot', $event);
+            $nextActionType = self::nextActionType($event['nextAction'] ?? null);
             unset($event['orderSnapshot'], $event['nextAction']);
+
+            // Payload retention exists so failed hooks can replay the original event.
+            // Those payloads can contain customer snapshots and private payment handoff data,
+            // so orders.read exposes only their availability and safe action type.
             $deliveries[] = [
                 ...$delivery,
                 ...$event,
-                'payload' => self::facts($payload),
+                'payloadRetained' => $payloadRetained,
+                'nextActionType' => $nextActionType,
             ];
             unset($deliveries[array_key_last($deliveries)]['event']);
         }
@@ -264,11 +268,9 @@ final class OrderPagePanel extends Page
         return [['path' => $path, 'value' => is_bool($value) ? ($value ? 'true' : 'false') : $value]];
     }
 
-    private static function nextAction(mixed $value): mixed
+    private static function nextActionType(mixed $value): ?string
     {
-        return is_string($value)
-            ? json_decode($value, true, flags: JSON_THROW_ON_ERROR)
-            : $value;
+        return is_string($value) ? PaymentAction::fromJson($value)->type() : null;
     }
 
     /** @return array<string, mixed> */

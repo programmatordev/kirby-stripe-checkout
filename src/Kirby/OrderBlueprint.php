@@ -559,14 +559,15 @@ final class OrderBlueprint
                 'triggerType',
                 'triggerId',
                 'actionFingerprint',
+                'nextActionType',
                 'createdAt',
                 'expiresAt',
+                'payloadRetained',
                 'payloadPrunedAt',
                 'status',
                 'attempts',
                 'lastAttemptAt',
                 'errorCode',
-                'payload',
             ],
             columns: [
                 'type' => [],
@@ -577,6 +578,7 @@ final class OrderBlueprint
             types: [
                 'revision' => 'number',
                 'attempts' => 'number',
+                'payloadRetained' => 'toggle',
             ],
         );
 
@@ -586,8 +588,6 @@ final class OrderBlueprint
                 ...self::dateProperties(),
             ];
         }
-
-        $field['fields']['payload'] = self::nestedField('payload', self::factsField());
 
         return $field;
     }

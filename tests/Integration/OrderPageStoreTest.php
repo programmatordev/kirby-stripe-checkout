@@ -121,7 +121,11 @@ final class OrderPageStoreTest extends KirbyTestCase
             $this->assertNotEmpty($delivery['deliveryid'] ?? null);
             $this->assertSame($page->uuid()->toString(), $delivery['pageuuid'] ?? null);
             $this->assertSame('2026-01-01 12:00:00', $delivery['occurredat'] ?? null);
-            $this->assertIsArray($delivery['payload'] ?? null);
+            $this->assertTrue($delivery['payloadretained'] ?? false);
+            $this->assertSame('', $delivery['nextactiontype'] ?? null);
+            $this->assertArrayNotHasKey('payload', $delivery);
+            $this->assertArrayNotHasKey('ordersnapshot', $delivery);
+            $this->assertArrayNotHasKey('nextaction', $delivery);
         }
 
         $content = $page->content('default')->toArray();
