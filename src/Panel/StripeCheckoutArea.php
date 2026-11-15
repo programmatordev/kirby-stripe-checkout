@@ -76,7 +76,7 @@ final class StripeCheckoutArea
                 'order.sync' => [
                     'pattern' => 'stripe-checkout/orders/(:any)/sync',
                     'load' => function (string $orderId) use ($kirby): array {
-                        return StripeCheckoutArea::syncOrderDialog($kirby);
+                        return StripeCheckoutArea::syncOrderDialog($kirby, $orderId);
                     },
                     'submit' => function (string $orderId) use ($kirby): array {
                         return StripeCheckoutArea::submitOrderSyncDialog($kirby, $orderId);
@@ -359,10 +359,17 @@ final class StripeCheckoutArea
     }
 
     /** @return array<string, mixed> */
-    public static function syncOrderDialog(App $kirby): array
+    public static function syncOrderDialog(App $kirby, string $orderId): array
     {
         PluginPermissions::require($kirby, 'orders.read');
         PluginPermissions::require($kirby, 'orders.reconcile');
+
+        if (self::hasStripeCheckoutSession($kirby, $orderId) === false) {
+            throw new KirbyException(
+                message: self::translate('orders.actions.syncUnavailable'),
+                httpCode: self::HTTP_CONFLICT,
+            );
+        }
 
         return [
             'component' => 'k-text-dialog',
@@ -557,6 +564,23 @@ final class StripeCheckoutArea
         }
 
         return $options;
+    }
+
+    private static function hasStripeCheckoutSession(App $kirby, string $orderId): bool
+    {
+        try {
+            $pageUuid = OrderData::pageUuid($orderId);
+            $store = new OrderPageStore($kirby);
+            $order = $store->order($pageUuid);
+
+            if ($order === null) {
+                return false;
+            }
+
+            return isset($store->data($order)['stripeCheckoutSessionId']);
+        } catch (OrderDataException|OrderQueryException|OrderStorageException) {
+            return false;
+        }
     }
 
     private static function isOrderManuallyDeletable(App $kirby, string $orderId): bool

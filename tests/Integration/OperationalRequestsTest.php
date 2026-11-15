@@ -90,6 +90,7 @@ final class OperationalRequestsTest extends KirbyTestCase
             'orders.read' => true,
             'orders.reconcile' => true,
         ], 'GET');
+        $this->createOpenOrder(new DateTimeImmutable());
 
         $response = Panel::router('dialogs/' . self::SYNC_PATH);
 
@@ -119,6 +120,26 @@ final class OperationalRequestsTest extends KirbyTestCase
 
         $this->assertNotNull($response);
         $this->assertSame(403, $response->code(), $response->body());
+    }
+
+    public function testOrderSyncDialogRejectsAnOrderWithoutACheckoutSession(): void
+    {
+        $this->restartRequest([
+            'orders.read' => true,
+            'orders.reconcile' => true,
+        ], 'GET');
+        $this->createOrder(new DateTimeImmutable());
+
+        $response = Panel::router('dialogs/' . self::SYNC_PATH);
+
+        $this->assertNotNull($response);
+        $this->assertSame(409, $response->code(), $response->body());
+        /** @var array{'$dialog': array{error: string}} $body */
+        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame(
+            'This order has no Stripe Checkout Session to sync.',
+            $body['$dialog']['error'],
+        );
     }
 
     public function testFailedLifecycleDeliveryExposesKirbysNativeRetryDialog(): void
