@@ -51,18 +51,6 @@ export default {
 				};
 			});
 		},
-		buttons(section) {
-			if (section.action === null) {
-				return [];
-			}
-
-			const action = section.action;
-
-			return [{
-				...action,
-				click: action.dialog ? () => this.$dialog(action.dialog) : undefined
-			}];
-		},
 		async fetch() {
 			this.isLoading = true;
 			const response = await this.load();
@@ -99,7 +87,7 @@ export default {
 		<k-section
 			v-for="section in displaySections"
 			:key="section.name"
-			:buttons="buttons(section)"
+			:buttons="section.action ? [section.action] : []"
 			:headline="section.headline"
 		>
 			<k-items :items="section.items" />
