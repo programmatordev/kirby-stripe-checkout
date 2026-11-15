@@ -161,7 +161,7 @@ final class OrdersSection
         MoneyFormatter $moneyFormatter,
         string $panelLocale,
     ): array {
-        // Preserve the native Pages section's row links, permissions and actions.
+        // Reuse Kirby's native Page item identity and detail metadata for each collection row.
         $item = (new PageItem(
             page: $summary->orderPage(),
             image: false,
