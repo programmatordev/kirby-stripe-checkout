@@ -4,7 +4,7 @@
 
 Composer installation automatically adds a **Stripe Checkout** area to Kirby's default Panel menu. On the first Kirby boot after installation, the plugin creates its protected `stripe-checkout` draft Page.
 
-The area is Kirby's native Page view, with plugin-owned Overview, Settings, and Diagnostics blueprint tabs. Kirby provides the fields, validation, versions, permissions, locks, and save flow without a duplicated editor component. No separate setup action is required.
+The area is Kirby's native Page view, with plugin-owned Overview, Orders, Settings, and Diagnostics blueprint tabs. Kirby provides the fields, validation, versions, permissions, locks, and save flow without a duplicated editor component. No separate setup action is required.
 
 The schema and layout are plugin-owned so conditional settings, locks, translations, validation, and documentation remain consistent. Projects cannot replace the `stripe-checkout` blueprint. Keep unrelated project settings in the Site blueprint or another project-owned Page.
 
@@ -77,11 +77,13 @@ The area stays registered even when omitted from a custom `panel.menu`. Use Kirb
 ],
 ```
 
-The area path is `stripe-checkout`. Its native blueprint tabs use `overview`, `settings`, and `diagnostics` query values, for example `stripe-checkout?tab=diagnostics`. Menu visibility does not replace the area and plugin permission checks.
+The area path is `stripe-checkout`. Its native blueprint tabs use `overview`, `orders`, `settings`, and `diagnostics` query values, for example `stripe-checkout?tab=diagnostics`. Menu visibility does not replace the area and plugin permission checks.
 
 ## Local diagnostics
 
-The Diagnostics tab checks the PHP, Kirby, and Stripe SDK versions; configuration validity; credential presence and detectable test/live mode; store currency and default shipping configuration; protected Page ownership; and invalid order records. It also shows cached Price or Tax Code catalogue health when relevant, retention and housekeeping configuration, the latest retained housekeeping outcome, pending and failed hook executions, and a warning if the last deleted-order hook failed. These refer to the plugin's local lifecycle hooks, not shipping or Stripe webhook deliveries. Opening the tab never makes a Stripe API request, refreshes a catalogue, or executes cleanup.
+The Diagnostics tab leads with a compact summary for Checkout setup, the Stripe account, webhooks and operations. Warnings and failures appear first with a direct remediation action when the plugin can offer one. Remaining checks are grouped into Stripe, operations, system and environment sections. Healthy Settings values that only repeat configured choices are omitted.
+
+Local checks cover the PHP, Kirby and Stripe SDK versions; configuration and credential readiness; protected Page ownership; invalid order records; relevant cached Price or Tax Code catalogue health; the latest retained housekeeping outcome; and pending or failed Event processing and lifecycle hook deliveries. The lifecycle checks refer to the plugin's local hooks, not shipping or Stripe webhook deliveries. Opening the tab never makes a Stripe API request, refreshes a catalogue or executes cleanup.
 
 The authenticated remote diagnostic action is always explicit. A role with `diagnostics.read` can run it from the Diagnostics tab after confirming the read-only Stripe request. It checks the configured key and mode plus the exact canonical webhook endpoint, its enabled state, API version, and supported Events. Webhook endpoint discovery is paginated. Wildcard event configuration covers the supported event matrix; duplicate exact endpoint URLs warn. Restricted-key read limitations are reported as not verifiable. The refreshed native view presents only the latest timestamped sanitized report from Kirby's configured cache: clearing or disabling that cache removes the previous report without affecting plugin behavior. No credentials, endpoint IDs, provider messages, request bodies, or signing secrets are stored. Stripe does not return an existing webhook signing secret, so only a successfully verified delivery proves that the configured secret belongs to the endpoint.
 
