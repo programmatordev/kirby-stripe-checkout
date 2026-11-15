@@ -187,17 +187,32 @@ final class LocalDiagnostics
                 default => $this->check('orders', DiagnosticStatus::Pass, 'orders.ready'),
             };
 
-            // Pending work remains visible in the counts, but only failed deliveries require operator attention.
+            // Synchronous work can remain pending after an interrupted request, so both incomplete and failed outcomes require attention.
+            // Failure-specific message keys identify when the failed-only Orders filters are relevant.
+            $lifecycleStatus = $pendingCount + $failedCount > 0 ? DiagnosticStatus::Warning : DiagnosticStatus::Pass;
+            $lifecycleMessageKey = $failedCount > 0 ? 'lifecycle.failed' : 'lifecycle.summary';
+            $eventStatus = $pendingEventCount + $failedEventCount > 0 ? DiagnosticStatus::Warning : DiagnosticStatus::Pass;
+            $eventMessageKey = $failedEventCount > 0 ? 'events.failed' : 'events.summary';
             $checks = [
                 $orderCheck,
-                $this->check('lifecycle', $failedCount > 0 ? DiagnosticStatus::Warning : DiagnosticStatus::Pass, 'lifecycle.summary', [
-                    'pending' => (string) $pendingCount,
-                    'failed' => (string) $failedCount,
-                ]),
-                $this->check('events', $failedEventCount > 0 ? DiagnosticStatus::Warning : DiagnosticStatus::Pass, 'events.summary', [
-                    'pending' => (string) $pendingEventCount,
-                    'failed' => (string) $failedEventCount,
-                ]),
+                $this->check(
+                    code: 'lifecycle',
+                    status: $lifecycleStatus,
+                    messageKey: $lifecycleMessageKey,
+                    context: [
+                        'pending' => (string) $pendingCount,
+                        'failed' => (string) $failedCount,
+                    ],
+                ),
+                $this->check(
+                    code: 'events',
+                    status: $eventStatus,
+                    messageKey: $eventMessageKey,
+                    context: [
+                        'pending' => (string) $pendingEventCount,
+                        'failed' => (string) $failedEventCount,
+                    ],
+                ),
             ];
             return $checks;
         } catch (OrderStorageException $error) {

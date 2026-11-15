@@ -20,6 +20,8 @@ use ProgrammatorDev\StripeCheckout\Housekeeping\HousekeepingRunStatus;
 use ProgrammatorDev\StripeCheckout\Housekeeping\Internal\HousekeepingState;
 use ProgrammatorDev\StripeCheckout\Housekeeping\Internal\HousekeepingStateStore;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
+use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
+use ProgrammatorDev\StripeCheckout\Lifecycle\LifecycleEventType;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Panel\DiagnosticsSection;
@@ -560,11 +562,20 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $checks = $this->checks((new LocalDiagnostics($this->kirby, $checkedAt))->report());
 
         $this->assertSame(DiagnosticStatus::Warning, $checks['events']->status());
+        $this->assertSame('events.failed', $checks['events']->messageKey());
         $this->assertSame('0', $checks['events']->context()['pending']);
         $this->assertSame('1', $checks['events']->context()['failed']);
+        $sections = array_column(DiagnosticsSection::response($this->kirby)['sections'], null, 'name');
+        $attention = array_column($sections['attention']['items'], null, 'id');
+        $this->assertSame([[
+            'icon' => 'cart',
+            'link' => Panel::url('stripe-checkout') . '?tab=orders&checkoutStatus=&payment=&attention=failed_events',
+            'title' => 'View affected orders',
+            'variant' => 'filled',
+        ]], $attention['events']['buttons']);
     }
 
-    public function testPendingEventsRemainInformational(): void
+    public function testPendingOperationalRecordsRequireAttentionWithoutFailedOnlyLinks(): void
     {
         $createdAt = new DateTimeImmutable('2026-10-24T12:00:00Z');
         $context = new OrderCreationContext(
@@ -585,6 +596,21 @@ final class LocalDiagnosticsTest extends KirbyTestCase
             createdAt: $createdAt,
         );
         $store->update($context->pageUuid(), static function (array $data) use ($createdAt): array {
+            $deliveries = array_map(
+                OrderData::map(...),
+                OrderData::list($data['lifecycleDeliveries'] ?? []),
+            );
+            $deliveries[] = HookDeliveryLedger::pending(
+                HookDeliveryLedger::event(
+                    $data,
+                    [],
+                    LifecycleEventType::OrderCreated,
+                    HookDeliveryLedger::nextRevision($deliveries),
+                ),
+                30,
+                $createdAt,
+            );
+            $data['lifecycleDeliveries'] = $deliveries;
             $data['events'] = [[
                 'id' => 'evt_pending_diagnostic',
                 'type' => 'checkout.session.completed',
@@ -599,12 +625,25 @@ final class LocalDiagnosticsTest extends KirbyTestCase
             return $data;
         });
 
-        $check = (new LocalDiagnostics($this->kirby, $createdAt))->report()->check('events');
+        $report = (new LocalDiagnostics($this->kirby, $createdAt))->report();
+        $eventCheck = $report->check('events');
+        $lifecycleCheck = $report->check('lifecycle');
 
-        $this->assertNotNull($check);
-        $this->assertSame(DiagnosticStatus::Pass, $check->status());
-        $this->assertSame('1', $check->context()['pending']);
-        $this->assertSame('0', $check->context()['failed']);
+        $this->assertNotNull($eventCheck);
+        $this->assertSame(DiagnosticStatus::Warning, $eventCheck->status());
+        $this->assertSame('events.summary', $eventCheck->messageKey());
+        $this->assertSame('1', $eventCheck->context()['pending']);
+        $this->assertSame('0', $eventCheck->context()['failed']);
+        $this->assertNotNull($lifecycleCheck);
+        $this->assertSame(DiagnosticStatus::Warning, $lifecycleCheck->status());
+        $this->assertSame('lifecycle.summary', $lifecycleCheck->messageKey());
+        $this->assertSame('1', $lifecycleCheck->context()['pending']);
+        $this->assertSame('0', $lifecycleCheck->context()['failed']);
+
+        $sections = array_column(DiagnosticsSection::response($this->kirby)['sections'], null, 'name');
+        $attention = array_column($sections['attention']['items'], null, 'id');
+        $this->assertSame([], $attention['events']['buttons']);
+        $this->assertSame([], $attention['lifecycle']['buttons']);
     }
 
     public function testReportsInvalidChildrenWhileSummarizingValidOrders(): void

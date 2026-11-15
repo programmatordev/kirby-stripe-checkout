@@ -523,9 +523,11 @@ final class DiagnosticsSection
                 && in_array($check->messageKey(), ['stripeAccount.modeMismatch', 'remote.authenticationFailed'], true) => self::stripeApiKeysButton(),
             $check->code() === 'stripeWebhook'
                 && in_array($check->messageKey(), ['stripeWebhook.missing', 'stripeWebhook.incomplete', 'stripeWebhook.duplicate'], true) => self::stripeWebhooksButton(),
-            $check->code() === 'events' => self::ordersButton($kirby, 'failed_events'),
+            $check->code() === 'events'
+                && $check->messageKey() === 'events.failed' => self::ordersButton($kirby, 'failed_events'),
             $check->code() === 'housekeepingRun' => self::housekeepingButton($kirby),
-            $check->code() === 'lifecycle' => self::ordersButton($kirby, 'failed_hooks'),
+            $check->code() === 'lifecycle'
+                && $check->messageKey() === 'lifecycle.failed' => self::ordersButton($kirby, 'failed_hooks'),
             $check->code() === 'prices' => self::catalogueRefreshButton(
                 kirby: $kirby,
                 permission: 'prices.read',
