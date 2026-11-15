@@ -72,23 +72,14 @@ final class OrderHookDispatcher
 
                     $errorCode = LifecycleErrorCode::DELIVERY_NOT_RETRYABLE;
 
-                    if ($entry['status'] === 'delivered') {
-                        break;
-                    }
-
-                    if ($failedOnly && $entry['status'] !== 'failed') {
-                        break;
-                    }
-
-                    // Pruned entries retain identity metadata but cannot restore a replayable event.
-                    if ($entry['payloadPrunedAt'] !== null) {
-                        break;
-                    }
-
                     // Resolve the clock after lock acquisition and reload; waiting must not admit an expired retry.
                     $attemptedAt ??= new DateTimeImmutable();
 
-                    if (HookDeliveryLedger::isExpired($entry, $attemptedAt)) {
+                    $eligible = $failedOnly
+                        ? HookDeliveryLedger::isFailedRetryEligible($entry, $attemptedAt)
+                        : HookDeliveryLedger::isDispatchEligible($entry, $attemptedAt);
+
+                    if ($eligible === false) {
                         break;
                     }
 

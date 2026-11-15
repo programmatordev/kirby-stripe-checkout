@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Kirby;
 
+use DateTimeImmutable;
 use Kirby\Cms\Language;
 use Kirby\Form\Fields;
 use Kirby\Panel\Page;
@@ -11,6 +12,7 @@ use Kirby\Panel\Panel;
 use Kirby\Panel\Ui\Buttons\ViewButtons;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
+use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
 use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
@@ -68,6 +70,7 @@ final class OrderPagePanel extends Page
 
         return ViewButtons::view($this)
             ->bind([
+                'hasRetryableLifecycleDelivery' => $this->hasRetryableLifecycleDelivery(),
                 'orderId' => $model instanceof OrderPage ? $model->slug() : null,
                 'stripeCheckoutSessionId' => $this->stripeCheckoutSessionId(),
                 'stripeDashboardUrl' => $this->stripeDashboardUrl(),
@@ -147,6 +150,28 @@ final class OrderPagePanel extends Page
         $stripeCheckoutSessionId = $data['stripeCheckoutSessionId'] ?? null;
 
         return $stripeCheckoutSessionId;
+    }
+
+    private function hasRetryableLifecycleDelivery(): bool
+    {
+        $model = $this->model;
+
+        if ($model instanceof OrderPage === false) {
+            return false;
+        }
+
+        $data = $this->orderData($model);
+        /** @var list<array<string, mixed>> $lifecycleDeliveries */
+        $lifecycleDeliveries = $data['lifecycleDeliveries'];
+        $attemptedAt = new DateTimeImmutable();
+
+        foreach ($lifecycleDeliveries as $lifecycleDelivery) {
+            if (HookDeliveryLedger::isFailedRetryEligible($lifecycleDelivery, $attemptedAt)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static function handle(string $name): string

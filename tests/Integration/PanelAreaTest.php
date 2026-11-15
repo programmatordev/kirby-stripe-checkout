@@ -89,6 +89,19 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertNull($button('abc123def456ghi7', 'cs_test_panel'));
     }
 
+    public function testLifecycleRetryButtonIsHiddenWithoutRetryPermission(): void
+    {
+        $this->restartWithPermissions([
+            'orders.read' => true,
+            'lifecycle.retry' => false,
+        ]);
+        $area = $this->area();
+        /** @var callable(?string, bool): mixed $button */
+        $button = $area['buttons']['page.stripeCheckoutOrderRetryLifecycleDelivery'];
+
+        $this->assertNull($button('abc123def456ghi7', true));
+    }
+
     public function testAreaNormalizesTheNativePageView(): void
     {
         $definition = $this->area();

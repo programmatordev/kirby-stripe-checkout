@@ -6,6 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use DateTimeImmutable;
 use Kirby\Data\Yaml;
+use Kirby\Exception\Exception as KirbyException;
 use Kirby\Panel\Panel;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
@@ -28,6 +29,7 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\OrderLineItemSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderNumberFormatter;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Order\OrderErrorCode;
+use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
@@ -117,6 +119,143 @@ final class OperationalRequestsTest extends KirbyTestCase
 
         $this->assertNotNull($response);
         $this->assertSame(403, $response->code(), $response->body());
+    }
+
+    public function testFailedLifecycleDeliveryExposesKirbysNativeRetryDialog(): void
+    {
+        $this->restartRequest(
+            permissions: [
+                'orders.read' => true,
+                'lifecycle.retry' => true,
+            ],
+            method: 'GET',
+            hooks: [
+                'programmatordev.stripe-checkout.session.created' => function (): void {
+                    throw new RuntimeException('Intentional listener failure');
+                },
+            ],
+        );
+        $order = $this->createOrder(new DateTimeImmutable());
+        $deliveryId = $this->dispatchFailedSessionCreated($order);
+        $order = (new OrderPageStore($this->kirby))->requirePage($order->id());
+        $retryProps = null;
+
+        foreach ($order->panel()->buttons() as $button) {
+            if (is_array($button) === false) {
+                continue;
+            }
+
+            $props = $button['props'] ?? null;
+
+            if (is_array($props) && ($props['text'] ?? null) === 'Retry failed hook') {
+                $retryProps = $props;
+                break;
+            }
+        }
+
+        $this->assertIsArray($retryProps);
+        $this->assertSame(
+            'stripe-checkout/orders/' . self::ORDER_ID . '/deliveries/retry',
+            $retryProps['dialog'] ?? null,
+        );
+        $this->assertSame('notice', $retryProps['theme'] ?? null);
+
+        $response = Panel::router('dialogs/stripe-checkout/orders/' . self::ORDER_ID . '/deliveries/retry');
+
+        $this->assertNotNull($response);
+        $this->assertSame(200, $response->code(), $response->body());
+        /** @var array{'$dialog': array{component: string, props: array{fields: array{warning: array{text: string, theme: string, type: string}, deliveryId: array{options: list<array{value: string, text: string}>}}, size: string, theme: string, value: array{deliveryId: string}}}} $body */
+        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
+        $dialog = $body['$dialog'];
+        $this->assertSame('k-form-dialog', $dialog['component']);
+        $this->assertSame('medium', $dialog['props']['size']);
+        $this->assertSame('notice', $dialog['props']['theme']);
+        $this->assertSame($deliveryId, $dialog['props']['value']['deliveryId']);
+        $this->assertSame([[
+            'value' => $deliveryId,
+            'text' => 'session.created — ' . $deliveryId,
+        ]], $dialog['props']['fields']['deliveryId']['options']);
+        $this->assertSame('info', $dialog['props']['fields']['warning']['type']);
+        $this->assertSame('notice', $dialog['props']['fields']['warning']['theme']);
+        $this->assertSame(
+            'Retrying a hook delivery runs its Kirby listeners again. Listeners that succeeded before another listener failed may run again. Connected workflows must deduplicate with the delivery ID.',
+            $dialog['props']['fields']['warning']['text'],
+        );
+    }
+
+    public function testLifecycleRetryDialogRequiresRetryPermissionBeforeLoadingDeliveries(): void
+    {
+        $this->restartRequest([
+            'orders.read' => true,
+            'lifecycle.retry' => false,
+        ], 'GET');
+
+        $response = Panel::router('dialogs/stripe-checkout/orders/' . self::ORDER_ID . '/deliveries/retry');
+
+        $this->assertNotNull($response);
+        $this->assertSame(403, $response->code(), $response->body());
+    }
+
+    public function testLifecycleRetryDialogReportsTheDeliveredOutcome(): void
+    {
+        $fail = true;
+        $this->restartRequest(
+            permissions: [
+                'orders.read' => true,
+                'lifecycle.retry' => true,
+            ],
+            hooks: [
+                'programmatordev.stripe-checkout.session.created' => function () use (&$fail): void {
+                    if ($fail) {
+                        $fail = false;
+
+                        throw new RuntimeException('Intentional listener failure');
+                    }
+                },
+            ],
+        );
+        $order = $this->createOrder(new DateTimeImmutable());
+        $deliveryId = $this->dispatchFailedSessionCreated($order);
+
+        $result = StripeCheckoutArea::submitLifecycleDeliveryRetryDialog($this->kirby, self::ORDER_ID, $deliveryId);
+
+        $this->assertSame([
+            'event' => 'stripe-checkout.order.lifecycle.retry',
+            'message' => 'The lifecycle hook was delivered.',
+        ], $result);
+    }
+
+    public function testLifecycleRetryDialogDistinguishesRetryableAndTerminalFailures(): void
+    {
+        $this->restartRequest(
+            permissions: [
+                'orders.read' => true,
+                'lifecycle.retry' => true,
+            ],
+            hooks: [
+                'programmatordev.stripe-checkout.session.created' => function (): void {
+                    throw new RuntimeException('Intentional listener failure');
+                },
+            ],
+        );
+        $order = $this->createOrder(new DateTimeImmutable());
+        $deliveryId = $this->dispatchFailedSessionCreated($order);
+
+        try {
+            StripeCheckoutArea::submitLifecycleDeliveryRetryDialog($this->kirby, self::ORDER_ID, $deliveryId);
+            $this->fail('The repeated listener failure should remain visible to the operator.');
+        } catch (KirbyException $error) {
+            $this->assertSame(503, $error->getHttpCode());
+            $this->assertSame('The lifecycle hook failed again. Review the listener before retrying.', $error->getMessage());
+        }
+
+        try {
+            StripeCheckoutArea::submitLifecycleDeliveryRetryDialog($this->kirby, self::ORDER_ID, 'missing-delivery');
+            $this->fail('A missing delivery should not be presented as retryable.');
+        } catch (KirbyException $error) {
+            $this->assertSame(409, $error->getHttpCode());
+            $this->assertSame('This lifecycle hook delivery can no longer be retried.', $error->getMessage());
+        }
     }
 
     public function testOrderSyncPermissionDoesNotRevealAnUnreadableOrder(): void

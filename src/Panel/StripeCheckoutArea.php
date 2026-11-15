@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Panel;
 
+use DateTimeImmutable;
 use Kirby\Cms\App;
 use Kirby\Exception\Exception as KirbyException;
 use Kirby\Exception\InvalidArgumentException;
@@ -14,9 +15,15 @@ use Kirby\Panel\Ui\Buttons\ViewButton;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Collection\CustomField;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
+use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\PluginPermissions;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPageStore;
+use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
+use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
+use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
+use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
+use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingZone;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
@@ -28,6 +35,8 @@ use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
  */
 final class StripeCheckoutArea
 {
+    private const HTTP_CONFLICT = 409;
+
     /** @return array<string, mixed> */
     public static function definition(App $kirby): array
     {
@@ -36,6 +45,11 @@ final class StripeCheckoutArea
             'icon' => 'credit-card',
             // Kirby collects named buttons from every area, but renders this one only where a blueprint references it.
             'buttons' => [
+                'page.stripeCheckoutOrderRetryLifecycleDelivery' => static fn(?string $orderId = null, bool $hasRetryableLifecycleDelivery = false): ?ViewButton => self::retryLifecycleDeliveryButton(
+                    kirby: $kirby,
+                    orderId: $orderId,
+                    hasRetryableLifecycleDelivery: $hasRetryableLifecycleDelivery,
+                ),
                 'page.stripeCheckoutOrderSync' => static fn(?string $orderId = null, ?string $stripeCheckoutSessionId = null): ?ViewButton => self::syncOrderButton(
                     kirby: $kirby,
                     orderId: $orderId,
@@ -51,6 +65,21 @@ final class StripeCheckoutArea
                     },
                     'submit' => function (string $orderId) use ($kirby): array {
                         return StripeCheckoutArea::submitOrderSyncDialog($kirby, $orderId);
+                    },
+                ],
+                'order.delivery.retry' => [
+                    'pattern' => 'stripe-checkout/orders/(:any)/deliveries/retry',
+                    'load' => function (string $orderId) use ($kirby): array {
+                        return StripeCheckoutArea::retryLifecycleDeliveryDialog($kirby, $orderId);
+                    },
+                    'submit' => function (string $orderId) use ($kirby): array {
+                        $deliveryId = $kirby->request()->get('deliveryId');
+
+                        return StripeCheckoutArea::submitLifecycleDeliveryRetryDialog(
+                            kirby: $kirby,
+                            orderId: $orderId,
+                            deliveryId: is_string($deliveryId) ? $deliveryId : '',
+                        );
                     },
                 ],
             ],
@@ -266,6 +295,30 @@ final class StripeCheckoutArea
         );
     }
 
+    private static function retryLifecycleDeliveryButton(App $kirby, ?string $orderId, bool $hasRetryableLifecycleDelivery): ?ViewButton
+    {
+        if ($orderId === null || $hasRetryableLifecycleDelivery === false) {
+            return null;
+        }
+
+        if (PluginPermissions::allows($kirby, 'orders.read') === false) {
+            return null;
+        }
+
+        if (PluginPermissions::allows($kirby, 'lifecycle.retry') === false) {
+            return null;
+        }
+
+        // This validated Order value controls presentation only.
+        // The dialog reloads the Order and the operation rechecks eligibility under its write lock.
+        return new ViewButton(
+            dialog: 'stripe-checkout/orders/' . rawurlencode($orderId) . '/deliveries/retry',
+            icon: 'refresh',
+            text: 'programmatordev.stripe-checkout.orders.actions.retryLifecycleDelivery',
+            theme: 'notice',
+        );
+    }
+
     /** @return array<string, mixed> */
     public static function syncOrderDialog(App $kirby): array
     {
@@ -311,6 +364,114 @@ final class StripeCheckoutArea
                 : 'orders.actions.syncFailure'),
             httpCode: $response['code'],
         );
+    }
+
+    /** @return array<string, mixed> */
+    public static function retryLifecycleDeliveryDialog(App $kirby, string $orderId): array
+    {
+        PluginPermissions::require($kirby, 'orders.read');
+        PluginPermissions::require($kirby, 'lifecycle.retry');
+        $options = self::retryableLifecycleDeliveryOptions($kirby, $orderId);
+
+        if ($options === []) {
+            throw new KirbyException(
+                message: self::translate('orders.actions.retryLifecycleDeliveryUnavailable'),
+                httpCode: self::HTTP_CONFLICT,
+            );
+        }
+
+        // Kirby's native Structure field has no supported per-row action extension.
+        // A native form dialog keeps the target explicit without custom Panel JavaScript.
+        return [
+            'component' => 'k-form-dialog',
+            'props' => [
+                'fields' => [
+                    'warning' => [
+                        'text' => self::translate('orders.actions.retryLifecycleDeliveryConfirm'),
+                        'theme' => 'notice',
+                        'type' => 'info',
+                    ],
+                    'deliveryId' => [
+                        'label' => self::translate('orders.actions.retryLifecycleDeliveryTarget'),
+                        'type' => 'select',
+                        'required' => true,
+                        'options' => $options,
+                        'placeholder' => self::translate('orders.actions.retryLifecycleDeliverySelect'),
+                    ],
+                ],
+                'size' => 'medium',
+                'submitButton' => [
+                    'icon' => 'refresh',
+                    'text' => self::translate('orders.actions.retryLifecycleDelivery'),
+                ],
+                'theme' => 'notice',
+                'value' => [
+                    'deliveryId' => count($options) === 1 ? $options[0]['value'] : null,
+                ],
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public static function submitLifecycleDeliveryRetryDialog(App $kirby, string $orderId, string $deliveryId): array
+    {
+        // Keep retry admission, delivery and outcome persistence in the existing operation.
+        // This adapter only maps its shared response envelope to Kirby's native dialog result.
+        $response = OperationalRequests::retryFailedDelivery($kirby, $orderId, $deliveryId);
+
+        if ($response['status'] === 'success') {
+            return [
+                'event' => 'stripe-checkout.order.lifecycle.retry',
+                'message' => self::translate('orders.actions.retryLifecycleDeliverySucceeded'),
+            ];
+        }
+
+        $retryable = $response['error']['retryable'] ?? false;
+
+        throw new KirbyException(
+            message: self::translate($retryable
+                ? 'orders.actions.retryLifecycleDeliveryRetryableFailure'
+                : 'orders.actions.retryLifecycleDeliveryFailure'),
+            httpCode: $response['code'],
+        );
+    }
+
+    /** @return list<array{value: string, text: string}> */
+    private static function retryableLifecycleDeliveryOptions(App $kirby, string $orderId): array
+    {
+        try {
+            $pageUuid = OrderData::pageUuid($orderId);
+            $store = new OrderPageStore($kirby);
+            $order = $store->order($pageUuid);
+
+            if ($order === null) {
+                return [];
+            }
+
+            $data = $store->data($order);
+        } catch (OrderDataException|OrderQueryException|OrderStorageException) {
+            return [];
+        }
+
+        /** @var list<array<string, mixed>> $lifecycleDeliveries */
+        $lifecycleDeliveries = $data['lifecycleDeliveries'];
+        $attemptedAt = new DateTimeImmutable();
+        $options = [];
+
+        foreach ($lifecycleDeliveries as $lifecycleDelivery) {
+            if (HookDeliveryLedger::isFailedRetryEligible($lifecycleDelivery, $attemptedAt) === false) {
+                continue;
+            }
+
+            /** @var array{deliveryId: string, type: string} $event */
+            $event = $lifecycleDelivery['event'];
+            $options[] = [
+                'value' => $event['deliveryId'],
+                'text' => $event['type'] . ' — ' . $event['deliveryId'],
+            ];
+        }
+
+        return $options;
     }
 
     private static function requireRead(App $kirby): void

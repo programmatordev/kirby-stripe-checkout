@@ -65,6 +65,30 @@ final class HookDeliveryLedgerTest extends TestCase
         yield 'delivered' => ['delivered'];
     }
 
+    public function testRetryEligibilityRequiresARetainedUnexpiredPayloadAndFailedStatusForManualRetry(): void
+    {
+        $attemptedAt = new DateTimeImmutable('2026-09-30T23:59:59Z');
+        $failed = $this->entry('failed');
+        $pending = $this->entry('pending');
+        $delivered = $this->entry('delivered');
+
+        $this->assertTrue(HookDeliveryLedger::isDispatchEligible($pending, $attemptedAt));
+        $this->assertTrue(HookDeliveryLedger::isDispatchEligible($failed, $attemptedAt));
+        $this->assertFalse(HookDeliveryLedger::isDispatchEligible($delivered, $attemptedAt));
+        $this->assertFalse(HookDeliveryLedger::isFailedRetryEligible($pending, $attemptedAt));
+        $this->assertTrue(HookDeliveryLedger::isFailedRetryEligible($failed, $attemptedAt));
+        $this->assertFalse(HookDeliveryLedger::isFailedRetryEligible(
+            $failed,
+            new DateTimeImmutable('2026-10-01T00:00:00Z'),
+        ));
+
+        $pruned = HookDeliveryLedger::prunePayloads([$failed], new DateTimeImmutable('2026-10-01T00:00:00Z'))[0];
+        $this->assertFalse(HookDeliveryLedger::isFailedRetryEligible(
+            $pruned,
+            new DateTimeImmutable('2026-10-01T00:00:01Z'),
+        ));
+    }
+
     #[DataProvider('invalidPrunedEntries')]
     public function testPrunedStorageStillRejectsInvalidMetadata(string $mutation): void
     {

@@ -101,6 +101,31 @@ final class HookDeliveryLedger
         return OrderData::date($entry['expiresAt']) <= $now;
     }
 
+    /** @param array<string, mixed> $entry Validated persisted delivery. */
+    public static function isDispatchEligible(array $entry, DateTimeImmutable $attemptedAt): bool
+    {
+        if ($entry['status'] === 'delivered') {
+            return false;
+        }
+
+        // Pruned entries retain identity metadata but cannot restore a replayable event.
+        if ($entry['payloadPrunedAt'] !== null) {
+            return false;
+        }
+
+        return self::isExpired($entry, $attemptedAt) === false;
+    }
+
+    /** @param array<string, mixed> $entry Validated persisted delivery. */
+    public static function isFailedRetryEligible(array $entry, DateTimeImmutable $attemptedAt): bool
+    {
+        if ($entry['status'] !== 'failed') {
+            return false;
+        }
+
+        return self::isDispatchEligible($entry, $attemptedAt);
+    }
+
     /** @param array<string, mixed> $data */
     public static function restoreEvent(array $data): LifecycleEvent
     {
