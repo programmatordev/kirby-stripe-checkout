@@ -71,7 +71,7 @@ final class WebhookEndpoint
             return $this->response(self::HTTP_BAD_REQUEST, WebhookErrorCode::SIGNATURE_INVALID);
         }
 
-        // SDK 22 can emit PHP warnings for header fragments without '='.
+        // The Stripe SDK can emit PHP warnings for header fragments without '='.
         // Contain that reproduced parsing gap inside verification without retaining payload-bearing SDK errors.
         set_error_handler(static function (): never {
             throw new UnexpectedValueException();

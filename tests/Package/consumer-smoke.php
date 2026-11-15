@@ -135,6 +135,7 @@ try {
 
     if (($extensions['options'] ?? null) !== [
         'cache' => [
+            'diagnostics' => true,
             'prices' => true,
             'taxCodes' => true,
         ],
