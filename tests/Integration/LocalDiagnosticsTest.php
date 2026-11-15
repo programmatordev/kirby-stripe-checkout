@@ -44,11 +44,15 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->assertSame('Overview', $response['summary']['headline']);
         $this->assertCount(4, $response['summary']['reports']);
         $summary = array_column($response['summary']['reports'], null, 'value');
-        $this->assertSame('Needs attention', $summary['Checkout setup']['label']);
-        $this->assertSame('2 issues', $summary['Checkout setup']['info']);
+        $this->assertSame('Needs attention (2 issues)', $summary['Checkout setup']['label']);
         $this->assertSame('Not checked', $summary['Stripe account']['label']);
-        $this->assertSame('Needs attention', $summary['Webhooks']['label']);
-        $this->assertSame('Needs attention', $summary['Operations']['label']);
+        $this->assertSame('Needs attention (1 issue)', $summary['Webhooks']['label']);
+        $this->assertSame('Needs attention (1 issue)', $summary['Operations']['label']);
+
+        foreach ($summary as $summaryReport) {
+            $this->assertNull($summaryReport['info']);
+        }
+
         $this->assertSame('Needs attention', $sections['attention']['headline']);
         $this->assertSame('Operations', $sections['operations']['headline']);
         $this->assertSame('System', $sections['system']['headline']);
@@ -111,6 +115,7 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $response = DiagnosticsSection::response($this->kirby);
         $sections = array_column($response['sections'], null, 'name');
         $items = array_column($sections['stripe']['items'], null, 'id');
+        $summary = array_column($response['summary']['reports'], null, 'value');
 
         $this->assertSame(
             '2026-11-15 12:00 UTC',
@@ -119,6 +124,10 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->assertSame(
             'Connected · test mode',
             $items['remote-stripeAccount']['info'],
+        );
+        $this->assertSame(
+            'Ready',
+            $summary['Stripe account']['label'],
         );
     }
 

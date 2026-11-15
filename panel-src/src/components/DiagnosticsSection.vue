@@ -94,7 +94,8 @@ export default {
 
 		<template v-else>
 			<k-section :headline="summary.headline">
-				<k-stats :reports="summary.reports" size="medium" />
+				<!-- Kirby's System view uses this class to color themed stat labels. -->
+				<k-stats class="k-system-info" :reports="summary.reports" size="medium" />
 			</k-section>
 
 			<k-section

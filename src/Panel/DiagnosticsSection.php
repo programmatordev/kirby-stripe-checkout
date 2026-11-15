@@ -365,35 +365,26 @@ final class DiagnosticsSection
             $remoteReport?->check('stripeWebhook'),
         ];
         $operationChecks = self::checks($report, self::OPERATION_CHECKS);
-        $remoteCheckedAt = $remoteReport === null
-            ? self::translate('diagnostics.summary.notCheckedInfo')
-            : self::template('diagnostics.summary.checkedAt', [
-                'checkedAt' => gmdate('Y-m-d H:i \U\T\C', $remoteReport->checkedAt()->getTimestamp()),
-            ]);
-        $webhookInfo = self::hasIssues($webhookChecks)
-            ? self::issueInfo($webhookChecks)
-            : $remoteCheckedAt;
 
         return [
             self::summaryReport(
                 label: self::translate('diagnostics.summary.setup'),
                 status: self::combinedStatus($setupChecks),
-                info: self::issueInfo($setupChecks),
+                issueCount: self::issueCount($setupChecks),
             ),
             self::summaryReport(
                 label: self::translate('diagnostics.summary.stripeAccount'),
                 status: self::combinedStatus($stripeChecks),
-                info: $remoteCheckedAt,
             ),
             self::summaryReport(
                 label: self::translate('diagnostics.summary.webhooks'),
                 status: self::combinedStatus($webhookChecks),
-                info: $webhookInfo,
+                issueCount: self::issueCount($webhookChecks),
             ),
             self::summaryReport(
                 label: self::translate('diagnostics.summary.operations'),
                 status: self::combinedStatus($operationChecks),
-                info: self::issueInfo($operationChecks),
+                issueCount: self::issueCount($operationChecks),
             ),
         ];
     }
@@ -426,31 +417,14 @@ final class DiagnosticsSection
         };
     }
 
-    /** @param list<DiagnosticCheck|null> $checks */
-    private static function issueInfo(array $checks): string
+    private static function issueLabel(int $issueCount): string
     {
-        $issueCount = self::issueCount($checks);
-
-        if ($issueCount === 0) {
-            if (self::combinedStatus($checks) === DiagnosticStatus::NotVerifiable) {
-                return self::translate('diagnostics.summary.unavailableInfo');
-            }
-
-            return self::translate('diagnostics.summary.noIssues');
-        }
-
         return self::template(
             $issueCount === 1
                 ? 'diagnostics.summary.issue.one'
                 : 'diagnostics.summary.issue.many',
             ['count' => (string) $issueCount],
         );
-    }
-
-    /** @param list<DiagnosticCheck|null> $checks */
-    private static function hasIssues(array $checks): bool
-    {
-        return self::issueCount($checks) > 0;
     }
 
     /** @param list<DiagnosticCheck|null> $checks */
@@ -467,12 +441,18 @@ final class DiagnosticsSection
     private static function summaryReport(
         string $label,
         DiagnosticStatus $status,
-        string $info,
+        int $issueCount = 0,
     ): array {
+        $statusLabel = self::summaryValue($status);
+
+        if ($issueCount > 0) {
+            $statusLabel .= ' (' . self::issueLabel($issueCount) . ')';
+        }
+
         return [
-            'label' => self::summaryValue($status),
+            'label' => $statusLabel,
             'value' => $label,
-            'info' => $info,
+            'info' => null,
             'icon' => self::statusIcon($status),
             'theme' => self::statusTheme($status),
         ];
