@@ -524,10 +524,10 @@ final class DiagnosticsSection
             $check->code() === 'stripeWebhook'
                 && in_array($check->messageKey(), ['stripeWebhook.missing', 'stripeWebhook.incomplete', 'stripeWebhook.duplicate'], true) => self::stripeWebhooksButton(),
             $check->code() === 'events'
-                && $check->messageKey() === 'events.failed' => self::ordersButton($kirby, 'failed_events'),
+                && $check->messageKey() === 'events.failed' => self::ordersButton($kirby, OrderAttentionFilter::FailedEvents),
             $check->code() === 'housekeepingRun' => self::housekeepingButton($kirby),
             $check->code() === 'lifecycle'
-                && $check->messageKey() === 'lifecycle.failed' => self::ordersButton($kirby, 'failed_hooks'),
+                && $check->messageKey() === 'lifecycle.failed' => self::ordersButton($kirby, OrderAttentionFilter::FailedHooks),
             $check->code() === 'prices' => self::catalogueRefreshButton(
                 kirby: $kirby,
                 permission: 'prices.read',
@@ -589,7 +589,7 @@ final class DiagnosticsSection
     }
 
     /** @return list<DiagnosticItemButton> */
-    private static function ordersButton(App $kirby, string $attention): array
+    private static function ordersButton(App $kirby, OrderAttentionFilter $attentionFilter): array
     {
         if (PluginPermissions::allows($kirby, 'orders.read') === false) {
             return [];
@@ -597,7 +597,7 @@ final class DiagnosticsSection
 
         return [[
             'icon' => 'cart',
-            'link' => Panel::url('stripe-checkout') . '?tab=orders&checkoutStatus=&payment=&attention=' . $attention,
+            'link' => Panel::url('stripe-checkout') . '?tab=orders&checkoutStatus=&payment=&attention=' . $attentionFilter->value,
             'title' => self::translate('diagnostics.actions.viewAffectedOrders'),
             'variant' => 'filled',
         ]];
