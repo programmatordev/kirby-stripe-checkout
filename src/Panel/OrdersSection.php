@@ -176,10 +176,10 @@ final class OrdersSection
                 'text' => $summary->orderNumber(),
             ],
             'createdAt' => $summary->createdAt()->format(DATE_ATOM),
-            'customer' => self::customer($summary),
+            'customer' => self::customerEmail($summary),
             'paymentStatus' => self::paymentStatusTags($summary),
             'total' => $summary->total() === null
-                ? null
+                ? '–'
                 : $moneyFormatter->format($summary->total(), locale: $panelLocale),
         ];
     }
@@ -247,16 +247,9 @@ final class OrdersSection
             || $query->attentionFilters() !== [];
     }
 
-    private static function customer(OrderSummary $summary): string
+    private static function customerEmail(OrderSummary $summary): string
     {
-        $customer = array_filter([
-            $summary->customerName(),
-            $summary->customerEmail(),
-        ], static fn(?string $value): bool => $value !== null && $value !== '');
-
-        return $customer === []
-            ? self::translation('orders.index.customerUnavailable')
-            : implode(' · ', $customer);
+        return $summary->customerEmail() ?? '–';
     }
 
     /** @return list<array{key: string, text: string, theme: string}> */

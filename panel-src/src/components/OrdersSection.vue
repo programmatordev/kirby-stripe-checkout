@@ -56,6 +56,11 @@ export default {
 				.filter(value => value.length > 0)
 				.length;
 		},
+		// Orders expose their guarded operations on the detail view.
+		// Native Page mutation dropdowns would contain only disabled actions.
+		items() {
+			return this.data;
+		},
 		buttons() {
 			const buttons = [
 				{
@@ -259,3 +264,53 @@ export default {
 	}
 };
 </script>
+
+<style>
+/* The native index is not a stable order identifier, and Collection reserves an empty options slot. */
+.k-table:has(.k-stripe-checkout-payment-status-preview)
+	:is(.k-table-index-column, .k-table-options-column) {
+	display: none;
+}
+
+.k-table:has(.k-stripe-checkout-payment-status-preview)
+	thead [data-column-id="title"] {
+	border-start-start-radius: var(--rounded);
+}
+
+.k-table:has(.k-stripe-checkout-payment-status-preview)
+	thead [data-column-id="total"] {
+	border-start-end-radius: var(--rounded);
+}
+
+.k-table:has(.k-stripe-checkout-payment-status-preview)
+	[data-column-id="total"] {
+	border-inline-end: 0;
+}
+
+.k-table:has(.k-stripe-checkout-payment-status-preview)
+	tbody tr:last-child [data-column-id="title"] {
+	border-end-start-radius: var(--rounded);
+}
+
+.k-table:has(.k-stripe-checkout-payment-status-preview)
+	tbody tr:last-child [data-column-id="total"] {
+	border-end-end-radius: var(--rounded);
+}
+
+@container (max-width: 40rem) {
+	.k-table:has(.k-stripe-checkout-payment-status-preview)
+		[data-column-id="title"] {
+		border-inline-end: 0;
+	}
+
+	.k-table:has(.k-stripe-checkout-payment-status-preview)
+		thead [data-column-id="title"] {
+		border-start-end-radius: var(--rounded);
+	}
+
+	.k-table:has(.k-stripe-checkout-payment-status-preview)
+		tbody tr:last-child [data-column-id="title"] {
+		border-end-end-radius: var(--rounded);
+	}
+}
+</style>

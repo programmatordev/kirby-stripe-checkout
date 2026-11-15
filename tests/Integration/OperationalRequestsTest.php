@@ -258,6 +258,136 @@ final class OperationalRequestsTest extends KirbyTestCase
         }
     }
 
+    public function testEligibleOrderExposesKirbysNativeDeletionDialog(): void
+    {
+        $this->restartRequest([
+            'orders.read' => true,
+            'orders.delete' => true,
+        ], 'GET');
+        $store = new OrderPageStore($this->kirby);
+        $order = $this->createOrder(new DateTimeImmutable('-2 days'));
+        $order = $store->update($order->uuid()->toString(), static fn(array $data): array => [
+            ...$data,
+            'checkoutStatus' => 'creation_failed',
+            'creationFailedAt' => $data['createdAt'],
+        ]);
+        $deleteProps = null;
+
+        foreach ($order->panel()->buttons() as $button) {
+            if (is_array($button) === false) {
+                continue;
+            }
+
+            $props = $button['props'] ?? null;
+
+            if (is_array($props) && ($props['text'] ?? null) === 'Delete order') {
+                $deleteProps = $props;
+                break;
+            }
+        }
+
+        $this->assertIsArray($deleteProps);
+        $this->assertSame(
+            'stripe-checkout/orders/' . self::ORDER_ID . '/delete',
+            $deleteProps['dialog'] ?? null,
+        );
+        $this->assertSame('negative', $deleteProps['theme'] ?? null);
+
+        $response = Panel::router('dialogs/stripe-checkout/orders/' . self::ORDER_ID . '/delete');
+
+        $this->assertNotNull($response);
+        $this->assertSame(200, $response->code(), $response->body());
+        /** @var array{'$dialog': array{component: string, props: array{text: string}}} $body */
+        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
+        $dialog = $body['$dialog'];
+        $this->assertSame('k-remove-dialog', $dialog['component']);
+        $this->assertSame(
+            'Permanently delete this order from Kirby? This cannot be undone and does not cancel or refund anything in Stripe.',
+            $dialog['props']['text'],
+        );
+    }
+
+    public function testOrderDeletionDialogRequiresDeletePermissionBeforeLoadingOrder(): void
+    {
+        $this->restartRequest([
+            'orders.read' => true,
+            'orders.delete' => false,
+        ], 'GET');
+
+        $response = Panel::router('dialogs/stripe-checkout/orders/' . self::ORDER_ID . '/delete');
+
+        $this->assertNotNull($response);
+        $this->assertSame(403, $response->code(), $response->body());
+    }
+
+    public function testOrderDeletionDialogDeletesAndRedirectsToTheOrdersIndex(): void
+    {
+        $this->restartRequest([
+            'orders.read' => true,
+            'orders.delete' => true,
+        ]);
+        $store = new OrderPageStore($this->kirby);
+        $order = $this->createOrder(new DateTimeImmutable('-2 days'));
+        $order = $store->update($order->uuid()->toString(), static fn(array $data): array => [
+            ...$data,
+            'checkoutStatus' => 'creation_failed',
+            'creationFailedAt' => $data['createdAt'],
+        ]);
+
+        $result = StripeCheckoutArea::submitOrderDeletionDialog($this->kirby, self::ORDER_ID);
+
+        $this->assertSame([
+            'event' => 'page.delete',
+            'message' => 'The order was deleted.',
+            'redirect' => Panel::url('stripe-checkout') . '?tab=orders',
+        ], $result);
+        $this->assertNull($store->order($order->uuid()->toString()));
+    }
+
+    public function testOrderDeletionDialogDistinguishesRetryableAndTerminalFailures(): void
+    {
+        $this->restartRequest(
+            permissions: [
+                'orders.read' => true,
+                'orders.delete' => true,
+            ],
+            hooks: [
+                'page.delete:before' => function (): void {
+                    throw new RuntimeException('Intentional deletion failure');
+                },
+            ],
+        );
+        $store = new OrderPageStore($this->kirby);
+        $order = $this->createOrder(new DateTimeImmutable('-2 days'));
+        $store->update($order->uuid()->toString(), static fn(array $data): array => [
+            ...$data,
+            'checkoutStatus' => 'creation_failed',
+            'creationFailedAt' => $data['createdAt'],
+        ]);
+
+        try {
+            StripeCheckoutArea::submitOrderDeletionDialog($this->kirby, self::ORDER_ID);
+            $this->fail('A storage failure should remain visible to the operator.');
+        } catch (KirbyException $error) {
+            $this->assertSame(503, $error->getHttpCode());
+            $this->assertSame('The order could not be deleted right now. Try again.', $error->getMessage());
+        }
+
+        $this->restartRequest([
+            'orders.read' => true,
+            'orders.delete' => true,
+        ]);
+        $this->createOrder(new DateTimeImmutable('-2 days'));
+
+        try {
+            StripeCheckoutArea::submitOrderDeletionDialog($this->kirby, self::ORDER_ID);
+            $this->fail('An ineligible order should not be presented as retryable.');
+        } catch (KirbyException $error) {
+            $this->assertSame(409, $error->getHttpCode());
+            $this->assertSame('This order can no longer be deleted.', $error->getMessage());
+        }
+    }
+
     public function testOrderSyncPermissionDoesNotRevealAnUnreadableOrder(): void
     {
         $this->restartRequest([

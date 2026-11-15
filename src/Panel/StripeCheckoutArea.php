@@ -24,6 +24,7 @@ use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingZone;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
@@ -45,6 +46,11 @@ final class StripeCheckoutArea
             'icon' => 'credit-card',
             // Kirby collects named buttons from every area, but renders this one only where a blueprint references it.
             'buttons' => [
+                'page.stripeCheckoutOrderDelete' => static fn(?string $orderId = null, bool $isManuallyDeletable = false): ?ViewButton => self::deleteOrderButton(
+                    kirby: $kirby,
+                    orderId: $orderId,
+                    isManuallyDeletable: $isManuallyDeletable,
+                ),
                 'page.stripeCheckoutOrderRetryLifecycleDelivery' => static fn(?string $orderId = null, bool $hasRetryableLifecycleDelivery = false): ?ViewButton => self::retryLifecycleDeliveryButton(
                     kirby: $kirby,
                     orderId: $orderId,
@@ -58,6 +64,15 @@ final class StripeCheckoutArea
                 'page.stripeCheckoutOrderOpenInStripe' => static fn(?string $stripeDashboardUrl = null): ?ViewButton => self::openInStripeButton($stripeDashboardUrl),
             ],
             'dialogs' => [
+                'order.delete' => [
+                    'pattern' => 'stripe-checkout/orders/(:any)/delete',
+                    'load' => function (string $orderId) use ($kirby): array {
+                        return StripeCheckoutArea::deleteOrderDialog($kirby, $orderId);
+                    },
+                    'submit' => function (string $orderId) use ($kirby): array {
+                        return StripeCheckoutArea::submitOrderDeletionDialog($kirby, $orderId);
+                    },
+                ],
                 'order.sync' => [
                     'pattern' => 'stripe-checkout/orders/(:any)/sync',
                     'load' => function (string $orderId) use ($kirby): array {
@@ -268,6 +283,30 @@ final class StripeCheckoutArea
         );
     }
 
+    private static function deleteOrderButton(App $kirby, ?string $orderId, bool $isManuallyDeletable): ?ViewButton
+    {
+        if ($orderId === null || $isManuallyDeletable === false) {
+            return null;
+        }
+
+        if (PluginPermissions::allows($kirby, 'orders.read') === false) {
+            return null;
+        }
+
+        if (PluginPermissions::allows($kirby, 'orders.delete') === false) {
+            return null;
+        }
+
+        // This validated Order value controls presentation only.
+        // The dialog reloads the Order and the operation rechecks eligibility under its write lock.
+        return new ViewButton(
+            dialog: 'stripe-checkout/orders/' . rawurlencode($orderId) . '/delete',
+            icon: 'trash',
+            text: 'programmatordev.stripe-checkout.orders.actions.delete',
+            theme: 'negative',
+        );
+    }
+
     private static function syncOrderButton(App $kirby, ?string $orderId, ?string $stripeCheckoutSessionId): ?ViewButton
     {
         if ($orderId === null) {
@@ -362,6 +401,52 @@ final class StripeCheckoutArea
             message: self::translate($retryable
                 ? 'orders.actions.syncRetryableFailure'
                 : 'orders.actions.syncFailure'),
+            httpCode: $response['code'],
+        );
+    }
+
+    /** @return array<string, mixed> */
+    public static function deleteOrderDialog(App $kirby, string $orderId): array
+    {
+        PluginPermissions::require($kirby, 'orders.read');
+        PluginPermissions::require($kirby, 'orders.delete');
+
+        if (self::isOrderManuallyDeletable($kirby, $orderId) === false) {
+            throw new KirbyException(
+                message: self::translate('orders.actions.deleteUnavailable'),
+                httpCode: self::HTTP_CONFLICT,
+            );
+        }
+
+        return [
+            'component' => 'k-remove-dialog',
+            'props' => [
+                'text' => self::translate('orders.actions.deleteConfirm'),
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public static function submitOrderDeletionDialog(App $kirby, string $orderId): array
+    {
+        // Keep eligibility and deletion in the existing locked operation.
+        // This adapter only maps its shared response envelope to Kirby's native dialog result.
+        $response = OperationalRequests::deleteOrder($kirby, $orderId);
+
+        if ($response['status'] === 'success') {
+            return [
+                'event' => 'page.delete',
+                'message' => self::translate('orders.actions.deleteSucceeded'),
+                'redirect' => Panel::url('stripe-checkout') . '?tab=orders',
+            ];
+        }
+
+        $retryable = $response['error']['retryable'] ?? false;
+
+        throw new KirbyException(
+            message: self::translate($retryable
+                ? 'orders.actions.deleteRetryableFailure'
+                : 'orders.actions.deleteUnavailable'),
             httpCode: $response['code'],
         );
     }
@@ -472,6 +557,27 @@ final class StripeCheckoutArea
         }
 
         return $options;
+    }
+
+    private static function isOrderManuallyDeletable(App $kirby, string $orderId): bool
+    {
+        try {
+            $pageUuid = OrderData::pageUuid($orderId);
+            $store = new OrderPageStore($kirby);
+            $order = $store->order($pageUuid);
+
+            if ($order === null) {
+                return false;
+            }
+
+            return RetentionPolicy::isManuallyEligible(
+                data: $store->data($order),
+                now: new DateTimeImmutable(),
+            );
+        } catch (OrderDataException|OrderQueryException|OrderStorageException) {
+            // Never expose a destructive confirmation when the current Order cannot be safely revalidated.
+            return false;
+        }
     }
 
     private static function requireRead(App $kirby): void

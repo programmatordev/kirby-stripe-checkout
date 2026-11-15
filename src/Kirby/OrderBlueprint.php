@@ -90,7 +90,7 @@ final class OrderBlueprint
         return [
             'title' => 'programmatordev.stripe-checkout.orders.order',
             'icon' => 'cart',
-            'buttons' => ['stripeCheckoutOrderSync', 'stripeCheckoutOrderRetryLifecycleDelivery', 'stripeCheckoutOrderOpenInStripe'],
+            'buttons' => ['stripeCheckoutOrderSync', 'stripeCheckoutOrderRetryLifecycleDelivery', 'stripeCheckoutOrderOpenInStripe', 'stripeCheckoutOrderDelete'],
             'options' => array_fill_keys(['create', 'changeSlug', 'changeStatus', 'changeTemplate', 'changeTitle', 'delete', 'duplicate', 'move', 'sort', 'preview'], false),
             'tabs' => $tabs,
         ];

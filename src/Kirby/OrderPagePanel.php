@@ -15,6 +15,7 @@ use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
+use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
 use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 
@@ -71,6 +72,7 @@ final class OrderPagePanel extends Page
         return ViewButtons::view($this)
             ->bind([
                 'hasRetryableLifecycleDelivery' => $this->hasRetryableLifecycleDelivery(),
+                'isManuallyDeletable' => $this->isManuallyDeletable(),
                 'orderId' => $model instanceof OrderPage ? $model->slug() : null,
                 'stripeCheckoutSessionId' => $this->stripeCheckoutSessionId(),
                 'stripeDashboardUrl' => $this->stripeDashboardUrl(),
@@ -172,6 +174,20 @@ final class OrderPagePanel extends Page
         }
 
         return false;
+    }
+
+    private function isManuallyDeletable(): bool
+    {
+        $model = $this->model;
+
+        if ($model instanceof OrderPage === false) {
+            return false;
+        }
+
+        return RetentionPolicy::isManuallyEligible(
+            data: $this->orderData($model),
+            now: new DateTimeImmutable(),
+        );
     }
 
     public static function handle(string $name): string

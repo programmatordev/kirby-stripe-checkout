@@ -102,6 +102,19 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertNull($button('abc123def456ghi7', true));
     }
 
+    public function testOrderDeletionButtonIsHiddenWithoutDeletePermission(): void
+    {
+        $this->restartWithPermissions([
+            'orders.read' => true,
+            'orders.delete' => false,
+        ]);
+        $area = $this->area();
+        /** @var callable(?string, bool): mixed $button */
+        $button = $area['buttons']['page.stripeCheckoutOrderDelete'];
+
+        $this->assertNull($button('abc123def456ghi7', true));
+    }
+
     public function testAreaNormalizesTheNativePageView(): void
     {
         $definition = $this->area();

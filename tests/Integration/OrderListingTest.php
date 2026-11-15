@@ -213,7 +213,7 @@ final class OrderListingTest extends KirbyTestCase
             'href' => $order->panel()->url(),
             'text' => $order->title()->value(),
         ], $row['title']);
-        $this->assertSame('Ana Silva · buyer@example.test', $row['customer']);
+        $this->assertSame('buyer@example.test', $row['customer']);
         $this->assertSame([[
             'key' => 'payment-paid',
             'text' => 'Paid',
@@ -242,6 +242,26 @@ final class OrderListingTest extends KirbyTestCase
         $this->assertIsArray($titleColumn);
         $this->assertArrayNotHasKey('width', $titleColumn);
         $this->assertArrayNotHasKey('attention', $columns);
+    }
+
+    public function testOrdersSectionShowsADashForUnavailableCustomerAndTotal(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(request: [
+            'method' => 'GET',
+            'query' => [
+                'checkoutStatus' => '',
+                'payment' => '',
+            ],
+            'url' => 'https://kirby-stripe-checkout.test/panel/stripe-checkout?tab=orders&checkoutStatus=&payment=',
+        ]);
+        $this->kirby = $this->environment->app();
+        $order = $this->createOrder(new DateTimeImmutable('2026-10-02T10:00:00Z'));
+        $response = OrdersSection::response($this->kirby);
+
+        $this->assertSame($order->uuid()->toString(), $response['data'][0]['uuid']);
+        $this->assertSame('–', $response['data'][0]['customer']);
+        $this->assertSame('–', $response['data'][0]['total']);
     }
 
     public function testOrdersSectionFormatsMoneyForThePanelUserInsteadOfTheContentLanguage(): void
