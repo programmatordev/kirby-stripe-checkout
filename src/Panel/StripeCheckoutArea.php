@@ -39,8 +39,6 @@ final class StripeCheckoutArea
 {
     private const HTTP_CONFLICT = 409;
 
-    private const TAB_DIAGNOSTICS = 'diagnostics';
-
     private const TAB_ORDERS = 'orders';
 
     private const TAB_OVERVIEW = 'overview';
@@ -53,8 +51,6 @@ final class StripeCheckoutArea
             'icon' => 'credit-card',
             // Kirby collects named buttons from every area, but renders this one only where a blueprint references it.
             'buttons' => [
-                'page.stripeCheckoutRemoteDiagnostics' => static fn(): ?ViewButton => self::remoteDiagnosticsButton($kirby),
-                'page.stripeCheckoutHousekeeping' => static fn(): ?ViewButton => self::housekeepingButton($kirby),
                 'page.stripeCheckoutOrderDelete' => static fn(?string $orderId = null, bool $isManuallyDeletable = false): ?ViewButton => self::deleteOrderButton(
                     kirby: $kirby,
                     orderId: $orderId,
@@ -307,51 +303,6 @@ final class StripeCheckoutArea
             target: '_blank',
             text: 'programmatordev.stripe-checkout.orders.actions.openInStripe',
             rel: 'noopener noreferrer',
-        );
-    }
-
-    private static function remoteDiagnosticsButton(App $kirby): ?ViewButton
-    {
-        if (self::isDiagnosticsTab($kirby) === false) {
-            return null;
-        }
-
-        if (PluginPermissions::allows($kirby, 'diagnostics.read') === false) {
-            return null;
-        }
-
-        $disabled = self::isStripeServerConfigurationReady($kirby) === false;
-
-        return new ViewButton(
-            dialog: $disabled ? null : 'stripe-checkout/diagnostics/run',
-            disabled: $disabled,
-            icon: 'refresh',
-            text: 'programmatordev.stripe-checkout.diagnostics.actions.runRemote',
-            title: $disabled ? 'programmatordev.stripe-checkout.diagnostics.actions.runRemoteUnavailable' : null,
-        );
-    }
-
-    private static function housekeepingButton(App $kirby): ?ViewButton
-    {
-        if (self::isDiagnosticsTab($kirby) === false) {
-            return null;
-        }
-
-        if (PluginPermissions::allows($kirby, 'diagnostics.read') === false
-            || PluginPermissions::allows($kirby, 'housekeeping.run') === false
-        ) {
-            return null;
-        }
-
-        $disabled = self::isStripeServerConfigurationReady($kirby) === false;
-
-        return new ViewButton(
-            dialog: $disabled ? null : 'stripe-checkout/housekeeping/run',
-            disabled: $disabled,
-            icon: 'refresh',
-            text: 'programmatordev.stripe-checkout.housekeeping.actions.run',
-            theme: 'notice',
-            title: $disabled ? 'programmatordev.stripe-checkout.housekeeping.actions.runUnavailable' : null,
         );
     }
 
@@ -749,21 +700,6 @@ final class StripeCheckoutArea
         } catch (OrderDataException|OrderQueryException|OrderStorageException) {
             return false;
         }
-    }
-
-    private static function isDiagnosticsTab(App $kirby): bool
-    {
-        // Kirby exposes Page buttons at view level, so tab-specific actions must resolve the active tab here.
-        $tab = $kirby->request()->get('tab');
-
-        if (is_string($tab)) {
-            return $tab === self::TAB_DIAGNOSTICS;
-        }
-
-        // Diagnostics is selected implicitly only when it is the first accessible tab.
-        return PluginPermissions::allows($kirby, 'diagnostics.read')
-            && PluginPermissions::allows($kirby, 'settings.read') === false
-            && PluginPermissions::allows($kirby, 'orders.read') === false;
     }
 
     private static function isStripeServerConfigurationReady(App $kirby): bool

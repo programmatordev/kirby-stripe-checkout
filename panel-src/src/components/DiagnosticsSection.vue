@@ -1,0 +1,99 @@
+<script>
+export default {
+	mixins: ["section"],
+	data() {
+		return {
+			isLoading: true,
+			isRequesting: false,
+			sections: [],
+			summary: {
+				headline: "",
+				reports: []
+			}
+		};
+	},
+	watch: {
+		timestamp() {
+			// Kirby signals model updates through the section timestamp; custom sections reload their own data.
+			this.fetch();
+		}
+	},
+	mounted() {
+		this.fetch();
+	},
+	methods: {
+		itemButtons(item) {
+			return (item.buttons ?? []).map(button => {
+				if (!button.endpoint) {
+					return button;
+				}
+
+				const { endpoint, successMessage, ...props } = button;
+
+				return {
+					...props,
+					click: () => this.request(endpoint, successMessage)
+				};
+			});
+		},
+		buttons(section) {
+			if (section.action === null) {
+				return [];
+			}
+
+			const action = section.action;
+
+			return [{
+				...action,
+				click: action.dialog ? () => this.$dialog(action.dialog) : undefined
+			}];
+		},
+		async fetch() {
+			this.isLoading = true;
+			const response = await this.load();
+			this.sections = response.sections.map(section => ({
+				...section,
+				items: section.items.map(item => ({
+					...item,
+					buttons: this.itemButtons(item)
+				}))
+			}));
+			this.summary = response.summary;
+			this.isLoading = false;
+		},
+		async request(endpoint, successMessage) {
+			if (this.isRequesting) {
+				return;
+			}
+
+			try {
+				this.isRequesting = true;
+				await this.$api.post(endpoint);
+				await this.fetch();
+				this.$panel.notification.success(successMessage);
+			} catch (error) {
+				this.$panel.error(error);
+			} finally {
+				this.isRequesting = false;
+			}
+		}
+	}
+};
+</script>
+
+<template>
+	<div v-if="isLoading === false" class="k-stripe-checkout-diagnostics-section">
+		<k-section :headline="summary.headline">
+			<k-stats :reports="summary.reports" size="medium" />
+		</k-section>
+
+		<k-section
+			v-for="section in sections"
+			:key="section.name"
+			:buttons="buttons(section)"
+			:headline="section.headline"
+		>
+			<k-items :items="section.items" />
+		</k-section>
+	</div>
+</template>

@@ -18,6 +18,8 @@ use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\OrderErrorCode;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogueErrorCode;
+use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeCatalogueErrorCode;
 use Throwable;
 
 /**
@@ -63,6 +65,18 @@ final class OperationalRequests
             'method' => 'POST',
             'action' => function () use ($kirby): array {
                 return OperationalRequests::runDiagnostics($kirby);
+            },
+        ], [
+            'pattern' => 'stripe-checkout/diagnostics/prices/refresh',
+            'method' => 'POST',
+            'action' => function () use ($kirby): array {
+                return OperationalRequests::refreshPrices($kirby);
+            },
+        ], [
+            'pattern' => 'stripe-checkout/diagnostics/tax-codes/refresh',
+            'method' => 'POST',
+            'action' => function () use ($kirby): array {
+                return OperationalRequests::refreshTaxCodes($kirby);
             },
         ], [
             'pattern' => 'stripe-checkout/housekeeping/run',
@@ -245,6 +259,59 @@ final class OperationalRequests
             code: self::HTTP_OK,
             status: self::STATUS_SUCCESS,
             result: $report->toArray(),
+        );
+    }
+
+    /** @return array{code: int, status: string, result: array<string, mixed>|null, error: array{code: string, retryable: bool}|null} */
+    public static function refreshPrices(App $kirby): array
+    {
+        PluginPermissions::require($kirby, 'diagnostics.read');
+        PluginPermissions::require($kirby, 'prices.read');
+
+        try {
+            $runtime = new RuntimeFactory($kirby);
+            $currency = $runtime->settings()->currency();
+
+            if ($currency === null) {
+                return self::operationalFailure(PriceCatalogueErrorCode::CONFIGURATION_INVALID, self::HTTP_CONFLICT);
+            }
+
+            $state = $runtime->stripePriceCatalogue()->refresh($currency);
+        } catch (ConfigurationException $error) {
+            return self::operationalFailure($error->errorCode(), self::HTTP_CONFLICT);
+        }
+
+        if ($state->error() !== null) {
+            return self::operationalFailure(PriceCatalogueErrorCode::REFRESH_FAILED, self::HTTP_SERVICE_UNAVAILABLE);
+        }
+
+        return self::operationalResponse(
+            code: self::HTTP_OK,
+            status: self::STATUS_SUCCESS,
+            result: ['catalogueStatus' => $state->status()],
+        );
+    }
+
+    /** @return array{code: int, status: string, result: array<string, mixed>|null, error: array{code: string, retryable: bool}|null} */
+    public static function refreshTaxCodes(App $kirby): array
+    {
+        PluginPermissions::require($kirby, 'diagnostics.read');
+        PluginPermissions::require($kirby, 'taxCodes.read');
+
+        try {
+            $state = (new RuntimeFactory($kirby))->taxCodeCatalogue()->refresh();
+        } catch (ConfigurationException $error) {
+            return self::operationalFailure($error->errorCode(), self::HTTP_CONFLICT);
+        }
+
+        if ($state->error() !== null) {
+            return self::operationalFailure(TaxCodeCatalogueErrorCode::REFRESH_FAILED, self::HTTP_SERVICE_UNAVAILABLE);
+        }
+
+        return self::operationalResponse(
+            code: self::HTTP_OK,
+            status: self::STATUS_SUCCESS,
+            result: ['catalogueStatus' => $state->status()],
         );
     }
 

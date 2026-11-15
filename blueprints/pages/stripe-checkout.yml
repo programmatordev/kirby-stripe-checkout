@@ -1,8 +1,6 @@
 title: programmatordev.stripe-checkout.area.label
 icon: settings
 buttons:
-  - stripeCheckoutRemoteDiagnostics
-  - stripeCheckoutHousekeeping
   - languages
 
 options:

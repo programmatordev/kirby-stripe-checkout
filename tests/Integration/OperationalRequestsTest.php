@@ -32,6 +32,8 @@ use ProgrammatorDev\StripeCheckout\Order\OrderErrorCode;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
+use ProgrammatorDev\StripeCheckout\Stripe\Price\PriceCatalogueErrorCode;
+use ProgrammatorDev\StripeCheckout\Stripe\Tax\TaxCodeCatalogueErrorCode;
 use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
@@ -49,9 +51,11 @@ final class OperationalRequestsTest extends KirbyTestCase
     private const DIAGNOSTICS_PATH = 'stripe-checkout/diagnostics/run';
     private const HOUSEKEEPING_PATH = 'stripe-checkout/housekeeping/run';
     private const ORDER_ID = 'abc123def456ghi7';
+    private const PRICE_REFRESH_PATH = 'stripe-checkout/diagnostics/prices/refresh';
     private const RETRY_PATTERN = 'stripe-checkout/orders/(:any)/deliveries/(:any)/retry';
     private const SYNC_PATTERN = 'stripe-checkout/orders/(:any)/sync';
     private const SYNC_PATH = 'stripe-checkout/orders/' . self::ORDER_ID . '/sync';
+    private const TAX_CODE_REFRESH_PATH = 'stripe-checkout/diagnostics/tax-codes/refresh';
 
     public function testOperationalRequestsAreRegisteredWithResourceOrientedPaths(): void
     {
@@ -64,6 +68,8 @@ final class OperationalRequestsTest extends KirbyTestCase
             ['pattern' => self::RETRY_PATTERN, 'method' => 'POST'],
             ['pattern' => self::DELETION_PATTERN, 'method' => 'DELETE'],
             ['pattern' => self::DIAGNOSTICS_PATH, 'method' => 'POST'],
+            ['pattern' => self::PRICE_REFRESH_PATH, 'method' => 'POST'],
+            ['pattern' => self::TAX_CODE_REFRESH_PATH, 'method' => 'POST'],
             ['pattern' => self::HOUSEKEEPING_PATH, 'method' => 'POST'],
         ], array_map(static fn(array $request): array => [
             'pattern' => $request['pattern'],
@@ -771,6 +777,65 @@ final class OperationalRequestsTest extends KirbyTestCase
 
         $this->assertNotNull($response);
         $this->assertSame(403, $response->code(), $response->body());
+    }
+
+    public function testCatalogueRefreshRequiresDiagnosticsAndCataloguePermissions(): void
+    {
+        $this->restartRequest([
+            'diagnostics.read' => false,
+            'prices.read' => true,
+        ]);
+        $response = Panel::router(self::PRICE_REFRESH_PATH);
+        $this->assertNotNull($response);
+        $this->assertSame(403, $response->code(), $response->body());
+
+        $this->restartRequest([
+            'diagnostics.read' => true,
+            'taxCodes.read' => false,
+        ]);
+        $response = Panel::router(self::TAX_CODE_REFRESH_PATH);
+        $this->assertNotNull($response);
+        $this->assertSame(403, $response->code(), $response->body());
+    }
+
+    public function testCatalogueRefreshReportsConfigurationAndProviderFailures(): void
+    {
+        $this->restartRequest([
+            'diagnostics.read' => true,
+            'prices.read' => true,
+        ]);
+        $response = Panel::router(self::PRICE_REFRESH_PATH);
+        $this->assertNotNull($response);
+        $this->assertSame(409, $response->code(), $response->body());
+        $this->assertSame([
+            'code' => 409,
+            'status' => 'failed',
+            'result' => null,
+            'error' => [
+                'code' => PriceCatalogueErrorCode::CONFIGURATION_INVALID,
+                'retryable' => false,
+            ],
+        ], json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR));
+
+        $this->restartRequest(
+            permissions: [
+                'diagnostics.read' => true,
+                'taxCodes.read' => true,
+            ],
+            pluginOptions: ['stripe' => []],
+        );
+        $response = Panel::router(self::TAX_CODE_REFRESH_PATH);
+        $this->assertNotNull($response);
+        $this->assertSame(503, $response->code(), $response->body());
+        $this->assertSame([
+            'code' => 503,
+            'status' => 'failed',
+            'result' => null,
+            'error' => [
+                'code' => TaxCodeCatalogueErrorCode::REFRESH_FAILED,
+                'retryable' => false,
+            ],
+        ], json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR));
     }
 
     public function testRemoteDiagnosticsDialogUsesKirbysNativeConfirmation(): void

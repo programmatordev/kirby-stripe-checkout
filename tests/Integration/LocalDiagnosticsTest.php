@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProgrammatorDev\StripeCheckout\Test\Integration;
 
 use DateTimeImmutable;
+use Kirby\Panel\Panel;
 use Kirby\Uuid\Uuid;
 use Kirby\Uuid\Uuids;
 use ProgrammatorDev\StripeCheckout\Checkout\CheckoutErrorCode;
@@ -14,10 +15,14 @@ use ProgrammatorDev\StripeCheckout\Diagnostics\DiagnosticCheck;
 use ProgrammatorDev\StripeCheckout\Diagnostics\DiagnosticReport;
 use ProgrammatorDev\StripeCheckout\Diagnostics\DiagnosticStatus;
 use ProgrammatorDev\StripeCheckout\Diagnostics\LocalDiagnostics;
+use ProgrammatorDev\StripeCheckout\Housekeeping\HousekeepingRunOutcome;
+use ProgrammatorDev\StripeCheckout\Housekeeping\HousekeepingRunStatus;
+use ProgrammatorDev\StripeCheckout\Housekeeping\Internal\HousekeepingState;
+use ProgrammatorDev\StripeCheckout\Housekeeping\Internal\HousekeepingStateStore;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
-use ProgrammatorDev\StripeCheckout\Panel\DiagnosticsSections;
+use ProgrammatorDev\StripeCheckout\Panel\DiagnosticsSection;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
@@ -27,24 +32,62 @@ use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
 
 final class LocalDiagnosticsTest extends KirbyTestCase
 {
-    public function testRendersCurrentHousekeepingConfiguration(): void
+    public function testRendersHealthChecksWithoutSettingsSummary(): void
     {
-        $sections = DiagnosticsSections::build($this->kirby);
-        /** @var array<string, array<string, mixed>> $fields */
-        $fields = $sections['diagnostics']['fields'];
+        $response = DiagnosticsSection::response($this->kirby);
+        $sections = array_column($response['sections'], null, 'name');
+        $attention = array_column($sections['attention']['items'], null, 'id');
+        $system = array_column($sections['system']['items'], null, 'id');
 
+        $this->assertSame('Overview', $response['summary']['headline']);
+        $this->assertCount(4, $response['summary']['reports']);
+        $summary = array_column($response['summary']['reports'], null, 'value');
+        $this->assertSame('Needs attention', $summary['Checkout setup']['label']);
+        $this->assertSame('2 issues', $summary['Checkout setup']['info']);
+        $this->assertSame('Not checked', $summary['Stripe account']['label']);
+        $this->assertSame('Needs attention', $summary['Webhooks']['label']);
+        $this->assertSame('Needs attention', $summary['Operations']['label']);
+        $this->assertSame('Needs attention', $sections['attention']['headline']);
+        $this->assertSame('Operations', $sections['operations']['headline']);
+        $this->assertSame('System', $sections['system']['headline']);
+        $this->assertSame('Environment', $sections['environment']['headline']);
+        $this->assertSame('Webhook route', $system['webhookRoute']['text']);
+        $this->assertSame('passive', $system['webhookRoute']['theme']);
+        $this->assertSame('Ready', $system['webhookRoute']['info']);
+        $this->assertSame('Storage write access', $system['storageWriteAccess']['text']);
+        $this->assertSame([[
+            'icon' => 'open',
+            'link' => 'https://dashboard.stripe.com/apikeys',
+            'rel' => 'noopener noreferrer',
+            'target' => '_blank',
+            'title' => 'Open Stripe API keys',
+            'variant' => 'filled',
+        ]], $attention['secretKey']['buttons']);
+        $this->assertSame([[
+            'icon' => 'open',
+            'link' => 'https://dashboard.stripe.com/webhooks',
+            'rel' => 'noopener noreferrer',
+            'target' => '_blank',
+            'title' => 'Open Stripe Webhooks',
+            'variant' => 'filled',
+        ]], $attention['webhookSecret']['buttons']);
+        $this->assertSame([[
+            'icon' => 'settings',
+            'link' => Panel::url('stripe-checkout') . '?tab=settings',
+            'title' => 'Open Settings',
+            'variant' => 'filled',
+        ]], $attention['currency']['buttons']);
+        $this->assertSame('Last housekeeping run', $attention['housekeepingRun']['text']);
         $this->assertSame(
-            'PHP configuration: at most 25 candidates per run; lifecycle snapshot retention 30 days. Configure the CLI command in cron or run it manually.',
-            $fields['diagnosticsHousekeeping']['text'],
+            'Configure the housekeeping command in cron, or run it manually now',
+            $attention['housekeepingRun']['info'],
         );
-        $this->assertSame(
-            'Housekeeping has not run yet. The plugin cannot detect whether the host cron entry exists.',
-            $fields['diagnosticsHousekeepingRun']['text'],
-        );
-        $this->assertSame(
-            'Remote diagnostics have not run yet. Opening this page does not contact Stripe.',
-            $fields['diagnosticsRemoteSummary']['text'],
-        );
+        $stripe = array_column($sections['stripe']['items'], null, 'id');
+        $this->assertSame('Last Stripe check', $stripe['remote-summary']['text']);
+        $this->assertSame('Not run yet', $stripe['remote-summary']['info']);
+        $this->assertSame('clock', $stripe['remote-summary']['image']['icon']);
+        $this->assertSame('info', $stripe['remote-summary']['theme']);
+        $this->assertArrayNotHasKey('configuration', $sections);
     }
 
     public function testRendersTheLatestSanitizedRemoteReportWithoutRunningIt(): void
@@ -63,18 +106,48 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         );
         (new RuntimeFactory($this->kirby))->diagnosticReportStore()->write($report);
 
-        $sections = DiagnosticsSections::build($this->kirby);
-        /** @var array<string, array<string, mixed>> $fields */
-        $fields = $sections['diagnostics']['fields'];
+        $response = DiagnosticsSection::response($this->kirby);
+        $sections = array_column($response['sections'], null, 'name');
+        $items = array_column($sections['stripe']['items'], null, 'id');
 
         $this->assertSame(
-            'Last checked at 2026-11-15 12:00 UTC. Overall status: Pass.',
-            $fields['diagnosticsRemoteSummary']['text'],
+            '2026-11-15 12:00 UTC',
+            $items['remote-summary']['info'],
         );
         $this->assertSame(
-            'Stripe accepted the configured server key in test mode.',
-            $fields['diagnosticsRemoteStripeAccount']['text'],
+            'Connected · test mode',
+            $items['remote-stripeAccount']['info'],
         );
+    }
+
+    public function testPresentsTheLatestSuccessfulRunsConsistently(): void
+    {
+        $attemptedAt = new DateTimeImmutable('2026-11-15T12:55:00Z');
+        $completedAt = $attemptedAt->modify('+1 minute');
+        $outcome = new HousekeepingRunOutcome(
+            attemptedAt: $attemptedAt,
+            completedAt: $completedAt,
+            status: HousekeepingRunStatus::Success,
+            selectedOrders: 0,
+            processedOrders: 0,
+            prunedDeliveries: 0,
+            deletedOrders: 0,
+            recoveredOrders: 0,
+            failedOrders: 0,
+            errorCode: null,
+        );
+        (new HousekeepingStateStore($this->kirby))->write(
+            (new HousekeepingState())->withOutcome($outcome),
+        );
+
+        $sections = array_column(DiagnosticsSection::response($this->kirby)['sections'], null, 'name');
+        $operations = $sections['operations']['items'];
+
+        $this->assertSame('housekeepingRun', $operations[0]['id']);
+        $this->assertSame('Last housekeeping run', $operations[0]['text']);
+        $this->assertSame('2026-11-15 12:56 UTC', $operations[0]['info']);
+        $this->assertSame('clock', $operations[0]['image']['icon']);
+        $this->assertSame('info', $operations[0]['theme']);
     }
 
     public function testPreservesAStableRemoteFailureCodeWithoutATranslation(): void
@@ -90,18 +163,57 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         );
         (new RuntimeFactory($this->kirby))->diagnosticReportStore()->write($report);
 
-        $sections = DiagnosticsSections::build($this->kirby);
-        /** @var array<string, array<string, mixed>> $fields */
-        $fields = $sections['diagnostics']['fields'];
+        $response = DiagnosticsSection::response($this->kirby);
+        $sections = array_column($response['sections'], null, 'name');
+        $stripeItems = array_column($sections['stripe']['items'], null, 'id');
+        $attentionItems = array_column($sections['attention']['items'], null, 'id');
 
         $this->assertSame(
-            'Last checked at 2026-11-15 12:00 UTC. Overall status: Fail.',
-            $fields['diagnosticsRemoteSummary']['text'],
+            '2026-11-15 12:00 UTC',
+            $stripeItems['remote-summary']['info'],
         );
         $this->assertSame(
-            'Stripe rejected the configured server key (diagnostics.authentication_failed).',
-            $fields['diagnosticsRemoteStripeAccount']['text'],
+            'Stripe rejected the configured server key (diagnostics.authentication_failed)',
+            $attentionItems['remote-stripeAccount']['info'],
         );
+        $this->assertSame([[
+            'icon' => 'open',
+            'link' => 'https://dashboard.stripe.com/apikeys',
+            'rel' => 'noopener noreferrer',
+            'target' => '_blank',
+            'title' => 'Open Stripe API keys',
+            'variant' => 'filled',
+        ]], $attentionItems['remote-stripeAccount']['buttons']);
+    }
+
+    public function testPresentsCompactWebhookWarningWithConfigurationAction(): void
+    {
+        $url = 'https://kirby-stripe-checkout.test/stripe-checkout/webhook';
+        $report = new DiagnosticReport(
+            checkedAt: new DateTimeImmutable('2026-11-15T12:00:00Z'),
+            checks: [new DiagnosticCheck(
+                code: 'stripeWebhook',
+                status: DiagnosticStatus::Warning,
+                messageKey: 'stripeWebhook.missing',
+                context: [
+                    'mode' => 'test',
+                    'url' => $url,
+                ],
+            )],
+        );
+        (new RuntimeFactory($this->kirby))->diagnosticReportStore()->write($report);
+
+        $sections = array_column(DiagnosticsSection::response($this->kirby)['sections'], null, 'name');
+        $attention = array_column($sections['attention']['items'], null, 'id');
+        $this->assertSame('Missing in test mode', $attention['remote-stripeWebhook']['info']);
+        $this->assertSame([[
+            'icon' => 'open',
+            'link' => 'https://dashboard.stripe.com/webhooks',
+            'rel' => 'noopener noreferrer',
+            'target' => '_blank',
+            'title' => 'Open Stripe Webhooks',
+            'variant' => 'filled',
+        ]], $attention['remote-stripeWebhook']['buttons']);
     }
 
     public function testReportsDependenciesIncompleteCredentialsAndInitializedSettingsLocally(): void
@@ -126,13 +238,15 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->assertSame(DiagnosticStatus::Pass, $checks['publishableKey']->status());
         $this->assertSame(DiagnosticStatus::Warning, $checks['webhookSecret']->status());
         $this->assertSame(DiagnosticStatus::Warning, $checks['currency']->status());
-        $this->assertSame(DiagnosticStatus::Warning, $checks['defaultRequiresShipping']->status());
-        $this->assertSame('shippingResolver.zones', $checks['shippingResolver']->messageKey());
-        $this->assertSame(DiagnosticStatus::Pass, $checks['settingSources']->status());
+        $this->assertArrayNotHasKey('defaultRequiresShipping', $checks);
         $this->assertSame(DiagnosticStatus::Pass, $checks['hubPage']->status());
         $this->assertSame(DiagnosticStatus::Pass, $checks['events']->status());
-        $this->assertSame(DiagnosticStatus::Pass, $checks['pendingPayments']->status());
-        $this->assertSame(DiagnosticStatus::Pass, $checks['housekeepingEligibility']->status());
+        $this->assertArrayNotHasKey('pendingPayments', $checks);
+        $this->assertArrayNotHasKey('settingSources', $checks);
+        $this->assertArrayNotHasKey('shippingResolver', $checks);
+        $this->assertArrayNotHasKey('housekeeping', $checks);
+        $this->assertArrayNotHasKey('retention', $checks);
+        $this->assertArrayNotHasKey('housekeepingEligibility', $checks);
     }
 
     public function testReportsMissingPublishableKeyOnlyForEmbeddedCheckout(): void
@@ -173,7 +287,7 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->assertStringNotContainsString($webhook, $encoded);
         $this->assertSame('test', $checks['secretKey']->context()['mode']);
         $this->assertSame('test', $checks['publishableKey']->context()['mode']);
-        $this->assertSame('unknown', $checks['webhookSecret']->context()['mode']);
+        $this->assertSame([], $checks['webhookSecret']->context());
     }
 
     public function testInvalidConfigurationRemainsInspectable(): void
@@ -197,8 +311,12 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->assertSame('configuration.option_unknown', $checks['configuration']->context()['code']);
         $this->assertSame(DiagnosticStatus::NotVerifiable, $checks['secretKey']->status());
         $this->assertSame(DiagnosticStatus::NotVerifiable, $checks['currency']->status());
-        $this->assertSame(DiagnosticStatus::NotVerifiable, $checks['defaultRequiresShipping']->status());
+        $this->assertArrayNotHasKey('defaultRequiresShipping', $checks);
         $this->assertStringNotContainsString($secret, $encoded);
+
+        $sections = array_column(DiagnosticsSection::response($this->kirby)['sections'], null, 'name');
+        $attention = array_column($sections['attention']['items'], null, 'id');
+        $this->assertSame([], $attention['configuration']['buttons']);
     }
 
     public function testReportsConfiguredCommerceDefaultsLocally(): void
@@ -214,28 +332,115 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         ]);
         $this->kirby = $this->environment->app();
         $checks = $this->checks((new LocalDiagnostics($this->kirby))->report());
+        $sections = array_column(DiagnosticsSection::response($this->kirby)['sections'], null, 'name');
+        $visibleIds = [];
+
+        foreach ($sections as $section) {
+            $visibleIds = [...$visibleIds, ...array_column($section['items'], 'id')];
+        }
 
         $this->assertSame(DiagnosticStatus::Pass, $checks['currency']->status());
-        $this->assertSame(DiagnosticStatus::Pass, $checks['defaultRequiresShipping']->status());
+        $this->assertArrayNotHasKey('defaultRequiresShipping', $checks);
+        $this->assertNotContains('currency', $visibleIds);
+        $this->assertNotContains('defaultRequiresShipping', $visibleIds);
     }
 
-    public function testReportsTheCustomShippingResolverWithoutCallingIt(): void
+    public function testDoesNotPresentAnUnloadedTaxCodeCatalogueAsAnIssue(): void
     {
-        $called = false;
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start(options: [
-            'programmatordev.stripe-checkout.shipping.resolver' => static function () use (&$called): never {
-                $called = true;
-
-                throw new \LogicException('Not called.');
-            },
+            'programmatordev.stripe-checkout' => [
+                'stripe' => ['secretKey' => 'sk_test_tax_diagnostics'],
+                'settings' => [
+                    'automaticTax' => true,
+                    'currency' => 'EUR',
+                ],
+            ],
         ]);
         $this->kirby = $this->environment->app();
-        $checks = $this->checks((new LocalDiagnostics($this->kirby))->report());
 
-        $this->assertFalse($called);
-        $this->assertSame(DiagnosticStatus::Pass, $checks['shippingResolver']->status());
-        $this->assertSame('shippingResolver.custom', $checks['shippingResolver']->messageKey());
+        $report = (new LocalDiagnostics($this->kirby))->report();
+        $check = $report->check('taxCodes');
+        $sections = array_column(DiagnosticsSection::response($this->kirby)['sections'], null, 'name');
+        $visibleIds = array_merge(...array_map(
+            static fn(array $section): array => array_column($section['items'], 'id'),
+            array_values($sections),
+        ));
+
+        $this->assertNotNull($check);
+        $this->assertSame(DiagnosticStatus::Pass, $check->status());
+        $this->assertSame('taxCodes.empty', $check->messageKey());
+        $this->assertNotContains('taxCodes', $visibleIds);
+    }
+
+    public function testDoesNotPresentAnUnloadedStripePriceCatalogueAsAnIssue(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(options: [
+            'programmatordev.stripe-checkout' => [
+                'stripe' => ['secretKey' => 'sk_test_price_diagnostics'],
+                'settings' => [
+                    'currency' => 'EUR',
+                    'priceSource' => 'stripe',
+                ],
+            ],
+        ]);
+        $this->kirby = $this->environment->app();
+
+        $report = (new LocalDiagnostics($this->kirby))->report();
+        $check = $report->check('prices');
+        $sections = array_column(DiagnosticsSection::response($this->kirby)['sections'], null, 'name');
+        $visibleIds = array_merge(...array_map(
+            static fn(array $section): array => array_column($section['items'], 'id'),
+            array_values($sections),
+        ));
+
+        $this->assertNotNull($check);
+        $this->assertSame(DiagnosticStatus::Pass, $check->status());
+        $this->assertSame('prices.empty', $check->messageKey());
+        $this->assertNotContains('prices', $visibleIds);
+    }
+
+    public function testFailedTaxCodeRefreshProvidesAnExplicitRecoveryAction(): void
+    {
+        $secretKey = 'sk_test_failed_tax_diagnostics';
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(options: [
+            'programmatordev.stripe-checkout' => [
+                'stripe' => ['secretKey' => $secretKey],
+                'settings' => [
+                    'automaticTax' => true,
+                    'currency' => 'EUR',
+                ],
+            ],
+        ]);
+        $this->kirby = $this->environment->app();
+        $runtime = new RuntimeFactory($this->kirby);
+        $stripe = $runtime->configurationReport()->configurationOrFail()->stripe();
+        $this->kirby->cache('programmatordev.stripe-checkout.taxCodes')->set(
+            $stripe->secretKeyFingerprint('tax-codes'),
+            [
+                'failedAt' => 1_763_208_000,
+                'items' => [],
+                'refreshedAt' => null,
+            ],
+        );
+
+        $check = (new LocalDiagnostics($this->kirby))->report()->check('taxCodes');
+        $sections = array_column(DiagnosticsSection::response($this->kirby)['sections'], null, 'name');
+        $attention = array_column($sections['attention']['items'], null, 'id');
+
+        $this->assertNotNull($check);
+        $this->assertSame(DiagnosticStatus::Warning, $check->status());
+        $this->assertSame('taxCodes.failed', $check->messageKey());
+        $this->assertSame('Refresh failed 2025-11-15 12:00 UTC · 0 cached from —', $attention['taxCodes']['info']);
+        $this->assertSame([[
+            'endpoint' => 'stripe-checkout/diagnostics/tax-codes/refresh',
+            'icon' => 'refresh',
+            'successMessage' => 'Tax Codes refreshed.',
+            'title' => 'Refresh Tax Codes',
+            'variant' => 'filled',
+        ]], $attention['taxCodes']['buttons']);
     }
 
     public function testReportsPageSlugSettingsThatWouldChangeOrderUuids(): void
@@ -316,7 +521,7 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->assertSame('stripe-checkout', $checks['hubPage']->context()['path']);
     }
 
-    public function testReportsFailedEventsAndIncompleteOrdersDueForRecovery(): void
+    public function testReportsFailedEvents(): void
     {
         $checkedAt = new DateTimeImmutable('2026-10-24T12:00:00Z');
         $createdAt = $checkedAt->modify('-8 days');
@@ -357,9 +562,49 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->assertSame(DiagnosticStatus::Warning, $checks['events']->status());
         $this->assertSame('0', $checks['events']->context()['pending']);
         $this->assertSame('1', $checks['events']->context()['failed']);
-        $this->assertSame(DiagnosticStatus::Warning, $checks['housekeepingEligibility']->status());
-        $this->assertSame('0', $checks['housekeepingEligibility']->context()['eligible']);
-        $this->assertSame('1', $checks['housekeepingEligibility']->context()['recoveryDue']);
+    }
+
+    public function testPendingEventsRemainInformational(): void
+    {
+        $createdAt = new DateTimeImmutable('2026-10-24T12:00:00Z');
+        $context = new OrderCreationContext(
+            uuid: 'pending-diagnostic-order',
+            orderNumber: 'ORDER-PENDING-DIAGNOSTIC',
+            checkoutSource: CheckoutSource::Direct,
+            cartRevision: null,
+            userUuid: null,
+            languageCode: null,
+            uiMode: UiMode::Hosted,
+            currency: 'EUR',
+            lineItems: [OrderFixture::lineItem()],
+        );
+        $store = new OrderPageStore($this->kirby);
+        $store->create(
+            context: $context,
+            checkoutAttempt: CheckoutAttemptFactory::create($context, $createdAt),
+            createdAt: $createdAt,
+        );
+        $store->update($context->pageUuid(), static function (array $data) use ($createdAt): array {
+            $data['events'] = [[
+                'id' => 'evt_pending_diagnostic',
+                'type' => 'checkout.session.completed',
+                'createdAt' => $createdAt->getTimestamp(),
+                'resourceId' => 'cs_pending_diagnostic',
+                'status' => 'pending',
+                'attempts' => 1,
+                'lastAttemptAt' => OrderData::timestamp($createdAt),
+                'errorCode' => null,
+            ]];
+
+            return $data;
+        });
+
+        $check = (new LocalDiagnostics($this->kirby, $createdAt))->report()->check('events');
+
+        $this->assertNotNull($check);
+        $this->assertSame(DiagnosticStatus::Pass, $check->status());
+        $this->assertSame('1', $check->context()['pending']);
+        $this->assertSame('0', $check->context()['failed']);
     }
 
     public function testReportsInvalidChildrenWhileSummarizingValidOrders(): void
@@ -393,8 +638,6 @@ final class LocalDiagnosticsTest extends KirbyTestCase
 
         $this->assertSame(DiagnosticStatus::Fail, $checks['orders']->status());
         $this->assertSame('1', $checks['orders']->context()['count']);
-        $this->assertSame(DiagnosticStatus::Warning, $checks['housekeepingEligibility']->status());
-        $this->assertSame('1', $checks['housekeepingEligibility']->context()['recoveryDue']);
     }
 
     /** @return array<string, DiagnosticCheck> */

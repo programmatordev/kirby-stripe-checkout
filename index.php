@@ -24,6 +24,7 @@ use ProgrammatorDev\StripeCheckout\Kirby\StripePriceField;
 use ProgrammatorDev\StripeCheckout\Kirby\TaxCodeField;
 use ProgrammatorDev\StripeCheckout\Kirby\WebhookRoutes;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
+use ProgrammatorDev\StripeCheckout\Panel\DiagnosticsSection;
 use ProgrammatorDev\StripeCheckout\Panel\OrdersSection;
 use ProgrammatorDev\StripeCheckout\Panel\StripeCheckoutArea;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
@@ -79,6 +80,7 @@ App::plugin(
             'stripe-checkout-tax-code' => TaxCodeField::class,
         ],
         'sections' => [
+            'stripe-checkout-diagnostics' => DiagnosticsSection::definition(),
             'stripe-checkout-orders' => OrdersSection::definition(),
         ],
         'fieldMethods' => [

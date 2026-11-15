@@ -1,4 +1,5 @@
 import CustomFieldsField from "./components/CustomFieldsField.vue";
+import DiagnosticsSection from "./components/DiagnosticsSection.vue";
 import OptionsField from "./components/OptionsField.vue";
 import SynchronizedStructureDrawer from "./components/SynchronizedStructureDrawer.vue";
 import SynchronizedStructureRowsField from "./components/SynchronizedStructureRowsField.vue";
@@ -32,6 +33,7 @@ panel.plugin("programmatordev/stripe-checkout", {
 		"stripe-checkout-tax-code": TaxCodeField
 	},
 	sections: {
+		"stripe-checkout-diagnostics": DiagnosticsSection,
 		"stripe-checkout-orders": OrdersSection
 	}
 });

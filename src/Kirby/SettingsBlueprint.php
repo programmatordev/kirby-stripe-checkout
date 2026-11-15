@@ -12,7 +12,6 @@ use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationResolver;
 use ProgrammatorDev\StripeCheckout\Configuration\Defaults;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Money\StripeCurrencyRegistry;
-use ProgrammatorDev\StripeCheckout\Panel\DiagnosticsSections;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingZone;
 use Symfony\Component\Intl\Currencies;
 use Throwable;
@@ -84,7 +83,11 @@ final class SettingsBlueprint
         }
 
         if ($canReadDiagnostics === true) {
-            $tabs['diagnostics']['sections'] = DiagnosticsSections::build($kirby);
+            $tabs['diagnostics']['sections'] = [
+                'diagnostics' => [
+                    'type' => 'stripe-checkout-diagnostics',
+                ],
+            ];
         } else {
             unset($tabs['diagnostics']);
         }

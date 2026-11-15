@@ -907,13 +907,13 @@ final class ConfigurationResolverTest extends TestCase
                         'tabs.settings' => 'Definições',
                         'area.label' => 'Stripe Checkout',
                     ],
-                    'en' => ['diagnostics.description' => 'Checks'],
+                    'en' => ['diagnostics.summary.label' => 'Checks'],
                 ],
             ],
         ])->configurationOrFail()->translations();
 
         $this->assertSame([
-            'en' => ['diagnostics.description' => 'Checks'],
+            'en' => ['diagnostics.summary.label' => 'Checks'],
             'pt' => [
                 'area.label' => 'Stripe Checkout',
                 'tabs.settings' => 'Definições',

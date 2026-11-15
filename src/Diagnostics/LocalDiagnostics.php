@@ -12,7 +12,6 @@ use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 use ProgrammatorDev\StripeCheckout\Configuration\ConfigurationErrorCode;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Configuration\PriceSource;
-use ProgrammatorDev\StripeCheckout\Configuration\Setting;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
 use ProgrammatorDev\StripeCheckout\Housekeeping\Exception\HousekeepingException;
 use ProgrammatorDev\StripeCheckout\Housekeeping\HousekeepingRunStatus;
@@ -26,8 +25,6 @@ use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderUuidValidator;
-use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
-use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use Stripe\Stripe;
 
@@ -61,7 +58,6 @@ final class LocalDiagnostics
 
         $runtime = new RuntimeFactory($this->kirby);
         $configurationReport = $runtime->configurationReport();
-        $retentionPolicy = null;
 
         if ($configurationReport->isValid() === false) {
             $error = $configurationReport->error();
@@ -75,22 +71,13 @@ final class LocalDiagnostics
                 $checks[] = $this->check($id, DiagnosticStatus::NotVerifiable, 'credential.unknown');
             }
 
-            foreach (['currency', 'defaultRequiresShipping'] as $id) {
-                $checks[] = $this->check($id, DiagnosticStatus::NotVerifiable, 'setting.unknown');
-            }
+            $checks[] = $this->check('currency', DiagnosticStatus::NotVerifiable, 'setting.unknown');
 
-            $checks[] = $this->check('shippingResolver', DiagnosticStatus::NotVerifiable, 'shippingResolver.unknown');
         } else {
             $checks[] = $this->check('configuration', DiagnosticStatus::Pass, 'configuration.ready');
             $configuration = $configurationReport->configurationOrFail();
             $stripe = $configuration->stripe();
             $settings = $configuration->settings();
-            $retentionPolicy = new RetentionPolicy($settings);
-            $checks[] = $this->settingSources($settings->all());
-
-            $checks[] = $configuration->shipping()->resolver() === null
-                ? $this->check('shippingResolver', DiagnosticStatus::Pass, 'shippingResolver.zones')
-                : $this->check('shippingResolver', DiagnosticStatus::Pass, 'shippingResolver.custom');
 
             if ($settings->automaticTax() && $settings->priceSource() === PriceSource::Kirby) {
                 $checks[] = $this->taxCodes($runtime);
@@ -114,27 +101,18 @@ final class LocalDiagnostics
                     affectedOperations: ['checkout'],
                 )
                 : $this->check('publishableKey', DiagnosticStatus::Pass, 'credential.notRequired');
-            $checks[] = $this->credential(
-                code: 'webhookSecret',
-                configured: $stripe->hasWebhookSecret(),
-                mode: CredentialMode::Unknown,
-                affectedOperations: ['webhook'],
-            );
-            $housekeeping = $configuration->housekeeping();
-            $checks[] = $this->check('housekeeping', DiagnosticStatus::Pass, 'housekeeping.configured', [
-                'batchSize' => (string) $housekeeping->batchSize(),
-                'lifecycleDeliveryPayloadRetentionDays' => (string) $housekeeping->lifecycleDeliveryPayloadRetentionDays(),
-            ]);
-            $checks[] = $this->check('retention', DiagnosticStatus::Pass, 'retention.configured', [
-                'incompleteOrderRetentionDays' => (string) $settings->incompleteOrderRetentionDays(),
-                'unpaidOrderRetentionDays' => (string) $settings->unpaidOrderRetentionDays(),
-            ]);
-            $checks[] = $settings->currency() === null
+            $checks[] = $stripe->hasWebhookSecret()
+                ? $this->check('webhookSecret', DiagnosticStatus::Pass, 'webhookSecret.configured')
+                : $this->check(
+                    code: 'webhookSecret',
+                    status: DiagnosticStatus::Warning,
+                    messageKey: 'credential.missing',
+                    affectedOperations: ['webhook'],
+                );
+            $currency = $settings->currency();
+            $checks[] = $currency === null
                 ? $this->check('currency', DiagnosticStatus::Warning, 'setting.missing', affectedOperations: ['checkout'])
                 : $this->check('currency', DiagnosticStatus::Pass, 'setting.ready');
-            $checks[] = $settings->defaultRequiresShipping() === null
-                ? $this->check('defaultRequiresShipping', DiagnosticStatus::Warning, 'setting.missing')
-                : $this->check('defaultRequiresShipping', DiagnosticStatus::Pass, 'setting.ready');
         }
 
         try {
@@ -151,7 +129,7 @@ final class LocalDiagnostics
             );
         }
 
-        $checks = [...$checks, ...$this->orderChecks($retentionPolicy)];
+        $checks = [...$checks, ...$this->orderChecks()];
 
         if ((new OrderHookDispatcher($this->kirby))->hasFailedDeletionDelivery()) {
             $checks[] = $this->check('lifecycleDeletion', DiagnosticStatus::Warning, 'lifecycleDeletion.failed');
@@ -163,7 +141,7 @@ final class LocalDiagnostics
     }
 
     /** @return list<DiagnosticCheck> */
-    private function orderChecks(?RetentionPolicy $retentionPolicy): array
+    private function orderChecks(): array
     {
         try {
             $store = new OrderPageStore($this->kirby);
@@ -173,10 +151,6 @@ final class LocalDiagnostics
             $failedCount = 0;
             $pendingEventCount = 0;
             $failedEventCount = 0;
-            $pendingPaymentCount = 0;
-            $oldestPendingPaymentAt = null;
-            $eligibleHousekeepingCount = 0;
-            $recoveryDueCount = 0;
 
             foreach ($container?->childrenAndDrafts() ?? [] as $order) {
                 try {
@@ -199,18 +173,6 @@ final class LocalDiagnostics
                     $failedEventCount += $entry['status'] === 'failed' ? 1 : 0;
                 }
 
-                if ($data['paymentStatus'] === PaymentStatus::Pending->value) {
-                    $pendingPaymentCount++;
-                    $completedAt = OrderData::date($data['checkoutCompletedAt']);
-                    $oldestPendingPaymentAt = $oldestPendingPaymentAt === null || $completedAt < $oldestPendingPaymentAt
-                        ? $completedAt
-                        : $oldestPendingPaymentAt;
-                }
-
-                if ($retentionPolicy !== null) {
-                    $eligibleHousekeepingCount += $retentionPolicy->isEligible($data, $this->checkedAt) ? 1 : 0;
-                    $recoveryDueCount += $retentionPolicy->needsCheckoutRecovery($data, $this->checkedAt) ? 1 : 0;
-                }
             }
 
             $orderCheck = match (true) {
@@ -225,37 +187,18 @@ final class LocalDiagnostics
                 default => $this->check('orders', DiagnosticStatus::Pass, 'orders.ready'),
             };
 
+            // Pending work remains visible in the counts, but only failed deliveries require operator attention.
             $checks = [
                 $orderCheck,
-                $this->check('lifecycle', $pendingCount + $failedCount > 0 ? DiagnosticStatus::Warning : DiagnosticStatus::Pass, 'lifecycle.summary', [
+                $this->check('lifecycle', $failedCount > 0 ? DiagnosticStatus::Warning : DiagnosticStatus::Pass, 'lifecycle.summary', [
                     'pending' => (string) $pendingCount,
                     'failed' => (string) $failedCount,
                 ]),
-                $this->check('events', $pendingEventCount + $failedEventCount > 0 ? DiagnosticStatus::Warning : DiagnosticStatus::Pass, 'events.summary', [
+                $this->check('events', $failedEventCount > 0 ? DiagnosticStatus::Warning : DiagnosticStatus::Pass, 'events.summary', [
                     'pending' => (string) $pendingEventCount,
                     'failed' => (string) $failedEventCount,
                 ]),
-                // Pending is a normal asynchronous payment state; expose its age without classifying it as a failure.
-                $this->check('pendingPayments', DiagnosticStatus::Pass, 'pendingPayments.summary', [
-                    'count' => (string) $pendingPaymentCount,
-                    'oldestAt' => $oldestPendingPaymentAt === null ? '—' : OrderData::timestamp($oldestPendingPaymentAt),
-                    'oldestAgeSeconds' => $oldestPendingPaymentAt === null
-                        ? '0'
-                        : (string) max(0, $this->checkedAt->getTimestamp() - $oldestPendingPaymentAt->getTimestamp()),
-                ]),
             ];
-            $checks[] = $retentionPolicy === null
-                ? $this->check('housekeepingEligibility', DiagnosticStatus::NotVerifiable, 'housekeepingEligibility.unknown')
-                : $this->check(
-                    code: 'housekeepingEligibility',
-                    status: $eligibleHousekeepingCount + $recoveryDueCount > 0 ? DiagnosticStatus::Warning : DiagnosticStatus::Pass,
-                    messageKey: 'housekeepingEligibility.summary',
-                    context: [
-                        'eligible' => (string) $eligibleHousekeepingCount,
-                        'recoveryDue' => (string) $recoveryDueCount,
-                    ],
-                );
-
             return $checks;
         } catch (OrderStorageException $error) {
             return [$this->check(
@@ -290,11 +233,13 @@ final class LocalDiagnostics
 
         $lastSuccess = $state->lastSuccess();
         $context = [
-            'attemptedAt' => OrderData::timestamp($lastAttempt->attemptedAt()),
-            'completedAt' => OrderData::timestamp($lastAttempt->completedAt()),
+            'attemptedAt' => gmdate('Y-m-d H:i \U\T\C', $lastAttempt->attemptedAt()->getTimestamp()),
+            'completedAt' => gmdate('Y-m-d H:i \U\T\C', $lastAttempt->completedAt()->getTimestamp()),
             'status' => $lastAttempt->status()->value,
             'code' => $lastAttempt->errorCode() ?? '—',
-            'lastSuccessAt' => $lastSuccess === null ? '—' : OrderData::timestamp($lastSuccess->completedAt()),
+            'lastSuccessAt' => $lastSuccess === null
+                ? '—'
+                : gmdate('Y-m-d H:i \U\T\C', $lastSuccess->completedAt()->getTimestamp()),
         ];
 
         return $lastAttempt->status() === HousekeepingRunStatus::Success
@@ -374,27 +319,6 @@ final class LocalDiagnostics
             );
     }
 
-    /** @param array<string, Setting> $settings */
-    private function settingSources(array $settings): DiagnosticCheck
-    {
-        $sources = [
-            'default' => 0,
-            'page' => 0,
-            'php' => 0,
-            'shadowed' => 0,
-        ];
-
-        foreach ($settings as $setting) {
-            $sources[$setting->source()->value]++;
-            $sources['shadowed'] += $setting->hasShadowedValue() ? 1 : 0;
-        }
-
-        return $this->check('settingSources', DiagnosticStatus::Pass, 'settingSources.summary', array_map(
-            static fn(int $count): string => (string) $count,
-            $sources,
-        ));
-    }
-
     private function taxCodes(RuntimeFactory $runtime): DiagnosticCheck
     {
         if (PluginPermissions::allows($this->kirby, 'taxCodes.read') === false) {
@@ -405,16 +329,15 @@ final class LocalDiagnostics
         $state = $runtime->taxCodeCatalogue()->cached();
         $values = [
             'count' => (string) count($state->items()),
-            'refreshedAt' => $state->refreshedAt() === null ? '—' : gmdate('Y-m-d H:i:s \U\T\C', $state->refreshedAt()),
-            'failedAt' => $state->failedAt() === null ? '—' : gmdate('Y-m-d H:i:s \U\T\C', $state->failedAt()),
+            'refreshedAt' => $state->refreshedAt() === null ? '—' : gmdate('Y-m-d H:i \U\T\C', $state->refreshedAt()),
+            'failedAt' => $state->failedAt() === null ? '—' : gmdate('Y-m-d H:i \U\T\C', $state->failedAt()),
         ];
 
-        return $this->check(
-            'taxCodes',
-            $state->refreshedAt() !== null && $state->error() === null ? DiagnosticStatus::Pass : DiagnosticStatus::Warning,
-            $state->error() !== null ? 'taxCodes.failed' : ($state->refreshedAt() === null ? 'taxCodes.empty' : 'taxCodes.ready'),
-            $values,
-        );
+        return match (true) {
+            $state->error() !== null => $this->check('taxCodes', DiagnosticStatus::Warning, 'taxCodes.failed', $values),
+            $state->refreshedAt() === null => $this->check('taxCodes', DiagnosticStatus::Pass, 'taxCodes.empty', $values),
+            default => $this->check('taxCodes', DiagnosticStatus::Pass, 'taxCodes.ready', $values),
+        };
     }
 
     private function prices(RuntimeFactory $runtime, ?string $currency): DiagnosticCheck
@@ -431,16 +354,15 @@ final class LocalDiagnostics
         $state = $runtime->stripePriceCatalogue()->cached($currency);
         $context = [
             'count' => (string) count($state->items()),
-            'refreshedAt' => $state->refreshedAt() === null ? '—' : gmdate('Y-m-d H:i:s \U\T\C', $state->refreshedAt()),
-            'failedAt' => $state->failedAt() === null ? '—' : gmdate('Y-m-d H:i:s \U\T\C', $state->failedAt()),
+            'refreshedAt' => $state->refreshedAt() === null ? '—' : gmdate('Y-m-d H:i \U\T\C', $state->refreshedAt()),
+            'failedAt' => $state->failedAt() === null ? '—' : gmdate('Y-m-d H:i \U\T\C', $state->failedAt()),
         ];
 
-        return $this->check(
-            'prices',
-            $state->refreshedAt() !== null && $state->error() === null ? DiagnosticStatus::Pass : DiagnosticStatus::Warning,
-            $state->error() !== null ? 'prices.failed' : ($state->refreshedAt() === null ? 'prices.empty' : 'prices.ready'),
-            $context,
-        );
+        return match (true) {
+            $state->error() !== null => $this->check('prices', DiagnosticStatus::Warning, 'prices.failed', $context),
+            $state->refreshedAt() === null => $this->check('prices', DiagnosticStatus::Pass, 'prices.empty', $context),
+            default => $this->check('prices', DiagnosticStatus::Pass, 'prices.ready', $context),
+        };
     }
 
     /** @param list<string> $affectedOperations */
