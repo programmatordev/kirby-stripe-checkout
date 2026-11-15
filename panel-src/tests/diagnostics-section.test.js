@@ -49,6 +49,22 @@ test("diagnostic actions expose the active request with Kirby's native button st
 	assert.equal(button.icon, "refresh");
 });
 
+test("failed diagnostic loads expose the issue and leave the loading state", async () => {
+	const error = new Error("Diagnostics unavailable");
+	const section = {
+		isLoading: false,
+		issue: null,
+		async load() {
+			throw error;
+		}
+	};
+
+	await diagnostics.methods.fetch.call(section);
+
+	assert.equal(section.issue, error);
+	assert.equal(section.isLoading, false);
+});
+
 test("diagnostic requests reload the section and report success", async () => {
 	const deferredRequest = deferred();
 	const postedEndpoints = [];

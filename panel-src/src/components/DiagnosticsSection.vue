@@ -4,6 +4,7 @@ export default {
 	data() {
 		return {
 			isLoading: true,
+			issue: null,
 			requestingEndpoint: null,
 			sections: [],
 			summary: {
@@ -53,10 +54,17 @@ export default {
 		},
 		async fetch() {
 			this.isLoading = true;
-			const response = await this.load();
-			this.sections = response.sections;
-			this.summary = response.summary;
-			this.isLoading = false;
+			this.issue = null;
+
+			try {
+				const response = await this.load();
+				this.sections = response.sections;
+				this.summary = response.summary;
+			} catch (error) {
+				this.issue = error;
+			} finally {
+				this.isLoading = false;
+			}
 		},
 		async request(endpoint, successMessage) {
 			if (this.requestingEndpoint !== null) {
@@ -80,17 +88,23 @@ export default {
 
 <template>
 	<div v-if="isLoading === false" class="k-stripe-checkout-diagnostics-section">
-		<k-section :headline="summary.headline">
-			<k-stats :reports="summary.reports" size="medium" />
+		<k-section v-if="issue" :headline="$t('error')">
+			<k-box :text="issue.message" :html="false" icon="alert" theme="negative" />
 		</k-section>
 
-		<k-section
-			v-for="section in displaySections"
-			:key="section.name"
-			:buttons="section.action ? [section.action] : []"
-			:headline="section.headline"
-		>
-			<k-items :items="section.items" />
-		</k-section>
+		<template v-else>
+			<k-section :headline="summary.headline">
+				<k-stats :reports="summary.reports" size="medium" />
+			</k-section>
+
+			<k-section
+				v-for="section in displaySections"
+				:key="section.name"
+				:buttons="section.action ? [section.action] : []"
+				:headline="section.headline"
+			>
+				<k-items :items="section.items" />
+			</k-section>
+		</template>
 	</div>
 </template>
