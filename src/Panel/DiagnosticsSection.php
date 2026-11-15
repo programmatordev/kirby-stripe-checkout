@@ -85,6 +85,8 @@ final class DiagnosticsSection
     {
         $report = (new LocalDiagnostics($kirby))->report();
         $remoteReport = (new RuntimeFactory($kirby))->diagnosticReportStore()->read();
+        // Reuse this fact so the action builders do not resolve the same configuration independently.
+        $isStripeServerConfigured = self::isStripeServerConfigured($kirby);
         $attentionItems = [];
         $groups = [
             'operations' => [],
@@ -93,7 +95,11 @@ final class DiagnosticsSection
         ];
 
         foreach ($report->checks() as $check) {
-            $item = self::checkItem($kirby, $check);
+            $item = self::checkItem(
+                kirby: $kirby,
+                check: $check,
+                isStripeServerConfigured: $isStripeServerConfigured,
+            );
 
             if (self::needsAttention($check)) {
                 $attentionItems[] = $item;
@@ -120,7 +126,12 @@ final class DiagnosticsSection
 
         if ($remoteReport !== null) {
             foreach ($remoteReport->checks() as $check) {
-                $item = self::checkItem($kirby, $check, 'remote-');
+                $item = self::checkItem(
+                    kirby: $kirby,
+                    check: $check,
+                    isStripeServerConfigured: $isStripeServerConfigured,
+                    idPrefix: 'remote-',
+                );
 
                 if (self::needsAttention($check)) {
                     $attentionItems[] = $item;
@@ -141,12 +152,12 @@ final class DiagnosticsSection
         $sections[] = self::section(
             name: 'stripe',
             items: $stripeItems,
-            action: self::remoteDiagnosticsAction($kirby),
+            action: self::remoteDiagnosticsAction($kirby, $isStripeServerConfigured),
         );
         $sections[] = self::section(
             name: 'operations',
             items: $groups['operations'],
-            action: self::housekeepingAction($kirby),
+            action: self::housekeepingAction($kirby, $isStripeServerConfigured),
         );
         $sections[] = self::section('system', $groups['system']);
         $sections[] = self::section('environment', $groups['environment']);
@@ -161,8 +172,12 @@ final class DiagnosticsSection
     }
 
     /** @return DiagnosticItem */
-    private static function checkItem(App $kirby, DiagnosticCheck $check, string $idPrefix = ''): array
-    {
+    private static function checkItem(
+        App $kirby,
+        DiagnosticCheck $check,
+        bool $isStripeServerConfigured,
+        string $idPrefix = '',
+    ): array {
         $context = $check->context();
 
         foreach (['mode', 'configuredMode', 'providerMode'] as $contextKey) {
@@ -185,7 +200,7 @@ final class DiagnosticsSection
             label: self::translate('diagnostics.' . $check->code()),
             message: self::template('diagnostics.' . $check->messageKey(), $context),
             status: $check->status(),
-            buttons: self::checkButtons($kirby, $check),
+            buttons: self::checkButtons($kirby, $check, $isStripeServerConfigured),
         );
 
         if ($check->code() === 'housekeepingRun' && $check->status() === DiagnosticStatus::Pass) {
@@ -198,13 +213,13 @@ final class DiagnosticsSection
     }
 
     /** @return DiagnosticAction|null */
-    private static function housekeepingAction(App $kirby): ?array
+    private static function housekeepingAction(App $kirby, bool $isStripeServerConfigured): ?array
     {
         if (PluginPermissions::allows($kirby, 'housekeeping.run') === false) {
             return null;
         }
 
-        $disabled = self::isStripeServerConfigurationReady($kirby) === false;
+        $disabled = $isStripeServerConfigured === false;
 
         return [
             'dialog' => $disabled ? null : 'stripe-checkout/housekeeping/run',
@@ -251,7 +266,7 @@ final class DiagnosticsSection
         };
     }
 
-    private static function isStripeServerConfigurationReady(App $kirby): bool
+    private static function isStripeServerConfigured(App $kirby): bool
     {
         $report = (new RuntimeFactory($kirby))->configurationReport();
 
@@ -288,9 +303,9 @@ final class DiagnosticsSection
     }
 
     /** @return DiagnosticAction */
-    private static function remoteDiagnosticsAction(App $kirby): array
+    private static function remoteDiagnosticsAction(App $kirby, bool $isStripeServerConfigured): array
     {
-        $disabled = self::isStripeServerConfigurationReady($kirby) === false;
+        $disabled = $isStripeServerConfigured === false;
 
         return [
             'dialog' => $disabled ? null : 'stripe-checkout/diagnostics/run',
@@ -507,8 +522,11 @@ final class DiagnosticsSection
     }
 
     /** @return list<DiagnosticItemButton> */
-    private static function checkButtons(App $kirby, DiagnosticCheck $check): array
-    {
+    private static function checkButtons(
+        App $kirby,
+        DiagnosticCheck $check,
+        bool $isStripeServerConfigured,
+    ): array {
         if (self::needsAttention($check) === false) {
             return [];
         }
@@ -525,11 +543,12 @@ final class DiagnosticsSection
                 && in_array($check->messageKey(), ['stripeWebhook.missing', 'stripeWebhook.incomplete', 'stripeWebhook.duplicate'], true) => self::stripeWebhooksButton(),
             $check->code() === 'events'
                 && $check->messageKey() === 'events.failed' => self::ordersButton($kirby, OrderAttentionFilter::FailedEvents),
-            $check->code() === 'housekeepingRun' => self::housekeepingButton($kirby),
+            $check->code() === 'housekeepingRun' => self::housekeepingButton($kirby, $isStripeServerConfigured),
             $check->code() === 'lifecycle'
                 && $check->messageKey() === 'lifecycle.failed' => self::ordersButton($kirby, OrderAttentionFilter::FailedHooks),
             $check->code() === 'prices' => self::catalogueRefreshButton(
                 kirby: $kirby,
+                isStripeServerConfigured: $isStripeServerConfigured,
                 permission: 'prices.read',
                 endpoint: 'stripe-checkout/diagnostics/prices/refresh',
                 label: 'prices.refresh',
@@ -537,6 +556,7 @@ final class DiagnosticsSection
             ),
             $check->code() === 'taxCodes' => self::catalogueRefreshButton(
                 kirby: $kirby,
+                isStripeServerConfigured: $isStripeServerConfigured,
                 permission: 'taxCodes.read',
                 endpoint: 'stripe-checkout/diagnostics/tax-codes/refresh',
                 label: 'taxCodes.refresh',
@@ -549,6 +569,7 @@ final class DiagnosticsSection
     /** @return list<DiagnosticItemButton> */
     private static function catalogueRefreshButton(
         App $kirby,
+        bool $isStripeServerConfigured,
         string $permission,
         string $endpoint,
         string $label,
@@ -556,7 +577,7 @@ final class DiagnosticsSection
     ): array {
         if (
             PluginPermissions::allows($kirby, $permission) === false
-            || self::isStripeServerConfigurationReady($kirby) === false
+            || $isStripeServerConfigured === false
         ) {
             return [];
         }
@@ -571,11 +592,11 @@ final class DiagnosticsSection
     }
 
     /** @return list<DiagnosticItemButton> */
-    private static function housekeepingButton(App $kirby): array
+    private static function housekeepingButton(App $kirby, bool $isStripeServerConfigured): array
     {
         if (
             PluginPermissions::allows($kirby, 'housekeeping.run') === false
-            || self::isStripeServerConfigurationReady($kirby) === false
+            || $isStripeServerConfigured === false
         ) {
             return [];
         }
