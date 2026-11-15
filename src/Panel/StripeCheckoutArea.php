@@ -15,6 +15,7 @@ use Kirby\Panel\Ui\Buttons\ViewButton;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Collection\CustomField;
 use ProgrammatorDev\StripeCheckout\Exception\ConfigurationException;
+use ProgrammatorDev\StripeCheckout\Housekeeping\HousekeepingErrorCode;
 use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Kirby\PluginPermissions;
 use ProgrammatorDev\StripeCheckout\Kirby\StripeCheckoutPage;
@@ -38,6 +39,12 @@ final class StripeCheckoutArea
 {
     private const HTTP_CONFLICT = 409;
 
+    private const TAB_DIAGNOSTICS = 'diagnostics';
+
+    private const TAB_ORDERS = 'orders';
+
+    private const TAB_OVERVIEW = 'overview';
+
     /** @return array<string, mixed> */
     public static function definition(App $kirby): array
     {
@@ -46,6 +53,8 @@ final class StripeCheckoutArea
             'icon' => 'credit-card',
             // Kirby collects named buttons from every area, but renders this one only where a blueprint references it.
             'buttons' => [
+                'page.stripeCheckoutRemoteDiagnostics' => static fn(): ?ViewButton => self::remoteDiagnosticsButton($kirby),
+                'page.stripeCheckoutHousekeeping' => static fn(): ?ViewButton => self::housekeepingButton($kirby),
                 'page.stripeCheckoutOrderDelete' => static fn(?string $orderId = null, bool $isManuallyDeletable = false): ?ViewButton => self::deleteOrderButton(
                     kirby: $kirby,
                     orderId: $orderId,
@@ -64,6 +73,24 @@ final class StripeCheckoutArea
                 'page.stripeCheckoutOrderOpenInStripe' => static fn(?string $stripeDashboardUrl = null): ?ViewButton => self::openInStripeButton($stripeDashboardUrl),
             ],
             'dialogs' => [
+                'diagnostics.run' => [
+                    'pattern' => 'stripe-checkout/diagnostics/run',
+                    'load' => function () use ($kirby): array {
+                        return StripeCheckoutArea::remoteDiagnosticsDialog($kirby);
+                    },
+                    'submit' => function () use ($kirby): array {
+                        return StripeCheckoutArea::submitRemoteDiagnosticsDialog($kirby);
+                    },
+                ],
+                'housekeeping.run' => [
+                    'pattern' => 'stripe-checkout/housekeeping/run',
+                    'load' => function () use ($kirby): array {
+                        return StripeCheckoutArea::housekeepingDialog($kirby);
+                    },
+                    'submit' => function () use ($kirby): array {
+                        return StripeCheckoutArea::submitHousekeepingDialog($kirby);
+                    },
+                ],
                 'order.delete' => [
                     'pattern' => 'stripe-checkout/orders/(:any)/delete',
                     'load' => function (string $orderId) use ($kirby): array {
@@ -283,6 +310,51 @@ final class StripeCheckoutArea
         );
     }
 
+    private static function remoteDiagnosticsButton(App $kirby): ?ViewButton
+    {
+        if (self::isDiagnosticsTab($kirby) === false) {
+            return null;
+        }
+
+        if (PluginPermissions::allows($kirby, 'diagnostics.read') === false) {
+            return null;
+        }
+
+        $disabled = self::isStripeServerConfigurationReady($kirby) === false;
+
+        return new ViewButton(
+            dialog: $disabled ? null : 'stripe-checkout/diagnostics/run',
+            disabled: $disabled,
+            icon: 'refresh',
+            text: 'programmatordev.stripe-checkout.diagnostics.actions.runRemote',
+            title: $disabled ? 'programmatordev.stripe-checkout.diagnostics.actions.runRemoteUnavailable' : null,
+        );
+    }
+
+    private static function housekeepingButton(App $kirby): ?ViewButton
+    {
+        if (self::isDiagnosticsTab($kirby) === false) {
+            return null;
+        }
+
+        if (PluginPermissions::allows($kirby, 'diagnostics.read') === false
+            || PluginPermissions::allows($kirby, 'housekeeping.run') === false
+        ) {
+            return null;
+        }
+
+        $disabled = self::isStripeServerConfigurationReady($kirby) === false;
+
+        return new ViewButton(
+            dialog: $disabled ? null : 'stripe-checkout/housekeeping/run',
+            disabled: $disabled,
+            icon: 'refresh',
+            text: 'programmatordev.stripe-checkout.housekeeping.actions.run',
+            theme: 'notice',
+            title: $disabled ? 'programmatordev.stripe-checkout.housekeeping.actions.runUnavailable' : null,
+        );
+    }
+
     private static function deleteOrderButton(App $kirby, ?string $orderId, bool $isManuallyDeletable): ?ViewButton
     {
         if ($orderId === null || $isManuallyDeletable === false) {
@@ -359,6 +431,104 @@ final class StripeCheckoutArea
     }
 
     /** @return array<string, mixed> */
+    public static function remoteDiagnosticsDialog(App $kirby): array
+    {
+        PluginPermissions::require($kirby, 'diagnostics.read');
+
+        if (self::isStripeServerConfigurationReady($kirby) === false) {
+            throw new KirbyException(
+                message: self::translate('diagnostics.actions.runRemoteUnavailable'),
+                httpCode: self::HTTP_CONFLICT,
+            );
+        }
+
+        return [
+            'component' => 'k-text-dialog',
+            'props' => [
+                'size' => 'medium',
+                'text' => self::translate('diagnostics.actions.runRemoteConfirm'),
+                'submitButton' => [
+                    'icon' => 'refresh',
+                    'text' => self::translate('diagnostics.actions.runRemote'),
+                ],
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public static function submitRemoteDiagnosticsDialog(App $kirby): array
+    {
+        // The operational boundary owns permissions and the Stripe reads.
+        $response = OperationalRequests::runDiagnostics($kirby);
+
+        if ($response['status'] === 'success') {
+            return [
+                'message' => self::translate('diagnostics.actions.runRemoteSucceeded'),
+            ];
+        }
+
+        throw new KirbyException(
+            message: self::translate('diagnostics.actions.runRemoteFailed'),
+            httpCode: $response['code'],
+        );
+    }
+
+    /** @return array<string, mixed> */
+    public static function housekeepingDialog(App $kirby): array
+    {
+        PluginPermissions::require($kirby, 'diagnostics.read');
+        PluginPermissions::require($kirby, 'housekeeping.run');
+
+        if (self::isStripeServerConfigurationReady($kirby) === false) {
+            throw new KirbyException(
+                message: self::translate('housekeeping.actions.runUnavailable'),
+                httpCode: self::HTTP_CONFLICT,
+            );
+        }
+
+        return [
+            'component' => 'k-text-dialog',
+            'props' => [
+                'size' => 'medium',
+                'text' => self::translate('housekeeping.actions.runConfirm'),
+                'submitButton' => [
+                    'icon' => 'refresh',
+                    'text' => self::translate('housekeeping.actions.run'),
+                ],
+                'theme' => 'notice',
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public static function submitHousekeepingDialog(App $kirby): array
+    {
+        // The same operational boundary and runner serve the Panel and CLI.
+        $response = OperationalRequests::runHousekeeping($kirby);
+
+        if ($response['status'] === 'success') {
+            return [
+                'message' => self::translate('housekeeping.actions.runSucceeded'),
+            ];
+        }
+
+        if ($response['status'] === 'partial_failure') {
+            return [
+                'message' => self::translate('housekeeping.actions.runPartialFailure'),
+            ];
+        }
+
+        $error = $response['error'];
+
+        throw new KirbyException(
+            message: self::translate($error !== null && $error['code'] === HousekeepingErrorCode::LOCKED
+                ? 'housekeeping.actions.runLocked'
+                : 'housekeeping.actions.runFailed'),
+            httpCode: $response['code'],
+        );
+    }
+
+    /** @return array<string, mixed> */
     public static function syncOrderDialog(App $kirby, string $orderId): array
     {
         PluginPermissions::require($kirby, 'orders.read');
@@ -397,7 +567,6 @@ final class StripeCheckoutArea
                 : self::translate('orders.actions.syncUnchanged');
 
             return [
-                'event' => 'stripe-checkout.order.sync',
                 'message' => $message,
             ];
         }
@@ -444,7 +613,7 @@ final class StripeCheckoutArea
             return [
                 'event' => 'page.delete',
                 'message' => self::translate('orders.actions.deleteSucceeded'),
-                'redirect' => Panel::url('stripe-checkout') . '?tab=orders',
+                'redirect' => Panel::url('stripe-checkout') . '?tab=' . self::TAB_ORDERS,
             ];
         }
 
@@ -513,7 +682,6 @@ final class StripeCheckoutArea
 
         if ($response['status'] === 'success') {
             return [
-                'event' => 'stripe-checkout.order.lifecycle.retry',
                 'message' => self::translate('orders.actions.retryLifecycleDeliverySucceeded'),
             ];
         }
@@ -583,6 +751,29 @@ final class StripeCheckoutArea
         }
     }
 
+    private static function isDiagnosticsTab(App $kirby): bool
+    {
+        // Kirby exposes Page buttons at view level, so tab-specific actions must resolve the active tab here.
+        $tab = $kirby->request()->get('tab');
+
+        if (is_string($tab)) {
+            return $tab === self::TAB_DIAGNOSTICS;
+        }
+
+        // Diagnostics is selected implicitly only when it is the first accessible tab.
+        return PluginPermissions::allows($kirby, 'diagnostics.read')
+            && PluginPermissions::allows($kirby, 'settings.read') === false
+            && PluginPermissions::allows($kirby, 'orders.read') === false;
+    }
+
+    private static function isStripeServerConfigurationReady(App $kirby): bool
+    {
+        $report = (new RuntimeFactory($kirby))->configurationReport();
+
+        return $report->isValid()
+            && $report->configurationOrFail()->stripe()->hasSecretKey();
+    }
+
     private static function isOrderManuallyDeletable(App $kirby, string $orderId): bool
     {
         try {
@@ -632,9 +823,9 @@ final class StripeCheckoutArea
      */
     private static function areaTabLink(array $tab): array
     {
-        $name = is_string($tab['name'] ?? null) ? $tab['name'] : 'overview';
+        $name = is_string($tab['name'] ?? null) ? $tab['name'] : self::TAB_OVERVIEW;
         $tab['link'] = Panel::url('stripe-checkout')
-            . ($name === 'overview' ? '' : '?tab=' . rawurlencode($name));
+            . ($name === self::TAB_OVERVIEW ? '' : '?tab=' . rawurlencode($name));
 
         return $tab;
     }

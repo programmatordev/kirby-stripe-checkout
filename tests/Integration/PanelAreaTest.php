@@ -9,6 +9,7 @@ use Kirby\Content\Field;
 use Kirby\Exception\PermissionException;
 use Kirby\Form\Fields;
 use Kirby\Panel\Panel;
+use Kirby\Panel\Ui\Buttons\ViewButton;
 use Kirby\Panel\View;
 use ProgrammatorDev\StripeCheckout\Kirby\PluginPermissions;
 use ProgrammatorDev\StripeCheckout\Kirby\SettingsBlueprint;
@@ -89,6 +90,108 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertNull($button('abc123def456ghi7', 'cs_test_panel'));
     }
 
+    public function testRemoteDiagnosticsButtonIsLimitedToTheDiagnosticsTabAndPermission(): void
+    {
+        $this->restartWithPermissions([
+            'settings.read' => true,
+            'diagnostics.read' => false,
+        ]);
+        /** @var callable(): mixed $button */
+        $button = $this->area()['buttons']['page.stripeCheckoutRemoteDiagnostics'];
+        $this->assertNull($button());
+
+        $this->restartWithPermissions([
+            'settings.read' => true,
+            'diagnostics.read' => true,
+        ]);
+        /** @var callable(): mixed $button */
+        $button = $this->area()['buttons']['page.stripeCheckoutRemoteDiagnostics'];
+        $this->assertNull($button());
+    }
+
+    public function testRemoteDiagnosticsButtonReflectsCurrentConfigurationEligibility(): void
+    {
+        $this->restartWithPermissions([
+            'settings.read' => false,
+            'orders.read' => false,
+            'diagnostics.read' => true,
+        ]);
+        /** @var callable(): mixed $button */
+        $button = $this->area()['buttons']['page.stripeCheckoutRemoteDiagnostics'];
+        $disabled = $button();
+        $this->assertInstanceOf(ViewButton::class, $disabled);
+        $this->assertTrue($disabled->disabled);
+        $this->assertNull($disabled->dialog);
+
+        $this->restartWithPermissions([
+            'settings.read' => false,
+            'orders.read' => false,
+            'diagnostics.read' => true,
+        ], [
+            'programmatordev.stripe-checkout' => [
+                'stripe' => ['secretKey' => 'sk_test_panel_diagnostics'],
+            ],
+        ]);
+        /** @var callable(): mixed $button */
+        $button = $this->area()['buttons']['page.stripeCheckoutRemoteDiagnostics'];
+        $available = $button();
+        $this->assertInstanceOf(ViewButton::class, $available);
+        $this->assertFalse($available->disabled);
+        $this->assertSame('stripe-checkout/diagnostics/run', $available->dialog);
+    }
+
+    public function testHousekeepingButtonRequiresDiagnosticsAndHousekeepingPermissions(): void
+    {
+        $this->restartWithPermissions([
+            'settings.read' => false,
+            'orders.read' => false,
+            'diagnostics.read' => true,
+            'housekeeping.run' => false,
+        ]);
+        /** @var callable(): mixed $button */
+        $button = $this->area()['buttons']['page.stripeCheckoutHousekeeping'];
+        $this->assertNull($button());
+
+        $this->restartWithPermissions([
+            'settings.read' => false,
+            'orders.read' => false,
+            'diagnostics.read' => false,
+            'housekeeping.run' => true,
+        ]);
+        /** @var callable(): mixed $button */
+        $button = $this->area()['buttons']['page.stripeCheckoutHousekeeping'];
+        $this->assertNull($button());
+    }
+
+    public function testHousekeepingButtonReflectsCurrentConfigurationEligibility(): void
+    {
+        $permissions = [
+            'settings.read' => false,
+            'orders.read' => false,
+            'diagnostics.read' => true,
+            'housekeeping.run' => true,
+        ];
+        $this->restartWithPermissions($permissions);
+        /** @var callable(): mixed $button */
+        $button = $this->area()['buttons']['page.stripeCheckoutHousekeeping'];
+        $disabled = $button();
+        $this->assertInstanceOf(ViewButton::class, $disabled);
+        $this->assertTrue($disabled->disabled);
+        $this->assertNull($disabled->dialog);
+
+        $this->restartWithPermissions($permissions, [
+            'programmatordev.stripe-checkout' => [
+                'stripe' => ['secretKey' => 'sk_test_panel_housekeeping'],
+            ],
+        ]);
+        /** @var callable(): mixed $button */
+        $button = $this->area()['buttons']['page.stripeCheckoutHousekeeping'];
+        $available = $button();
+        $this->assertInstanceOf(ViewButton::class, $available);
+        $this->assertFalse($available->disabled);
+        $this->assertSame('stripe-checkout/housekeeping/run', $available->dialog);
+    }
+
     public function testLifecycleRetryButtonIsHiddenWithoutRetryPermission(): void
     {
         $this->restartWithPermissions([
@@ -135,10 +238,12 @@ final class PanelAreaTest extends KirbyTestCase
 
         $this->assertTrue($view['menu']);
         $this->assertSame('k-page-view', $view['component']);
-        $this->assertCount(1, $props['buttons']);
-        $languageButton = $props['buttons'][0] ?? null;
-        $this->assertIsArray($languageButton);
-        $this->assertSame('k-languages-view-button', $languageButton['component'] ?? null);
+        $languageButtons = array_values(array_filter(
+            $props['buttons'],
+            static fn(mixed $button): bool => is_array($button)
+                && ($button['component'] ?? null) === 'k-languages-view-button',
+        ));
+        $this->assertCount(1, $languageButtons);
     }
 
     public function testRegisteredAreaRendersNativeTranslatedTabsThroughKirbysRouter(): void
@@ -163,7 +268,7 @@ final class PanelAreaTest extends KirbyTestCase
 
         $this->assertNotNull($response);
         $this->assertSame(200, $response->code());
-        /** @var array{'$view': array{component: string, title: string, props: array{tabs: list<array{label: string, link: string}>}}} $body */
+        /** @var array{'$view': array{component: string, title: string, props: array{buttons: list<array{props: array{text?: string}}>, tabs: list<array{label: string, link: string}>}}} $body */
         $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
 
         $this->assertSame('k-page-view', $body['$view']['component']);
@@ -181,6 +286,60 @@ final class PanelAreaTest extends KirbyTestCase
             ],
             array_column($body['$view']['props']['tabs'], 'link'),
         );
+        $this->assertNotContains(
+            'Executar diagnóstico do Stripe',
+            array_map(
+                static fn(array $button): mixed => $button['props']['text'] ?? null,
+                $body['$view']['props']['buttons'],
+            ),
+        );
+    }
+
+    public function testRegisteredDiagnosticsTabRendersTheOperationalActions(): void
+    {
+        $this->environment->close();
+        $this->environment = KirbyTestEnvironment::start(
+            options: [
+                'programmatordev.stripe-checkout' => [
+                    'stripe' => ['secretKey' => 'sk_test_panel_diagnostics'],
+                ],
+            ],
+            users: [[
+                'id' => 'panel-admin',
+                'email' => 'panel-admin@example.com',
+                'role' => 'admin',
+            ]],
+            impersonate: 'panel-admin',
+            request: [
+                'method' => 'GET',
+                'query' => [
+                    '_json' => '1',
+                    'tab' => 'diagnostics',
+                ],
+                'url' => 'https://kirby-stripe-checkout.test/panel/stripe-checkout?tab=diagnostics',
+            ],
+        );
+        $this->kirby = $this->environment->app();
+        $response = Panel::router('stripe-checkout');
+
+        $this->assertNotNull($response);
+        $this->assertSame(200, $response->code());
+        /** @var array{'$view': array{props: array{buttons: list<array{props: array{text?: string, dialog?: string}}>}}} $body */
+        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
+        $buttons = $body['$view']['props']['buttons'];
+        $remote = array_values(array_filter(
+            $buttons,
+            static fn(array $button): bool => ($button['props']['text'] ?? null) === 'Run Stripe diagnostics',
+        ));
+        $housekeeping = array_values(array_filter(
+            $buttons,
+            static fn(array $button): bool => ($button['props']['text'] ?? null) === 'Run housekeeping',
+        ));
+
+        $this->assertCount(1, $remote);
+        $this->assertSame('stripe-checkout/diagnostics/run', $remote[0]['props']['dialog'] ?? null);
+        $this->assertCount(1, $housekeeping);
+        $this->assertSame('stripe-checkout/housekeeping/run', $housekeeping[0]['props']['dialog'] ?? null);
     }
 
     public function testSettingsReaderGetsOnlyOverviewAndSettingsTabs(): void
@@ -203,7 +362,11 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertFalse($options['list']);
         $this->assertTrue($options['read']);
         $this->assertFalse($options['update']);
-        $this->assertSame(['languages'], $blueprint['buttons']);
+        $this->assertSame([
+            'stripeCheckoutRemoteDiagnostics',
+            'stripeCheckoutHousekeeping',
+            'languages',
+        ], $blueprint['buttons']);
     }
 
     public function testDiagnosticsReaderGetsNativeDiagnosticSectionsWithoutUpdateAccess(): void
@@ -229,9 +392,14 @@ final class PanelAreaTest extends KirbyTestCase
         $this->assertTrue($options['access']);
         $this->assertTrue($options['read']);
         $this->assertFalse($options['update']);
-        $this->assertArrayHasKey('diagnostics-summary', $sections);
-        $this->assertArrayHasKey('diagnostics-php', $sections);
-        $this->assertSame('info', $sections['diagnostics-php']['type']);
+        $this->assertSame(['diagnostics'], array_keys($sections));
+        $this->assertSame('fields', $sections['diagnostics']['type']);
+        /** @var array<string, array<string, mixed>> $fields */
+        $fields = $sections['diagnostics']['fields'];
+        $this->assertArrayHasKey('diagnosticsSummary', $fields);
+        $this->assertArrayHasKey('diagnosticsPhp', $fields);
+        $this->assertArrayHasKey('diagnosticsRemoteSummary', $fields);
+        $this->assertSame('info', $fields['diagnosticsPhp']['type']);
     }
 
     public function testOrdersReaderGetsOnlyTheNativeOrdersTabAndSection(): void

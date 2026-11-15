@@ -241,7 +241,6 @@ final class OperationalRequestsTest extends KirbyTestCase
         $result = StripeCheckoutArea::submitLifecycleDeliveryRetryDialog($this->kirby, self::ORDER_ID, $deliveryId);
 
         $this->assertSame([
-            'event' => 'stripe-checkout.order.lifecycle.retry',
             'message' => 'The lifecycle hook was delivered.',
         ], $result);
     }
@@ -527,9 +526,8 @@ final class OperationalRequestsTest extends KirbyTestCase
 
         $this->assertNotNull($response);
         $this->assertSame(200, $response->code(), $response->body());
-        /** @var array{'$dialog': array{event: string, message: string}} $body */
+        /** @var array{'$dialog': array{message: string}} $body */
         $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
-        $this->assertSame('stripe-checkout.order.sync', $body['$dialog']['event']);
         $this->assertSame('The order was updated from Stripe.', $body['$dialog']['message']);
     }
 
@@ -773,6 +771,155 @@ final class OperationalRequestsTest extends KirbyTestCase
 
         $this->assertNotNull($response);
         $this->assertSame(403, $response->code(), $response->body());
+    }
+
+    public function testRemoteDiagnosticsDialogUsesKirbysNativeConfirmation(): void
+    {
+        $this->restartRequest(['diagnostics.read' => true], 'GET');
+
+        $response = Panel::router('dialogs/' . self::DIAGNOSTICS_PATH);
+
+        $this->assertNotNull($response);
+        $this->assertSame(200, $response->code(), $response->body());
+        /** @var array{'$dialog': array{component: string, props: array{size: string, text: string, submitButton: array{icon: string, text: string}}}} $body */
+        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
+        $dialog = $body['$dialog'];
+        $this->assertSame('k-text-dialog', $dialog['component']);
+        $this->assertSame('medium', $dialog['props']['size']);
+        $this->assertSame('refresh', $dialog['props']['submitButton']['icon']);
+        $this->assertSame('Run Stripe diagnostics', $dialog['props']['submitButton']['text']);
+        $this->assertSame(
+            'Run read-only Stripe account and webhook endpoint checks now? The latest sanitized report will be replaced.',
+            $dialog['props']['text'],
+        );
+    }
+
+    public function testRemoteDiagnosticsDialogRechecksPermissionAndConfiguration(): void
+    {
+        $this->restartRequest(['diagnostics.read' => false], 'GET');
+        $response = Panel::router('dialogs/' . self::DIAGNOSTICS_PATH);
+        $this->assertNotNull($response);
+        $this->assertSame(403, $response->code(), $response->body());
+
+        $this->restartRequest(
+            permissions: ['diagnostics.read' => true],
+            method: 'GET',
+            pluginOptions: ['stripe' => []],
+        );
+        $response = Panel::router('dialogs/' . self::DIAGNOSTICS_PATH);
+        $this->assertNotNull($response);
+        $this->assertSame(409, $response->code(), $response->body());
+    }
+
+    public function testRemoteDiagnosticsDialogPresentsTheCachedCompletedRun(): void
+    {
+        $this->restartRequest(['diagnostics.read' => true]);
+        $client = new DiagnosticsClient();
+        ApiRequestor::setHttpClient($client);
+
+        $result = StripeCheckoutArea::submitRemoteDiagnosticsDialog($this->kirby);
+
+        $this->assertSame([
+            'message' => 'Remote Stripe diagnostics completed.',
+        ], $result);
+        $this->assertCount(2, $client->requests);
+        $this->assertNotNull((new RuntimeFactory($this->kirby))->diagnosticReportStore()->read());
+    }
+
+    public function testHousekeepingDialogUsesKirbysNativeConfirmation(): void
+    {
+        $this->restartRequest([
+            'diagnostics.read' => true,
+            'housekeeping.run' => true,
+        ], 'GET');
+
+        $response = Panel::router('dialogs/' . self::HOUSEKEEPING_PATH);
+
+        $this->assertNotNull($response);
+        $this->assertSame(200, $response->code(), $response->body());
+        /** @var array{'$dialog': array{component: string, props: array{size: string, text: string, submitButton: array{icon: string, text: string}, theme: string}}} $body */
+        $body = json_decode($response->body(), true, flags: JSON_THROW_ON_ERROR);
+        $dialog = $body['$dialog'];
+        $this->assertSame('k-text-dialog', $dialog['component']);
+        $this->assertSame('medium', $dialog['props']['size']);
+        $this->assertSame('notice', $dialog['props']['theme']);
+        $this->assertSame('refresh', $dialog['props']['submitButton']['icon']);
+        $this->assertSame('Run housekeeping', $dialog['props']['submitButton']['text']);
+        $this->assertSame(
+            'Run one housekeeping batch now? It can recover incomplete orders, prune expired lifecycle payloads and permanently delete orders eligible under the current retention settings. The configured batch limit and shared lock apply.',
+            $dialog['props']['text'],
+        );
+    }
+
+    public function testHousekeepingDialogRechecksPermissionsAndConfiguration(): void
+    {
+        $this->restartRequest([
+            'diagnostics.read' => false,
+            'housekeeping.run' => true,
+        ], 'GET');
+        $response = Panel::router('dialogs/' . self::HOUSEKEEPING_PATH);
+        $this->assertNotNull($response);
+        $this->assertSame(403, $response->code(), $response->body());
+
+        $this->restartRequest([
+            'diagnostics.read' => true,
+            'housekeeping.run' => false,
+        ], 'GET');
+        $response = Panel::router('dialogs/' . self::HOUSEKEEPING_PATH);
+        $this->assertNotNull($response);
+        $this->assertSame(403, $response->code(), $response->body());
+
+        $this->restartRequest(
+            permissions: [
+                'diagnostics.read' => true,
+                'housekeeping.run' => true,
+            ],
+            method: 'GET',
+            pluginOptions: ['stripe' => []],
+        );
+        $response = Panel::router('dialogs/' . self::HOUSEKEEPING_PATH);
+        $this->assertNotNull($response);
+        $this->assertSame(409, $response->code(), $response->body());
+    }
+
+    public function testHousekeepingDialogPresentsCompletedAndPartialRuns(): void
+    {
+        $permissions = [
+            'diagnostics.read' => true,
+            'housekeeping.run' => true,
+        ];
+        $this->restartRequest($permissions);
+
+        $this->assertSame([
+            'message' => 'Housekeeping completed.',
+        ], StripeCheckoutArea::submitHousekeepingDialog($this->kirby));
+
+        $this->restartRequest($permissions);
+        $order = $this->createOrder(new DateTimeImmutable('2026-09-01T00:00:00Z'), 'order-corrupt-dialog');
+        $order->version('latest')->update(['schemaVersion' => '2'], 'default');
+
+        $this->assertSame([
+            'message' => 'Housekeeping completed with some order failures. Review the updated diagnostics before running it again.',
+        ], StripeCheckoutArea::submitHousekeepingDialog($this->kirby));
+    }
+
+    public function testHousekeepingDialogReportsTheSharedRunLock(): void
+    {
+        $this->restartRequest([
+            'diagnostics.read' => true,
+            'housekeeping.run' => true,
+        ]);
+
+        try {
+            HousekeepingRunLock::run(
+                $this->kirby,
+                fn(): array => StripeCheckoutArea::submitHousekeepingDialog($this->kirby),
+            );
+            $this->fail('The active housekeeping run should remain visible to the operator.');
+        } catch (KirbyException $error) {
+            $this->assertSame(409, $error->getHttpCode());
+            $this->assertSame('Housekeeping is already running.', $error->getMessage());
+        }
     }
 
     public function testDiagnosticsRunsExplicitStripeReadsAndCachesTheSanitizedReport(): void

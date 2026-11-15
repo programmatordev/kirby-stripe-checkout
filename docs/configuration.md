@@ -300,7 +300,7 @@ Run it more frequently when the store regularly creates more Orders than `batchS
 
 Cron owns cadence. Without a cron entry or direct invocation, housekeeping does not run. The plugin does not add a request hook, worker, queue or internal scheduler, and it cannot detect whether the host configured cron.
 
-The authenticated Panel backend also accepts one explicit housekeeping run from a role with `housekeeping.run`. It calls this same runner, configured batch limit, continuation state and non-overlapping lock; it does not create a separate cleanup path or schedule later work. The Panel button and outcome presentation belong to the later interface batch, so the CLI remains the direct operator entry point in this version.
+The Diagnostics tab also offers one explicit housekeeping run to a role with both `diagnostics.read` and `housekeeping.run`. After confirmation, it calls this same runner with the configured batch limit, continuation state and non-overlapping lock. The refreshed Diagnostics view shows the latest retained outcome. This does not create a separate cleanup path or schedule later work; the CLI remains the entry point for external scheduling.
 
 ## Built-in cart
 

@@ -18,6 +18,7 @@ use ProgrammatorDev\StripeCheckout\Kirby\OrderPageStore;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
 use ProgrammatorDev\StripeCheckout\Panel\DiagnosticsSections;
+use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
@@ -29,14 +30,77 @@ final class LocalDiagnosticsTest extends KirbyTestCase
     public function testRendersCurrentHousekeepingConfiguration(): void
     {
         $sections = DiagnosticsSections::build($this->kirby);
+        /** @var array<string, array<string, mixed>> $fields */
+        $fields = $sections['diagnostics']['fields'];
 
         $this->assertSame(
             'PHP configuration: at most 25 candidates per run; lifecycle snapshot retention 30 days. Configure the CLI command in cron or run it manually.',
-            $sections['diagnostics-housekeeping']['text'],
+            $fields['diagnosticsHousekeeping']['text'],
         );
         $this->assertSame(
             'Housekeeping has not run yet. The plugin cannot detect whether the host cron entry exists.',
-            $sections['diagnostics-housekeepingRun']['text'],
+            $fields['diagnosticsHousekeepingRun']['text'],
+        );
+        $this->assertSame(
+            'Remote diagnostics have not run yet. Opening this page does not contact Stripe.',
+            $fields['diagnosticsRemoteSummary']['text'],
+        );
+    }
+
+    public function testRendersTheLatestSanitizedRemoteReportWithoutRunningIt(): void
+    {
+        $report = new DiagnosticReport(
+            checkedAt: new DateTimeImmutable('2026-11-15T12:00:00Z'),
+            checks: [new DiagnosticCheck(
+                code: 'stripeAccount',
+                status: DiagnosticStatus::Pass,
+                messageKey: 'stripeAccount.ready',
+                context: [
+                    'configuredMode' => 'test',
+                    'providerMode' => 'test',
+                ],
+            )],
+        );
+        (new RuntimeFactory($this->kirby))->diagnosticReportStore()->write($report);
+
+        $sections = DiagnosticsSections::build($this->kirby);
+        /** @var array<string, array<string, mixed>> $fields */
+        $fields = $sections['diagnostics']['fields'];
+
+        $this->assertSame(
+            'Last checked at 2026-11-15 12:00 UTC. Overall status: Pass.',
+            $fields['diagnosticsRemoteSummary']['text'],
+        );
+        $this->assertSame(
+            'Stripe accepted the configured server key in test mode.',
+            $fields['diagnosticsRemoteStripeAccount']['text'],
+        );
+    }
+
+    public function testPreservesAStableRemoteFailureCodeWithoutATranslation(): void
+    {
+        $report = new DiagnosticReport(
+            checkedAt: new DateTimeImmutable('2026-11-15T12:00:00Z'),
+            checks: [new DiagnosticCheck(
+                code: 'stripeAccount',
+                status: DiagnosticStatus::Fail,
+                messageKey: 'remote.authenticationFailed',
+                context: ['code' => 'diagnostics.authentication_failed'],
+            )],
+        );
+        (new RuntimeFactory($this->kirby))->diagnosticReportStore()->write($report);
+
+        $sections = DiagnosticsSections::build($this->kirby);
+        /** @var array<string, array<string, mixed>> $fields */
+        $fields = $sections['diagnostics']['fields'];
+
+        $this->assertSame(
+            'Last checked at 2026-11-15 12:00 UTC. Overall status: Fail.',
+            $fields['diagnosticsRemoteSummary']['text'],
+        );
+        $this->assertSame(
+            'Stripe rejected the configured server key (diagnostics.authentication_failed).',
+            $fields['diagnosticsRemoteStripeAccount']['text'],
         );
     }
 
