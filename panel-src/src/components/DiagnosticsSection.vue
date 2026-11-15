@@ -4,13 +4,25 @@ export default {
 	data() {
 		return {
 			isLoading: true,
-			isRequesting: false,
+			requestingEndpoint: null,
 			sections: [],
 			summary: {
 				headline: "",
 				reports: []
 			}
 		};
+	},
+	computed: {
+		displaySections() {
+			// Derive button props here so request state updates already-loaded item actions reactively.
+			return this.sections.map(section => ({
+				...section,
+				items: section.items.map(item => ({
+					...item,
+					buttons: this.itemButtons(item)
+				}))
+			}));
+		}
 	},
 	watch: {
 		timestamp() {
@@ -29,9 +41,12 @@ export default {
 				}
 
 				const { endpoint, successMessage, ...props } = button;
+				const isRequesting = this.requestingEndpoint !== null;
 
 				return {
 					...props,
+					disabled: props.disabled || isRequesting,
+					icon: this.requestingEndpoint === endpoint ? "loader" : props.icon,
 					click: () => this.request(endpoint, successMessage)
 				};
 			});
@@ -51,30 +66,24 @@ export default {
 		async fetch() {
 			this.isLoading = true;
 			const response = await this.load();
-			this.sections = response.sections.map(section => ({
-				...section,
-				items: section.items.map(item => ({
-					...item,
-					buttons: this.itemButtons(item)
-				}))
-			}));
+			this.sections = response.sections;
 			this.summary = response.summary;
 			this.isLoading = false;
 		},
 		async request(endpoint, successMessage) {
-			if (this.isRequesting) {
+			if (this.requestingEndpoint !== null) {
 				return;
 			}
 
 			try {
-				this.isRequesting = true;
+				this.requestingEndpoint = endpoint;
 				await this.$api.post(endpoint);
 				await this.fetch();
 				this.$panel.notification.success(successMessage);
 			} catch (error) {
 				this.$panel.error(error);
 			} finally {
-				this.isRequesting = false;
+				this.requestingEndpoint = null;
 			}
 		}
 	}
@@ -88,7 +97,7 @@ export default {
 		</k-section>
 
 		<k-section
-			v-for="section in sections"
+			v-for="section in displaySections"
 			:key="section.name"
 			:buttons="buttons(section)"
 			:headline="section.headline"
