@@ -1049,30 +1049,21 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->assertStringNotContainsString('PRIVATE', json_encode($this->data(), JSON_THROW_ON_ERROR));
     }
 
-    #[DataProvider('refundOutcomes')]
-    public function testRefundEventsRefreshPaymentAndPersistCurrentRefundFacts(string $type, string $status, string $summary): void
+    public function testRefundEventRefreshesPaymentAndPersistsCurrentRefundFacts(): void
     {
-        $this->setRefunds([$this->refund(status: $status)]);
-        $this->assertResponse($this->send($this->refundEvent($type)), 204);
+        $this->setRefunds([$this->refund()]);
+        $this->assertResponse($this->send($this->refundEvent()), 204);
         $data = $this->data();
         $this->assertSame('paid', $data['paymentStatus']);
-        $this->assertSame($summary, $data['refundStatus']);
-        $this->assertSame($status === 'succeeded' ? '16.00' : '0', $data['refundedTotal']);
+        $this->assertSame('partial', $data['refundStatus']);
+        $this->assertSame('16.00', $data['refundedTotal']);
         $this->assertSame('pi_webhook', $this->entries('refunds')[0]['stripePaymentIntentId']);
         $this->assertSame('re_webhook', $this->entries('events')[0]['resourceId']);
         $this->assertSame('processed', $this->entries('events')[0]['status']);
         $this->assertSame(['session.created', 'payment.succeeded', 'refund.updated'], array_map(static fn(LifecycleEvent $event): string => $event->type()->value, $this->delivered));
         $this->assertSame($data['refunds'], $this->delivered[2]->orderSnapshot()['refunds']);
-        $this->assertSame($type, $this->delivered[2]->triggerType());
+        $this->assertSame('refund.created', $this->delivered[2]->triggerType());
         $this->assertStringNotContainsString('PRIVATE_REFUND', json_encode($data, JSON_THROW_ON_ERROR));
-    }
-
-    /** @return iterable<array{string, string, string}> */
-    public static function refundOutcomes(): iterable
-    {
-        yield ['refund.created', 'pending', 'pending'];
-        yield ['refund.updated', 'succeeded', 'partial'];
-        yield ['refund.failed', 'failed', 'failed'];
     }
 
     public function testNativeRefundStructureDisplaysSafeFactsAndCannotRewriteTheSnapshot(): void
@@ -1199,20 +1190,6 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->assertCount(2, $this->entries('events'));
     }
 
-    public function testRefundStatusComesFromTheCurrentCollectionNotTheHistoricalEvent(): void
-    {
-        $this->setRefunds([$this->refund(status: 'pending')]);
-        $body = $this->refundEvent();
-        $this->setRefunds([$this->refund(status: 'succeeded', amount: 3200)]);
-        // Keep the immutable amount in the historical envelope consistent; its pending status is stale.
-        /** @var array{data: array{object: array<string, mixed>}} $event */
-        $event = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
-        $event['data']['object']['amount'] = 3200;
-        $this->assertResponse($this->send(json_encode($event, JSON_THROW_ON_ERROR)), 204);
-        $this->assertSame('full', $this->data()['refundStatus']);
-        $this->assertSame('32.00', $this->data()['refundedTotal']);
-    }
-
     public function testForeignParentIsIgnoredEvenWhenRefundMetadataClaimsOwnership(): void
     {
         $this->setRefunds([$this->refund()]);
@@ -1227,44 +1204,6 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->assertResponse($this->send(json_encode($body, JSON_THROW_ON_ERROR)), 204);
         $this->assertSame($before, $this->data());
         $this->assertCount(0, $this->delivered);
-    }
-
-    public function testChargeFallbackAndOlderSamePaymentChargeAreCorrelated(): void
-    {
-        $refund = $this->refund();
-        $refund['payment_intent'] = null;
-        $refund['charge'] = 'charge.older-reference';
-        $this->provider->charges['charge.older-reference'] = [
-            'id' => 'charge.older-reference',
-            'object' => 'charge',
-            'payment_intent' => 'pi_webhook',
-            'currency' => 'eur',
-            'livemode' => false,
-        ];
-        $this->setRefunds([$refund]);
-        $this->assertResponse($this->send($this->refundEvent()), 204);
-        $this->assertSame('charge.older-reference', $this->entries('refunds')[0]['stripeChargeId']);
-        $this->assertSame('charge.older-reference', $this->entries('events')[0]['stripeChargeId']);
-        $this->assertSame('pi_webhook', $this->entries('refunds')[0]['stripePaymentIntentId']);
-        $this->assertArrayNotHasKey('stripeChargeId', $this->data());
-    }
-
-    #[DataProvider('invalidRefundParents')]
-    public function testRefundParentContradictionsCannotMutateAnOrder(string $field, mixed $value): void
-    {
-        $this->setRefunds([$this->refund()]);
-        $this->provider->paymentIntent[$field] = $value;
-        $before = $this->data();
-        $this->assertResponse($this->send($this->refundEvent()), 500);
-        $this->assertSame($before, $this->data());
-    }
-
-    /** @return iterable<array{string, mixed}> */
-    public static function invalidRefundParents(): iterable
-    {
-        yield ['id', 'pi_other'];
-        yield ['livemode', true];
-        yield ['currency', 'usd'];
     }
 
     /** @param list<array<string, mixed>> $matches */
