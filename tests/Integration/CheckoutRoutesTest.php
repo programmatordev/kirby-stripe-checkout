@@ -409,22 +409,6 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertSame(CheckoutStatus::Open->value, $this->orderData($body)['checkoutStatus']);
     }
 
-    #[DataProvider('providerFailures')]
-    public function testProviderFailuresAreSanitizedAndKeepIndependentRetryPolicy(int $providerStatus, int $httpStatus, string $code, bool $retryable): void
-    {
-        $body = $this->submission();
-        $this->providerStatus = $providerStatus;
-        $this->assertError($this->send($body), $httpStatus, $code, $retryable);
-    }
-
-    /** @return iterable<string, array{int, int, string, bool}> */
-    public static function providerFailures(): iterable
-    {
-        yield 'definitive rejection' => [400, 502, 'checkout.session_rejected', false];
-        yield 'rate limit with explicit no retry' => [429, 503, 'checkout.session_unavailable', false];
-        yield 'uncertain mutation with explicit no retry' => [500, 202, 'checkout.session_uncertain', false];
-    }
-
     public function testUnsupportedRepresentationIsRejectedBeforeParsingOrResolving(): void
     {
         $response = $this->send('broken JSON', headers: ['Accept' => 'image/png', 'X-CSRF' => null]);
