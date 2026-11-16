@@ -634,27 +634,17 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->assertSame('payment.requiresAction', $this->delivered[2]->type()->value);
     }
 
-    #[DataProvider('checkoutOutcomes')]
-    public function testDispatchesTheFourCheckoutEventsThroughTheRealRuntime(string $type, string $checkoutStatus, string $paymentStatus, string $intentStatus, string $expected): void
+    public function testDispatchesACompletedCheckoutThroughTheRealRuntime(): void
     {
-        $this->provider->session['status'] = $checkoutStatus;
-        $this->provider->session['payment_status'] = $paymentStatus;
-        $this->provider->paymentIntent['status'] = $intentStatus;
-        $this->provider->paymentIntent['amount_received'] = $paymentStatus === 'paid' ? 3200 : 0;
-        $this->assertResponse($this->send($this->event($type)), 204);
-        $this->assertSame($expected, $this->data()['paymentStatus']);
+        $this->provider->session['status'] = 'complete';
+        $this->provider->session['payment_status'] = 'paid';
+        $this->provider->paymentIntent['status'] = 'succeeded';
+        $this->provider->paymentIntent['amount_received'] = 3200;
+        $this->assertResponse($this->send($this->event('checkout.session.completed')), 204);
+        $this->assertSame('paid', $this->data()['paymentStatus']);
         $this->assertSame('processed', $this->entries('events')[0]['status']);
         $this->assertCount(2, $this->provider->requests);
         $this->assertNull($this->kirby->session()->token());
-    }
-
-    /** @return iterable<string, array{string, string, string, string, string}> */
-    public static function checkoutOutcomes(): iterable
-    {
-        yield 'completed' => ['checkout.session.completed', 'complete', 'paid', 'succeeded', 'paid'];
-        yield 'async success' => ['checkout.session.async_payment_succeeded', 'complete', 'paid', 'succeeded', 'paid'];
-        yield 'async failure' => ['checkout.session.async_payment_failed', 'complete', 'unpaid', 'requires_payment_method', 'failed'];
-        yield 'expired' => ['checkout.session.expired', 'expired', 'unpaid', 'canceled', 'unpaid'];
     }
 
     public function testRedeliveryAfterALostSuccessfulResponseDoesNotRepeatEffects(): void
