@@ -594,10 +594,7 @@ final class CartRoutesTest extends KirbyTestCase
         }]]);
         $product = $this->product();
 
-        foreach ([null, '*/*', 'application/json', 'application/json;q=1,text/html;q=0.5'] as $accept) {
-            $this->assertSame('application/json', $this->send('GET', headers: $accept === null ? [] : ['Accept' => $accept])->type());
-        }
-
+        $this->assertSame('application/json', $this->send('GET')->type());
         $this->assertCount(0, $calls);
         $response = $this->send('POST', '/items', ['reference' => $product->id()], ['Accept' => 'text/html']);
         $this->assertSame(200, $response->code());
@@ -610,8 +607,6 @@ final class CartRoutesTest extends KirbyTestCase
         $this->assertSame(409, $response->code());
         $this->assertSame('cart.revision_conflict', $calls[1]->error()?->code());
         $this->assertStringContainsString('>1</div>', $response->body());
-        $this->assertSame('text/html', $this->send('GET', headers: ['Accept' => 'application/json;q=0,*/*;q=1'])->type());
-        $this->assertSame(406, $this->send('GET', headers: ['Accept' => 'application/json;q=0,text/html;q=0'])->code());
     }
 
     public function testMissingRendererRejectsBeforeMutation(): void

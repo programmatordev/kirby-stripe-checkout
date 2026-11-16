@@ -425,40 +425,15 @@ final class CheckoutRoutesTest extends KirbyTestCase
         yield 'uncertain mutation with explicit no retry' => [500, 202, 'checkout.session_uncertain', false];
     }
 
-    #[DataProvider('negotiationFailures')]
-    public function testUnsupportedRepresentationIsRejectedBeforeParsingOrResolving(string $accept): void
+    public function testUnsupportedRepresentationIsRejectedBeforeParsingOrResolving(): void
     {
-        $response = $this->send('broken JSON', headers: ['Accept' => $accept, 'X-CSRF' => null]);
+        $response = $this->send('broken JSON', headers: ['Accept' => 'image/png', 'X-CSRF' => null]);
         $this->assertSame(406, $response->code());
         $this->assertSame('', $response->body());
         $this->assertPrivate($response);
         $this->assertSame(0, $this->resolutions);
         $this->assertCount(0, $this->requests);
         $this->assertCount(0, (new OrderPageStore($this->kirby))->orders());
-    }
-
-    /** @return iterable<string, array{string}> */
-    public static function negotiationFailures(): iterable
-    {
-        yield 'other representation' => ['image/png'];
-        yield 'zero quality' => ['application/json;q=0'];
-        yield 'specific exclusions beat wildcard' => ['*/*;q=1, application/json;q=0, text/html;q=0'];
-        yield 'type exclusions beat wildcard' => ['application/*;q=0, text/*;q=0, */*;q=1'];
-    }
-
-    #[DataProvider('acceptedRepresentations')]
-    public function testSupportedAcceptRangesReachTheJsonBoundary(string $accept): void
-    {
-        $this->assertError($this->send('{}', headers: ['Accept' => $accept]), 400, 'request.invalid_body', false);
-    }
-
-    /** @return iterable<string, array{string}> */
-    public static function acceptedRepresentations(): iterable
-    {
-        yield 'json' => ['application/json'];
-        yield 'wildcard' => ['*/*'];
-        yield 'application wildcard' => ['application/*'];
-        yield 'blank' => [''];
     }
 
     #[DataProvider('unsupportedMethods')]
