@@ -41,18 +41,17 @@ use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 final class SessionRequestBuilderTest extends KirbyTestCase
 {
     #[DataProvider('taxPolicies')]
-    public function testMapsTaxDefaultsForBothCheckoutModes(bool $enabled, string $behavior, UiMode $uiMode): void
+    public function testMapsTaxDefaults(bool $enabled, string $behavior): void
     {
         $this->restart(options: [
             'programmatordev.stripe-checkout' => [
                 'settings' => [
                     'automaticTax' => $enabled,
                     'taxBehavior' => $behavior,
-                    'uiMode' => $uiMode->value,
                 ],
             ],
         ]);
-        $checkout = $this->inlineCheckout(uiMode: $uiMode, taxCode: new TaxCode('txcd_33020002'));
+        $checkout = $this->inlineCheckout(taxCode: new TaxCode('txcd_33020002'));
         $parameters = $this->build($checkout)->parameters();
         $this->assertIsArray($parameters['line_items']);
         $this->assertIsArray($parameters['line_items'][0]);
@@ -75,16 +74,14 @@ final class SessionRequestBuilderTest extends KirbyTestCase
         }
     }
 
-    /** @return iterable<string, array{bool, string, UiMode}> */
+    /** @return iterable<string, array{bool, string}> */
     public static function taxPolicies(): iterable
     {
         $behaviors = ['stripe_default', 'inclusive', 'exclusive'];
 
-        foreach (UiMode::cases() as $uiMode) {
-            foreach ($behaviors as $behavior) {
-                yield $uiMode->value . ' ' . $behavior => [true, $behavior, $uiMode];
-                yield $uiMode->value . ' disabled ' . $behavior => [false, $behavior, $uiMode];
-            }
+        foreach ($behaviors as $behavior) {
+            yield $behavior => [true, $behavior];
+            yield 'disabled ' . $behavior => [false, $behavior];
         }
     }
 
@@ -121,18 +118,16 @@ final class SessionRequestBuilderTest extends KirbyTestCase
         $this->assertArrayNotHasKey('tax_code', $parameters['line_items'][0]['price_data']['product_data']);
     }
 
-    #[DataProvider('checkoutModes')]
-    public function testMapsTheAcceptedShippingQuoteForBothCheckoutModes(UiMode $uiMode): void
+    public function testMapsTheAcceptedShippingQuote(): void
     {
         $this->restart(options: [
             'programmatordev.stripe-checkout' => [
                 'settings' => [
                     'automaticTax' => true,
-                    'uiMode' => $uiMode->value,
                 ],
             ],
         ]);
-        $checkout = $this->inlineCheckout(uiMode: $uiMode);
+        $checkout = $this->inlineCheckout();
         $shipping = InitiatingShippingSnapshot::fromQuote(
             checkout: $checkout,
             shipping: new ShippingContext('PT'),
@@ -278,14 +273,6 @@ final class SessionRequestBuilderTest extends KirbyTestCase
             $this->context($checkout),
             $shipping,
         );
-    }
-
-    /** @return iterable<string, array{UiMode}> */
-    public static function checkoutModes(): iterable
-    {
-        foreach (UiMode::cases() as $uiMode) {
-            yield $uiMode->value => [$uiMode];
-        }
     }
 
     public function testBuildsTheProtectedHostedInlineRequest(): void
