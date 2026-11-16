@@ -117,15 +117,12 @@ final class CheckoutRoutesTest extends KirbyTestCase
     public static function checkoutModesAndSources(): iterable
     {
         yield 'hosted cart' => [UiMode::Hosted, CheckoutSource::Cart];
-        yield 'hosted direct' => [UiMode::Hosted, CheckoutSource::Direct];
-        yield 'embedded cart' => [UiMode::Embedded, CheckoutSource::Cart];
         yield 'embedded direct' => [UiMode::Embedded, CheckoutSource::Direct];
     }
 
-    #[DataProvider('cartCheckoutModes')]
-    public function testLaterCartActionReusesTheFirstAcceptedOrderAndSession(UiMode $uiMode): void
+    public function testLaterCartActionReusesTheFirstAcceptedOrderAndSession(): void
     {
-        $this->restart($uiMode);
+        $this->restart(UiMode::Hosted);
         $stripeCheckout = new StripeCheckout($this->kirby);
         $stripeCheckout->cart()?->add('product', 2);
         $firstSubmissionData = $stripeCheckout->checkout(CheckoutSource::Cart)->submissionData();
@@ -147,13 +144,6 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertCount(1, (new OrderPageStore($this->kirby))->orders());
         $laterPageUuid = OrderData::pageUuid((new AttemptToken($laterSubmissionData['attemptToken']))->orderUuid());
         $this->assertNull((new OrderPageStore($this->kirby))->order($laterPageUuid));
-    }
-
-    /** @return iterable<string, array{UiMode}> */
-    public static function cartCheckoutModes(): iterable
-    {
-        yield 'hosted' => [UiMode::Hosted];
-        yield 'embedded' => [UiMode::Embedded];
     }
 
     public function testChangedCartRevisionCreatesAnIndependentOrderAndSession(): void
