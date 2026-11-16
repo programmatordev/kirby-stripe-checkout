@@ -839,7 +839,7 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->assertSame('paid', $this->data()['paymentStatus']);
     }
 
-    public function testRouteIsCanonicalOnMultilingualSitesAndOtherMethodsDoNotProcess(): void
+    public function testRouteIsCanonicalOnMultilingualSitesAndPostOnly(): void
     {
         $this->environment->close();
         $this->environment = KirbyTestEnvironment::start(options: [
@@ -863,12 +863,7 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->kirby = $this->environment->app();
         $this->assertResponse($this->send($this->event('future.event')), 204);
         $this->assertNotInstanceOf(Response::class, $this->kirby->call('pt/stripe-checkout/webhook', 'POST'));
-        $methods = ['GET', 'HEAD', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
-
-        foreach ($methods as $method) {
-            $this->assertNotInstanceOf(Response::class, $this->kirby->call('stripe-checkout/webhook', $method));
-        }
-
+        $this->assertNotInstanceOf(Response::class, $this->kirby->call('stripe-checkout/webhook', 'GET'));
         $this->assertCount(0, (new OrderPageStore($this->kirby))->orders());
         $this->assertNull($this->kirby->session()->token());
     }

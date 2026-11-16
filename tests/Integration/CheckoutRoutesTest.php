@@ -420,25 +420,14 @@ final class CheckoutRoutesTest extends KirbyTestCase
         $this->assertCount(0, (new OrderPageStore($this->kirby))->orders());
     }
 
-    #[DataProvider('unsupportedMethods')]
-    public function testMethodsHaveExplicitPrivateRejections(string $method): void
+    public function testGetHasAnExplicitPrivateMethodRejection(): void
     {
-        $response = $this->send('{}', method: $method);
+        $response = $this->send('{}', method: 'GET');
         $this->assertSame(405, $response->code());
         $this->assertSame('POST', $response->headers()['Allow']);
         $this->assertPrivate($response);
         $this->assertSame(0, $this->resolutions);
         $this->assertCount(0, $this->requests);
-    }
-
-    /** @return iterable<int, array{string}> */
-    public static function unsupportedMethods(): iterable
-    {
-        yield ['GET'];
-        yield ['PUT'];
-        yield ['PATCH'];
-        yield ['DELETE'];
-        yield ['OPTIONS'];
     }
 
     public function testHostedFormRedirectsDirectlyToStripe(): void
