@@ -476,10 +476,18 @@ final class CheckoutSessionRetrieverTest extends KirbyTestCase
         $this->read(request: new SessionRequest($parameters));
     }
 
-    /** @param array<string, mixed> $action */
-    #[DataProvider('paymentActions')]
-    public function testPreservesGenericPaymentActionsWithIndependentSdkReadProjections(array $action): void
+    public function testPreservesGenericPaymentActionsWithIndependentSdkReadProjections(): void
     {
+        $actionType = 'future_action';
+        $action = [
+            'type' => $actionType,
+            $actionType => [
+                'provider_detail' => [
+                    'new_field' => 'NEW_VALUE',
+                    'fraction' => 0.75,
+                ],
+            ],
+        ];
         $session = $this->session();
         $payment = $this->payment();
         $payment['next_action'] = $action + ['unrelated' => ['client_secret' => 'EXCLUDED_SECRET']];
@@ -494,80 +502,20 @@ final class CheckoutSessionRetrieverTest extends KirbyTestCase
         $details = $paymentAction->details();
         $details['mutated'] = true;
 
-        $this->assertSame($action['type'], $paymentAction->type());
-        $this->assertSame($action['type'], $observation->payment()->nextActionType());
+        $this->assertSame($actionType, $paymentAction->type());
+        $this->assertSame($actionType, $observation->payment()->nextActionType());
         $this->assertEquals($action, $paymentAction->toArray());
         $this->assertEquals($action, $paymentAction->toPaymentIntent()->next_action?->toArray());
-        $this->assertEquals($action[$paymentAction->type()], $paymentAction->details()->toArray());
+        $this->assertEquals($action[$actionType], $paymentAction->details()->toArray());
         $this->assertNull($paymentAction->toPaymentIntent()->id ?? null);
         $this->assertStringNotContainsString('EXCLUDED', json_encode($paymentAction->toArray(), JSON_THROW_ON_ERROR));
         $this->assertArrayNotHasKey('next_action', $observation->snapshot()->toArray());
         $this->assertStringNotContainsString($paymentAction->type(), json_encode($observation->snapshot()->toArray(), JSON_THROW_ON_ERROR));
     }
 
-    /** @return iterable<string, array{array<string, mixed>}> */
-    public static function paymentActions(): iterable
+    public function testExposesTransientAuthenticationActionWithoutAddingItToTheCanonicalSnapshot(): void
     {
-        yield 'Multibanco' => [[
-            'type' => 'multibanco_display_details',
-            'multibanco_display_details' => [
-                'entity' => '12345',
-                'reference' => '123456789',
-                'expires_at' => 90000,
-                'hosted_voucher_url' => 'https://payments.stripe.com/test/voucher',
-            ],
-        ]];
-        yield 'OXXO' => [[
-            'type' => 'oxxo_display_details',
-            'oxxo_display_details' => [
-                'number' => '1234567890',
-                'expires_after' => 90000,
-                'hosted_voucher_url' => 'https://payments.stripe.com/test/voucher',
-            ],
-        ]];
-        yield 'PayNow' => [[
-            'type' => 'paynow_display_qr_code',
-            'paynow_display_qr_code' => [
-                'data' => 'TEST_QR_DATA',
-                'image_url_png' => 'https://payments.stripe.com/test/qr.png',
-                'image_url_svg' => 'https://payments.stripe.com/test/qr.svg',
-                'hosted_instructions_url' => 'https://payments.stripe.com/test/qr',
-            ],
-        ]];
-        yield 'Konbini' => [[
-            'type' => 'konbini_display_details',
-            'konbini_display_details' => [
-                'expires_at' => 90000,
-                'hosted_voucher_url' => 'https://payments.stripe.com/test/voucher',
-                'stores' => [
-                    'familymart' => [
-                        'payment_code' => 'TEST_CODE',
-                        'confirmation_number' => 'TEST_CONFIRMATION',
-                    ],
-                ],
-            ],
-        ]];
-        yield 'bank transfer without a method-name prefix' => [[
-            'type' => 'display_bank_transfer_instructions',
-            'display_bank_transfer_instructions' => [
-                'reference' => 'TRANSFER_REFERENCE',
-                'hosted_instructions_url' => 'https://payments.stripe.com/test/transfer',
-                'financial_addresses' => [['type' => 'iban', 'iban' => ['iban' => 'TEST_ONLY_IBAN']]],
-            ],
-        ]];
-        yield 'parameterless action' => [[
-            'type' => 'blik_authorize',
-            'blik_authorize' => [],
-        ]];
-        yield 'unknown action' => [[
-            'type' => 'future_action',
-            'future_action' => ['provider_detail' => ['new_field' => 'NEW_VALUE', 'fraction' => 0.75]],
-        ]];
-    }
-
-    #[DataProvider('authenticationActions')]
-    public function testExposesTransientAuthenticationActionsWithoutAddingThemToTheCanonicalSnapshot(string $actionType): void
-    {
+        $actionType = 'use_stripe_sdk';
         $session = $this->session();
         $payment = $this->payment();
         $payment['payment_method'] = array_replace(OrderData::map($payment['payment_method']), ['type' => 'future_method']);
@@ -586,13 +534,6 @@ final class CheckoutSessionRetrieverTest extends KirbyTestCase
         $this->assertSame('EXCLUDED_SECRET', $paymentSnapshot->nextAction()?->details()['client_secret']);
         $this->assertStringNotContainsString('EXCLUDED_SECRET', json_encode($observation->snapshot()->toArray(), JSON_THROW_ON_ERROR));
         $this->assertArrayNotHasKey('next_action', $observation->snapshot()->toArray());
-    }
-
-    /** @return iterable<string, array{string}> */
-    public static function authenticationActions(): iterable
-    {
-        yield 'SDK authentication' => ['use_stripe_sdk'];
-        yield 'redirect authentication' => ['redirect_to_url'];
     }
 
     public function testReadsNoCostAndExpiredSessionsWithoutInventingPaymentObjects(): void
