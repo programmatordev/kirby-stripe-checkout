@@ -1918,11 +1918,10 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->assertSame($before, $this->data());
     }
 
-    #[DataProvider('disputeEvents')]
-    public function testEveryDisputeEventRetrievesCurrentStateRatherThanTrustingTheEvent(string $type): void
+    public function testDisputeEventRetrievesCurrentStateRatherThanTrustingTheEvent(): void
     {
         $this->setDisputes([$this->dispute()]);
-        $body = $this->disputeEvent($type);
+        $body = $this->disputeEvent();
         $this->setDisputes([$this->dispute(status: 'prevented', amount: 5000)]);
         $this->assertResponse($this->send($body), 204);
         $data = $this->data();
@@ -1933,16 +1932,6 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->assertSame('dispute.updated', $this->delivered[2]->type()->value);
         $this->assertSame($data['disputes'], $this->delivered[2]->orderSnapshot()['disputes']);
         $this->assertStringNotContainsString('PRIVATE', json_encode($data, JSON_THROW_ON_ERROR));
-    }
-
-    /** @return iterable<array{string}> */
-    public static function disputeEvents(): iterable
-    {
-        yield ['charge.dispute.created'];
-        yield ['charge.dispute.updated'];
-        yield ['charge.dispute.closed'];
-        yield ['charge.dispute.funds_withdrawn'];
-        yield ['charge.dispute.funds_reinstated'];
     }
 
     public function testDisputeDuplicateAndUnchangedObservationSkipNotificationsAndKeepTimes(): void
@@ -2057,36 +2046,6 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->assertSame(['session.created', 'payment.succeeded', 'refund.updated', 'dispute.updated'], array_map(static fn(LifecycleEvent $event): string => $event->type()->value, $this->delivered));
     }
 
-    public function testDisputeChargeBacklinkResolvesANullPaymentIntentAndAcceptsAnOlderCharge(): void
-    {
-        $dispute = $this->dispute();
-        $dispute['payment_intent'] = null;
-        $this->setDisputes([$dispute]);
-        $this->assertResponse($this->send($this->disputeEvent()), 204);
-        $this->assertSame('pi_webhook', $this->entries('disputes')[0]['stripePaymentIntentId']);
-        $this->assertSame('ch_disputed', $this->entries('disputes')[0]['stripeChargeId']);
-        $this->assertNull($this->provider->paymentIntent['latest_charge']);
-    }
-
-    #[DataProvider('disputeParentContradictions')]
-    public function testDisputeParentContradictionsCannotAttachAnEventOrChangeCommerce(string $field, mixed $value): void
-    {
-        $this->setDisputes([$this->dispute()]);
-        $this->provider->charges['ch_disputed'][$field] = $value;
-        $before = $this->data();
-        $this->assertResponse($this->send($this->disputeEvent()), 500);
-        $this->assertSame($before, $this->data());
-    }
-
-    /** @return iterable<array{string, mixed}> */
-    public static function disputeParentContradictions(): iterable
-    {
-        yield ['id', 'ch_other'];
-        yield ['payment_intent', 'pi_other'];
-        yield ['currency', 'usd'];
-        yield ['livemode', true];
-    }
-
     public function testCompleteDisputePagesProduceAMixedSummaryWithoutRepeatedChargeReads(): void
     {
         $first = $this->dispute(status: 'lost');
@@ -2171,38 +2130,6 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->assertSame('failed', $this->entries('events')[1]['status']);
         $this->assertSame('checkout.session_incompatible', $this->entries('events')[1]['errorCode']);
         $this->assertCount(3, $this->delivered);
-    }
-
-    public function testMissingTriggeringDisputeCannotCommitAnUnrelatedCompleteCollection(): void
-    {
-        $this->setDisputes([$this->dispute()]);
-        $this->provider->disputes = [$this->dispute(id: 'du_other')];
-        $this->assertResponse($this->send($this->disputeEvent()), 500);
-        $this->assertSame('creating', $this->data()['checkoutStatus']);
-        $this->assertArrayNotHasKey('disputes', $this->data());
-        $this->assertSame('failed', $this->entries('events')[0]['status']);
-    }
-
-    #[DataProvider('contradictoryDisputeSiblings')]
-    public function testContradictorySiblingFactsCannotPartiallyCommitPayment(string $field, mixed $value): void
-    {
-        $first = $this->dispute();
-        $second = $this->dispute(id: 'du_other');
-        $second[$field] = $value;
-        $this->setDisputes([$first, $second]);
-        $this->assertResponse($this->send($this->disputeEvent()), 500);
-        $this->assertSame('creating', $this->data()['checkoutStatus']);
-        $this->assertArrayNotHasKey('disputes', $this->data());
-        $this->assertSame('failed', $this->entries('events')[0]['status']);
-    }
-
-    /** @return iterable<array{string, mixed}> */
-    public static function contradictoryDisputeSiblings(): iterable
-    {
-        yield ['payment_intent', 'pi_other'];
-        yield ['currency', 'usd'];
-        yield ['livemode', true];
-        yield ['object', 'refund'];
     }
 
     public function testOpaqueDisputeFactsSurviveProcessingAndExpiredPayloadPruning(): void

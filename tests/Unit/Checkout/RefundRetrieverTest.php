@@ -20,6 +20,7 @@ use ProgrammatorDev\StripeCheckout\Order\Internal\PaymentSnapshot;
 use ProgrammatorDev\StripeCheckout\Plugin\PluginMetadata;
 use ProgrammatorDev\StripeCheckout\Stripe\Checkout\CheckoutSessionObservation;
 use ProgrammatorDev\StripeCheckout\Stripe\Refund\RefundGatewayInterface;
+use Stripe\Charge;
 use Stripe\Event;
 use Stripe\PaymentIntent;
 use Stripe\Refund;
@@ -223,7 +224,7 @@ final class RefundRetrieverTest extends TestCase
     {
         return [
             'id' => $id,
-            'object' => 'charge',
+            'object' => Charge::OBJECT_NAME,
             'payment_intent' => 'pi_test',
             'currency' => 'eur',
             'livemode' => false,
