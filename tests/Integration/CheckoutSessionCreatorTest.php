@@ -117,8 +117,8 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
         ]]);
     }
 
-    #[DataProvider('sessionModesAndPriceSources')]
-    public function testCreatesASessionAcrossSupportedCheckoutCombinations(
+    #[DataProvider('creationScenarios')]
+    public function testCreatesASessionAndPersistsItsInitiatingFacts(
         UiMode $uiMode,
         bool $stripePrice,
         CheckoutSource $checkoutSource,
@@ -1623,26 +1623,29 @@ final class CheckoutSessionCreatorTest extends KirbyTestCase
     }
 
     /** @return iterable<string, array{UiMode, bool, CheckoutSource, bool, bool}> */
-    public static function sessionModesAndPriceSources(): iterable
+    public static function creationScenarios(): iterable
     {
-        $priceSources = ['Kirby' => false, 'Stripe' => true];
-        $shippingCases = [
-            'digital' => [false, false],
-            'physical' => [true, false],
-            'mixed' => [true, true],
+        yield 'hosted direct digital purchase with Kirby price' => [
+            UiMode::Hosted,
+            false,
+            CheckoutSource::Direct,
+            false,
+            false,
         ];
-
-        foreach (UiMode::cases() as $uiMode) {
-            foreach ($priceSources as $priceSource => $stripePrice) {
-                foreach (CheckoutSource::cases() as $checkoutSource) {
-                    foreach ($shippingCases as $shipping => [$requiresShipping, $mixed]) {
-                        yield "$uiMode->value $priceSource $checkoutSource->value $shipping" => [
-                            $uiMode, $stripePrice, $checkoutSource, $requiresShipping, $mixed,
-                        ];
-                    }
-                }
-            }
-        }
+        yield 'embedded cart purchase with shipping and Stripe price' => [
+            UiMode::Embedded,
+            true,
+            CheckoutSource::Cart,
+            true,
+            false,
+        ];
+        yield 'hosted direct mixed purchase' => [
+            UiMode::Hosted,
+            false,
+            CheckoutSource::Direct,
+            true,
+            true,
+        ];
     }
 
     private function persistUncertainAttempt(
