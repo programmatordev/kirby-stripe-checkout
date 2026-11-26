@@ -30,32 +30,30 @@ final class SettingsBlueprint
         $blueprint = Data::read(
             dirname(__DIR__, 2) . '/blueprints/pages/stripe-checkout.yml',
         );
-        /** @var array<string, array<string, mixed>> $tabs */
-        $tabs = $blueprint['tabs'];
-        /** @var array<string, mixed> $settingsTab */
-        $settingsTab = $tabs['settings'];
-        /** @var array<string, array<string, mixed>> $settingsSections */
-        $settingsSections = $settingsTab['sections'];
-        /** @var array<string, mixed> $settingsSection */
-        $settingsSection = $settingsSections['settings'];
-        /** @var array<string, array<string, mixed>> $settingsFields */
-        $settingsFields = $settingsSection['fields'];
-        // The provider registry and active Panel locale make these options runtime data; the YAML blueprint supplies only their static field.
-        $settingsFields['currency']['options'] = self::currencyOptions();
-        $settingsFields['shippingZones']['countryOptions'] = (new ShippingCountryOptions())->all();
+        // Runtime properties follow field handles so native layout changes do not alter Settings behavior.
+        // Currency and country options depend on runtime registries and the active Panel locale;
+        // YAML contains only their static field configuration.
+        $blueprint = self::applyFieldProperties(
+            blueprint: $blueprint,
+            fieldName: 'currency',
+            properties: ['options' => self::currencyOptions()],
+        );
+        $blueprint = self::applyFieldProperties(
+            blueprint: $blueprint,
+            fieldName: 'shippingZones',
+            properties: ['countryOptions' => (new ShippingCountryOptions())->all()],
+        );
 
         // Use the same defaults for native Page creation and runtime fallbacks.
         foreach (Defaults::SETTINGS as $name => $default) {
-            if ($default !== null && is_array($settingsFields[$name] ?? null)) {
-                $settingsFields[$name]['default'] = $default;
+            if ($default !== null) {
+                $blueprint = self::applyFieldProperties(
+                    blueprint: $blueprint,
+                    fieldName: $name,
+                    properties: ['default' => $default],
+                );
             }
         }
-
-        $settingsSection['fields'] = $settingsFields;
-        $settingsSections['settings'] = $settingsSection;
-        $settingsTab['sections'] = $settingsSections;
-        $tabs['settings'] = $settingsTab;
-        $blueprint['tabs'] = $tabs;
 
         $canReadSettings = PluginPermissions::allows($kirby, 'settings.read');
         $canReadOrders = PluginPermissions::allows($kirby, 'orders.read');

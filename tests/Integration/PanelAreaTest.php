@@ -592,15 +592,9 @@ final class PanelAreaTest extends KirbyTestCase
             },
         );
         $this->kirby = $this->environment->app();
-        $blueprint = SettingsBlueprint::load($this->kirby);
-        /** @var array<string, array<string, mixed>> $tabs */
-        $tabs = $blueprint['tabs'];
-        /** @var array<string, array<string, mixed>> $sections */
-        $sections = $tabs['settings']['sections'];
-        /** @var array<string, mixed> $settings */
-        $settings = $sections['settings'];
-        /** @var array<string, mixed> $fields */
-        $fields = $settings['fields'];
+        $page = (new StripeCheckoutPageStore($this->kirby))->initialize();
+        $blueprint = $page->blueprint();
+        $fields = $blueprint->fields();
         $this->assertArrayHasKey('priceSource', $fields);
         $this->assertArrayHasKey('currency', $fields);
         $this->assertArrayHasKey('defaultRequiresShipping', $fields);
@@ -695,10 +689,7 @@ final class PanelAreaTest extends KirbyTestCase
             ['cleanupUnpaidOrders' => true],
             $unpaidOrderRetentionDays['when'],
         );
-        $this->assertSame(
-            'programmatordev.stripe-checkout.area.label',
-            $blueprint['title'],
-        );
+        $this->assertSame('Stripe Checkout', $blueprint->title());
     }
 
     public function testPriceSourceOptionsAreTranslated(): void
@@ -720,7 +711,10 @@ final class PanelAreaTest extends KirbyTestCase
         /** @var list<array{text: string, value: string}> $options */
         $options = $field['options'];
 
-        $this->assertSame(['Kirby', 'Stripe'], array_column($options, 'text'));
+        $this->assertSame(
+            ['Geridos no Kirby', 'Geridos no Stripe'],
+            array_column($options, 'text'),
+        );
         $this->assertSame(['kirby', 'stripe'], array_column($options, 'value'));
         $this->assertStringNotContainsString(
             'programmatordev.stripe-checkout.settings.priceSource',

@@ -31,16 +31,21 @@ tabs:
   settings:
     label: programmatordev.stripe-checkout.tabs.settings
     icon: settings
-    sections:
+    columns:
       settings:
-        type: fields
+        width: 1/1
         fields:
+          storeDefaultsHeadline:
+            label: programmatordev.stripe-checkout.settings.groups.storeDefaults
+            type: headline
+            numbered: false
           priceSource:
             label: programmatordev.stripe-checkout.settings.priceSource.label
             help: programmatordev.stripe-checkout.settings.priceSource.help
             type: select
             required: true
             translate: false
+            width: 1/3
             options:
               kirby:
                 "*": programmatordev.stripe-checkout.settings.priceSource.kirby
@@ -53,6 +58,7 @@ tabs:
             required: true
             translate: false
             placeholder: programmatordev.stripe-checkout.settings.currency.placeholder
+            width: 1/3
             options: []
           defaultRequiresShipping:
             label: programmatordev.stripe-checkout.settings.defaultRequiresShipping.label
@@ -61,79 +67,12 @@ tabs:
             required: true
             translate: false
             placeholder: programmatordev.stripe-checkout.settings.defaultRequiresShipping.placeholder
+            width: 1/3
             options:
               "yes":
                 "*": programmatordev.stripe-checkout.settings.defaultRequiresShipping.yes
               "no":
                 "*": programmatordev.stripe-checkout.settings.defaultRequiresShipping.no
-          uiMode:
-            label: programmatordev.stripe-checkout.settings.uiMode.label
-            help: programmatordev.stripe-checkout.settings.uiMode.help
-            type: select
-            required: true
-            translate: false
-            options:
-              hosted:
-                "*": programmatordev.stripe-checkout.settings.uiMode.hosted
-              embedded:
-                "*": programmatordev.stripe-checkout.settings.uiMode.embedded
-          successDestination:
-            label: programmatordev.stripe-checkout.settings.successDestination.label
-            help: programmatordev.stripe-checkout.settings.successDestination.help
-            type: link
-            when:
-              uiMode: hosted
-            options:
-              - page
-              - url
-          cancelDestination:
-            label: programmatordev.stripe-checkout.settings.cancelDestination.label
-            help: programmatordev.stripe-checkout.settings.cancelDestination.help
-            type: link
-            when:
-              uiMode: hosted
-            options:
-              - page
-              - url
-          returnDestination:
-            label: programmatordev.stripe-checkout.settings.returnDestination.label
-            help: programmatordev.stripe-checkout.settings.returnDestination.help
-            type: link
-            when:
-              uiMode: embedded
-            options:
-              - page
-              - url
-          cleanupIncompleteOrders:
-            label: programmatordev.stripe-checkout.settings.cleanupIncompleteOrders.label
-            help: programmatordev.stripe-checkout.settings.cleanupIncompleteOrders.help
-            type: toggle
-            translate: false
-          incompleteOrderRetentionDays:
-            label: programmatordev.stripe-checkout.settings.incompleteOrderRetentionDays.label
-            help: programmatordev.stripe-checkout.settings.incompleteOrderRetentionDays.help
-            type: number
-            translate: false
-            required: true
-            min: 1
-            step: 1
-            when:
-              cleanupIncompleteOrders: true
-          cleanupUnpaidOrders:
-            label: programmatordev.stripe-checkout.settings.cleanupUnpaidOrders.label
-            help: programmatordev.stripe-checkout.settings.cleanupUnpaidOrders.help
-            type: toggle
-            translate: false
-          unpaidOrderRetentionDays:
-            label: programmatordev.stripe-checkout.settings.unpaidOrderRetentionDays.label
-            help: programmatordev.stripe-checkout.settings.unpaidOrderRetentionDays.help
-            type: number
-            translate: false
-            required: true
-            min: 1
-            step: 1
-            when:
-              cleanupUnpaidOrders: true
           optionPresets:
             label: programmatordev.stripe-checkout.settings.optionPresets.label
             help: programmatordev.stripe-checkout.settings.optionPresets.help
@@ -159,12 +98,69 @@ tabs:
                     type: tags
                     required: true
                     min: 1
+          checkoutExperienceHeadline:
+            label: programmatordev.stripe-checkout.settings.groups.checkoutExperience
+            type: headline
+            numbered: false
+          uiMode:
+            label: programmatordev.stripe-checkout.settings.uiMode.label
+            help: programmatordev.stripe-checkout.settings.uiMode.help
+            type: select
+            required: true
+            translate: false
+            width: 1/2
+            options:
+              hosted:
+                "*": programmatordev.stripe-checkout.settings.uiMode.hosted
+              embedded:
+                "*": programmatordev.stripe-checkout.settings.uiMode.embedded
+          allowPromotionCodes:
+            label: programmatordev.stripe-checkout.settings.allowPromotionCodes.label
+            help: programmatordev.stripe-checkout.settings.allowPromotionCodes.help
+            type: toggle
+            translate: false
+            width: 1/2
+          successDestination:
+            label: programmatordev.stripe-checkout.settings.successDestination.label
+            help: programmatordev.stripe-checkout.settings.successDestination.help
+            type: link
+            when:
+              uiMode: hosted
+            options:
+              - page
+              - url
+            width: 1/2
+          cancelDestination:
+            label: programmatordev.stripe-checkout.settings.cancelDestination.label
+            help: programmatordev.stripe-checkout.settings.cancelDestination.help
+            type: link
+            when:
+              uiMode: hosted
+            options:
+              - page
+              - url
+            width: 1/2
+          returnDestination:
+            label: programmatordev.stripe-checkout.settings.returnDestination.label
+            help: programmatordev.stripe-checkout.settings.returnDestination.help
+            type: link
+            when:
+              uiMode: embedded
+            options:
+              - page
+              - url
+            width: 1/2
+          customerInformationHeadline:
+            label: programmatordev.stripe-checkout.settings.groups.customerInformation
+            type: headline
+            numbered: false
           billingAddressCollection:
             label: programmatordev.stripe-checkout.settings.billingAddressCollection.label
             help: programmatordev.stripe-checkout.settings.billingAddressCollection.help
             type: select
             required: true
             translate: false
+            width: 1/2
             options:
               auto:
                 "*": programmatordev.stripe-checkout.settings.billingAddressCollection.auto
@@ -176,6 +172,7 @@ tabs:
             type: select
             required: true
             translate: false
+            width: 1/2
             options:
               "off":
                 "*": programmatordev.stripe-checkout.settings.collectionMode.off
@@ -189,6 +186,7 @@ tabs:
             type: select
             required: true
             translate: false
+            width: 1/2
             options:
               "off":
                 "*": programmatordev.stripe-checkout.settings.collectionMode.off
@@ -201,12 +199,14 @@ tabs:
             help: programmatordev.stripe-checkout.settings.phoneNumberCollection.help
             type: toggle
             translate: false
+            width: 1/2
           taxIdCollection:
             label: programmatordev.stripe-checkout.settings.taxIdCollection.label
             help: programmatordev.stripe-checkout.settings.taxIdCollection.help
             type: select
             required: true
             translate: false
+            width: 1/2
             options:
               "off":
                 "*": programmatordev.stripe-checkout.settings.taxIdCollection.off
@@ -219,31 +219,34 @@ tabs:
             help: programmatordev.stripe-checkout.settings.termsOfServiceConsent.help
             type: toggle
             translate: false
+            width: 1/2
           promotionsConsent:
             label: programmatordev.stripe-checkout.settings.promotionsConsent.label
             help: programmatordev.stripe-checkout.settings.promotionsConsent.help
             type: toggle
             translate: false
+            width: 1/2
           customFields:
             label: programmatordev.stripe-checkout.customFields.label
             help: programmatordev.stripe-checkout.customFields.help
             type: stripe-checkout-custom-fields
-          allowPromotionCodes:
-            label: programmatordev.stripe-checkout.settings.allowPromotionCodes.label
-            help: programmatordev.stripe-checkout.settings.allowPromotionCodes.help
-            type: toggle
-            translate: false
+          taxAndShippingHeadline:
+            label: programmatordev.stripe-checkout.settings.groups.taxAndShipping
+            type: headline
+            numbered: false
           automaticTax:
             label: programmatordev.stripe-checkout.settings.automaticTax.label
             help: programmatordev.stripe-checkout.settings.automaticTax.help
             type: toggle
             translate: false
+            width: 1/2
           taxBehavior:
             label: programmatordev.stripe-checkout.settings.taxBehavior.label
             help: programmatordev.stripe-checkout.settings.taxBehavior.help
             type: select
             required: true
             translate: false
+            width: 1/2
             when:
               automaticTax: true
               priceSource: kirby
@@ -264,6 +267,7 @@ tabs:
             type: select
             required: true
             translate: false
+            width: 1/2
             when:
               automaticTax: true
             options:
@@ -279,6 +283,7 @@ tabs:
             type: select
             required: true
             translate: false
+            width: 1/2
             when:
               automaticTax: true
             options:
@@ -288,6 +293,50 @@ tabs:
                 "*": programmatordev.stripe-checkout.settings.shippingTaxCode.shipping
               nontaxable:
                 "*": programmatordev.stripe-checkout.settings.shippingTaxCode.nontaxable
+          orderRetentionHeadline:
+            label: programmatordev.stripe-checkout.settings.groups.orderRetention
+            type: headline
+            numbered: false
+          orderCleanupInfo:
+            label: false
+            text: programmatordev.stripe-checkout.settings.orderCleanupInfo
+            type: info
+      incompleteOrders:
+        width: 1/2
+        fields:
+          cleanupIncompleteOrders:
+            label: programmatordev.stripe-checkout.settings.cleanupIncompleteOrders.label
+            help: programmatordev.stripe-checkout.settings.cleanupIncompleteOrders.help
+            type: toggle
+            translate: false
+          incompleteOrderRetentionDays:
+            label: programmatordev.stripe-checkout.settings.incompleteOrderRetentionDays.label
+            help: programmatordev.stripe-checkout.settings.incompleteOrderRetentionDays.help
+            type: number
+            translate: false
+            required: true
+            min: 1
+            step: 1
+            when:
+              cleanupIncompleteOrders: true
+      unpaidOrders:
+        width: 1/2
+        fields:
+          cleanupUnpaidOrders:
+            label: programmatordev.stripe-checkout.settings.cleanupUnpaidOrders.label
+            help: programmatordev.stripe-checkout.settings.cleanupUnpaidOrders.help
+            type: toggle
+            translate: false
+          unpaidOrderRetentionDays:
+            label: programmatordev.stripe-checkout.settings.unpaidOrderRetentionDays.label
+            help: programmatordev.stripe-checkout.settings.unpaidOrderRetentionDays.help
+            type: number
+            translate: false
+            required: true
+            min: 1
+            step: 1
+            when:
+              cleanupUnpaidOrders: true
   diagnostics:
     label: programmatordev.stripe-checkout.tabs.diagnostics
     icon: info
