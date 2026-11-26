@@ -17,6 +17,7 @@
 - Prefix plugin-owned HTTP and Panel request routes with `stripe-checkout`. Prefer resource-oriented paths that identify the target resource in the URL, and use an explicit action suffix for commands, such as `stripe-checkout/orders/{orderId}/sync`.
 - Follow Kirby's documented Panel design system. Compose custom interfaces from Kirby components, patterns, states, tokens, and accessibility behavior whenever possible.
 - Make Panel configuration understandable to non-developers. When PHP configuration overrides a Panel value, show that the value is locked and explain its source.
+- Write Panel labels for shop operators: prefer concrete outcomes over implementation terminology. Use field help for non-obvious effects, prerequisites and lifecycle distinctions, and use an info field only when guidance applies to a whole group rather than one control.
 - Support multi-language Kirby sites deliberately. Persist stable identifiers independently from translated labels, and retain the language needed for customer-facing flows.
 - Load bundled Panel translations from translation files and allow documented configuration overrides.
 
@@ -74,6 +75,7 @@
 
 - Run project tooling through DDEV by default. Stripe CLI is an operating-system development tool, not a project dependency.
 - Test plugin behavior rather than test infrastructure or implementation details.
+- Test blueprint behavior through Kirby's normalized Page and Blueprint APIs. Do not couple tests to raw YAML sections, columns, widths, headings or field order unless that exact presentation is an explicit product requirement.
 - Each test should protect an identifiable behavior, public contract, or regression. Do not add tests merely because a class or method exists, or assert private wiring that can change without affecting behavior.
 - Keep scenarios readable: make the relevant inputs, action, and expected outcome visible. Share repetitive setup only when it simplifies the tests; avoid elaborate fixture builders and helpers that hide the scenario.
 - Keep expected mapping results independent of the production transformation under test. Use explicit expected values for the contract being verified.
