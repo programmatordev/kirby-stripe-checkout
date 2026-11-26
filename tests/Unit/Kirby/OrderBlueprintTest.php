@@ -16,7 +16,7 @@ final class OrderBlueprintTest extends TestCase
         $blueprint = OrderBlueprint::load();
         $tabs = $blueprint['tabs'] ?? null;
         $this->assertIsArray($tabs);
-        $this->assertSame(['overview', 'purchase', 'customer', 'payment', 'technical'], array_keys($tabs));
+        $this->assertSame(['overview', 'customer', 'payment', 'technical'], array_keys($tabs));
         $this->assertSame(
             ['stripeCheckoutOrderSync', 'stripeCheckoutOrderRetryLifecycleDelivery', 'stripeCheckoutOrderOpenInStripe', 'stripeCheckoutOrderDelete'],
             $blueprint['buttons'] ?? null,
@@ -65,44 +65,111 @@ final class OrderBlueprintTest extends TestCase
         $this->assertSame('object', self::map($fields['payment'] ?? null)['type'] ?? null);
     }
 
-    public function testFinalItemsUseTheAuthoritativeCheckoutProjection(): void
+    public function testPresentsOneOperatorItemCollectionWithoutReplacingCanonicalSnapshots(): void
     {
         $blueprint = OrderBlueprint::load();
         $tabs = self::map($blueprint['tabs'] ?? null);
-        $purchase = self::map($tabs['purchase'] ?? null);
-        $sections = self::map($purchase['sections'] ?? null);
+        $overview = self::map($tabs['overview'] ?? null);
+        $sections = self::map($overview['sections'] ?? null);
         $items = self::map($sections['items'] ?? null);
         $itemFields = self::map($items['fields'] ?? null);
-        $lineItems = self::map($itemFields['lineItems'] ?? null);
-        $fields = self::map($lineItems['fields'] ?? null);
+        $headline = self::map($itemFields[OrderPagePanel::handle('itemsHeadline')] ?? null);
+        $this->assertSame('headline', $headline['type'] ?? null);
+        $orderItems = self::map($itemFields[OrderPagePanel::handle('orderItems')] ?? null);
+        $this->assertSame('structure', $orderItems['type'] ?? null);
+        $fields = self::map($orderItems['fields'] ?? null);
         $this->assertSame([
-            'stripeLineItemId',
-            'initiatingIndex',
-            'stripePriceId',
-            'stripeProductId',
-            'quantity',
+            'name',
             'description',
+            'optionSummary',
+            'options',
+            'sku',
+            'quantity',
+            'requiresShipping',
             'currency',
             'price',
             'subtotal',
             'discount',
             'tax',
             'total',
-            'discounts',
         ], array_keys($fields));
-        $this->assertArrayNotHasKey('reference', $fields);
-        $this->assertArrayNotHasKey('name', $fields);
+
+        $technical = self::map($tabs['technical'] ?? null);
+        $technicalSections = self::map($technical['sections'] ?? null);
+        $operations = self::map($technicalSections['operations'] ?? null);
+        $technicalFields = self::map($operations['fields'] ?? null);
+        $this->assertSame('structure', self::map($technicalFields['lineItems'] ?? null)['type'] ?? null);
+        $this->assertSame('structure', self::map($technicalFields['initiatingLineItems'] ?? null)['type'] ?? null);
+    }
+
+    public function testIncompleteCheckoutFactsUseNativeStateAwarePresentation(): void
+    {
+        $blueprint = OrderBlueprint::load();
+        $tabs = self::map($blueprint['tabs'] ?? null);
+        $overview = self::map($tabs['overview'] ?? null);
+        $sections = self::map($overview['sections'] ?? null);
+        $summary = self::map($sections['summary'] ?? null);
+        $summaryFields = self::map($summary['fields'] ?? null);
+        $stateInfoFields = [
+            'checkoutCreatingInfo' => [
+                'checkoutStatus' => 'creating',
+                'theme' => 'info',
+            ],
+            'checkoutCreationUncertainInfo' => [
+                'checkoutStatus' => 'creation_uncertain',
+                'theme' => 'warning',
+            ],
+            'checkoutCreationFailedInfo' => [
+                'checkoutStatus' => 'creation_failed',
+                'theme' => 'negative',
+            ],
+            'checkoutOpenInfo' => [
+                'checkoutStatus' => 'open',
+                'theme' => 'info',
+            ],
+            'checkoutExpiredInfo' => [
+                'checkoutStatus' => 'expired',
+                'theme' => 'warning',
+            ],
+        ];
+
+        foreach ($stateInfoFields as $name => $expected) {
+            $stateInfo = self::map($summaryFields[OrderPagePanel::handle($name)] ?? null);
+            $this->assertSame('info', $stateInfo['type'] ?? null);
+            $this->assertSame($expected['theme'], $stateInfo['theme'] ?? null);
+            $this->assertSame(
+                ['checkoutStatus' => $expected['checkoutStatus']],
+                $stateInfo['when'] ?? null,
+            );
+        }
+
+        $totals = self::map($sections['totals'] ?? null);
+        $totalFields = self::map($totals['fields'] ?? null);
+
+        foreach (['discountTotal', 'shippingTotal', 'taxTotal', 'total', 'refundedTotal'] as $handle) {
+            $this->assertSame(
+                ['checkoutStatus' => 'complete'],
+                self::map($totalFields[$handle] ?? null)['when'] ?? null,
+            );
+        }
+
+        $adjustments = self::map($sections['adjustments'] ?? null);
+        $adjustmentFields = self::map($adjustments['fields'] ?? null);
+
+        foreach ($adjustmentFields as $field) {
+            $this->assertSame(['checkoutStatus' => 'complete'], self::map($field)['when'] ?? null);
+        }
     }
 
     public function testPresentsOperatorRelevantInitiatingAndTaxFacts(): void
     {
         $blueprint = OrderBlueprint::load();
         $tabs = self::map($blueprint['tabs'] ?? null);
-        $purchase = self::map($tabs['purchase'] ?? null);
-        $sections = self::map($purchase['sections'] ?? null);
-        $items = self::map($sections['items'] ?? null);
-        $itemFields = self::map($items['fields'] ?? null);
-        $initiatingLineItems = self::map($itemFields['initiatingLineItems'] ?? null);
+        $technical = self::map($tabs['technical'] ?? null);
+        $technicalSections = self::map($technical['sections'] ?? null);
+        $operations = self::map($technicalSections['operations'] ?? null);
+        $technicalFields = self::map($operations['fields'] ?? null);
+        $initiatingLineItems = self::map($technicalFields['initiatingLineItems'] ?? null);
         $initiatingFields = self::map($initiatingLineItems['fields'] ?? null);
         $this->assertSame([
             'reference',
@@ -129,21 +196,30 @@ final class OrderBlueprintTest extends TestCase
         $optionFields = self::map($options['fields'] ?? null);
         $this->assertSame(['optionId', 'optionName', 'valueId', 'valueName'], array_keys($optionFields));
 
+        $overview = self::map($tabs['overview'] ?? null);
+        $sections = self::map($overview['sections'] ?? null);
         $adjustments = self::map($sections['adjustments'] ?? null);
         $adjustmentFields = self::map($adjustments['fields'] ?? null);
-        $breakdown = self::map($adjustmentFields[OrderPagePanel::handle('taxBreakdown')] ?? null);
+        $breakdown = self::map($adjustmentFields[OrderPagePanel::handle('orderTaxBreakdown')] ?? null);
         $breakdownFields = self::map($breakdown['fields'] ?? null);
-        $this->assertArrayHasKey('providerAmount', $breakdownFields);
-        $this->assertArrayHasKey('providerTaxableAmount', $breakdownFields);
-        $this->assertArrayHasKey('rateId', $breakdownFields);
-        $this->assertArrayHasKey('jurisdictionLevel', $breakdownFields);
-        $this->assertArrayHasKey('rateType', $breakdownFields);
+        $this->assertSame(['targetLabel', 'displayName', 'amount', 'currency', 'percentage', 'jurisdiction'], array_keys($breakdownFields));
+        $discounts = self::map($adjustmentFields[OrderPagePanel::handle('orderDiscounts')] ?? null);
+        $discountFields = self::map($discounts['fields'] ?? null);
+        $this->assertSame(['couponName', 'promotionCode', 'amount', 'currency', 'percentOff'], array_keys($discountFields));
+        $this->assertSame('1/2', self::map($adjustmentFields[OrderPagePanel::handle('shippingMethod')] ?? null)['width'] ?? null);
+        $this->assertSame('1/2', self::map($adjustmentFields[OrderPagePanel::handle('deliveryEstimate')] ?? null)['width'] ?? null);
 
-        $shipping = self::map($adjustmentFields['shipping'] ?? null);
+        $shipping = self::map($technicalFields['shipping'] ?? null);
         $shippingFields = self::map($shipping['fields'] ?? null);
-        $this->assertArrayNotHasKey('deliveryEstimate', $shippingFields);
+        $this->assertArrayHasKey('deliveryEstimate', $shippingFields);
         $this->assertArrayHasKey('providerSubtotal', $shippingFields);
-        $this->assertSame('number', self::map($adjustmentFields[OrderPagePanel::handle('shippingDeliveryMinimum')] ?? null)['type'] ?? null);
+        $tax = self::map($technicalFields['tax'] ?? null);
+        $taxFields = self::map($tax['fields'] ?? null);
+        $technicalBreakdown = self::map($taxFields['breakdown'] ?? null);
+        $technicalBreakdownFields = self::map($technicalBreakdown['fields'] ?? null);
+        $this->assertArrayHasKey('providerAmount', $technicalBreakdownFields);
+        $this->assertArrayHasKey('providerTaxableAmount', $technicalBreakdownFields);
+        $this->assertArrayHasKey('rateId', $technicalBreakdownFields);
     }
 
     public function testPresentsOperationalCollectionsAsNativeStructures(): void

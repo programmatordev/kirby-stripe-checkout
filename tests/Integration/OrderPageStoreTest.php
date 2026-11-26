@@ -99,6 +99,7 @@ final class OrderPageStoreTest extends KirbyTestCase
         $versions = $page->panel()->versions();
         $requestHandle = strtolower(OrderPagePanel::handle('checkoutSessionRequest'));
         $tokenHandle = strtolower(OrderPagePanel::handle('checkoutAttemptTokenHash'));
+        $orderItemsHandle = strtolower(OrderPagePanel::handle('orderItems'));
 
         foreach (['latest', 'changes'] as $version) {
             $values = $versions[$version] ?? null;
@@ -109,6 +110,17 @@ final class OrderPageStoreTest extends KirbyTestCase
             $this->assertIsArray($request);
             $this->assertContains(['path' => 'client_reference_id', 'value' => $page->uuid()->toString()], $request);
             $this->assertContains(['path' => 'mode', 'value' => 'payment'], $request);
+            $orderItems = $values[$orderItemsHandle] ?? null;
+            $this->assertIsArray($orderItems);
+            $this->assertCount(1, $orderItems);
+            $orderItem = $orderItems[0] ?? null;
+            $this->assertIsArray($orderItem);
+            $this->assertSame('Product', $orderItem['name'] ?? null);
+            $this->assertSame(2.0, $orderItem['quantity'] ?? null);
+            $this->assertSame('32.00', $orderItem['subtotal'] ?? null);
+            $this->assertSame('32.00', $orderItem['total'] ?? null);
+            $this->assertArrayNotHasKey('confirmed', $orderItem);
+            $this->assertArrayNotHasKey('stripepriceid', $orderItem);
             $this->assertIsArray($values['initiatinglineitems'] ?? null);
             $deliveries = $values['lifecycledeliveries'] ?? null;
             $this->assertIsArray($deliveries);
@@ -129,6 +141,86 @@ final class OrderPageStoreTest extends KirbyTestCase
         $content = $page->content('default')->toArray();
         $this->assertArrayNotHasKey($requestHandle, $content);
         $this->assertArrayNotHasKey($tokenHandle, $content);
+    }
+
+    public function testPanelDoesNotPresentOpenSessionLinesAsACompletedPurchase(): void
+    {
+        $page = $this->createOrder(createdAt: new DateTimeImmutable('2026-01-01T12:00:00Z'));
+        $page = (new OrderPageStore($this->kirby))->update($page->uuid()->toString(), static fn(array $data): array => [
+            ...$data,
+            'checkoutStatus' => 'open',
+            'stripeCheckoutSessionId' => 'cs_open',
+            'stripeShippingRateIds' => [],
+            'checkoutOpenedAt' => $data['createdAt'],
+            'lineItems' => [[
+                'stripeLineItemId' => 'li_open',
+                'initiatingIndex' => 0,
+                'stripePriceId' => 'price_open',
+                'stripeProductId' => 'prod_open',
+                'quantity' => 2,
+                'description' => 'Provider line',
+                'currency' => 'EUR',
+                'price' => '16.00',
+                'subtotal' => '32.00',
+                'discount' => '0',
+                'tax' => '0',
+                'total' => '32.00',
+                'discounts' => [],
+            ]],
+        ]);
+        $values = $page->panel()->versions()['latest'] ?? null;
+        $this->assertIsArray($values);
+        $orderItems = $values[strtolower(OrderPagePanel::handle('orderItems'))] ?? null;
+        $this->assertIsArray($orderItems);
+        $orderItem = $orderItems[0] ?? null;
+        $this->assertIsArray($orderItem);
+        $this->assertSame('', $orderItem['discount'] ?? null);
+        $this->assertSame('', $orderItem['tax'] ?? null);
+        $this->assertArrayNotHasKey('confirmed', $orderItem);
+    }
+
+    public function testPanelUsesFinalSessionLinesAfterCheckoutCompletes(): void
+    {
+        $page = $this->createOrder(createdAt: new DateTimeImmutable('2026-01-01T12:00:00Z'));
+        $page = (new OrderPageStore($this->kirby))->update($page->uuid()->toString(), static fn(array $data): array => [
+            ...$data,
+            'checkoutStatus' => 'complete',
+            'paymentStatus' => 'paid',
+            'stripeCheckoutSessionId' => 'cs_complete',
+            'stripeShippingRateIds' => [],
+            'checkoutCompletedAt' => $data['createdAt'],
+            'paidAt' => $data['createdAt'],
+            'discountTotal' => '0',
+            'shippingTotal' => '0',
+            'taxTotal' => '0',
+            'total' => '32.00',
+            'customFields' => [],
+            'discounts' => [],
+            'lineItems' => [[
+                'stripeLineItemId' => 'li_complete',
+                'initiatingIndex' => 0,
+                'stripePriceId' => 'price_complete',
+                'stripeProductId' => 'prod_complete',
+                'quantity' => 2,
+                'description' => 'Provider line',
+                'currency' => 'EUR',
+                'price' => '16.00',
+                'subtotal' => '32.00',
+                'discount' => '0',
+                'tax' => '0',
+                'total' => '32.00',
+                'discounts' => [],
+            ]],
+        ]);
+        $values = $page->panel()->versions()['latest'] ?? null;
+        $this->assertIsArray($values);
+        $orderItems = $values[strtolower(OrderPagePanel::handle('orderItems'))] ?? null;
+        $this->assertIsArray($orderItems);
+        $orderItem = $orderItems[0] ?? null;
+        $this->assertIsArray($orderItem);
+        $this->assertSame('0.00', $orderItem['discount'] ?? null);
+        $this->assertSame('0.00', $orderItem['tax'] ?? null);
+        $this->assertArrayNotHasKey('confirmed', $orderItem);
     }
 
     public function testPanelBreadcrumbReturnsToTheStripeCheckoutOrderList(): void

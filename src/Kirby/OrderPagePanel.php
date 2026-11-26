@@ -13,6 +13,7 @@ use Kirby\Panel\Ui\Buttons\ViewButtons;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
+use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
 use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
@@ -217,11 +218,13 @@ final class OrderPagePanel extends Page
         $checkoutAttempt = self::map($order['checkoutAttempt'] ?? null);
         $providerFailure = self::map($checkoutAttempt['providerFailure'] ?? null);
         $values = [
+            self::handle('customerSummary') => self::customerSummary($customer),
+            self::handle('orderItems') => self::orderItems($order),
+            self::handle('shippingMethod') => $shipping['label'] ?? null,
+            self::handle('deliveryEstimate') => self::deliveryEstimate($deliveryEstimate),
+            self::handle('orderDiscounts') => self::list($order['discounts'] ?? null),
+            self::handle('orderTaxBreakdown') => self::orderTaxBreakdown($tax['breakdown'] ?? null),
             self::handle('customerTaxIds') => self::list($customer['taxIds'] ?? null),
-            self::handle('shippingDeliveryMinimum') => $deliveryEstimate['minimum'] ?? null,
-            self::handle('shippingDeliveryMaximum') => $deliveryEstimate['maximum'] ?? null,
-            self::handle('shippingDeliveryUnit') => $deliveryEstimate['unit'] ?? null,
-            self::handle('taxBreakdown') => self::list($tax['breakdown'] ?? null),
             self::handle('checkoutSessionRequest') => self::facts($checkoutAttempt['sessionRequest'] ?? null),
             self::handle('checkoutFailureType') => $providerFailure['type'] ?? null,
             self::handle('checkoutFailureRequestId') => $providerFailure['requestId'] ?? null,
@@ -296,6 +299,132 @@ final class OrderPagePanel extends Page
         }
 
         return $items;
+    }
+
+    /** @param array<string, mixed> $customer */
+    private static function customerSummary(array $customer): ?string
+    {
+        /** @var string|null $individualName */
+        $individualName = $customer['individualName'] ?? null;
+        /** @var string|null $businessName */
+        $businessName = $customer['businessName'] ?? null;
+        /** @var string|null $email */
+        $email = $customer['email'] ?? null;
+        $details = array_values(array_filter([$businessName, $individualName, $email]));
+
+        return $details === [] ? null : implode(' — ', $details);
+    }
+
+    /** @param array<string, mixed> $deliveryEstimate */
+    private static function deliveryEstimate(array $deliveryEstimate): ?string
+    {
+        if ($deliveryEstimate === []) {
+            return null;
+        }
+
+        /** @var int|null $minimum */
+        $minimum = $deliveryEstimate['minimum'];
+        /** @var int|null $maximum */
+        $maximum = $deliveryEstimate['maximum'];
+        /** @var string $unit */
+        $unit = $deliveryEstimate['unit'];
+        $range = match (true) {
+            $minimum === null => (string) $maximum,
+            $maximum === null, $minimum === $maximum => (string) $minimum,
+            default => $minimum . '–' . $maximum,
+        };
+        $count = $maximum ?? $minimum;
+        $unitLabel = self::translate('orders.deliveryUnits.' . $unit . '.' . ($count === 1 ? 'one' : 'other'));
+
+        return $range . ' ' . $unitLabel;
+    }
+
+    /**
+     * Stripe can return line items before Checkout completes. Until completion,
+     * the Panel presents the frozen initiating items instead of implying that
+     * provider amounts are final.
+     *
+     * @param array<string, mixed> $order
+     * @return list<array<string, mixed>>
+     */
+    private static function orderItems(array $order): array
+    {
+        $initiatingLineItems = self::list($order['initiatingLineItems'] ?? null);
+        $lineItems = self::list($order['lineItems'] ?? null);
+        $checkoutStatus = CheckoutStatus::from(OrderData::string($order['checkoutStatus'] ?? null));
+
+        if ($checkoutStatus !== CheckoutStatus::Complete || $lineItems === []) {
+            return array_map(static function (mixed $value): array {
+                $initiatingLineItem = self::map($value);
+
+                return self::orderItem(
+                    initiatingLineItem: $initiatingLineItem,
+                    lineItem: null,
+                );
+            }, $initiatingLineItems);
+        }
+
+        return array_map(static function (mixed $value) use ($initiatingLineItems): array {
+            $lineItem = self::map($value);
+            /** @var int $initiatingIndex The stored order has already crossed the Order schema boundary. */
+            $initiatingIndex = $lineItem['initiatingIndex'];
+
+            return self::orderItem(
+                initiatingLineItem: self::map($initiatingLineItems[$initiatingIndex]),
+                lineItem: $lineItem,
+            );
+        }, $lineItems);
+    }
+
+    /**
+     * @param array<string, mixed> $initiatingLineItem
+     * @param array<string, mixed>|null $lineItem
+     * @return array<string, mixed>
+     */
+    private static function orderItem(array $initiatingLineItem, ?array $lineItem): array
+    {
+        $options = self::list($initiatingLineItem['options'] ?? null);
+        $optionLabels = array_map(static function (mixed $value): string {
+            $option = self::map($value);
+            /** @var string $optionName */
+            $optionName = $option['optionName'];
+            /** @var string $valueName */
+            $valueName = $option['valueName'];
+
+            return $optionName . ': ' . $valueName;
+        }, $options);
+        $amounts = $lineItem ?? $initiatingLineItem;
+
+        return [
+            'name' => $initiatingLineItem['name'] ?? $lineItem['description'] ?? null,
+            'description' => $initiatingLineItem['description'] ?? null,
+            'optionSummary' => $optionLabels === [] ? null : implode(' · ', $optionLabels),
+            'options' => $options,
+            'sku' => $initiatingLineItem['sku'] ?? null,
+            'quantity' => $amounts['quantity'] ?? null,
+            'requiresShipping' => $initiatingLineItem['requiresShipping'] ?? null,
+            'currency' => $amounts['currency'] ?? null,
+            'price' => $amounts['price'] ?? null,
+            'subtotal' => $amounts['subtotal'] ?? null,
+            'discount' => $lineItem['discount'] ?? null,
+            'tax' => $lineItem['tax'] ?? null,
+            'total' => $lineItem['total'] ?? $initiatingLineItem['subtotal'] ?? null,
+        ];
+    }
+
+    /** @return list<array<string, mixed>> */
+    private static function orderTaxBreakdown(mixed $value): array
+    {
+        return array_map(static function (mixed $value): array {
+            $tax = self::map($value);
+            /** @var string $target */
+            $target = $tax['target'];
+
+            return [
+                ...$tax,
+                'targetLabel' => self::translate('orders.taxTargets.' . $target),
+            ];
+        }, self::list($value));
     }
 
     /** @return list<array<string, mixed>> */
