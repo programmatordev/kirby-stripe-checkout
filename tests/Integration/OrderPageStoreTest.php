@@ -36,6 +36,8 @@ use ProgrammatorDev\StripeCheckout\Kirby\PersistenceErrorCode;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
+use ProgrammatorDev\StripeCheckout\Order\Internal\DisputeCollection;
+use ProgrammatorDev\StripeCheckout\Order\Internal\DisputeSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\PaymentSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\Internal\RefundCollection;
@@ -56,6 +58,7 @@ use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
 use RuntimeException;
 use Stripe\Charge;
+use Stripe\Dispute;
 use Stripe\PaymentIntent;
 use Stripe\Refund;
 
@@ -466,15 +469,26 @@ final class OrderPageStoreTest extends KirbyTestCase
                 'state' => null,
                 'country' => 'PT',
             ],
-            'customFields' => [[
-                'key' => 'note',
-                'type' => 'text',
-                'label' => 'Order note',
-                'required' => false,
-                'configured' => true,
-                'answered' => false,
-                'value' => null,
-            ]],
+            'customFields' => [
+                [
+                    'key' => 'note',
+                    'type' => 'text',
+                    'label' => 'Order note',
+                    'required' => false,
+                    'configured' => true,
+                    'answered' => false,
+                    'value' => null,
+                ],
+                [
+                    'key' => 'deliveryslot',
+                    'type' => 'dropdown',
+                    'label' => 'Delivery slot',
+                    'required' => true,
+                    'configured' => true,
+                    'answered' => true,
+                    'value' => 'morning',
+                ],
+            ],
             'consent' => [
                 'termsOfService' => 'accepted',
                 'promotions' => null,
@@ -555,6 +569,22 @@ final class OrderPageStoreTest extends KirbyTestCase
         $this->assertSame('€5.00', $orderDiscount['amount'] ?? null);
         $this->assertSame('15%', $orderDiscount['percentoff'] ?? null);
         $this->assertArrayNotHasKey('currency', $orderDiscount);
+        $checkoutCustomFields = OrderData::list(
+            $values[strtolower(OrderPagePanel::handle('checkoutCustomFields'))] ?? null,
+        );
+        $this->assertSame([
+            [
+                'label' => 'Order note',
+                'value' => '–',
+            ],
+            [
+                'label' => 'Delivery slot',
+                'value' => 'morning',
+            ],
+        ], $checkoutCustomFields);
+        $this->assertTrue(
+            $values[strtolower(OrderPagePanel::handle('hasCheckoutCustomFields'))] ?? false,
+        );
         $this->assertFalse(
             $values[strtolower(OrderPagePanel::handle('hasRefundedAmount'))] ?? true,
         );
@@ -575,7 +605,7 @@ final class OrderPageStoreTest extends KirbyTestCase
         ]);
     }
 
-    public function testPanelMarksARefundThatRequiresAction(): void
+    public function testPanelExplainsPaymentIssuesThatNeedAttention(): void
     {
         $createdAt = new DateTimeImmutable('2026-01-01T12:00:00Z');
         $page = $this->createOrder(createdAt: $createdAt);
@@ -607,7 +637,38 @@ final class OrderPageStoreTest extends KirbyTestCase
             'created' => $createdAt->getTimestamp(),
             'status' => Refund::STATUS_REQUIRES_ACTION,
         ], $paymentIntentId);
-        $refunds = RefundCollection::fromSnapshots([$refund], $paymentIntentId, $amount)
+        $failedRefund = RefundSnapshot::fromStripe([
+            'id' => 're_failed',
+            'object' => Refund::OBJECT_NAME,
+            'amount' => 800,
+            'currency' => 'eur',
+            'payment_intent' => $paymentIntentId,
+            'charge' => $chargeId,
+            'created' => $createdAt->getTimestamp(),
+            'status' => Refund::STATUS_FAILED,
+            'failure_reason' => 'declined',
+        ], $paymentIntentId);
+        $refunds = RefundCollection::fromSnapshots([$refund, $failedRefund], $paymentIntentId, $amount)
+            ->observed(null, $createdAt);
+        $dispute = DisputeSnapshot::fromStripe([
+            'id' => 'dp_response',
+            'object' => Dispute::OBJECT_NAME,
+            'amount' => 1600,
+            'currency' => 'eur',
+            'payment_intent' => $paymentIntentId,
+            'charge' => $chargeId,
+            'created' => $createdAt->getTimestamp(),
+            'status' => Dispute::STATUS_NEEDS_RESPONSE,
+            'reason' => 'fraudulent',
+            'evidence_details' => [
+                'due_by' => $createdAt->modify('+7 days')->getTimestamp(),
+                'has_evidence' => false,
+                'past_due' => false,
+                'submission_count' => 0,
+            ],
+            'balance_transactions' => [],
+        ], $paymentIntentId);
+        $disputes = DisputeCollection::fromSnapshots([$dispute], $paymentIntentId, $amount)
             ->observed(null, $createdAt);
         $page = (new OrderPageStore($this->kirby))->update($page->uuid()->toString(), static fn(array $data): array => [
             ...$data,
@@ -629,9 +690,15 @@ final class OrderPageStoreTest extends KirbyTestCase
             'refundStatus' => $refunds->refundStatus()->value,
             'refundHasActive' => $refunds->refundHasActive(),
             'refundRequiresAction' => $refunds->refundRequiresAction(),
+            'refundHasFailed' => $refunds->refundHasFailed(),
             'refundedTotal' => '0',
             'refundUpdatedAt' => $data['createdAt'],
             'refunds' => $refunds->toArray(),
+            'disputeStatus' => $disputes->disputeStatus()->value,
+            'disputeRequiresResponse' => $disputes->disputeRequiresResponse(),
+            'disputeHasLost' => $disputes->disputeHasLost(),
+            'disputeUpdatedAt' => $data['createdAt'],
+            'disputes' => $disputes->toArray(),
         ]);
         $panel = $page->panel();
         $this->assertInstanceOf(OrderPagePanel::class, $panel);
@@ -639,6 +706,24 @@ final class OrderPageStoreTest extends KirbyTestCase
 
         $this->assertSame('Refund requires action', $reports[2]['label']);
         $this->assertSame('negative', $reports[2]['theme']);
+        $this->assertSame('Needs response', $reports[3]['label']);
+        $this->assertSame('negative', $reports[3]['theme']);
+        $this->assertSame(
+            'Refunds requiring action in Stripe: €16.00. Review the Payment tab',
+            $panel->refundRequiresActionNotice(),
+        );
+        $this->assertSame(
+            'Failed refunds: €8.00 (declined). Review the Payment tab',
+            $panel->refundFailureNotice(),
+        );
+        $this->assertSame(
+            'Disputes requiring a response: €16.00 (respond by 2026-01-08 12:00:00 (UTC+00:00)). Review the Payment tab',
+            $panel->disputeResponseNotice(),
+        );
+        $this->assertSame(
+            $panel->disputeResponseNotice(),
+            $page->toSafeString('{{ page.panel.disputeResponseNotice }}'),
+        );
     }
 
     public function testStaleOrderPageDoesNotOverwriteCanonicalUpdates(): void

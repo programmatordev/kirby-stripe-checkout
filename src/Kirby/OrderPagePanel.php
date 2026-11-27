@@ -25,6 +25,8 @@ use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
 use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 use ProgrammatorDev\StripeCheckout\Order\RefundStatus;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
+use Stripe\Dispute;
+use Stripe\Refund;
 
 /** @internal Customizes the native Order Page presentation without replacing its route or form. */
 final class OrderPagePanel extends Page
@@ -216,6 +218,67 @@ final class OrderPagePanel extends Page
         ];
     }
 
+    /** Native Info fields resolve these notices through the Page's Panel query API. */
+    public function refundRequiresActionNotice(): string
+    {
+        return $this->refundNotice(
+            status: Refund::STATUS_REQUIRES_ACTION,
+            translationKey: 'orders.refundAttention.requiresAction',
+        );
+    }
+
+    public function refundFailureNotice(): string
+    {
+        return $this->refundNotice(
+            status: Refund::STATUS_FAILED,
+            translationKey: 'orders.refundAttention.failed',
+            reasonField: 'failureReason',
+        );
+    }
+
+    public function disputeResponseNotice(): string
+    {
+        $model = $this->model;
+
+        if ($model instanceof OrderPage === false) {
+            return '';
+        }
+
+        $statuses = [
+            Dispute::STATUS_NEEDS_RESPONSE,
+            Dispute::STATUS_APPEAL_NEEDS_RESPONSE,
+            Dispute::STATUS_WARNING_NEEDS_RESPONSE,
+        ];
+        $items = [];
+        $moneyFormatter = new MoneyFormatter($model->kirby());
+
+        foreach (self::list($this->orderData($model)['disputes'] ?? null) as $value) {
+            $dispute = self::map($value);
+
+            if (in_array($dispute['status'] ?? null, $statuses, true) === false) {
+                continue;
+            }
+
+            $amount = self::formattedAmount(
+                value: $dispute['amount'] ?? null,
+                currency: OrderData::string($dispute['currency'] ?? null),
+                panelLocale: $this->panelLocale(),
+                moneyFormatter: $moneyFormatter,
+            );
+            $evidenceDueBy = self::formattedUnixDate($dispute['evidenceDueBy'] ?? null);
+            $items[] = $evidenceDueBy === null
+                ? $amount
+                : self::template('orders.disputeAttention.itemWithDeadline', [
+                    'amount' => $amount ?? '',
+                    'deadline' => $evidenceDueBy,
+                ]);
+        }
+
+        return $items === [] ? '' : self::template('orders.disputeAttention.requiresResponse', [
+            'disputes' => implode(', ', $items),
+        ]);
+    }
+
     private function stripeCheckoutSessionId(): ?string
     {
         $model = $this->model;
@@ -298,6 +361,7 @@ final class OrderPagePanel extends Page
         $shipping = self::map($order['shipping'] ?? null);
         $deliveryEstimate = self::map($shipping['deliveryEstimate'] ?? null);
         $discounts = self::list($order['discounts'] ?? null);
+        $checkoutCustomFields = self::checkoutCustomFields($order['customFields'] ?? null);
         $checkoutAttempt = self::map($order['checkoutAttempt'] ?? null);
         $providerFailure = self::map($checkoutAttempt['providerFailure'] ?? null);
         $requiresShipping = self::requiresShipping($order);
@@ -306,6 +370,7 @@ final class OrderPagePanel extends Page
 
         $values = [
             self::handle('hasDiscounts') => $discounts !== [],
+            self::handle('hasCheckoutCustomFields') => $checkoutCustomFields !== [],
             self::handle('hasRefundedAmount') => $refundedTotal !== null
                 && BigDecimal::of($refundedTotal)->isZero() === false,
             self::handle('requiresShipping') => $requiresShipping,
@@ -336,6 +401,7 @@ final class OrderPagePanel extends Page
                 panelLocale: $panelLocale,
                 moneyFormatter: $moneyFormatter,
             ),
+            self::handle('checkoutCustomFields') => $checkoutCustomFields,
             self::handle('customerTaxIds') => $customerTaxIds,
             self::handle('checkoutSessionRequest') => self::facts($checkoutAttempt['sessionRequest'] ?? null),
             self::handle('checkoutFailureType') => $providerFailure['type'] ?? null,
@@ -402,6 +468,12 @@ final class OrderPagePanel extends Page
         return is_string($translation) ? $translation : $suffix;
     }
 
+    /** @param array<string, string> $values */
+    private static function template(string $suffix, array $values): string
+    {
+        return I18n::template(Catalogue::PREFIX . $suffix, $values);
+    }
+
     private function panelLocale(): string
     {
         $kirby = $this->model->kirby();
@@ -418,8 +490,24 @@ final class OrderPagePanel extends Page
             return null;
         }
 
+        return self::formattedDateTime(new DateTimeImmutable($value));
+    }
+
+    private static function formattedUnixDate(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        return self::formattedDateTime(
+            (new DateTimeImmutable())->setTimestamp(OrderData::integer($value)),
+        );
+    }
+
+    private static function formattedDateTime(DateTimeImmutable $date): string
+    {
         $timezoneName = date_default_timezone_get();
-        $date = (new DateTimeImmutable($value))->setTimezone(new DateTimeZone($timezoneName));
+        $date = $date->setTimezone(new DateTimeZone($timezoneName));
 
         return sprintf(
             '%s (UTC%s)',
@@ -437,6 +525,46 @@ final class OrderPagePanel extends Page
         $value = OrderData::nullableString($value);
 
         return $value === null ? null : $moneyFormatter->format($value, $currency, $panelLocale);
+    }
+
+    private function refundNotice(string $status, string $translationKey, ?string $reasonField = null): string
+    {
+        $model = $this->model;
+
+        if ($model instanceof OrderPage === false) {
+            return '';
+        }
+
+        $items = [];
+        $moneyFormatter = new MoneyFormatter($model->kirby());
+
+        foreach (self::list($this->orderData($model)['refunds'] ?? null) as $value) {
+            $refund = self::map($value);
+
+            if (($refund['status'] ?? null) !== $status) {
+                continue;
+            }
+
+            $amount = self::formattedAmount(
+                value: $refund['amount'] ?? null,
+                currency: OrderData::string($refund['currency'] ?? null),
+                panelLocale: $this->panelLocale(),
+                moneyFormatter: $moneyFormatter,
+            );
+            $reason = $reasonField === null
+                ? null
+                : OrderData::nullableString($refund[$reasonField] ?? null);
+            $items[] = $reason === null
+                ? $amount
+                : self::template('orders.refundAttention.itemWithReason', [
+                    'amount' => $amount ?? '',
+                    'reason' => $reason,
+                ]);
+        }
+
+        return $items === [] ? '' : self::template($translationKey, [
+            'refunds' => implode(', ', $items),
+        ]);
     }
 
     /** @return array<string, mixed> */
@@ -618,6 +746,26 @@ final class OrderPagePanel extends Page
                 'percentOff' => $percentOff === null ? null : $percentOff . '%',
             ];
         }, $discounts);
+    }
+
+    /** @return list<array{label: mixed, value: mixed}> */
+    private static function checkoutCustomFields(mixed $value): array
+    {
+        $checkoutCustomFields = [];
+
+        foreach (self::list($value) as $entry) {
+            $customField = self::map($entry);
+            // Keep the frozen Checkout field set visible; a dash distinguishes
+            // an unanswered field from one that was never offered for this Order.
+            $checkoutCustomFields[] = [
+                'label' => $customField['label'] ?? null,
+                'value' => ($customField['answered'] ?? false) === true
+                    ? $customField['value'] ?? null
+                    : '–',
+            ];
+        }
+
+        return $checkoutCustomFields;
     }
 
     /** @return list<array<string, mixed>> */

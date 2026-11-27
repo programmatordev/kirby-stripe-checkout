@@ -108,6 +108,7 @@ final class OrderBlueprint
 
             $field['when'] = match ($sectionName) {
                 'discounts' => [OrderPagePanel::handle('hasDiscounts') => true],
+                'additionalInformation' => [OrderPagePanel::handle('hasCheckoutCustomFields') => true],
                 'customerSummary', 'billingAddressSummary' => [
                     'checkoutStatus' => CheckoutStatus::Complete->value,
                 ],
@@ -189,6 +190,10 @@ final class OrderBlueprint
                 OrderPagePanel::handle('requiresShipping') => false,
             ],
             OrderPagePanel::handle('orderDiscounts') => [OrderPagePanel::handle('hasDiscounts') => true],
+            OrderPagePanel::handle('checkoutCustomFields') => [OrderPagePanel::handle('hasCheckoutCustomFields') => true],
+            OrderPagePanel::handle('refundRequiresActionInfo') => ['refundRequiresAction' => true],
+            OrderPagePanel::handle('refundFailureInfo') => ['refundHasFailed' => true],
+            OrderPagePanel::handle('disputeResponseInfo') => ['disputeRequiresResponse' => true],
             OrderPagePanel::handle('formattedSubtotal'),
             OrderPagePanel::handle('formattedDiscountTotal'),
             OrderPagePanel::handle('formattedShippingTotal'),
@@ -227,12 +232,31 @@ final class OrderBlueprint
         return match (OrderPagePanel::name($handle)) {
             'orderItems' => self::orderItemsField(),
             'orderDiscounts' => self::orderDiscountsField(),
+            'checkoutCustomFields' => self::checkoutCustomFieldsField(),
             'customerSummary' => self::customerSummaryField(),
             'billingAddressSummary' => self::billingAddressSummaryField(),
             'shippingAddressSummary' => self::addressSummaryField(),
-            'hasDiscounts', 'hasRefundedAmount', 'requiresShipping' => [
+            'hasDiscounts', 'hasCheckoutCustomFields', 'hasRefundedAmount', 'requiresShipping' => [
                 'label' => false,
                 'type' => 'hidden',
+            ],
+            'refundRequiresActionInfo' => [
+                'label' => false,
+                'type' => 'info',
+                'text' => '{{ page.panel.refundRequiresActionNotice }}',
+                'theme' => 'warning',
+            ],
+            'refundFailureInfo' => [
+                'label' => false,
+                'type' => 'info',
+                'text' => '{{ page.panel.refundFailureNotice }}',
+                'theme' => 'negative',
+            ],
+            'disputeResponseInfo' => [
+                'label' => false,
+                'type' => 'info',
+                'text' => '{{ page.panel.disputeResponseNotice }}',
+                'theme' => 'negative',
             ],
             'shippingNotRequiredInfo' => [
                 'label' => false,
@@ -357,6 +381,11 @@ final class OrderBlueprint
             $fields[$handle] = self::fieldAtWidth($handle, '1/1');
         }
 
+        foreach (['refundRequiresActionInfo', 'refundFailureInfo', 'disputeResponseInfo'] as $name) {
+            $handle = OrderPagePanel::handle($name);
+            $fields[$handle] = self::fieldAtWidth($handle, '1/1');
+        }
+
         $fields[self::headline('items')] = self::fieldAtWidth(self::headline('items'), '1/1');
         $fields[OrderPagePanel::handle('orderItems')] = self::fieldAtWidth(
             OrderPagePanel::handle('orderItems'),
@@ -421,6 +450,12 @@ final class OrderBlueprint
             '1/1',
         );
 
+        $fields[self::headline('additionalInformation')] = self::fieldAtWidth(self::headline('additionalInformation'), '1/1');
+        $fields[OrderPagePanel::handle('checkoutCustomFields')] = self::fieldAtWidth(
+            OrderPagePanel::handle('checkoutCustomFields'),
+            '1/1',
+        );
+
         $fields[self::headline('keyDates')] = self::fieldAtWidth(self::headline('keyDates'), '1/1');
 
         foreach ([
@@ -433,7 +468,7 @@ final class OrderBlueprint
             $fields[$handle] = self::fieldAtWidth($handle, '1/3');
         }
 
-        foreach (['hasDiscounts', 'hasRefundedAmount', 'requiresShipping'] as $name) {
+        foreach (['hasDiscounts', 'hasCheckoutCustomFields', 'hasRefundedAmount', 'requiresShipping'] as $name) {
             $handle = OrderPagePanel::handle($name);
             $fields[$handle] = self::field($handle);
         }
@@ -592,6 +627,21 @@ final class OrderBlueprint
                 'promotionCode' => [],
                 'amount' => ['align' => 'right'],
                 'percentOff' => ['align' => 'right'],
+            ],
+        );
+        $field['label'] = false;
+
+        return $field;
+    }
+
+    /** @return array<string, mixed> */
+    private static function checkoutCustomFieldsField(): array
+    {
+        $field = self::structureField(
+            members: ['label', 'value'],
+            columns: [
+                'label' => [],
+                'value' => [],
             ],
         );
         $field['label'] = false;

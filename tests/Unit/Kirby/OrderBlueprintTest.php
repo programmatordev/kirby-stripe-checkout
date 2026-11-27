@@ -135,6 +135,28 @@ final class OrderBlueprintTest extends TestCase
             );
         }
 
+        $attentionInfoFields = [
+            'refundRequiresActionInfo' => [
+                'when' => ['refundRequiresAction' => true],
+                'theme' => 'warning',
+            ],
+            'refundFailureInfo' => [
+                'when' => ['refundHasFailed' => true],
+                'theme' => 'negative',
+            ],
+            'disputeResponseInfo' => [
+                'when' => ['disputeRequiresResponse' => true],
+                'theme' => 'negative',
+            ],
+        ];
+
+        foreach ($attentionInfoFields as $name => $expected) {
+            $attentionInfo = self::map($fields[OrderPagePanel::handle($name)] ?? null);
+            $this->assertSame('info', $attentionInfo['type'] ?? null);
+            $this->assertSame($expected['theme'], $attentionInfo['theme'] ?? null);
+            $this->assertSame($expected['when'], $attentionInfo['when'] ?? null);
+        }
+
         $this->assertSame(
             ['checkoutStatus' => 'complete'],
             self::map($fields[OrderPagePanel::handle('formattedCheckoutCompletedAt')] ?? null)['when'] ?? null,
@@ -185,6 +207,17 @@ final class OrderBlueprintTest extends TestCase
         $this->assertSame(
             ['couponName', 'promotionCode', 'amount', 'percentOff'],
             array_keys(self::map($orderDiscounts['fields'] ?? null)),
+        );
+
+        $checkoutCustomFields = self::map($fields[OrderPagePanel::handle('checkoutCustomFields')] ?? null);
+        $this->assertSame('structure', $checkoutCustomFields['type'] ?? null);
+        $this->assertSame(
+            ['label', 'value'],
+            array_keys(self::map($checkoutCustomFields['fields'] ?? null)),
+        );
+        $this->assertSame(
+            [OrderPagePanel::handle('hasCheckoutCustomFields') => true],
+            $checkoutCustomFields['when'] ?? null,
         );
 
         $customerSummary = self::map($fields[OrderPagePanel::handle('customerSummary')] ?? null);
