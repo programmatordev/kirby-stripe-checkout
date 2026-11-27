@@ -9,7 +9,7 @@ use ProgrammatorDev\StripeCheckout\Checkout\UiMode;
 /** @var Kirby\Content\Field|string|null $title */
 /** @var ProgrammatorDev\StripeCheckout\Cart\Cart|null $cart */
 
-$documentTitle = isset($title) ? $title . ' · Test store' : 'Test store';
+$documentTitle = isset($title) ? $title . ' — Test store' : 'Test store';
 $languageCode = $kirby->language()?->code() ?? 'en';
 // Product templates pass their existing view to avoid resolving every line twice.
 $cart ??= $site->stripeCheckout()->cart();
@@ -49,15 +49,15 @@ $settings = $site->stripeCheckout()->settings();
         </nav>
     </header>
     <div class="store-context">
-        <span><span class="status-dot" aria-hidden="true"></span> Development store · Stripe test mode</span>
-        <span><?= esc(ucfirst($settings->priceSource()->value)) ?> prices · <?= esc($settings->currency() ?? 'Currency not set') ?></span>
+        <span><span class="status-dot" aria-hidden="true"></span> Development store (Stripe test mode)</span>
+        <span><?= esc(ucfirst($settings->priceSource()->value)) ?> prices in <?= esc($settings->currency() ?? 'Currency not set') ?></span>
     </div>
     <div class="store-layout <?= $cart === null ? 'without-cart' : '' ?>">
         <main id="content" tabindex="-1"><?= $slots->content() ?></main>
         <?php if ($cart !== null): ?>
             <aside id="cart" class="cart-sidebar" aria-label="Shopping cart">
                 <?php snippet('cart', ['cart' => $cart, 'site' => $site]) ?>
-                <?php // Keep the live region outside the replaced fragment so announcements remain reliable. ?>
+                <?php // Keep the live region outside the replaced fragment so announcements remain reliable.?>
                 <div class="cart-feedback">
                     <p data-cart-feedback role="status" aria-live="polite" aria-atomic="true"></p>
                     <button class="text-button" type="button" data-cart-refresh>Refresh cart</button>

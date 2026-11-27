@@ -381,17 +381,15 @@ final class StripePriceField extends FieldClass
     /** @return array<string, mixed> */
     private static function item(StripePrice $price): array
     {
-        $text = array_filter([
-            $price->name(),
-            $price->nickname(),
-        ]);
+        $name = $price->name();
+        $nickname = $price->nickname();
 
         return [
             'id' => $price->priceId(),
             'icon' => 'money',
             'image' => self::itemImage($price->images()[0] ?? null, 'money'),
             'info' => self::formattedAmount($price),
-            'text' => implode(' · ', $text),
+            'text' => $nickname === null ? $name : sprintf('%s (%s)', $name, $nickname),
         ];
     }
 

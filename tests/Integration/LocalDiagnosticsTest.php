@@ -122,7 +122,7 @@ final class LocalDiagnosticsTest extends KirbyTestCase
             $items['remote-summary']['info'],
         );
         $this->assertSame(
-            'Connected · test mode',
+            'Connected in test mode',
             $items['remote-stripeAccount']['info'],
         );
         $this->assertSame(
@@ -444,7 +444,7 @@ final class LocalDiagnosticsTest extends KirbyTestCase
         $this->assertNotNull($check);
         $this->assertSame(DiagnosticStatus::Warning, $check->status());
         $this->assertSame('taxCodes.failed', $check->messageKey());
-        $this->assertSame('Refresh failed 2025-11-15 12:00 UTC · 0 cached from —', $attention['taxCodes']['info']);
+        $this->assertSame('Refresh failed 2025-11-15 12:00 UTC; using 0 cached from —', $attention['taxCodes']['info']);
         $this->assertSame([[
             'endpoint' => 'stripe-checkout/diagnostics/tax-codes/refresh',
             'icon' => 'refresh',
