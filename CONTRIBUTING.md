@@ -99,6 +99,18 @@ ddev php vendor/bin/phpunit --order-by=random
 
 ## Development data
 
+### Order Panel fixtures
+
+Seed the local development site with deterministic Orders for Panel review:
+
+```bash
+ddev kirby stripe-checkout:seed-orders
+```
+
+The command covers incomplete Checkout states, payment outcomes, shipping and customer detail, refunds, and disputes. It makes no Stripe requests, preserves unrelated Orders and safely reuses its own deterministic fixtures on later runs. Generated Order content remains ignored; the command and its fixture catalogue are development-only and excluded from the Composer package.
+
+The DDEV `kirby` command boots `index.site.php` before handing control to Kirby CLI. This repository keeps the distributable plugin bootstrap in the root `index.php`, while ordinary consumer installations already have the site entry point Kirby CLI expects.
+
 ### Cart checks
 
 The home page and Products page show the catalogue. Product pages have option selectors, a live selected price and add-to-cart forms. The shared storefront keeps one cart on every page: a sticky sidebar on desktop and a collapsible panel above the content on smaller screens. Its update/remove/clear controls use the real plugin routes and the project-owned HTML renderer in `site/config/config.php`. These templates, snippets and their small JavaScript examples are excluded from the Composer package. The Test pages menu keeps hosted/embedded and return-page previews available without pretending to submit Checkout or create orders.

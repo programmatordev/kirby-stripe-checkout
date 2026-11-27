@@ -8,7 +8,8 @@ parameters:
 	paths:
 		- config
 		- index.php
+		- site/commands
 		- src
 		- tests
-		- tools/PhpCsFixer
+		- tools
 	reportUnmatchedIgnoredErrors: true

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+## Description: Run Kirby CLI with the development site bootstrap
+## Usage: kirby [command] [arguments]
+## Example: "ddev kirby stripe-checkout:housekeeping"
+## ExecRaw: true
+
+php /var/www/html/tools/kirby.php "$@"

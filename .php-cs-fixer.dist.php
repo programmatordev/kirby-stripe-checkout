@@ -12,9 +12,10 @@ $finder = Finder::create()
     ->files()
     ->in([
         __DIR__ . '/config',
+        __DIR__ . '/site/commands',
         __DIR__ . '/src',
         __DIR__ . '/tests',
-        __DIR__ . '/tools/PhpCsFixer',
+        __DIR__ . '/tools',
     ])
     ->append([__DIR__ . '/index.php']);
 
