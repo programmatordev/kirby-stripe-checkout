@@ -12,6 +12,7 @@ import TaxCodeDialog from "./components/TaxCodeDialog.vue";
 import CatalogueDialogHeader from "./components/CatalogueDialogHeader.vue";
 import MoneyPreview from "./components/MoneyPreview.vue";
 import OrdersSection from "./components/OrdersSection.vue";
+import OrderStatusField from "./components/OrderStatusField.vue";
 import PaymentStatusPreview from "./components/PaymentStatusPreview.vue";
 
 panel.plugin("programmatordev/stripe-checkout", {
@@ -28,6 +29,7 @@ panel.plugin("programmatordev/stripe-checkout", {
 		"stripe-checkout-custom-fields": CustomFieldsField,
 		"stripe-checkout-synchronized-structure-rows": SynchronizedStructureRowsField,
 		"stripe-checkout-options": OptionsField,
+		"stripe-checkout-order-status": OrderStatusField,
 		"stripe-checkout-price": StripePriceField,
 		"stripe-checkout-shipping-zones": ShippingZonesField,
 		"stripe-checkout-tax-code": TaxCodeField

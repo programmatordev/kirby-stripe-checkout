@@ -117,8 +117,8 @@ final class OrderPageStoreTest extends KirbyTestCase
             $this->assertIsArray($orderItem);
             $this->assertSame('Product', $orderItem['name'] ?? null);
             $this->assertSame(2.0, $orderItem['quantity'] ?? null);
-            $this->assertSame('32.00', $orderItem['subtotal'] ?? null);
-            $this->assertSame('32.00', $orderItem['total'] ?? null);
+            $this->assertSame('€32.00', $orderItem['subtotal'] ?? null);
+            $this->assertSame('€32.00', $orderItem['total'] ?? null);
             $this->assertArrayNotHasKey('confirmed', $orderItem);
             $this->assertArrayNotHasKey('stripepriceid', $orderItem);
             $this->assertIsArray($values['initiatinglineitems'] ?? null);
@@ -218,8 +218,8 @@ final class OrderPageStoreTest extends KirbyTestCase
         $this->assertIsArray($orderItems);
         $orderItem = $orderItems[0] ?? null;
         $this->assertIsArray($orderItem);
-        $this->assertSame('0.00', $orderItem['discount'] ?? null);
-        $this->assertSame('0.00', $orderItem['tax'] ?? null);
+        $this->assertSame('€0.00', $orderItem['discount'] ?? null);
+        $this->assertSame('€0.00', $orderItem['tax'] ?? null);
         $this->assertArrayNotHasKey('confirmed', $orderItem);
     }
 
@@ -363,6 +363,15 @@ final class OrderPageStoreTest extends KirbyTestCase
     public function testPersistsAndRehydratesCollectionAndDiscountSnapshots(): void
     {
         $page = $this->createOrder();
+        $panel = $page->panel();
+        $this->assertInstanceOf(OrderPagePanel::class, $panel);
+        $reports = $panel->statusReports();
+        $this->assertSame('Checkout status', $reports[0]['value']);
+        $this->assertSame('Creating', $reports[0]['label']);
+        $this->assertSame('info', $reports[0]['theme']);
+        $this->assertSame('Unpaid', $reports[1]['label']);
+        $this->assertSame('info', $reports[1]['theme']);
+
         $store = new OrderPageStore($this->kirby);
         $updated = $store->update($page->uuid()->toString(), static fn(array $data): array => [
             ...$data,
@@ -451,6 +460,43 @@ final class OrderPageStoreTest extends KirbyTestCase
         $this->assertTrue($tax['automaticTaxEnabled']);
         $this->assertSame('complete', $tax['calculationStatus']);
         $this->assertSame('0.00', $tax['amount']);
+
+        $values = $updated->panel()->versions()['latest'] ?? null;
+        $this->assertIsArray($values);
+        $customerSummary = OrderData::map(
+            $values[strtolower(OrderPagePanel::handle('customerSummary'))] ?? null,
+        );
+        $this->assertSame('buyer@example.test', $customerSummary['email'] ?? null);
+        $this->assertSame('Ana Silva', $customerSummary['individualname'] ?? null);
+
+        $billingAddressSummary = OrderData::map(
+            $values[strtolower(OrderPagePanel::handle('billingAddressSummary'))] ?? null,
+        );
+        $this->assertSame('Rua Um, 10', $billingAddressSummary['line1'] ?? null);
+        $this->assertSame('1000-001', $billingAddressSummary['postalcode'] ?? null);
+        $this->assertFalse(
+            $values[strtolower(OrderPagePanel::handle('requiresShipping'))] ?? true,
+        );
+        $this->assertSame(
+            '€32.00',
+            $values[strtolower(OrderPagePanel::handle('formattedSubtotal'))] ?? null,
+        );
+        $this->assertSame(
+            '€27.00',
+            $values[strtolower(OrderPagePanel::handle('formattedTotal'))] ?? null,
+        );
+        $this->assertFalse(
+            $values[strtolower(OrderPagePanel::handle('hasRefundedAmount'))] ?? true,
+        );
+        $this->assertIsString($values[strtolower(OrderPagePanel::handle('formattedCreatedAt'))] ?? null);
+
+        $panel = $updated->panel();
+        $this->assertInstanceOf(OrderPagePanel::class, $panel);
+        $reports = $panel->statusReports();
+        $this->assertSame('Complete', $reports[0]['label']);
+        $this->assertSame('positive', $reports[0]['theme']);
+        $this->assertSame('Paid', $reports[1]['label']);
+        $this->assertSame('positive', $reports[1]['theme']);
 
         $this->expectException(OrderDataException::class);
         $store->update($updated->uuid()->toString(), static fn(array $data): array => [

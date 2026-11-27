@@ -18,36 +18,6 @@ final class OrderBlueprint
     public static function load(): array
     {
         $sections = [
-            'overview' => [
-                'summary' => [
-                    self::headline('summary'),
-                    'checkoutStatus',
-                    'paymentStatus',
-                    'refundStatus',
-                    'disputeStatus',
-                    ...array_keys(self::checkoutStateInfoFields()),
-                    OrderPagePanel::handle('customerSummary'),
-                ],
-                'items' => [
-                    self::headline('items'),
-                    OrderPagePanel::handle('orderItems'),
-                ],
-                'totals' => [self::headline('totals'), 'currency', ...OrderSchema::AMOUNTS],
-                'adjustments' => [
-                    self::headline('adjustments'),
-                    OrderPagePanel::handle('shippingMethod'),
-                    OrderPagePanel::handle('deliveryEstimate'),
-                    OrderPagePanel::handle('orderDiscounts'),
-                    OrderPagePanel::handle('orderTaxBreakdown'),
-                ],
-                'keyDates' => [
-                    self::headline('keyDates'),
-                    'createdAt',
-                    'checkoutCompletedAt',
-                    'paidAt',
-                    'paymentFailedAt',
-                ],
-            ],
             'customer' => [
                 'customer' => ['customer', OrderPagePanel::handle('customerTaxIds')],
                 'addresses' => ['shippingAddress', 'billingAddress'],
@@ -94,7 +64,7 @@ final class OrderBlueprint
                 OrderSchema::TIMESTAMPS,
             )),
         ];
-        $tabs = [];
+        $tabs = ['overview' => self::overviewTab()];
 
         foreach ($sections as $tabName => $tabSections) {
             $tabs[$tabName] = self::tab($tabName, $tabSections);
@@ -116,7 +86,6 @@ final class OrderBlueprint
         $checkoutStatus = $checkoutStateInfoFields[$handle] ?? null;
 
         if ($checkoutStatus !== null) {
-
             return [
                 'label' => false,
                 'type' => 'info',
@@ -133,11 +102,23 @@ final class OrderBlueprint
         if (($sectionName = self::headlineName($handle)) !== null) {
             $field = [
                 'label' => 'programmatordev.stripe-checkout.orders.sections.' . $sectionName,
+                'numbered' => false,
                 'type' => 'headline',
             ];
 
-            if ($sectionName === 'adjustments') {
-                $field['when'] = ['checkoutStatus' => CheckoutStatus::Complete->value];
+            $field['when'] = match ($sectionName) {
+                'discounts' => [OrderPagePanel::handle('hasDiscounts') => true],
+                'customerSummary', 'billingAddressSummary' => [
+                    'checkoutStatus' => CheckoutStatus::Complete->value,
+                ],
+                'deliverySummary' => [
+                    'checkoutStatus' => CheckoutStatus::Complete->value,
+                ],
+                default => null,
+            };
+
+            if ($field['when'] === null) {
+                unset($field['when']);
             }
 
             return $field;
@@ -177,22 +158,12 @@ final class OrderBlueprint
 
         $width = match (true) {
             in_array($handle, [
-                'checkoutStatus',
-                'paymentStatus',
-                'refundStatus',
-                'disputeStatus',
-                'currency',
-                ...OrderSchema::AMOUNTS,
                 'createdAt',
                 'updatedAt',
                 'checkoutCompletedAt',
                 'paidAt',
                 'paymentFailedAt',
             ], true) => '1/4',
-            in_array($handle, [
-                OrderPagePanel::handle('shippingMethod'),
-                OrderPagePanel::handle('deliveryEstimate'),
-            ], true) => '1/2',
             default => null,
         };
 
@@ -202,18 +173,34 @@ final class OrderBlueprint
 
         $when = match ($handle) {
             OrderPagePanel::handle('customerSummary'),
+            OrderPagePanel::handle('billingAddressSummary') => [
+                'checkoutStatus' => CheckoutStatus::Complete->value,
+            ],
             OrderPagePanel::handle('shippingMethod'),
             OrderPagePanel::handle('deliveryEstimate'),
-            OrderPagePanel::handle('orderDiscounts'),
-            OrderPagePanel::handle('orderTaxBreakdown'),
-            'discountTotal',
-            'shippingTotal',
-            'taxTotal',
-            'total',
-            'refundedTotal' => ['checkoutStatus' => CheckoutStatus::Complete->value],
-            'checkoutCompletedAt' => ['checkoutStatus' => CheckoutStatus::Complete->value],
-            'paidAt' => ['paymentStatus' => PaymentStatus::Paid->value],
-            'paymentFailedAt' => ['paymentStatus' => PaymentStatus::Failed->value],
+            OrderPagePanel::handle('shippingAddressSummary') => [
+                'checkoutStatus' => CheckoutStatus::Complete->value,
+                OrderPagePanel::handle('requiresShipping') => true,
+            ],
+            OrderPagePanel::handle('shippingNotRequiredInfo') => [
+                'checkoutStatus' => CheckoutStatus::Complete->value,
+                OrderPagePanel::handle('requiresShipping') => false,
+            ],
+            OrderPagePanel::handle('orderDiscounts') => [OrderPagePanel::handle('hasDiscounts') => true],
+            OrderPagePanel::handle('formattedSubtotal'),
+            OrderPagePanel::handle('formattedDiscountTotal'),
+            OrderPagePanel::handle('formattedShippingTotal'),
+            OrderPagePanel::handle('formattedTaxTotal'),
+            OrderPagePanel::handle('formattedTotal') => [
+                'checkoutStatus' => CheckoutStatus::Complete->value,
+            ],
+            OrderPagePanel::handle('formattedRefundedTotal') => [
+                'checkoutStatus' => CheckoutStatus::Complete->value,
+                OrderPagePanel::handle('hasRefundedAmount') => true,
+            ],
+            OrderPagePanel::handle('formattedCheckoutCompletedAt') => ['checkoutStatus' => CheckoutStatus::Complete->value],
+            OrderPagePanel::handle('formattedPaidAt') => ['paymentStatus' => PaymentStatus::Paid->value],
+            OrderPagePanel::handle('formattedPaymentFailedAt') => ['paymentStatus' => PaymentStatus::Failed->value],
             default => null,
         };
 
@@ -238,7 +225,19 @@ final class OrderBlueprint
         return match (OrderPagePanel::name($handle)) {
             'orderItems' => self::orderItemsField(),
             'orderDiscounts' => self::orderDiscountsField(),
-            'orderTaxBreakdown' => self::orderTaxBreakdownField(),
+            'customerSummary' => self::customerSummaryField(),
+            'billingAddressSummary' => self::billingAddressSummaryField(),
+            'shippingAddressSummary' => self::addressSummaryField(),
+            'hasDiscounts', 'hasRefundedAmount', 'requiresShipping' => [
+                'label' => false,
+                'type' => 'hidden',
+            ],
+            'shippingNotRequiredInfo' => [
+                'label' => false,
+                'type' => 'info',
+                'text' => 'programmatordev.stripe-checkout.orders.shippingNotRequired',
+                'theme' => 'info',
+            ],
             'customerTaxIds' => self::structureField(['type', 'value']),
             'checkoutSessionRequest' => self::factsField(),
             'checkoutFailureRetryable' => ['type' => 'toggle'],
@@ -265,6 +264,9 @@ final class OrderBlueprint
             'checkoutFailureProviderType' => 'providerType',
             'checkoutFailureRetryable' => 'retryable',
             'checkoutFailureOccurredAt' => 'occurredAt',
+            'shippingMethod' => 'shippingMethod',
+            'deliveryEstimate' => 'deliveryEstimate',
+            'shippingAddressSummary' => 'shippingAddress',
         ];
 
         if (isset($labels[$name])) {
@@ -273,6 +275,12 @@ final class OrderBlueprint
 
         if (str_starts_with($name, 'checkoutAttempt')) {
             return lcfirst(substr($name, strlen('checkoutAttempt')));
+        }
+
+        foreach (['billingAddress', 'shippingAddress', 'formatted'] as $prefix) {
+            if (str_starts_with($name, $prefix)) {
+                return lcfirst(substr($name, strlen($prefix)));
+            }
         }
 
         return $name;
@@ -311,6 +319,141 @@ final class OrderBlueprint
         return substr($name, 0, -strlen('Headline'));
     }
 
+    /** @return array<string, mixed> */
+    private static function overviewTab(): array
+    {
+        return [
+            'label' => 'programmatordev.stripe-checkout.orders.tabs.overview',
+            'columns' => [
+                'details' => [
+                    'width' => '1/1',
+                    'fields' => self::overviewFields(),
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * A single field grid lets Kirby collapse conditional order sections.
+     *
+     * @return array<string, mixed>
+     */
+    private static function overviewFields(): array
+    {
+        $fields = [];
+
+        $fields[OrderPagePanel::handle('statusReports')] = [
+            'type' => 'stripe-checkout-order-status',
+            'reports' => 'page.panel.statusReports',
+            'size' => 'medium',
+            'width' => '1/1',
+        ];
+        $fields[self::headline('items')] = self::fieldAtWidth(self::headline('items'), '1/1');
+
+        foreach (self::checkoutStateInfoFields() as $handle => $checkoutStatus) {
+            $fields[$handle] = self::fieldAtWidth($handle, '1/1');
+        }
+
+        $fields[OrderPagePanel::handle('orderItems')] = self::fieldAtWidth(
+            OrderPagePanel::handle('orderItems'),
+            '1/1',
+        );
+
+        foreach ([
+            'formattedSubtotal',
+            'formattedDiscountTotal',
+            'formattedShippingTotal',
+            'formattedTaxTotal',
+        ] as $name) {
+            $handle = OrderPagePanel::handle($name);
+            $fields[$handle] = self::fieldAtWidth($handle, '1/4');
+        }
+
+        $fields[OrderPagePanel::handle('formattedTotal')] = self::fieldAtWidth(
+            OrderPagePanel::handle('formattedTotal'),
+            '1/1',
+        );
+        $fields[OrderPagePanel::handle('formattedRefundedTotal')] = self::fieldAtWidth(
+            OrderPagePanel::handle('formattedRefundedTotal'),
+            '1/1',
+        );
+        $fields[self::headline('discounts')] = self::fieldAtWidth(self::headline('discounts'), '1/1');
+        $fields[OrderPagePanel::handle('orderDiscounts')] = self::fieldAtWidth(
+            OrderPagePanel::handle('orderDiscounts'),
+            '1/1',
+        );
+
+        foreach ([
+            'customerSummary' => 'customerSummary',
+            'billingAddressSummary' => 'billingAddressSummary',
+        ] as $sectionName => $fieldName) {
+            $fields[self::headline($sectionName)] = self::fieldAtWidth(self::headline($sectionName), '1/1');
+            $handle = OrderPagePanel::handle($fieldName);
+            $fields[$handle] = self::fieldAtWidth($handle, '1/1');
+        }
+
+        $fields[self::headline('deliverySummary')] = self::fieldAtWidth(self::headline('deliverySummary'), '1/1');
+        $fields[OrderPagePanel::handle('shippingMethod')] = self::fieldAtWidth(
+            OrderPagePanel::handle('shippingMethod'),
+            '1/2',
+        );
+        $fields[OrderPagePanel::handle('deliveryEstimate')] = self::fieldAtWidth(
+            OrderPagePanel::handle('deliveryEstimate'),
+            '1/2',
+        );
+        $fields[OrderPagePanel::handle('shippingAddressSummary')] = self::fieldAtWidth(
+            OrderPagePanel::handle('shippingAddressSummary'),
+            '1/1',
+        );
+        $fields[OrderPagePanel::handle('shippingNotRequiredInfo')] = self::fieldAtWidth(
+            OrderPagePanel::handle('shippingNotRequiredInfo'),
+            '1/1',
+        );
+
+        $fields[self::headline('keyDates')] = self::fieldAtWidth(self::headline('keyDates'), '1/1');
+
+        foreach ([
+            'formattedCreatedAt',
+            'formattedCheckoutCompletedAt',
+            'formattedPaidAt',
+            'formattedPaymentFailedAt',
+        ] as $name) {
+            $handle = OrderPagePanel::handle($name);
+            $fields[$handle] = self::fieldAtWidth($handle, '1/4');
+        }
+
+        foreach (['hasDiscounts', 'hasRefundedAmount', 'requiresShipping'] as $name) {
+            $handle = OrderPagePanel::handle($name);
+            $fields[$handle] = self::field($handle);
+        }
+
+        return $fields;
+    }
+
+    /** @return array<string, mixed> */
+    private static function fieldAtWidth(string $handle, string $width): array
+    {
+        return [
+            ...self::field($handle),
+            'width' => $width,
+        ];
+    }
+
+    /**
+     * @param list<string> $handles
+     * @return array<string, mixed>
+     */
+    private static function fields(array $handles): array
+    {
+        $fields = [];
+
+        foreach ($handles as $handle) {
+            $fields[$handle] = self::field($handle);
+        }
+
+        return $fields;
+    }
+
     /**
      * @param array<string, list<string>> $sections
      * @return array<string, mixed>
@@ -324,16 +467,10 @@ final class OrderBlueprint
                 continue;
             }
 
-            $fields = [];
-
-            foreach ($handles as $handle) {
-                $fields[$handle] = self::field($handle);
-            }
-
             $blueprintSections[$sectionName] = [
                 'type' => 'fields',
                 'headline' => 'programmatordev.stripe-checkout.orders.sections.' . $sectionName,
-                'fields' => $fields,
+                'fields' => self::fields($handles),
             ];
         }
 
@@ -423,15 +560,14 @@ final class OrderBlueprint
                 'optionSummary' => [],
                 'quantity' => ['align' => 'right'],
                 'total' => ['align' => 'right'],
-                'currency' => [],
             ],
             types: [
                 'quantity' => 'number',
                 'requiresShipping' => 'toggle',
             ],
-            help: 'programmatordev.stripe-checkout.orders.orderItemsHelp',
         );
         $field['label'] = false;
+        $field['fields']['optionSummary']['type'] = 'hidden';
         $field['fields']['options'] = self::nestedField('options', self::structureField([
             'optionId',
             'optionName',
@@ -457,21 +593,49 @@ final class OrderBlueprint
     }
 
     /** @return array<string, mixed> */
-    private static function orderTaxBreakdownField(): array
+    private static function customerSummaryField(): array
     {
-        return self::structureField(
-            members: ['targetLabel', 'displayName', 'amount', 'currency', 'percentage', 'jurisdiction'],
-            columns: [
-                'targetLabel' => [],
-                'displayName' => [],
-                'amount' => ['align' => 'right'],
-                'currency' => [],
-                'percentage' => ['align' => 'right'],
-            ],
-        );
+        $field = self::customerField();
+        $field['label'] = false;
+
+        foreach ($field['fields'] as $name => $member) {
+            $field['fields'][$name] = [
+                ...$member,
+                'width' => '1/2',
+            ];
+        }
+
+        return $field;
     }
 
     /** @return array<string, mixed> */
+    private static function billingAddressSummaryField(): array
+    {
+        return [
+            ...self::addressSummaryField(),
+            'label' => false,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private static function addressSummaryField(): array
+    {
+        $field = self::addressField();
+
+        foreach ($field['fields'] as $name => $member) {
+            $field['fields'][$name] = [
+                ...$member,
+                'width' => match ($name) {
+                    'postalCode', 'city', 'state' => '1/3',
+                    default => '1/2',
+                },
+            ];
+        }
+
+        return $field;
+    }
+
+    /** @return array{type: 'object', fields: array<string, array<string, mixed>>} */
     private static function customerField(): array
     {
         $field = self::objectField(['email', 'individualName', 'businessName', 'phone']);
@@ -481,10 +645,10 @@ final class OrderBlueprint
         return $field;
     }
 
-    /** @return array<string, mixed> */
+    /** @return array{type: 'object', fields: array<string, array<string, mixed>>} */
     private static function addressField(): array
     {
-        return self::objectField(['name', 'line1', 'line2', 'postalCode', 'city', 'state', 'country']);
+        return self::objectField(['name', 'country', 'line1', 'line2', 'postalCode', 'city', 'state']);
     }
 
     /** @return array<string, mixed> */
@@ -912,7 +1076,6 @@ final class OrderBlueprint
         return [
             'label' => 'programmatordev.stripe-checkout.orders.fields.' . $name,
             'type' => $type,
-            'disabled' => true,
             'translate' => false,
         ];
     }

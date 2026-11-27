@@ -26,14 +26,9 @@ final class OrderBlueprintTest extends TestCase
         $handles = [];
 
         foreach ($tabs as $tab) {
-            $this->assertIsArray($tab);
-            $sections = $tab['sections'] ?? null;
-            $this->assertIsArray($sections);
+            $tab = self::map($tab);
 
-            foreach ($sections as $section) {
-                $this->assertIsArray($section);
-                $sectionFields = $section['fields'] ?? null;
-                $this->assertIsArray($sectionFields);
+            foreach (self::tabFieldCollections($tab) as $sectionFields) {
                 $fields = [...$fields, ...$sectionFields];
                 $handles = [...$handles, ...array_keys($sectionFields)];
             }
@@ -54,6 +49,7 @@ final class OrderBlueprintTest extends TestCase
         }
 
         $this->assertSame('select', self::map($fields['checkoutStatus'] ?? null)['type'] ?? null);
+        $this->assertTrue(self::map($fields['checkoutStatus'] ?? null)['disabled'] ?? false);
         $this->assertSame('date', self::map($fields['createdAt'] ?? null)['type'] ?? null);
         $this->assertSame('toggle', self::map($fields['refundRequiresAction'] ?? null)['type'] ?? null);
         $this->assertSame('structure', self::map($fields['lineItems'] ?? null)['type'] ?? null);
@@ -70,13 +66,10 @@ final class OrderBlueprintTest extends TestCase
         $blueprint = OrderBlueprint::load();
         $tabs = self::map($blueprint['tabs'] ?? null);
         $overview = self::map($tabs['overview'] ?? null);
-        $sections = self::map($overview['sections'] ?? null);
-        $items = self::map($sections['items'] ?? null);
-        $itemFields = self::map($items['fields'] ?? null);
-        $headline = self::map($itemFields[OrderPagePanel::handle('itemsHeadline')] ?? null);
-        $this->assertSame('headline', $headline['type'] ?? null);
-        $orderItems = self::map($itemFields[OrderPagePanel::handle('orderItems')] ?? null);
+        $fields = self::tabFields($overview);
+        $orderItems = self::map($fields[OrderPagePanel::handle('orderItems')] ?? null);
         $this->assertSame('structure', $orderItems['type'] ?? null);
+        $this->assertTrue($orderItems['disabled'] ?? false);
         $fields = self::map($orderItems['fields'] ?? null);
         $this->assertSame([
             'name',
@@ -93,6 +86,7 @@ final class OrderBlueprintTest extends TestCase
             'tax',
             'total',
         ], array_keys($fields));
+        $this->assertFalse(self::map($fields['name'] ?? null)['disabled'] ?? false);
 
         $technical = self::map($tabs['technical'] ?? null);
         $technicalSections = self::map($technical['sections'] ?? null);
@@ -107,9 +101,7 @@ final class OrderBlueprintTest extends TestCase
         $blueprint = OrderBlueprint::load();
         $tabs = self::map($blueprint['tabs'] ?? null);
         $overview = self::map($tabs['overview'] ?? null);
-        $sections = self::map($overview['sections'] ?? null);
-        $summary = self::map($sections['summary'] ?? null);
-        $summaryFields = self::map($summary['fields'] ?? null);
+        $fields = self::tabFields($overview);
         $stateInfoFields = [
             'checkoutCreatingInfo' => [
                 'checkoutStatus' => 'creating',
@@ -134,7 +126,7 @@ final class OrderBlueprintTest extends TestCase
         ];
 
         foreach ($stateInfoFields as $name => $expected) {
-            $stateInfo = self::map($summaryFields[OrderPagePanel::handle($name)] ?? null);
+            $stateInfo = self::map($fields[OrderPagePanel::handle($name)] ?? null);
             $this->assertSame('info', $stateInfo['type'] ?? null);
             $this->assertSame($expected['theme'], $stateInfo['theme'] ?? null);
             $this->assertSame(
@@ -143,25 +135,94 @@ final class OrderBlueprintTest extends TestCase
             );
         }
 
-        $totals = self::map($sections['totals'] ?? null);
-        $totalFields = self::map($totals['fields'] ?? null);
+        $this->assertSame(
+            ['checkoutStatus' => 'complete'],
+            self::map($fields[OrderPagePanel::handle('formattedCheckoutCompletedAt')] ?? null)['when'] ?? null,
+        );
+        $this->assertSame(
+            ['paymentStatus' => 'paid'],
+            self::map($fields[OrderPagePanel::handle('formattedPaidAt')] ?? null)['when'] ?? null,
+        );
+        $this->assertSame(
+            ['paymentStatus' => 'failed'],
+            self::map($fields[OrderPagePanel::handle('formattedPaymentFailedAt')] ?? null)['when'] ?? null,
+        );
+    }
 
-        foreach (['discountTotal', 'shippingTotal', 'taxTotal', 'total', 'refundedTotal'] as $handle) {
+    public function testOverviewExposesConditionalFinancialAndFulfillmentFacts(): void
+    {
+        $blueprint = OrderBlueprint::load();
+        $tabs = self::map($blueprint['tabs'] ?? null);
+        $overview = self::map($tabs['overview'] ?? null);
+        $fields = self::tabFields($overview);
+
+        $completeCondition = ['checkoutStatus' => 'complete'];
+
+        $statuses = self::map($fields[OrderPagePanel::handle('statusReports')] ?? null);
+        $this->assertSame('stripe-checkout-order-status', $statuses['type'] ?? null);
+        $this->assertSame('page.panel.statusReports', $statuses['reports'] ?? null);
+
+        foreach (['formattedSubtotal', 'formattedDiscountTotal', 'formattedShippingTotal', 'formattedTaxTotal'] as $name) {
+            $amount = self::map($fields[OrderPagePanel::handle($name)] ?? null);
+            $this->assertSame($completeCondition, $amount['when'] ?? null);
+        }
+
+        $total = self::map($fields[OrderPagePanel::handle('formattedTotal')] ?? null);
+        $this->assertSame($completeCondition, $total['when'] ?? null);
+        $refundedTotal = self::map($fields[OrderPagePanel::handle('formattedRefundedTotal')] ?? null);
+        $this->assertSame([
+            'checkoutStatus' => 'complete',
+            OrderPagePanel::handle('hasRefundedAmount') => true,
+        ], $refundedTotal['when'] ?? null);
+
+        $hasDiscounts = [OrderPagePanel::handle('hasDiscounts') => true];
+        $this->assertSame(
+            $hasDiscounts,
+            self::map($fields[OrderPagePanel::handle('discountsHeadline')] ?? null)['when'] ?? null,
+        );
+        $orderDiscounts = self::map($fields[OrderPagePanel::handle('orderDiscounts')] ?? null);
+        $this->assertSame($hasDiscounts, $orderDiscounts['when'] ?? null);
+        $this->assertSame(
+            ['couponName', 'promotionCode', 'amount', 'currency', 'percentOff'],
+            array_keys(self::map($orderDiscounts['fields'] ?? null)),
+        );
+
+        $customerSummary = self::map($fields[OrderPagePanel::handle('customerSummary')] ?? null);
+        $customerSummaryFields = self::map($customerSummary['fields'] ?? null);
+        $this->assertSame('object', $customerSummary['type'] ?? null);
+        $this->assertSame('email', self::map($customerSummaryFields['email'] ?? null)['type'] ?? null);
+        $this->assertSame('tel', self::map($customerSummaryFields['phone'] ?? null)['type'] ?? null);
+        $this->assertTrue($customerSummary['disabled'] ?? false);
+
+        $billingAddress = self::map($fields[OrderPagePanel::handle('billingAddressSummary')] ?? null);
+        $billingAddressFields = self::map($billingAddress['fields'] ?? null);
+        $this->assertSame('object', $billingAddress['type'] ?? null);
+        $this->assertArrayHasKey('country', $billingAddressFields);
+        $this->assertArrayHasKey('postalCode', $billingAddressFields);
+        $this->assertTrue($billingAddress['disabled'] ?? false);
+
+        $deliveryCondition = [
+            'checkoutStatus' => 'complete',
+            OrderPagePanel::handle('requiresShipping') => true,
+        ];
+
+        foreach (['shippingMethod', 'deliveryEstimate', 'shippingAddressSummary'] as $name) {
             $this->assertSame(
-                ['checkoutStatus' => 'complete'],
-                self::map($totalFields[$handle] ?? null)['when'] ?? null,
+                $deliveryCondition,
+                self::map($fields[OrderPagePanel::handle($name)] ?? null)['when'] ?? null,
             );
         }
 
-        $adjustments = self::map($sections['adjustments'] ?? null);
-        $adjustmentFields = self::map($adjustments['fields'] ?? null);
-
-        foreach ($adjustmentFields as $field) {
-            $this->assertSame(['checkoutStatus' => 'complete'], self::map($field)['when'] ?? null);
-        }
+        $notRequired = self::map($fields[OrderPagePanel::handle('shippingNotRequiredInfo')] ?? null);
+        $this->assertSame('info', $notRequired['type'] ?? null);
+        $this->assertSame([
+            'checkoutStatus' => 'complete',
+            OrderPagePanel::handle('requiresShipping') => false,
+        ], $notRequired['when'] ?? null);
+        $this->assertArrayHasKey(OrderPagePanel::handle('formattedCreatedAt'), $fields);
     }
 
-    public function testPresentsOperatorRelevantInitiatingAndTaxFacts(): void
+    public function testKeepsDetailedInitiatingShippingAndTaxFactsInTechnicalDetails(): void
     {
         $blueprint = OrderBlueprint::load();
         $tabs = self::map($blueprint['tabs'] ?? null);
@@ -195,19 +256,6 @@ final class OrderBlueprintTest extends TestCase
         $options = self::map($initiatingFields['options'] ?? null);
         $optionFields = self::map($options['fields'] ?? null);
         $this->assertSame(['optionId', 'optionName', 'valueId', 'valueName'], array_keys($optionFields));
-
-        $overview = self::map($tabs['overview'] ?? null);
-        $sections = self::map($overview['sections'] ?? null);
-        $adjustments = self::map($sections['adjustments'] ?? null);
-        $adjustmentFields = self::map($adjustments['fields'] ?? null);
-        $breakdown = self::map($adjustmentFields[OrderPagePanel::handle('orderTaxBreakdown')] ?? null);
-        $breakdownFields = self::map($breakdown['fields'] ?? null);
-        $this->assertSame(['targetLabel', 'displayName', 'amount', 'currency', 'percentage', 'jurisdiction'], array_keys($breakdownFields));
-        $discounts = self::map($adjustmentFields[OrderPagePanel::handle('orderDiscounts')] ?? null);
-        $discountFields = self::map($discounts['fields'] ?? null);
-        $this->assertSame(['couponName', 'promotionCode', 'amount', 'currency', 'percentOff'], array_keys($discountFields));
-        $this->assertSame('1/2', self::map($adjustmentFields[OrderPagePanel::handle('shippingMethod')] ?? null)['width'] ?? null);
-        $this->assertSame('1/2', self::map($adjustmentFields[OrderPagePanel::handle('deliveryEstimate')] ?? null)['width'] ?? null);
 
         $shipping = self::map($technicalFields['shipping'] ?? null);
         $shippingFields = self::map($shipping['fields'] ?? null);
@@ -243,6 +291,65 @@ final class OrderBlueprintTest extends TestCase
         $this->assertArrayHasKey(OrderPagePanel::handle('checkoutAttemptTokenHash'), $attemptFields);
         $request = self::map($attemptFields[OrderPagePanel::handle('checkoutSessionRequest')] ?? null);
         $this->assertSame('structure', $request['type'] ?? null);
+    }
+
+    /**
+     * @param array<string, mixed> $tab
+     * @return list<array<string, mixed>>
+     */
+    private static function tabFieldCollections(array $tab): array
+    {
+        $collections = [];
+        $sections = $tab['sections'] ?? [];
+        self::assertIsArray($sections);
+
+        foreach ($sections as $section) {
+            self::assertIsArray($section);
+            $fields = $section['fields'] ?? null;
+            self::assertIsArray($fields);
+            $collections[] = self::map($fields);
+        }
+
+        $columns = $tab['columns'] ?? [];
+        self::assertIsArray($columns);
+
+        foreach ($columns as $column) {
+            self::assertIsArray($column);
+
+            if (isset($column['fields'])) {
+                self::assertIsArray($column['fields']);
+                $collections[] = self::map($column['fields']);
+            }
+
+            $columnSections = $column['sections'] ?? [];
+            self::assertIsArray($columnSections);
+
+            foreach ($columnSections as $section) {
+                self::assertIsArray($section);
+
+                if (isset($section['fields'])) {
+                    self::assertIsArray($section['fields']);
+                    $collections[] = self::map($section['fields']);
+                }
+            }
+        }
+
+        return $collections;
+    }
+
+    /**
+     * @param array<string, mixed> $tab
+     * @return array<string, mixed>
+     */
+    private static function tabFields(array $tab): array
+    {
+        $fields = [];
+
+        foreach (self::tabFieldCollections($tab) as $collection) {
+            $fields = [...$fields, ...$collection];
+        }
+
+        return $fields;
     }
 
     /** @return array<string, mixed> */

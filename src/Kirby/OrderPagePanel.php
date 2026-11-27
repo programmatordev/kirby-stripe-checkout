@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace ProgrammatorDev\StripeCheckout\Kirby;
 
+use Brick\Math\BigDecimal;
 use DateTimeImmutable;
+use IntlDateFormatter;
 use Kirby\Cms\Language;
 use Kirby\Form\Fields;
 use Kirby\Panel\Page;
@@ -13,11 +15,15 @@ use Kirby\Panel\Ui\Buttons\ViewButtons;
 use Kirby\Toolkit\I18n;
 use ProgrammatorDev\StripeCheckout\Configuration\CredentialMode;
 use ProgrammatorDev\StripeCheckout\Lifecycle\Internal\HookDeliveryLedger;
+use ProgrammatorDev\StripeCheckout\Money\MoneyFormatter;
 use ProgrammatorDev\StripeCheckout\Order\CheckoutStatus;
+use ProgrammatorDev\StripeCheckout\Order\DisputeStatus;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderSchema;
 use ProgrammatorDev\StripeCheckout\Order\Internal\RetentionPolicy;
 use ProgrammatorDev\StripeCheckout\Order\PaymentAction;
+use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
+use ProgrammatorDev\StripeCheckout\Order\RefundStatus;
 use ProgrammatorDev\StripeCheckout\Translation\Catalogue;
 
 /** @internal Customizes the native Order Page presentation without replacing its route or form. */
@@ -110,7 +116,11 @@ final class OrderPagePanel extends Page
             ];
         }
 
-        $projectionInput = self::projection($this->orderData($model));
+        $projectionInput = self::projection(
+            order: $this->orderData($model),
+            panelLocale: $this->panelLocale(),
+            moneyFormatter: new MoneyFormatter($model->kirby()),
+        );
 
         // Fields formats the entire blueprint. Keep only the supplied projection
         // so empty display fields cannot overwrite the native version values.
@@ -138,6 +148,68 @@ final class OrderPagePanel extends Page
         }
 
         return self::stripeDashboardUrlFor($this->orderData($model));
+    }
+
+    /**
+     * Supplies the native stats section with presentation-only order states.
+     *
+     * @return list<array{label: string, value: string, icon: string, theme: string}>
+     */
+    public function statusReports(): array
+    {
+        $model = $this->model;
+
+        if ($model instanceof OrderPage === false) {
+            return [];
+        }
+
+        $order = $this->orderData($model);
+        $checkoutStatus = CheckoutStatus::from(OrderData::string($order['checkoutStatus'] ?? null));
+        $paymentStatus = PaymentStatus::from(OrderData::string($order['paymentStatus'] ?? null));
+        $refundStatus = RefundStatus::from(OrderData::string($order['refundStatus'] ?? null));
+        $disputeStatus = DisputeStatus::from(OrderData::string($order['disputeStatus'] ?? null));
+
+        return [
+            self::statusReport(
+                name: 'checkoutStatus',
+                value: self::translate('orders.index.option.checkout.' . $checkoutStatus->value),
+                theme: match ($checkoutStatus) {
+                    CheckoutStatus::Complete => 'positive',
+                    CheckoutStatus::CreationFailed => 'negative',
+                    CheckoutStatus::CreationUncertain, CheckoutStatus::Expired => 'notice',
+                    default => 'info',
+                },
+            ),
+            self::statusReport(
+                name: 'paymentStatus',
+                value: self::translate('orders.index.option.payment.' . $paymentStatus->value),
+                theme: match ($paymentStatus) {
+                    PaymentStatus::Paid, PaymentStatus::NoPaymentRequired => 'positive',
+                    PaymentStatus::Failed => 'negative',
+                    PaymentStatus::Pending => 'notice',
+                    PaymentStatus::Unpaid => $checkoutStatus === CheckoutStatus::Complete ? 'notice' : 'info',
+                },
+            ),
+            self::statusReport(
+                name: 'refundStatus',
+                value: self::translate('orders.index.option.refundFilter.' . $refundStatus->value),
+                theme: match ($refundStatus) {
+                    RefundStatus::None => 'positive',
+                    RefundStatus::Pending, RefundStatus::Partial => 'notice',
+                    RefundStatus::Full => 'info',
+                    RefundStatus::Failed => 'negative',
+                },
+            ),
+            self::statusReport(
+                name: 'disputeStatus',
+                value: self::translate('orders.index.option.disputeFilter.' . $disputeStatus->value),
+                theme: match ($disputeStatus) {
+                    DisputeStatus::None, DisputeStatus::ResolvedFavorable => 'positive',
+                    DisputeStatus::UnderReview, DisputeStatus::Mixed => 'notice',
+                    DisputeStatus::NeedsResponse, DisputeStatus::ResolvedLost => 'negative',
+                },
+            ),
+        ];
     }
 
     private function stripeCheckoutSessionId(): ?string
@@ -209,21 +281,49 @@ final class OrderPagePanel extends Page
      * @param array<string, mixed> $order
      * @return array<string, mixed>
      */
-    private static function projection(array $order): array
-    {
+    private static function projection(
+        array $order,
+        string $panelLocale,
+        MoneyFormatter $moneyFormatter,
+    ): array {
         $customer = self::map($order['customer'] ?? null);
+        $billingAddress = self::map($order['billingAddress'] ?? null);
+        $shippingAddress = self::map($order['shippingAddress'] ?? null);
         $shipping = self::map($order['shipping'] ?? null);
         $deliveryEstimate = self::map($shipping['deliveryEstimate'] ?? null);
-        $tax = self::map($order['tax'] ?? null);
+        $discounts = self::list($order['discounts'] ?? null);
         $checkoutAttempt = self::map($order['checkoutAttempt'] ?? null);
         $providerFailure = self::map($checkoutAttempt['providerFailure'] ?? null);
+        $requiresShipping = self::requiresShipping($order);
+        $currency = OrderData::string($order['currency'] ?? null);
+        $refundedTotal = OrderData::nullableString($order['refundedTotal'] ?? null);
+
         $values = [
-            self::handle('customerSummary') => self::customerSummary($customer),
-            self::handle('orderItems') => self::orderItems($order),
+            self::handle('hasDiscounts') => $discounts !== [],
+            self::handle('hasRefundedAmount') => $refundedTotal !== null
+                && BigDecimal::of($refundedTotal)->isZero() === false,
+            self::handle('requiresShipping') => $requiresShipping,
+            self::handle('customerSummary') => $customer,
+            self::handle('billingAddressSummary') => $billingAddress,
+            self::handle('shippingAddressSummary') => $shippingAddress,
             self::handle('shippingMethod') => $shipping['label'] ?? null,
             self::handle('deliveryEstimate') => self::deliveryEstimate($deliveryEstimate),
-            self::handle('orderDiscounts') => self::list($order['discounts'] ?? null),
-            self::handle('orderTaxBreakdown') => self::orderTaxBreakdown($tax['breakdown'] ?? null),
+            self::handle('formattedSubtotal') => self::formattedAmount($order['subtotal'] ?? null, $currency, $panelLocale, $moneyFormatter),
+            self::handle('formattedDiscountTotal') => self::formattedAmount($order['discountTotal'] ?? null, $currency, $panelLocale, $moneyFormatter),
+            self::handle('formattedShippingTotal') => self::formattedAmount($order['shippingTotal'] ?? null, $currency, $panelLocale, $moneyFormatter),
+            self::handle('formattedTaxTotal') => self::formattedAmount($order['taxTotal'] ?? null, $currency, $panelLocale, $moneyFormatter),
+            self::handle('formattedTotal') => self::formattedAmount($order['total'] ?? null, $currency, $panelLocale, $moneyFormatter),
+            self::handle('formattedRefundedTotal') => self::formattedAmount($refundedTotal, $currency, $panelLocale, $moneyFormatter),
+            self::handle('formattedCreatedAt') => self::formattedDate($order['createdAt'] ?? null, $panelLocale),
+            self::handle('formattedCheckoutCompletedAt') => self::formattedDate($order['checkoutCompletedAt'] ?? null, $panelLocale),
+            self::handle('formattedPaidAt') => self::formattedDate($order['paidAt'] ?? null, $panelLocale),
+            self::handle('formattedPaymentFailedAt') => self::formattedDate($order['paymentFailedAt'] ?? null, $panelLocale),
+            self::handle('orderItems') => self::orderItems(
+                order: $order,
+                panelLocale: $panelLocale,
+                moneyFormatter: $moneyFormatter,
+            ),
+            self::handle('orderDiscounts') => $discounts,
             self::handle('customerTaxIds') => self::list($customer['taxIds'] ?? null),
             self::handle('checkoutSessionRequest') => self::facts($checkoutAttempt['sessionRequest'] ?? null),
             self::handle('checkoutFailureType') => $providerFailure['type'] ?? null,
@@ -250,6 +350,21 @@ final class OrderPagePanel extends Page
         return $normalized;
     }
 
+    /** @return array{label: string, value: string, icon: string, theme: string} */
+    private static function statusReport(string $name, string $value, string $theme): array
+    {
+        return [
+            'label' => $value,
+            'value' => self::translate('orders.fields.' . $name),
+            'icon' => match ($theme) {
+                'positive' => 'check',
+                'negative', 'notice' => 'alert',
+                default => 'info',
+            },
+            'theme' => $theme,
+        ];
+    }
+
     /** @param array<string, mixed> $order */
     private static function stripeDashboardUrlFor(array $order): ?string
     {
@@ -273,6 +388,44 @@ final class OrderPagePanel extends Page
         $translation = I18n::translate(Catalogue::PREFIX . $suffix);
 
         return is_string($translation) ? $translation : $suffix;
+    }
+
+    private function panelLocale(): string
+    {
+        $kirby = $this->model->kirby();
+        $panelLanguage = $kirby->user()?->language() ?? $kirby->panelLanguage();
+
+        return $kirby->translation($panelLanguage)->locale();
+    }
+
+    private static function formattedDate(mixed $value, string $panelLocale): ?string
+    {
+        $value = OrderData::nullableString($value);
+
+        if ($value === null) {
+            return null;
+        }
+
+        $formatter = new IntlDateFormatter(
+            $panelLocale,
+            IntlDateFormatter::MEDIUM,
+            IntlDateFormatter::SHORT,
+            date_default_timezone_get(),
+        );
+        $formatted = $formatter->format(new DateTimeImmutable($value));
+
+        return $formatted === false ? $value : $formatted;
+    }
+
+    private static function formattedAmount(
+        mixed $value,
+        string $currency,
+        string $panelLocale,
+        MoneyFormatter $moneyFormatter,
+    ): ?string {
+        $value = OrderData::nullableString($value);
+
+        return $value === null ? null : $moneyFormatter->format($value, $currency, $panelLocale);
     }
 
     /** @return array<string, mixed> */
@@ -301,18 +454,19 @@ final class OrderPagePanel extends Page
         return $items;
     }
 
-    /** @param array<string, mixed> $customer */
-    private static function customerSummary(array $customer): ?string
+    /** @param array<string, mixed> $order */
+    private static function requiresShipping(array $order): bool
     {
-        /** @var string|null $individualName */
-        $individualName = $customer['individualName'] ?? null;
-        /** @var string|null $businessName */
-        $businessName = $customer['businessName'] ?? null;
-        /** @var string|null $email */
-        $email = $customer['email'] ?? null;
-        $details = array_values(array_filter([$businessName, $individualName, $email]));
+        // The frozen store input owns this fact; Stripe's final line items do not reproduce it.
+        foreach (self::list($order['initiatingLineItems'] ?? null) as $value) {
+            $lineItem = self::map($value);
 
-        return $details === [] ? null : implode(' — ', $details);
+            if (($lineItem['requiresShipping'] ?? false) === true) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @param array<string, mixed> $deliveryEstimate */
@@ -347,24 +501,33 @@ final class OrderPagePanel extends Page
      * @param array<string, mixed> $order
      * @return list<array<string, mixed>>
      */
-    private static function orderItems(array $order): array
-    {
+    private static function orderItems(
+        array $order,
+        string $panelLocale,
+        MoneyFormatter $moneyFormatter,
+    ): array {
         $initiatingLineItems = self::list($order['initiatingLineItems'] ?? null);
         $lineItems = self::list($order['lineItems'] ?? null);
         $checkoutStatus = CheckoutStatus::from(OrderData::string($order['checkoutStatus'] ?? null));
 
         if ($checkoutStatus !== CheckoutStatus::Complete || $lineItems === []) {
-            return array_map(static function (mixed $value): array {
+            return array_map(static function (mixed $value) use ($panelLocale, $moneyFormatter): array {
                 $initiatingLineItem = self::map($value);
 
                 return self::orderItem(
                     initiatingLineItem: $initiatingLineItem,
                     lineItem: null,
+                    panelLocale: $panelLocale,
+                    moneyFormatter: $moneyFormatter,
                 );
             }, $initiatingLineItems);
         }
 
-        return array_map(static function (mixed $value) use ($initiatingLineItems): array {
+        return array_map(static function (mixed $value) use (
+            $initiatingLineItems,
+            $panelLocale,
+            $moneyFormatter,
+        ): array {
             $lineItem = self::map($value);
             /** @var int $initiatingIndex The stored order has already crossed the Order schema boundary. */
             $initiatingIndex = $lineItem['initiatingIndex'];
@@ -372,6 +535,8 @@ final class OrderPagePanel extends Page
             return self::orderItem(
                 initiatingLineItem: self::map($initiatingLineItems[$initiatingIndex]),
                 lineItem: $lineItem,
+                panelLocale: $panelLocale,
+                moneyFormatter: $moneyFormatter,
             );
         }, $lineItems);
     }
@@ -381,8 +546,12 @@ final class OrderPagePanel extends Page
      * @param array<string, mixed>|null $lineItem
      * @return array<string, mixed>
      */
-    private static function orderItem(array $initiatingLineItem, ?array $lineItem): array
-    {
+    private static function orderItem(
+        array $initiatingLineItem,
+        ?array $lineItem,
+        string $panelLocale,
+        MoneyFormatter $moneyFormatter,
+    ): array {
         $options = self::list($initiatingLineItem['options'] ?? null);
         $optionLabels = array_map(static function (mixed $value): string {
             $option = self::map($value);
@@ -394,6 +563,7 @@ final class OrderPagePanel extends Page
             return $optionName . ': ' . $valueName;
         }, $options);
         $amounts = $lineItem ?? $initiatingLineItem;
+        $currency = OrderData::string($amounts['currency'] ?? null);
 
         return [
             'name' => $initiatingLineItem['name'] ?? $lineItem['description'] ?? null,
@@ -403,28 +573,18 @@ final class OrderPagePanel extends Page
             'sku' => $initiatingLineItem['sku'] ?? null,
             'quantity' => $amounts['quantity'] ?? null,
             'requiresShipping' => $initiatingLineItem['requiresShipping'] ?? null,
-            'currency' => $amounts['currency'] ?? null,
-            'price' => $amounts['price'] ?? null,
-            'subtotal' => $amounts['subtotal'] ?? null,
-            'discount' => $lineItem['discount'] ?? null,
-            'tax' => $lineItem['tax'] ?? null,
-            'total' => $lineItem['total'] ?? $initiatingLineItem['subtotal'] ?? null,
+            'currency' => $currency,
+            'price' => self::formattedAmount($amounts['price'] ?? null, $currency, $panelLocale, $moneyFormatter),
+            'subtotal' => self::formattedAmount($amounts['subtotal'] ?? null, $currency, $panelLocale, $moneyFormatter),
+            'discount' => self::formattedAmount($lineItem['discount'] ?? null, $currency, $panelLocale, $moneyFormatter),
+            'tax' => self::formattedAmount($lineItem['tax'] ?? null, $currency, $panelLocale, $moneyFormatter),
+            'total' => self::formattedAmount(
+                $lineItem['total'] ?? $initiatingLineItem['subtotal'] ?? null,
+                $currency,
+                $panelLocale,
+                $moneyFormatter,
+            ),
         ];
-    }
-
-    /** @return list<array<string, mixed>> */
-    private static function orderTaxBreakdown(mixed $value): array
-    {
-        return array_map(static function (mixed $value): array {
-            $tax = self::map($value);
-            /** @var string $target */
-            $target = $tax['target'];
-
-            return [
-                ...$tax,
-                'targetLabel' => self::translate('orders.taxTargets.' . $target),
-            ];
-        }, self::list($value));
     }
 
     /** @return list<array<string, mixed>> */
