@@ -27,7 +27,7 @@
 		"ext-intl": "*",
 		"getkirby/cms": "^5.6.0",
 		"getkirby/composer-installer": "^1.2.1",
-		"stripe/stripe-php": "^23.0",
+		"stripe/stripe-php": "^23.1",
 		"brick/money": "^0.15.2",
 		"symfony/intl": "^7.4",
 		"getkirby/cli": "^2.0"
