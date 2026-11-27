@@ -356,6 +356,9 @@ final class OrderPagePanel extends Page
         $customer = self::map($order['customer'] ?? null);
         $customerTaxIds = self::list($customer['taxIds'] ?? null);
         $billingTaxId = self::map($customerTaxIds[0] ?? null);
+        $consent = self::map($order['consent'] ?? null);
+        $termsOfServiceConsent = self::termsOfServiceConsent($consent['termsOfService'] ?? null);
+        $promotionalEmailConsent = self::promotionalEmailConsent($consent['promotions'] ?? null);
         $billingAddress = self::map($order['billingAddress'] ?? null);
         $shippingAddress = self::map($order['shippingAddress'] ?? null);
         $shipping = self::map($order['shipping'] ?? null);
@@ -365,16 +368,34 @@ final class OrderPagePanel extends Page
         $checkoutAttempt = self::map($order['checkoutAttempt'] ?? null);
         $providerFailure = self::map($checkoutAttempt['providerFailure'] ?? null);
         $requiresShipping = self::requiresShipping($order);
+        $hasBillingAddress = array_filter(
+            $billingAddress,
+            static fn(mixed $value): bool => $value !== null && $value !== '',
+        ) !== [];
+        $billingTaxIdValue = $billingTaxId['value'] ?? null;
+        $hasBillingTaxId = $billingTaxIdValue !== null && $billingTaxIdValue !== '';
+        $hasBillingInformation = $hasBillingAddress || $hasBillingTaxId;
+        $hasAdditionalInformation = $checkoutCustomFields !== []
+            || $termsOfServiceConsent !== null
+            || $promotionalEmailConsent !== null;
         $currency = OrderData::string($order['currency'] ?? null);
         $refundedTotal = OrderData::nullableString($order['refundedTotal'] ?? null);
 
         $values = [
             self::handle('hasDiscounts') => $discounts !== [],
+            self::handle('hasAdditionalInformation') => $hasAdditionalInformation,
+            self::handle('hasBillingAddress') => $hasBillingAddress,
+            self::handle('hasBillingInformation') => $hasBillingInformation,
+            self::handle('hasBillingTaxId') => $hasBillingTaxId,
             self::handle('hasCheckoutCustomFields') => $checkoutCustomFields !== [],
             self::handle('hasRefundedAmount') => $refundedTotal !== null
                 && BigDecimal::of($refundedTotal)->isZero() === false,
+            self::handle('hasTermsOfServiceConsent') => $termsOfServiceConsent !== null,
+            self::handle('hasPromotionalEmailConsent') => $promotionalEmailConsent !== null,
             self::handle('requiresShipping') => $requiresShipping,
             self::handle('customerSummary') => $customer,
+            self::handle('termsOfServiceConsent') => $termsOfServiceConsent,
+            self::handle('promotionalEmailConsent') => $promotionalEmailConsent,
             self::handle('billingAddressSummary') => $billingAddress,
             self::handle('billingTaxIdType') => $billingTaxId['type'] ?? null,
             self::handle('billingTaxId') => $billingTaxId['value'] ?? null,
@@ -402,7 +423,6 @@ final class OrderPagePanel extends Page
                 moneyFormatter: $moneyFormatter,
             ),
             self::handle('checkoutCustomFields') => $checkoutCustomFields,
-            self::handle('customerTaxIds') => $customerTaxIds,
             self::handle('checkoutSessionRequest') => self::facts($checkoutAttempt['sessionRequest'] ?? null),
             self::handle('checkoutFailureType') => $providerFailure['type'] ?? null,
             self::handle('checkoutFailureRequestId') => $providerFailure['requestId'] ?? null,
@@ -426,6 +446,28 @@ final class OrderPagePanel extends Page
         }
 
         return $normalized;
+    }
+
+    // Stripe uses separate outcome vocabularies for terms and promotional consent.
+    // https://docs.stripe.com/api/checkout/sessions/object#checkout_session_object-consent
+    private static function termsOfServiceConsent(mixed $value): ?string
+    {
+        $value = OrderData::nullableString($value);
+
+        return $value === 'accepted'
+            ? self::translate('orders.consent.accepted')
+            : $value;
+    }
+
+    private static function promotionalEmailConsent(mixed $value): ?string
+    {
+        $value = OrderData::nullableString($value);
+
+        return match ($value) {
+            'opt_in' => self::translate('orders.consent.optedIn'),
+            'opt_out' => self::translate('orders.consent.optedOut'),
+            default => $value,
+        };
     }
 
     /** @return array{label: string, value: string, icon: string, theme: string} */
@@ -509,11 +551,7 @@ final class OrderPagePanel extends Page
         $timezoneName = date_default_timezone_get();
         $date = $date->setTimezone(new DateTimeZone($timezoneName));
 
-        return sprintf(
-            '%s (UTC%s)',
-            $date->format('Y-m-d H:i:s'),
-            $date->format('P'),
-        );
+        return $date->format('Y-m-d H:i:s');
     }
 
     private static function formattedAmount(

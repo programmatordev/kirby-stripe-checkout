@@ -718,7 +718,7 @@ final class OrderPanelFixtureSeeder
                 ],
                 'consent' => [
                     'termsOfService' => 'accepted',
-                    'promotions' => 'accepted',
+                    'promotions' => 'opt_in',
                 ],
                 'discounts' => [$discount],
                 'lineItems' => $this->richCheckoutLineItems(OrderData::list($data['initiatingLineItems']), $discount),

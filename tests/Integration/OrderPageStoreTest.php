@@ -191,7 +191,7 @@ final class OrderPageStoreTest extends KirbyTestCase
 
         $this->assertIsArray($values);
         $this->assertSame(
-            '2026-07-01 13:00:00 (UTC+01:00)',
+            '2026-07-01 13:00:00',
             $values[strtolower(OrderPagePanel::handle('formattedCreatedAt'))] ?? null,
         );
     }
@@ -232,7 +232,7 @@ final class OrderPageStoreTest extends KirbyTestCase
         $this->assertArrayNotHasKey('confirmed', $orderItem);
     }
 
-    public function testPanelUsesFinalSessionLinesAfterCheckoutCompletes(): void
+    public function testPanelUsesFinalSessionFactsAfterCheckoutCompletes(): void
     {
         $page = $this->createOrder(createdAt: new DateTimeImmutable('2026-01-01T12:00:00Z'));
         $page = (new OrderPageStore($this->kirby))->update($page->uuid()->toString(), static fn(array $data): array => [
@@ -249,6 +249,25 @@ final class OrderPageStoreTest extends KirbyTestCase
             'total' => '32.00',
             'customFields' => [],
             'discounts' => [],
+            'customer' => [
+                'email' => 'buyer@example.test',
+                'individualName' => null,
+                'businessName' => null,
+                'phone' => null,
+                'taxIds' => [[
+                    'type' => 'eu_vat',
+                    'value' => null,
+                ]],
+            ],
+            'billingAddress' => [
+                'name' => null,
+                'line1' => null,
+                'line2' => null,
+                'postalCode' => null,
+                'city' => null,
+                'state' => null,
+                'country' => null,
+            ],
             'lineItems' => [[
                 'stripeLineItemId' => 'li_complete',
                 'initiatingIndex' => 0,
@@ -274,6 +293,9 @@ final class OrderPageStoreTest extends KirbyTestCase
         $this->assertSame('€0.00', $orderItem['discount'] ?? null);
         $this->assertSame('€0.00', $orderItem['tax'] ?? null);
         $this->assertArrayNotHasKey('confirmed', $orderItem);
+        $this->assertFalse($values[strtolower(OrderPagePanel::handle('hasBillingAddress'))] ?? true);
+        $this->assertFalse($values[strtolower(OrderPagePanel::handle('hasBillingTaxId'))] ?? true);
+        $this->assertFalse($values[strtolower(OrderPagePanel::handle('hasBillingInformation'))] ?? true);
     }
 
     public function testPanelBreadcrumbReturnsToTheStripeCheckoutOrderList(): void
@@ -491,7 +513,7 @@ final class OrderPageStoreTest extends KirbyTestCase
             ],
             'consent' => [
                 'termsOfService' => 'accepted',
-                'promotions' => null,
+                'promotions' => 'opt_in',
             ],
             'discounts' => [[
                 'discountId' => 'di_test',
@@ -537,6 +559,14 @@ final class OrderPageStoreTest extends KirbyTestCase
         );
         $this->assertSame('buyer@example.test', $customerSummary['email'] ?? null);
         $this->assertSame('Ana Silva', $customerSummary['individualname'] ?? null);
+        $this->assertSame(
+            'Accepted',
+            $values[strtolower(OrderPagePanel::handle('termsOfServiceConsent'))] ?? null,
+        );
+        $this->assertSame(
+            'Opted in',
+            $values[strtolower(OrderPagePanel::handle('promotionalEmailConsent'))] ?? null,
+        );
 
         $billingAddressSummary = OrderData::map(
             $values[strtolower(OrderPagePanel::handle('billingAddressSummary'))] ?? null,
@@ -717,7 +747,7 @@ final class OrderPageStoreTest extends KirbyTestCase
             $panel->refundFailureNotice(),
         );
         $this->assertSame(
-            'Disputes requiring a response: €16.00 (respond by 2026-01-08 12:00:00 (UTC+00:00)). Review the Payment tab',
+            'Disputes requiring a response: €16.00 (respond by 2026-01-08 12:00:00). Review the Payment tab',
             $panel->disputeResponseNotice(),
         );
         $this->assertSame(

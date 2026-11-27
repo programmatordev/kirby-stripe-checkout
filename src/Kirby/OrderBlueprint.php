@@ -18,11 +18,6 @@ final class OrderBlueprint
     public static function load(): array
     {
         $sections = [
-            'customer' => [
-                'customer' => ['customer', OrderPagePanel::handle('customerTaxIds')],
-                'addresses' => ['shippingAddress', 'billingAddress'],
-                'checkoutDetails' => ['customFields', 'consent'],
-            ],
             'payment' => [
                 'payment' => ['payment'],
                 'refunds' => ['refunds'],
@@ -108,7 +103,7 @@ final class OrderBlueprint
 
             $field['when'] = match ($sectionName) {
                 'discounts' => [OrderPagePanel::handle('hasDiscounts') => true],
-                'additionalInformation' => [OrderPagePanel::handle('hasCheckoutCustomFields') => true],
+                'additionalInformation' => [OrderPagePanel::handle('hasAdditionalInformation') => true],
                 'customerSummary', 'billingAddressSummary' => [
                     'checkoutStatus' => CheckoutStatus::Complete->value,
                 ],
@@ -173,11 +168,27 @@ final class OrderBlueprint
         }
 
         $when = match ($handle) {
-            OrderPagePanel::handle('customerSummary'),
-            OrderPagePanel::handle('billingAddressSummary'),
+            OrderPagePanel::handle('customerSummary') => [
+                'checkoutStatus' => CheckoutStatus::Complete->value,
+            ],
+            OrderPagePanel::handle('billingAddressSummary') => [
+                'checkoutStatus' => CheckoutStatus::Complete->value,
+                OrderPagePanel::handle('hasBillingAddress') => true,
+            ],
             OrderPagePanel::handle('billingTaxIdType'),
             OrderPagePanel::handle('billingTaxId') => [
                 'checkoutStatus' => CheckoutStatus::Complete->value,
+                OrderPagePanel::handle('hasBillingTaxId') => true,
+            ],
+            OrderPagePanel::handle('billingInformationUnavailableInfo') => [
+                'checkoutStatus' => CheckoutStatus::Complete->value,
+                OrderPagePanel::handle('hasBillingInformation') => false,
+            ],
+            OrderPagePanel::handle('termsOfServiceConsent') => [
+                OrderPagePanel::handle('hasTermsOfServiceConsent') => true,
+            ],
+            OrderPagePanel::handle('promotionalEmailConsent') => [
+                OrderPagePanel::handle('hasPromotionalEmailConsent') => true,
             ],
             OrderPagePanel::handle('shippingMethod'),
             OrderPagePanel::handle('deliveryEstimate'),
@@ -236,7 +247,16 @@ final class OrderBlueprint
             'customerSummary' => self::customerSummaryField(),
             'billingAddressSummary' => self::billingAddressSummaryField(),
             'shippingAddressSummary' => self::addressSummaryField(),
-            'hasDiscounts', 'hasCheckoutCustomFields', 'hasRefundedAmount', 'requiresShipping' => [
+            'hasDiscounts',
+            'hasAdditionalInformation',
+            'hasBillingAddress',
+            'hasBillingInformation',
+            'hasBillingTaxId',
+            'hasCheckoutCustomFields',
+            'hasRefundedAmount',
+            'hasTermsOfServiceConsent',
+            'hasPromotionalEmailConsent',
+            'requiresShipping' => [
                 'label' => false,
                 'type' => 'hidden',
             ],
@@ -264,7 +284,12 @@ final class OrderBlueprint
                 'text' => 'programmatordev.stripe-checkout.orders.shippingNotRequired',
                 'theme' => 'info',
             ],
-            'customerTaxIds' => self::structureField(['type', 'value']),
+            'billingInformationUnavailableInfo' => [
+                'label' => false,
+                'type' => 'info',
+                'text' => 'programmatordev.stripe-checkout.orders.billingInformationUnavailable',
+                'theme' => 'info',
+            ],
             'checkoutSessionRequest' => self::factsField(),
             'checkoutFailureRetryable' => ['type' => 'toggle'],
             'checkoutFailureOccurredAt', 'checkoutAttemptRetryUntil' => self::dateProperties(),
@@ -282,9 +307,10 @@ final class OrderBlueprint
         }
 
         $labels = [
-            'customerTaxIds' => 'taxIds',
             'billingTaxIdType' => 'taxIdType',
             'billingTaxId' => 'taxId',
+            'termsOfServiceConsent' => 'termsOfService',
+            'promotionalEmailConsent' => 'promotionalEmails',
             'checkoutSessionRequest' => 'sessionRequest',
             'checkoutFailureType' => 'failureType',
             'checkoutFailureRequestId' => 'requestId',
@@ -416,14 +442,17 @@ final class OrderBlueprint
             '1/1',
         );
 
-        foreach ([
-            'customerSummary' => 'customerSummary',
-            'billingAddressSummary' => 'billingAddressSummary',
-        ] as $sectionName => $fieldName) {
-            $fields[self::headline($sectionName)] = self::fieldAtWidth(self::headline($sectionName), '1/1');
-            $handle = OrderPagePanel::handle($fieldName);
-            $fields[$handle] = self::fieldAtWidth($handle, '1/1');
-        }
+        $fields[self::headline('customerSummary')] = self::fieldAtWidth(self::headline('customerSummary'), '1/1');
+        $fields[OrderPagePanel::handle('customerSummary')] = self::fieldAtWidth(
+            OrderPagePanel::handle('customerSummary'),
+            '1/1',
+        );
+
+        $fields[self::headline('billingAddressSummary')] = self::fieldAtWidth(self::headline('billingAddressSummary'), '1/1');
+        $fields[OrderPagePanel::handle('billingAddressSummary')] = self::fieldAtWidth(
+            OrderPagePanel::handle('billingAddressSummary'),
+            '1/1',
+        );
 
         $billingTaxFields = ['billingTaxIdType', 'billingTaxId'];
 
@@ -431,6 +460,11 @@ final class OrderBlueprint
             $handle = OrderPagePanel::handle($name);
             $fields[$handle] = self::fieldAtWidth($handle, '1/2');
         }
+
+        $fields[OrderPagePanel::handle('billingInformationUnavailableInfo')] = self::fieldAtWidth(
+            OrderPagePanel::handle('billingInformationUnavailableInfo'),
+            '1/1',
+        );
 
         $fields[self::headline('deliverySummary')] = self::fieldAtWidth(self::headline('deliverySummary'), '1/1');
         $fields[OrderPagePanel::handle('shippingMethod')] = self::fieldAtWidth(
@@ -456,6 +490,11 @@ final class OrderBlueprint
             '1/1',
         );
 
+        foreach (['termsOfServiceConsent', 'promotionalEmailConsent'] as $name) {
+            $handle = OrderPagePanel::handle($name);
+            $fields[$handle] = self::fieldAtWidth($handle, '1/2');
+        }
+
         $fields[self::headline('keyDates')] = self::fieldAtWidth(self::headline('keyDates'), '1/1');
 
         foreach ([
@@ -468,7 +507,18 @@ final class OrderBlueprint
             $fields[$handle] = self::fieldAtWidth($handle, '1/3');
         }
 
-        foreach (['hasDiscounts', 'hasCheckoutCustomFields', 'hasRefundedAmount', 'requiresShipping'] as $name) {
+        foreach ([
+            'hasDiscounts',
+            'hasAdditionalInformation',
+            'hasBillingAddress',
+            'hasBillingInformation',
+            'hasBillingTaxId',
+            'hasCheckoutCustomFields',
+            'hasRefundedAmount',
+            'hasTermsOfServiceConsent',
+            'hasPromotionalEmailConsent',
+            'requiresShipping',
+        ] as $name) {
             $handle = OrderPagePanel::handle($name);
             $fields[$handle] = self::field($handle);
         }
