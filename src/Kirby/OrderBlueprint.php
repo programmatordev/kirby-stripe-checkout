@@ -173,7 +173,9 @@ final class OrderBlueprint
 
         $when = match ($handle) {
             OrderPagePanel::handle('customerSummary'),
-            OrderPagePanel::handle('billingAddressSummary') => [
+            OrderPagePanel::handle('billingAddressSummary'),
+            OrderPagePanel::handle('billingTaxIdType'),
+            OrderPagePanel::handle('billingTaxId') => [
                 'checkoutStatus' => CheckoutStatus::Complete->value,
             ],
             OrderPagePanel::handle('shippingMethod'),
@@ -257,6 +259,8 @@ final class OrderBlueprint
 
         $labels = [
             'customerTaxIds' => 'taxIds',
+            'billingTaxIdType' => 'taxIdType',
+            'billingTaxId' => 'taxId',
             'checkoutSessionRequest' => 'sessionRequest',
             'checkoutFailureType' => 'failureType',
             'checkoutFailureRequestId' => 'requestId',
@@ -390,6 +394,13 @@ final class OrderBlueprint
             $fields[self::headline($sectionName)] = self::fieldAtWidth(self::headline($sectionName), '1/1');
             $handle = OrderPagePanel::handle($fieldName);
             $fields[$handle] = self::fieldAtWidth($handle, '1/1');
+        }
+
+        $billingTaxFields = ['billingTaxIdType', 'billingTaxId'];
+
+        foreach ($billingTaxFields as $name) {
+            $handle = OrderPagePanel::handle($name);
+            $fields[$handle] = self::fieldAtWidth($handle, '1/2');
         }
 
         $fields[self::headline('deliverySummary')] = self::fieldAtWidth(self::headline('deliverySummary'), '1/1');

@@ -291,6 +291,8 @@ final class OrderPagePanel extends Page
         MoneyFormatter $moneyFormatter,
     ): array {
         $customer = self::map($order['customer'] ?? null);
+        $customerTaxIds = self::list($customer['taxIds'] ?? null);
+        $billingTaxId = self::map($customerTaxIds[0] ?? null);
         $billingAddress = self::map($order['billingAddress'] ?? null);
         $shippingAddress = self::map($order['shippingAddress'] ?? null);
         $shipping = self::map($order['shipping'] ?? null);
@@ -309,6 +311,8 @@ final class OrderPagePanel extends Page
             self::handle('requiresShipping') => $requiresShipping,
             self::handle('customerSummary') => $customer,
             self::handle('billingAddressSummary') => $billingAddress,
+            self::handle('billingTaxIdType') => $billingTaxId['type'] ?? null,
+            self::handle('billingTaxId') => $billingTaxId['value'] ?? null,
             self::handle('shippingAddressSummary') => $shippingAddress,
             self::handle('shippingMethod') => $shipping['label'] ?? null,
             self::handle('deliveryEstimate') => self::deliveryEstimate($deliveryEstimate),
@@ -332,7 +336,7 @@ final class OrderPagePanel extends Page
                 panelLocale: $panelLocale,
                 moneyFormatter: $moneyFormatter,
             ),
-            self::handle('customerTaxIds') => self::list($customer['taxIds'] ?? null),
+            self::handle('customerTaxIds') => $customerTaxIds,
             self::handle('checkoutSessionRequest') => self::facts($checkoutAttempt['sessionRequest'] ?? null),
             self::handle('checkoutFailureType') => $providerFailure['type'] ?? null,
             self::handle('checkoutFailureRequestId') => $providerFailure['requestId'] ?? null,

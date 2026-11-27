@@ -450,7 +450,12 @@ final class OrderPageStoreTest extends KirbyTestCase
                 'individualName' => 'Ana Silva',
                 'businessName' => null,
                 'phone' => null,
-                'taxIds' => [],
+                'taxIds' => [
+                    [
+                        'type' => 'eu_vat',
+                        'value' => 'PT123456789',
+                    ],
+                ],
             ],
             'billingAddress' => [
                 'name' => 'Ana Silva',
@@ -524,6 +529,14 @@ final class OrderPageStoreTest extends KirbyTestCase
         );
         $this->assertSame('Rua Um, 10', $billingAddressSummary['line1'] ?? null);
         $this->assertSame('1000-001', $billingAddressSummary['postalcode'] ?? null);
+        $this->assertSame(
+            'eu_vat',
+            $values[strtolower(OrderPagePanel::handle('billingTaxIdType'))] ?? null,
+        );
+        $this->assertSame(
+            'PT123456789',
+            $values[strtolower(OrderPagePanel::handle('billingTaxId'))] ?? null,
+        );
         $this->assertFalse(
             $values[strtolower(OrderPagePanel::handle('requiresShipping'))] ?? true,
         );

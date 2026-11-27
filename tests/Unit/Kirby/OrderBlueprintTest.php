@@ -201,6 +201,13 @@ final class OrderBlueprintTest extends TestCase
         $this->assertArrayHasKey('postalCode', $billingAddressFields);
         $this->assertTrue($billingAddress['disabled'] ?? false);
 
+        $billingTaxIdType = self::map($fields[OrderPagePanel::handle('billingTaxIdType')] ?? null);
+        $billingTaxId = self::map($fields[OrderPagePanel::handle('billingTaxId')] ?? null);
+        $this->assertSame('text', $billingTaxIdType['type'] ?? null);
+        $this->assertSame('text', $billingTaxId['type'] ?? null);
+        $this->assertTrue($billingTaxIdType['disabled'] ?? false);
+        $this->assertTrue($billingTaxId['disabled'] ?? false);
+
         $deliveryCondition = [
             'checkoutStatus' => 'complete',
             OrderPagePanel::handle('requiresShipping') => true,
