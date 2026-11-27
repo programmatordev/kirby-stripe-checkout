@@ -6,7 +6,7 @@ namespace ProgrammatorDev\StripeCheckout\Kirby;
 
 use Brick\Math\BigDecimal;
 use DateTimeImmutable;
-use IntlDateFormatter;
+use DateTimeZone;
 use Kirby\Cms\Language;
 use Kirby\Form\Fields;
 use Kirby\Panel\Page;
@@ -167,6 +167,7 @@ final class OrderPagePanel extends Page
         $checkoutStatus = CheckoutStatus::from(OrderData::string($order['checkoutStatus'] ?? null));
         $paymentStatus = PaymentStatus::from(OrderData::string($order['paymentStatus'] ?? null));
         $refundStatus = RefundStatus::from(OrderData::string($order['refundStatus'] ?? null));
+        $refundRequiresAction = OrderData::boolean($order['refundRequiresAction'] ?? null);
         $disputeStatus = DisputeStatus::from(OrderData::string($order['disputeStatus'] ?? null));
 
         return [
@@ -192,12 +193,15 @@ final class OrderPagePanel extends Page
             ),
             self::statusReport(
                 name: 'refundStatus',
-                value: self::translate('orders.index.option.refundFilter.' . $refundStatus->value),
-                theme: match ($refundStatus) {
-                    RefundStatus::None => 'positive',
-                    RefundStatus::Pending, RefundStatus::Partial => 'notice',
-                    RefundStatus::Full => 'info',
-                    RefundStatus::Failed => 'negative',
+                value: $refundRequiresAction
+                    ? self::translate('orders.fields.refundRequiresAction')
+                    : self::translate('orders.index.option.refundFilter.' . $refundStatus->value),
+                theme: match (true) {
+                    $refundRequiresAction => 'negative',
+                    $refundStatus === RefundStatus::None => 'positive',
+                    in_array($refundStatus, [RefundStatus::Pending, RefundStatus::Partial], true) => 'notice',
+                    $refundStatus === RefundStatus::Full => 'info',
+                    $refundStatus === RefundStatus::Failed => 'negative',
                 },
             ),
             self::statusReport(
@@ -314,16 +318,20 @@ final class OrderPagePanel extends Page
             self::handle('formattedTaxTotal') => self::formattedAmount($order['taxTotal'] ?? null, $currency, $panelLocale, $moneyFormatter),
             self::handle('formattedTotal') => self::formattedAmount($order['total'] ?? null, $currency, $panelLocale, $moneyFormatter),
             self::handle('formattedRefundedTotal') => self::formattedAmount($refundedTotal, $currency, $panelLocale, $moneyFormatter),
-            self::handle('formattedCreatedAt') => self::formattedDate($order['createdAt'] ?? null, $panelLocale),
-            self::handle('formattedCheckoutCompletedAt') => self::formattedDate($order['checkoutCompletedAt'] ?? null, $panelLocale),
-            self::handle('formattedPaidAt') => self::formattedDate($order['paidAt'] ?? null, $panelLocale),
-            self::handle('formattedPaymentFailedAt') => self::formattedDate($order['paymentFailedAt'] ?? null, $panelLocale),
+            self::handle('formattedCreatedAt') => self::formattedDate($order['createdAt'] ?? null),
+            self::handle('formattedCheckoutCompletedAt') => self::formattedDate($order['checkoutCompletedAt'] ?? null),
+            self::handle('formattedPaidAt') => self::formattedDate($order['paidAt'] ?? null),
+            self::handle('formattedPaymentFailedAt') => self::formattedDate($order['paymentFailedAt'] ?? null),
             self::handle('orderItems') => self::orderItems(
                 order: $order,
                 panelLocale: $panelLocale,
                 moneyFormatter: $moneyFormatter,
             ),
-            self::handle('orderDiscounts') => $discounts,
+            self::handle('orderDiscounts') => self::orderDiscounts(
+                discounts: $discounts,
+                panelLocale: $panelLocale,
+                moneyFormatter: $moneyFormatter,
+            ),
             self::handle('customerTaxIds') => self::list($customer['taxIds'] ?? null),
             self::handle('checkoutSessionRequest') => self::facts($checkoutAttempt['sessionRequest'] ?? null),
             self::handle('checkoutFailureType') => $providerFailure['type'] ?? null,
@@ -398,7 +406,7 @@ final class OrderPagePanel extends Page
         return $kirby->translation($panelLanguage)->locale();
     }
 
-    private static function formattedDate(mixed $value, string $panelLocale): ?string
+    private static function formattedDate(mixed $value): ?string
     {
         $value = OrderData::nullableString($value);
 
@@ -406,15 +414,14 @@ final class OrderPagePanel extends Page
             return null;
         }
 
-        $formatter = new IntlDateFormatter(
-            $panelLocale,
-            IntlDateFormatter::MEDIUM,
-            IntlDateFormatter::SHORT,
-            date_default_timezone_get(),
-        );
-        $formatted = $formatter->format(new DateTimeImmutable($value));
+        $timezoneName = date_default_timezone_get();
+        $date = (new DateTimeImmutable($value))->setTimezone(new DateTimeZone($timezoneName));
 
-        return $formatted === false ? $value : $formatted;
+        return sprintf(
+            '%s (UTC%s)',
+            $date->format('Y-m-d H:i:s'),
+            $date->format('P'),
+        );
     }
 
     private static function formattedAmount(
@@ -568,8 +575,7 @@ final class OrderPagePanel extends Page
         return [
             'name' => $initiatingLineItem['name'] ?? $lineItem['description'] ?? null,
             'description' => $initiatingLineItem['description'] ?? null,
-            'optionSummary' => $optionLabels === [] ? null : implode(' · ', $optionLabels),
-            'options' => $options,
+            'optionSummary' => $optionLabels,
             'sku' => $initiatingLineItem['sku'] ?? null,
             'quantity' => $amounts['quantity'] ?? null,
             'requiresShipping' => $initiatingLineItem['requiresShipping'] ?? null,
@@ -585,6 +591,29 @@ final class OrderPagePanel extends Page
                 $moneyFormatter,
             ),
         ];
+    }
+
+    /**
+     * @param list<mixed> $discounts
+     * @return list<array<string, mixed>>
+     */
+    private static function orderDiscounts(
+        array $discounts,
+        string $panelLocale,
+        MoneyFormatter $moneyFormatter,
+    ): array {
+        return array_map(static function (mixed $value) use ($panelLocale, $moneyFormatter): array {
+            $discount = self::map($value);
+            $currency = OrderData::string($discount['currency'] ?? null);
+            $percentOff = OrderData::nullableString($discount['percentOff'] ?? null);
+
+            return [
+                'couponName' => $discount['couponName'] ?? null,
+                'promotionCode' => $discount['promotionCode'] ?? null,
+                'amount' => self::formattedAmount($discount['amount'] ?? null, $currency, $panelLocale, $moneyFormatter),
+                'percentOff' => $percentOff === null ? null : $percentOff . '%',
+            ];
+        }, $discounts);
     }
 
     /** @return list<array<string, mixed>> */

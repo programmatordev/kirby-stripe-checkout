@@ -75,7 +75,6 @@ final class OrderBlueprintTest extends TestCase
             'name',
             'description',
             'optionSummary',
-            'options',
             'sku',
             'quantity',
             'requiresShipping',
@@ -86,6 +85,7 @@ final class OrderBlueprintTest extends TestCase
             'tax',
             'total',
         ], array_keys($fields));
+        $this->assertSame('tags', self::map($fields['optionSummary'] ?? null)['type'] ?? null);
         $this->assertFalse(self::map($fields['name'] ?? null)['disabled'] ?? false);
 
         $technical = self::map($tabs['technical'] ?? null);
@@ -183,7 +183,7 @@ final class OrderBlueprintTest extends TestCase
         $orderDiscounts = self::map($fields[OrderPagePanel::handle('orderDiscounts')] ?? null);
         $this->assertSame($hasDiscounts, $orderDiscounts['when'] ?? null);
         $this->assertSame(
-            ['couponName', 'promotionCode', 'amount', 'currency', 'percentOff'],
+            ['couponName', 'promotionCode', 'amount', 'percentOff'],
             array_keys(self::map($orderDiscounts['fields'] ?? null)),
         );
 

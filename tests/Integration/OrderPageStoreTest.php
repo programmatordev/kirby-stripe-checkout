@@ -37,11 +37,17 @@ use ProgrammatorDev\StripeCheckout\Order\Exception\OrderDataException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderQueryException;
 use ProgrammatorDev\StripeCheckout\Order\Exception\OrderStorageException;
 use ProgrammatorDev\StripeCheckout\Order\Internal\OrderData;
+use ProgrammatorDev\StripeCheckout\Order\Internal\PaymentSnapshot;
+use ProgrammatorDev\StripeCheckout\Order\Internal\RefundCollection;
+use ProgrammatorDev\StripeCheckout\Order\Internal\RefundSnapshot;
 use ProgrammatorDev\StripeCheckout\Order\OrderCreationContext;
+use ProgrammatorDev\StripeCheckout\Order\Payment;
+use ProgrammatorDev\StripeCheckout\Order\PaymentStatus;
 use ProgrammatorDev\StripeCheckout\Plugin\RuntimeFactory;
 use ProgrammatorDev\StripeCheckout\Product\Price;
 use ProgrammatorDev\StripeCheckout\Product\Product;
 use ProgrammatorDev\StripeCheckout\Product\ProductRequest;
+use ProgrammatorDev\StripeCheckout\Product\SelectedOption;
 use ProgrammatorDev\StripeCheckout\Shipping\ShippingContext;
 use ProgrammatorDev\StripeCheckout\StripeCheckout;
 use ProgrammatorDev\StripeCheckout\Test\Support\CheckoutAttemptFactory;
@@ -49,6 +55,9 @@ use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestCase;
 use ProgrammatorDev\StripeCheckout\Test\Support\KirbyTestEnvironment;
 use ProgrammatorDev\StripeCheckout\Test\Support\TestWorkspace;
 use RuntimeException;
+use Stripe\Charge;
+use Stripe\PaymentIntent;
+use Stripe\Refund;
 
 final class OrderPageStoreTest extends KirbyTestCase
 {
@@ -141,6 +150,47 @@ final class OrderPageStoreTest extends KirbyTestCase
         $content = $page->content('default')->toArray();
         $this->assertArrayNotHasKey($requestHandle, $content);
         $this->assertArrayNotHasKey($tokenHandle, $content);
+    }
+
+    public function testPanelPresentsSelectedOptionsAsOperatorTags(): void
+    {
+        $createdAt = new DateTimeImmutable('2026-01-01T12:00:00Z');
+        $page = $this->createOrder(
+            createdAt: $createdAt,
+            selectedOptions: [new SelectedOption(
+                optionId: 'size',
+                optionName: 'Size',
+                valueId: 'large',
+                valueName: 'Large',
+            )],
+        );
+        $values = $page->panel()->versions()['latest'] ?? null;
+        $this->assertIsArray($values);
+        $orderItems = $values[strtolower(OrderPagePanel::handle('orderItems'))] ?? null;
+        $this->assertIsArray($orderItems);
+        $orderItem = $orderItems[0] ?? null;
+        $this->assertIsArray($orderItem);
+        $this->assertSame(['Size: Large'], $orderItem['optionsummary'] ?? null);
+        $this->assertArrayNotHasKey('options', $orderItem);
+    }
+
+    public function testPanelFormatsKeyDatesInTheApplicationTimezone(): void
+    {
+        $page = $this->createOrder(createdAt: new DateTimeImmutable('2026-07-01T12:00:00Z'));
+        $previousTimezone = date_default_timezone_get();
+
+        try {
+            date_default_timezone_set('Europe/Lisbon');
+            $values = $page->panel()->versions()['latest'] ?? null;
+        } finally {
+            date_default_timezone_set($previousTimezone);
+        }
+
+        $this->assertIsArray($values);
+        $this->assertSame(
+            '2026-07-01 13:00:00 (UTC+01:00)',
+            $values[strtolower(OrderPagePanel::handle('formattedCreatedAt'))] ?? null,
+        );
     }
 
     public function testPanelDoesNotPresentOpenSessionLinesAsACompletedPurchase(): void
@@ -433,7 +483,7 @@ final class OrderPageStoreTest extends KirbyTestCase
                 'amount' => '5.00',
                 'currency' => 'EUR',
                 'providerAmount' => 500,
-                'percentOff' => null,
+                'percentOff' => '15',
                 'appliesToProducts' => [],
                 'firstTimeTransaction' => null,
                 'minimumAmount' => null,
@@ -485,6 +535,13 @@ final class OrderPageStoreTest extends KirbyTestCase
             '€27.00',
             $values[strtolower(OrderPagePanel::handle('formattedTotal'))] ?? null,
         );
+        $orderDiscounts = OrderData::list(
+            $values[strtolower(OrderPagePanel::handle('orderDiscounts'))] ?? null,
+        );
+        $orderDiscount = OrderData::map($orderDiscounts[0] ?? null);
+        $this->assertSame('€5.00', $orderDiscount['amount'] ?? null);
+        $this->assertSame('15%', $orderDiscount['percentoff'] ?? null);
+        $this->assertArrayNotHasKey('currency', $orderDiscount);
         $this->assertFalse(
             $values[strtolower(OrderPagePanel::handle('hasRefundedAmount'))] ?? true,
         );
@@ -503,6 +560,72 @@ final class OrderPageStoreTest extends KirbyTestCase
             ...$data,
             'taxTotal' => '1.00',
         ]);
+    }
+
+    public function testPanelMarksARefundThatRequiresAction(): void
+    {
+        $createdAt = new DateTimeImmutable('2026-01-01T12:00:00Z');
+        $page = $this->createOrder(createdAt: $createdAt);
+        $paymentIntentId = 'pi_action';
+        $chargeId = 'ch_action';
+        $amount = Money::of('32.00', 'EUR');
+        $payment = Payment::fromSnapshot(new PaymentSnapshot(
+            amount: $amount,
+            amountReceived: $amount,
+            stripePaymentIntentId: $paymentIntentId,
+            stripeChargeId: $chargeId,
+            stripePaymentMethodId: 'pm_action',
+            paymentIntentStatus: PaymentIntent::STATUS_SUCCEEDED,
+            chargeStatus: Charge::STATUS_SUCCEEDED,
+            methodType: 'card',
+            createdAt: $createdAt->getTimestamp(),
+            chargeCreatedAt: $createdAt->getTimestamp(),
+            chargePaid: true,
+            chargeCaptured: true,
+            amountCaptured: $amount,
+        ), PaymentStatus::Paid, 'EUR');
+        $refund = RefundSnapshot::fromStripe([
+            'id' => 're_action',
+            'object' => Refund::OBJECT_NAME,
+            'amount' => 1600,
+            'currency' => 'eur',
+            'payment_intent' => $paymentIntentId,
+            'charge' => $chargeId,
+            'created' => $createdAt->getTimestamp(),
+            'status' => Refund::STATUS_REQUIRES_ACTION,
+        ], $paymentIntentId);
+        $refunds = RefundCollection::fromSnapshots([$refund], $paymentIntentId, $amount)
+            ->observed(null, $createdAt);
+        $page = (new OrderPageStore($this->kirby))->update($page->uuid()->toString(), static fn(array $data): array => [
+            ...$data,
+            'checkoutStatus' => 'complete',
+            'paymentStatus' => 'paid',
+            'stripeCheckoutSessionId' => 'cs_action',
+            'stripeShippingRateIds' => [],
+            'stripePaymentIntentId' => $paymentIntentId,
+            'stripeChargeId' => $chargeId,
+            'checkoutCompletedAt' => $data['createdAt'],
+            'paidAt' => $data['createdAt'],
+            'discountTotal' => '0',
+            'shippingTotal' => '0',
+            'taxTotal' => '0',
+            'total' => '32.00',
+            'customFields' => [],
+            'discounts' => [],
+            'payment' => $payment->toArray(),
+            'refundStatus' => $refunds->refundStatus()->value,
+            'refundHasActive' => $refunds->refundHasActive(),
+            'refundRequiresAction' => $refunds->refundRequiresAction(),
+            'refundedTotal' => '0',
+            'refundUpdatedAt' => $data['createdAt'],
+            'refunds' => $refunds->toArray(),
+        ]);
+        $panel = $page->panel();
+        $this->assertInstanceOf(OrderPagePanel::class, $panel);
+        $reports = $panel->statusReports();
+
+        $this->assertSame('Refund requires action', $reports[2]['label']);
+        $this->assertSame('negative', $reports[2]['theme']);
     }
 
     public function testStaleOrderPageDoesNotOverwriteCanonicalUpdates(): void
@@ -1116,13 +1239,28 @@ final class OrderPageStoreTest extends KirbyTestCase
         return $page?->content('default')->data()[strtolower($field)] ?? null;
     }
 
+    /** @param list<SelectedOption> $selectedOptions */
     private function createOrder(
         ?string $userUuid = null,
         ?DateTimeImmutable $createdAt = null,
         CredentialMode $credentialMode = CredentialMode::Test,
+        array $selectedOptions = [],
     ): OrderPage {
         $price = Money::of('16', 'EUR');
-        $product = new Product(new ProductRequest('product', 2), 'Product', false, new Price($price));
+        $requestedOptions = [];
+
+        foreach ($selectedOptions as $selectedOption) {
+            $requestedOptions[$selectedOption->optionId()] = $selectedOption->valueId();
+        }
+
+        $product = new Product(
+            request: new ProductRequest('product', 2, $requestedOptions),
+            name: 'Product',
+            requiresShipping: false,
+            price: new Price($price),
+            selectedOptions: $selectedOptions,
+            variantId: $selectedOptions === [] ? null : 'selected-variant',
+        );
         $checkout = new CheckoutContext(
             items: [new CheckoutLineItem($product)],
             languageCode: $this->kirby->languageCode(),

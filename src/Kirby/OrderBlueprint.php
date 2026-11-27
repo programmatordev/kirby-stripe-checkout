@@ -348,12 +348,12 @@ final class OrderBlueprint
             'size' => 'medium',
             'width' => '1/1',
         ];
-        $fields[self::headline('items')] = self::fieldAtWidth(self::headline('items'), '1/1');
 
         foreach (self::checkoutStateInfoFields() as $handle => $checkoutStatus) {
             $fields[$handle] = self::fieldAtWidth($handle, '1/1');
         }
 
+        $fields[self::headline('items')] = self::fieldAtWidth(self::headline('items'), '1/1');
         $fields[OrderPagePanel::handle('orderItems')] = self::fieldAtWidth(
             OrderPagePanel::handle('orderItems'),
             '1/1',
@@ -419,7 +419,7 @@ final class OrderBlueprint
             'formattedPaymentFailedAt',
         ] as $name) {
             $handle = OrderPagePanel::handle($name);
-            $fields[$handle] = self::fieldAtWidth($handle, '1/4');
+            $fields[$handle] = self::fieldAtWidth($handle, '1/3');
         }
 
         foreach (['hasDiscounts', 'hasRefundedAmount', 'requiresShipping'] as $name) {
@@ -544,7 +544,6 @@ final class OrderBlueprint
                 'name',
                 'description',
                 'optionSummary',
-                'options',
                 'sku',
                 'quantity',
                 'requiresShipping',
@@ -562,18 +561,12 @@ final class OrderBlueprint
                 'total' => ['align' => 'right'],
             ],
             types: [
+                'optionSummary' => 'tags',
                 'quantity' => 'number',
                 'requiresShipping' => 'toggle',
             ],
         );
         $field['label'] = false;
-        $field['fields']['optionSummary']['type'] = 'hidden';
-        $field['fields']['options'] = self::nestedField('options', self::structureField([
-            'optionId',
-            'optionName',
-            'valueId',
-            'valueName',
-        ]));
 
         return $field;
     }
@@ -581,15 +574,18 @@ final class OrderBlueprint
     /** @return array<string, mixed> */
     private static function orderDiscountsField(): array
     {
-        return self::structureField(
-            members: ['couponName', 'promotionCode', 'amount', 'currency', 'percentOff'],
+        $field = self::structureField(
+            members: ['couponName', 'promotionCode', 'amount', 'percentOff'],
             columns: [
                 'couponName' => [],
                 'promotionCode' => [],
                 'amount' => ['align' => 'right'],
-                'currency' => [],
+                'percentOff' => ['align' => 'right'],
             ],
         );
+        $field['label'] = false;
+
+        return $field;
     }
 
     /** @return array<string, mixed> */
