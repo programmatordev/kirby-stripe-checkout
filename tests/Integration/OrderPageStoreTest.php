@@ -446,6 +446,10 @@ final class OrderPageStoreTest extends KirbyTestCase
         $this->assertSame('info', $reports[0]['theme']);
         $this->assertSame('Unpaid', $reports[1]['label']);
         $this->assertSame('info', $reports[1]['theme']);
+        $this->assertSame('Not applicable', $reports[2]['label']);
+        $this->assertSame('passive', $reports[2]['theme']);
+        $this->assertSame('Not applicable', $reports[3]['label']);
+        $this->assertSame('passive', $reports[3]['theme']);
 
         $store = new OrderPageStore($this->kirby);
         $updated = $store->update($page->uuid()->toString(), static fn(array $data): array => [
@@ -635,6 +639,80 @@ final class OrderPageStoreTest extends KirbyTestCase
         ]);
     }
 
+    public function testPanelPresentsFailedPaymentDetailsAndFallback(): void
+    {
+        $createdAt = new DateTimeImmutable('2026-01-01T12:00:00Z');
+        $page = $this->createOrder(createdAt: $createdAt);
+        $amount = Money::of('32.00', 'EUR');
+        $payment = Payment::fromSnapshot(new PaymentSnapshot(
+            amount: $amount,
+            amountReceived: Money::zero('EUR'),
+            stripePaymentIntentId: 'pi_failed',
+            stripeChargeId: 'ch_failed',
+            stripePaymentMethodId: 'pm_failed',
+            paymentIntentStatus: PaymentIntent::STATUS_REQUIRES_PAYMENT_METHOD,
+            chargeStatus: Charge::STATUS_FAILED,
+            methodType: 'card',
+            createdAt: $createdAt->getTimestamp(),
+            chargeCreatedAt: $createdAt->getTimestamp(),
+            chargePaid: false,
+            chargeCaptured: false,
+            amountCaptured: Money::zero('EUR'),
+            failureCode: 'card_declined',
+            failureMessage: 'The card was declined.',
+        ), PaymentStatus::Failed, 'EUR');
+        $store = new OrderPageStore($this->kirby);
+        $page = $store->update($page->uuid()->toString(), static fn(array $data): array => [
+            ...$data,
+            'checkoutStatus' => 'complete',
+            'paymentStatus' => 'failed',
+            'stripeCheckoutSessionId' => 'cs_failed',
+            'stripeShippingRateIds' => [],
+            'stripePaymentIntentId' => 'pi_failed',
+            'stripeChargeId' => 'ch_failed',
+            'checkoutCompletedAt' => $data['createdAt'],
+            'paymentFailedAt' => $data['createdAt'],
+            'discountTotal' => '0',
+            'shippingTotal' => '0',
+            'taxTotal' => '0',
+            'total' => '32.00',
+            'customFields' => [],
+            'discounts' => [],
+            'payment' => $payment->toArray(),
+        ]);
+        $panel = $page->panel();
+        $this->assertInstanceOf(OrderPagePanel::class, $panel);
+        $values = $panel->versions()['latest'] ?? null;
+        $this->assertIsArray($values);
+        $this->assertSame(
+            'The card was declined.',
+            $values[strtolower(OrderPagePanel::handle('paymentFailureMessage'))] ?? null,
+        );
+        $this->assertSame(
+            '2026-01-01 12:00:00',
+            $values[strtolower(OrderPagePanel::handle('paymentFailedAt'))] ?? null,
+        );
+        $reports = $panel->financialStatusReports();
+        $this->assertSame('Failed', $reports[0]['label']);
+        $this->assertSame('negative', $reports[0]['theme']);
+        $this->assertSame('Not applicable', $reports[1]['label']);
+        $this->assertSame('Not applicable', $reports[2]['label']);
+
+        $paymentData = $payment->toArray();
+        $paymentData['failureMessage'] = null;
+        $paymentWithoutMessage = Payment::fromArray($paymentData);
+        $page = $store->update($page->uuid()->toString(), static fn(array $data): array => [
+            ...$data,
+            'payment' => $paymentWithoutMessage->toArray(),
+        ]);
+        $values = $page->panel()->versions()['latest'] ?? null;
+        $this->assertIsArray($values);
+        $this->assertSame(
+            'Not provided',
+            $values[strtolower(OrderPagePanel::handle('paymentFailureMessage'))] ?? null,
+        );
+    }
+
     public function testPanelExplainsPaymentIssuesThatNeedAttention(): void
     {
         $createdAt = new DateTimeImmutable('2026-01-01T12:00:00Z');
@@ -733,6 +811,36 @@ final class OrderPageStoreTest extends KirbyTestCase
         $panel = $page->panel();
         $this->assertInstanceOf(OrderPagePanel::class, $panel);
         $reports = $panel->statusReports();
+        $financialReports = $panel->financialStatusReports();
+
+        $this->assertCount(3, $financialReports);
+        $this->assertSame('Paid', $financialReports[0]['label']);
+        $this->assertSame('Refund requires action', $financialReports[1]['label']);
+        $this->assertSame('Needs response', $financialReports[2]['label']);
+
+        $values = $page->panel()->versions()['latest'] ?? null;
+        $this->assertIsArray($values);
+        $this->assertSame(
+            '€32.00',
+            $values[strtolower(OrderPagePanel::handle('formattedPaymentAmount'))] ?? null,
+        );
+        $this->assertSame(
+            '€32.00',
+            $values[strtolower(OrderPagePanel::handle('formattedPaymentAmountReceived'))] ?? null,
+        );
+        $this->assertSame(
+            '€32.00',
+            $values[strtolower(OrderPagePanel::handle('formattedPaymentAmountCaptured'))] ?? null,
+        );
+        $this->assertSame('Card', $values[strtolower(OrderPagePanel::handle('paymentMethod'))] ?? null);
+        $this->assertSame(
+            '2026-01-01 12:00:00',
+            $values[strtolower(OrderPagePanel::handle('formattedPaymentCreatedAt'))] ?? null,
+        );
+        $this->assertSame(
+            '2026-01-01 12:00:00',
+            $values[strtolower(OrderPagePanel::handle('paymentPaidAt'))] ?? null,
+        );
 
         $this->assertSame('Refund requires action', $reports[2]['label']);
         $this->assertSame('negative', $reports[2]['theme']);

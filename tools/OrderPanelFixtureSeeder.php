@@ -621,12 +621,20 @@ final class OrderPanelFixtureSeeder
     {
         $data = $this->store->data($page);
 
-        // Enriched fixtures reuse their completed projection on reruns; rebuilding the base would discard those later snapshots.
+        // Refresh the base payment projection without rebuilding the completed order or discarding later refund and dispute snapshots.
         if (
             $data['checkoutStatus'] === CheckoutStatus::Complete->value
             && $data['paymentStatus'] === $paymentStatus->value
         ) {
-            return $page;
+            return $this->store->update($page->uuid()->toString(), fn(array $data): array => [
+                ...$data,
+                ...$this->paymentFacts(
+                    uuid: $page->slug(),
+                    paymentStatus: $paymentStatus,
+                    total: OrderData::string($data['total']),
+                    createdAt: OrderData::date($data['checkoutCompletedAt']),
+                ),
+            ]);
         }
 
         return $this->complete($page, $paymentStatus);
@@ -1011,6 +1019,7 @@ final class OrderPanelFixtureSeeder
             chargeCaptured: $paid || $failed ? $paid : null,
             amountCaptured: $paid ? $amount : ($failed ? Money::zero(self::CURRENCY) : null),
             failureCode: $failed ? 'card_declined' : null,
+            failureMessage: $failed ? 'The card was declined.' : null,
         ), $paymentStatus, self::CURRENCY);
     }
 

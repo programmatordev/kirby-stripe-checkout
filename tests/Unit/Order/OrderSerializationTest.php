@@ -421,6 +421,7 @@ final class OrderSerializationTest extends TestCase
                 amount: Money::of('32', 'EUR'),
                 amountReceived: Money::of('16', 'EUR'),
                 stripePaymentIntentId: 'pi_test',
+                failureMessage: 'The payment method could not be used.',
             ),
             status: $state === CheckoutStatus::Complete ? PaymentStatus::Pending : PaymentStatus::Unpaid,
             currency: 'EUR',
@@ -430,6 +431,31 @@ final class OrderSerializationTest extends TestCase
 
         $this->assertSame($data['payment'], $decoded['payment']);
         $this->assertSame($state === CheckoutStatus::Complete, isset($decoded['total']));
+    }
+
+    public function testRestoresStoredPaymentsWithoutAnOptionalFailureMessage(): void
+    {
+        $data = $this->dataWithCheckoutStatus(CheckoutStatus::Open);
+        $data['stripePaymentIntentId'] = 'pi_test';
+        $data['payment'] = Payment::fromSnapshot(
+            snapshot: new PaymentSnapshot(
+                amount: Money::of('32', 'EUR'),
+                stripePaymentIntentId: 'pi_test',
+            ),
+            status: PaymentStatus::Unpaid,
+            currency: 'EUR',
+        )->toArray();
+        unset($data['payment']['failureMessage']);
+
+        $decoded = OrderSerializer::decode(
+            OrderSerializer::encode($data),
+            OrderSchema::ORDER_PAGE_TEMPLATE,
+            'Abc123def456GHI7',
+        );
+
+        $payment = OrderData::map($decoded['payment']);
+        $this->assertArrayHasKey('failureMessage', $payment);
+        $this->assertNull($payment['failureMessage']);
     }
 
     /** @return iterable<array{CheckoutStatus}> */

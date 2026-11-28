@@ -34,6 +34,7 @@ final readonly class PaymentSnapshot
         private ?bool $chargeCaptured = null,
         private ?Money $amountCaptured = null,
         private ?string $failureCode = null,
+        private ?string $failureMessage = null,
         private ?PaymentAction $nextAction = null,
     ) {}
 
@@ -106,6 +107,12 @@ final readonly class PaymentSnapshot
     public function failureCode(): ?string
     {
         return $this->failureCode;
+    }
+
+    /** Provider-authored explanation for presentation, never a value for programmatic decisions. */
+    public function failureMessage(): ?string
+    {
+        return $this->failureMessage;
     }
 
     public function nextActionType(): ?string

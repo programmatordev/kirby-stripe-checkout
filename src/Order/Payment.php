@@ -39,6 +39,7 @@ final readonly class Payment
             'chargeStatus' => $snapshot->chargeStatus(),
             'methodType' => $snapshot->methodType(),
             'failureCode' => $snapshot->failureCode(),
+            'failureMessage' => $snapshot->failureMessage(),
             'createdAt' => $snapshot->createdAt(),
             'chargeCreatedAt' => $snapshot->chargeCreatedAt(),
             'chargePaid' => $snapshot->chargePaid(),
@@ -49,9 +50,11 @@ final readonly class Payment
     /** @param array<string, mixed> $data */
     public static function fromArray(array $data, ?PaymentAction $nextAction = null): self
     {
-        $keys = ['status', 'currency', ...self::MONEY_FIELDS, ...self::TEXT_FIELDS, ...self::TIME_FIELDS, ...self::BOOLEAN_FIELDS];
+        $keys = ['status', 'currency', ...self::MONEY_FIELDS, ...self::TEXT_FIELDS, 'failureMessage', ...self::TIME_FIELDS, ...self::BOOLEAN_FIELDS];
         OrderData::validateAllowedKeys($data, $keys);
-        OrderData::validateRequiredKeys($data, $keys);
+        // Schema 1 orders can predate this optional presentation fact.
+        OrderData::validateRequiredKeys($data, array_values(array_diff($keys, ['failureMessage'])));
+        $data['failureMessage'] ??= null;
         PaymentStatus::from(OrderData::text($data['status']));
         $currency = OrderData::text($data['currency']);
         $registry = new StripeCurrencyRegistry();
@@ -67,6 +70,10 @@ final readonly class Payment
             if ($data[$key] !== null) {
                 OrderData::nonEmptyString($data[$key]);
             }
+        }
+
+        if ($data['failureMessage'] !== null) {
+            OrderData::string($data['failureMessage']);
         }
 
         foreach (self::TIME_FIELDS as $key) {
@@ -140,6 +147,11 @@ final readonly class Payment
     public function failureCode(): ?string
     {
         return OrderData::nullableString($this->data['failureCode']);
+    }
+
+    public function failureMessage(): ?string
+    {
+        return OrderData::nullableString($this->data['failureMessage']);
     }
 
     public function createdAt(): ?int

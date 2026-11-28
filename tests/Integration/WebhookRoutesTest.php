@@ -569,6 +569,7 @@ final class WebhookRoutesTest extends KirbyTestCase
         $paymentMethodId = 'method.reference-' . str_repeat('m', 3000);
         $chargeId = 'charge.reference-' . str_repeat('c', 3000);
         $failureCode = 'future_failure_' . str_repeat('f', 3000);
+        $failureMessage = 'The payment method could not be used.';
         $invoiceId = 'invoice.reference-' . str_repeat('i', 3000);
         $customerId = 'customer.reference-' . str_repeat('c', 3000);
         $methodType = 'future_method_' . str_repeat('m', 3000);
@@ -599,6 +600,7 @@ final class WebhookRoutesTest extends KirbyTestCase
             'captured' => false,
             'payment_method' => $paymentMethodId,
             'failure_code' => $failureCode,
+            'failure_message' => $failureMessage,
         ];
         $event = OrderData::map(json_decode($this->event(), true, flags: JSON_THROW_ON_ERROR));
         $eventData = OrderData::map($event['data']);
@@ -619,6 +621,7 @@ final class WebhookRoutesTest extends KirbyTestCase
         $this->assertSame($paymentMethodId, $payment['stripePaymentMethodId']);
         $this->assertSame($methodType, $payment['methodType']);
         $this->assertSame($failureCode, $payment['failureCode']);
+        $this->assertSame($failureMessage, $payment['failureMessage']);
         $this->assertSame($paymentIntentId, $this->delivered[1]->payment()?->stripePaymentIntentId());
         $this->assertResponse($this->send($body), 204);
         $this->assertSame($data, $this->data());

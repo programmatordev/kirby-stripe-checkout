@@ -215,6 +215,7 @@ final class CheckoutSessionRetrieverTest extends KirbyTestCase
             'payment_method_details' => ['type' => 'card'],
             'status' => 'failed',
             'failure_code' => 'card_declined',
+            'failure_message' => 'The card was declined.',
         ];
         $session['payment_intent'] = $payment;
         $this->responses([$session, $this->page([$this->line(0), $this->line(1)])]);
@@ -227,6 +228,7 @@ final class CheckoutSessionRetrieverTest extends KirbyTestCase
         $this->assertSame('ch_previous', $paymentSnapshot->stripeChargeId());
         $this->assertSame('failed', $paymentSnapshot->chargeStatus());
         $this->assertFalse($paymentSnapshot->chargePaid());
+        $this->assertSame('The card was declined.', $paymentSnapshot->failureMessage());
 
         $payment['payment_method'] = null;
         $session['payment_intent'] = $payment;
@@ -236,6 +238,60 @@ final class CheckoutSessionRetrieverTest extends KirbyTestCase
 
         $this->assertSame('pm_previous', $paymentSnapshot->stripePaymentMethodId());
         $this->assertSame('card', $paymentSnapshot->methodType());
+    }
+
+    public function testPreservesTheProviderPaymentFailureDescription(): void
+    {
+        $session = $this->session();
+        $payment = $this->payment();
+        $payment['status'] = 'requires_payment_method';
+        $payment['next_action'] = null;
+        $payment['last_payment_error'] = [
+            'code' => 'card_declined',
+            'message' => 'Your card was declined.',
+        ];
+        $session['payment_intent'] = $payment;
+        $this->responses([$session, $this->page([$this->line(0), $this->line(1)])]);
+
+        $paymentSnapshot = $this->read()->payment();
+
+        $this->assertSame('card_declined', $paymentSnapshot->failureCode());
+        $this->assertSame('Your card was declined.', $paymentSnapshot->failureMessage());
+    }
+
+    public function testKeepsPaymentIntentFailureDetailsFromOneAttempt(): void
+    {
+        $session = $this->session();
+        $payment = $this->payment();
+        $payment['status'] = 'requires_payment_method';
+        $payment['next_action'] = null;
+        $payment['last_payment_error'] = [
+            'message' => 'The current payment method could not be used.',
+        ];
+        $payment['latest_charge'] = [
+            'id' => 'ch_previous',
+            'object' => 'charge',
+            'amount' => 6400,
+            'amount_captured' => 0,
+            'captured' => false,
+            'created' => 1001,
+            'currency' => 'eur',
+            'livemode' => false,
+            'paid' => false,
+            'payment_intent' => 'pi_current',
+            'payment_method' => 'pm_previous',
+            'payment_method_details' => ['type' => 'card'],
+            'status' => 'failed',
+            'failure_code' => 'card_declined',
+            'failure_message' => 'The previous card was declined.',
+        ];
+        $session['payment_intent'] = $payment;
+        $this->responses([$session, $this->page([$this->line(0), $this->line(1)])]);
+
+        $paymentSnapshot = $this->read()->payment();
+
+        $this->assertNull($paymentSnapshot->failureCode());
+        $this->assertSame('The current payment method could not be used.', $paymentSnapshot->failureMessage());
     }
 
     #[DataProvider('descriptions')]

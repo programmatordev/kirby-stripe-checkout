@@ -19,7 +19,24 @@ final class OrderBlueprint
     {
         $sections = [
             'payment' => [
-                'payment' => ['payment'],
+                'payment' => [
+                    OrderPagePanel::handle('financialStatusReports'),
+                    OrderPagePanel::handle('paymentNotRequiredInfo'),
+                    OrderPagePanel::handle('paymentUnavailableInfo'),
+                    OrderPagePanel::handle('formattedPaymentAmount'),
+                    OrderPagePanel::handle('formattedPaymentAmountReceived'),
+                    OrderPagePanel::handle('formattedPaymentAmountCaptured'),
+                    OrderPagePanel::handle('paymentMethod'),
+                    OrderPagePanel::handle('formattedPaymentCreatedAt'),
+                    OrderPagePanel::handle('paymentPaidAt'),
+                    OrderPagePanel::handle('paymentFailedAt'),
+                    OrderPagePanel::handle('paymentFailureMessage'),
+                    OrderPagePanel::handle('hasPaymentAmount'),
+                    OrderPagePanel::handle('hasPaymentAmountReceived'),
+                    OrderPagePanel::handle('hasPaymentAmountCaptured'),
+                    OrderPagePanel::handle('hasPaymentMethod'),
+                    OrderPagePanel::handle('hasPaymentCreatedAt'),
+                ],
                 'refunds' => ['refunds'],
                 'disputes' => ['disputes'],
             ],
@@ -190,6 +207,30 @@ final class OrderBlueprint
             OrderPagePanel::handle('promotionalEmailConsent') => [
                 OrderPagePanel::handle('hasPromotionalEmailConsent') => true,
             ],
+            OrderPagePanel::handle('formattedPaymentAmount') => [
+                OrderPagePanel::handle('hasPaymentAmount') => true,
+            ],
+            OrderPagePanel::handle('formattedPaymentAmountReceived') => [
+                OrderPagePanel::handle('hasPaymentAmountReceived') => true,
+            ],
+            OrderPagePanel::handle('formattedPaymentAmountCaptured') => [
+                OrderPagePanel::handle('hasPaymentAmountCaptured') => true,
+            ],
+            OrderPagePanel::handle('paymentMethod') => [
+                OrderPagePanel::handle('hasPaymentMethod') => true,
+            ],
+            OrderPagePanel::handle('paymentFailureMessage') => [
+                'paymentStatus' => PaymentStatus::Failed->value,
+            ],
+            OrderPagePanel::handle('formattedPaymentCreatedAt') => [
+                OrderPagePanel::handle('hasPaymentCreatedAt') => true,
+            ],
+            OrderPagePanel::handle('paymentPaidAt') => [
+                'paymentStatus' => PaymentStatus::Paid->value,
+            ],
+            OrderPagePanel::handle('paymentFailedAt') => [
+                'paymentStatus' => PaymentStatus::Failed->value,
+            ],
             OrderPagePanel::handle('shippingMethod'),
             OrderPagePanel::handle('deliveryEstimate'),
             OrderPagePanel::handle('shippingAddressSummary') => [
@@ -241,6 +282,13 @@ final class OrderBlueprint
     private static function presentationField(string $handle): ?array
     {
         return match (OrderPagePanel::name($handle)) {
+            'financialStatusReports' => [
+                'label' => false,
+                'reports' => 'page.panel.financialStatusReports',
+                'size' => 'medium',
+                'type' => 'stripe-checkout-order-status',
+                'width' => '1/1',
+            ],
             'orderItems' => self::orderItemsField(),
             'orderDiscounts' => self::orderDiscountsField(),
             'checkoutCustomFields' => self::checkoutCustomFieldsField(),
@@ -256,9 +304,65 @@ final class OrderBlueprint
             'hasRefundedAmount',
             'hasTermsOfServiceConsent',
             'hasPromotionalEmailConsent',
+            'hasPaymentAmount',
+            'hasPaymentAmountReceived',
+            'hasPaymentAmountCaptured',
+            'hasPaymentMethod',
+            'hasPaymentCreatedAt',
             'requiresShipping' => [
                 'label' => false,
                 'type' => 'hidden',
+            ],
+            'paymentNotRequiredInfo' => [
+                'label' => false,
+                'text' => 'programmatordev.stripe-checkout.orders.paymentNotRequired',
+                'theme' => 'info',
+                'type' => 'info',
+                'when' => ['paymentStatus' => PaymentStatus::NoPaymentRequired->value],
+                'width' => '1/1',
+            ],
+            'paymentUnavailableInfo' => [
+                'label' => false,
+                'text' => 'programmatordev.stripe-checkout.orders.paymentUnavailable',
+                'theme' => 'info',
+                'type' => 'info',
+                'when' => ['paymentStatus' => PaymentStatus::Unpaid->value],
+                'width' => '1/1',
+            ],
+            'formattedPaymentAmount' => [
+                'type' => 'text',
+                'width' => '1/3',
+            ],
+            'formattedPaymentAmountReceived' => [
+                'help' => 'programmatordev.stripe-checkout.orders.amountReceivedHelp',
+                'type' => 'text',
+                'width' => '1/3',
+            ],
+            'formattedPaymentAmountCaptured' => [
+                'help' => 'programmatordev.stripe-checkout.orders.amountCapturedHelp',
+                'type' => 'text',
+                'width' => '1/3',
+            ],
+            'paymentMethod' => [
+                'type' => 'text',
+                'width' => '1/2',
+            ],
+            'formattedPaymentCreatedAt' => [
+                'help' => 'programmatordev.stripe-checkout.orders.paymentCreatedAtHelp',
+                'type' => 'text',
+                'width' => '1/2',
+            ],
+            'paymentPaidAt' => [
+                'type' => 'text',
+                'width' => '1/1',
+            ],
+            'paymentFailedAt' => [
+                'type' => 'text',
+                'width' => '1/1',
+            ],
+            'paymentFailureMessage' => [
+                'type' => 'textarea',
+                'width' => '1/1',
             ],
             'refundRequiresActionInfo' => [
                 'label' => false,
@@ -311,6 +415,14 @@ final class OrderBlueprint
             'billingTaxId' => 'taxId',
             'termsOfServiceConsent' => 'termsOfService',
             'promotionalEmailConsent' => 'promotionalEmails',
+            'formattedPaymentAmount' => 'amount',
+            'formattedPaymentAmountReceived' => 'amountReceived',
+            'formattedPaymentAmountCaptured' => 'amountCaptured',
+            'paymentMethod' => 'methodType',
+            'paymentFailureMessage' => 'paymentFailure',
+            'formattedPaymentCreatedAt' => 'paymentCreatedAt',
+            'paymentPaidAt' => 'paidAt',
+            'paymentFailedAt' => 'paymentFailedAt',
             'checkoutSessionRequest' => 'sessionRequest',
             'checkoutFailureType' => 'failureType',
             'checkoutFailureRequestId' => 'requestId',
@@ -922,6 +1034,7 @@ final class OrderBlueprint
             'paymentIntentStatus',
             'chargeStatus',
             'failureCode',
+            'failureMessage',
             'stripePaymentIntentId',
             'stripeChargeId',
             'stripePaymentMethodId',

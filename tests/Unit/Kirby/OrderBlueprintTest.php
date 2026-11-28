@@ -96,6 +96,49 @@ final class OrderBlueprintTest extends TestCase
         $this->assertSame('structure', self::map($technicalFields['initiatingLineItems'] ?? null)['type'] ?? null);
     }
 
+    public function testPaymentTabSeparatesOperatorFactsFromTheCanonicalPaymentSnapshot(): void
+    {
+        $blueprint = OrderBlueprint::load();
+        $tabs = self::map($blueprint['tabs'] ?? null);
+        $paymentTab = self::map($tabs['payment'] ?? null);
+        $paymentSections = self::map($paymentTab['sections'] ?? null);
+        $paymentSection = self::map($paymentSections['payment'] ?? null);
+        $paymentFields = self::map($paymentSection['fields'] ?? null);
+
+        $financialStatuses = self::map(
+            $paymentFields[OrderPagePanel::handle('financialStatusReports')] ?? null,
+        );
+        $this->assertSame('stripe-checkout-order-status', $financialStatuses['type'] ?? null);
+        $this->assertSame('page.panel.financialStatusReports', $financialStatuses['reports'] ?? null);
+        $this->assertSame(
+            ['paymentStatus' => 'no_payment_required'],
+            self::map($paymentFields[OrderPagePanel::handle('paymentNotRequiredInfo')] ?? null)['when'] ?? null,
+        );
+        $this->assertSame(
+            ['paymentStatus' => 'unpaid'],
+            self::map($paymentFields[OrderPagePanel::handle('paymentUnavailableInfo')] ?? null)['when'] ?? null,
+        );
+        $this->assertSame(
+            ['paymentStatus' => 'paid'],
+            self::map($paymentFields[OrderPagePanel::handle('paymentPaidAt')] ?? null)['when'] ?? null,
+        );
+        $this->assertSame(
+            ['paymentStatus' => 'failed'],
+            self::map($paymentFields[OrderPagePanel::handle('paymentFailedAt')] ?? null)['when'] ?? null,
+        );
+        $this->assertSame(
+            ['paymentStatus' => 'failed'],
+            self::map($paymentFields[OrderPagePanel::handle('paymentFailureMessage')] ?? null)['when'] ?? null,
+        );
+        $this->assertArrayNotHasKey('payment', $paymentFields);
+
+        $technicalTab = self::map($tabs['technical'] ?? null);
+        $technicalSections = self::map($technicalTab['sections'] ?? null);
+        $operations = self::map($technicalSections['operations'] ?? null);
+        $technicalFields = self::map($operations['fields'] ?? null);
+        $this->assertSame('object', self::map($technicalFields['payment'] ?? null)['type'] ?? null);
+    }
+
     public function testIncompleteCheckoutFactsUseNativeStateAwarePresentation(): void
     {
         $blueprint = OrderBlueprint::load();

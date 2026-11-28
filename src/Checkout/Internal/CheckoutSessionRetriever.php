@@ -394,6 +394,7 @@ final class CheckoutSessionRetriever
         $chargeCaptured = null;
         $amountCaptured = null;
         $failureCode = OrderData::nullableString($payment['failure_code'] ?? null);
+        $failureMessage = OrderData::nullableString($payment['failure_message'] ?? null);
 
         if ($charge !== null) {
             $chargeId = OrderData::nonEmptyString($charge['id'] ?? null);
@@ -441,7 +442,6 @@ final class CheckoutSessionRetriever
             // https://docs.stripe.com/payments/payment-intents/asynchronous-capture
             $chargeCaptured = OrderData::boolean($charge['captured'] ?? null);
             $amountCaptured = $this->amount($charge['amount_captured'] ?? null, $currency);
-            $failureCode ??= OrderData::nullableString($charge['failure_code'] ?? null);
         }
 
         return new PaymentSnapshot(
@@ -459,6 +459,7 @@ final class CheckoutSessionRetriever
             chargeCaptured: $chargeCaptured,
             amountCaptured: $amountCaptured,
             failureCode: $failureCode,
+            failureMessage: $failureMessage,
             nextAction: $record->nextAction,
         );
     }

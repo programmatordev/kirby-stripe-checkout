@@ -369,7 +369,9 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
             'id', 'object', 'livemode', 'currency', 'metadata', 'created', 'status',
             'amount', 'amount_received', 'capture_method',
         ]);
-        $payment['failure_code'] = $paymentIntent->last_payment_error->code ?? null;
+        $lastPaymentError = $paymentIntent->last_payment_error ?? null;
+        $payment['failure_code'] = $lastPaymentError->code ?? null;
+        $payment['failure_message'] = $lastPaymentError->message ?? null;
         $method = $paymentIntent->payment_method ?? null;
 
         // Retain the method reference/type, not its card or bank details.
@@ -387,7 +389,13 @@ final class StripeApiCheckoutSessionGateway implements CheckoutSessionGatewayInt
                 'status', 'paid', 'captured', 'amount_captured', 'payment_method',
             ]);
             $payment['latest_charge']['method_type'] = $charge->payment_method_details->type ?? null;
-            $payment['latest_charge']['failure_code'] = $charge->failure_code ?? null;
+
+            // A Charge can belong to a previous confirmation attempt. Keep the failure code and message from one source.
+            // https://docs.stripe.com/api/payment_intents/object#payment_intent_object-last_payment_error
+            if ($lastPaymentError === null) {
+                $payment['failure_code'] = $charge->failure_code ?? null;
+                $payment['failure_message'] = $charge->failure_message ?? null;
+            }
         } elseif ($charge !== null) {
             throw new OrderDataException();
         }

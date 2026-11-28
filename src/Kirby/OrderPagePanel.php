@@ -171,6 +171,12 @@ final class OrderPagePanel extends Page
         $refundStatus = RefundStatus::from(OrderData::string($order['refundStatus'] ?? null));
         $refundRequiresAction = OrderData::boolean($order['refundRequiresAction'] ?? null);
         $disputeStatus = DisputeStatus::from(OrderData::string($order['disputeStatus'] ?? null));
+        // A successful payment makes these outcomes possible; reconciled provider records remain authoritative exceptions.
+        $refundApplicable = $paymentStatus === PaymentStatus::Paid
+            || $refundStatus !== RefundStatus::None
+            || $refundRequiresAction;
+        $disputeApplicable = $paymentStatus === PaymentStatus::Paid
+            || $disputeStatus !== DisputeStatus::None;
 
         return [
             self::statusReport(
@@ -195,10 +201,13 @@ final class OrderPagePanel extends Page
             ),
             self::statusReport(
                 name: 'refundStatus',
-                value: $refundRequiresAction
-                    ? self::translate('orders.fields.refundRequiresAction')
-                    : self::translate('orders.index.option.refundFilter.' . $refundStatus->value),
+                value: match (true) {
+                    $refundApplicable === false => self::translate('orders.status.notApplicable'),
+                    $refundRequiresAction => self::translate('orders.fields.refundRequiresAction'),
+                    default => self::translate('orders.index.option.refundFilter.' . $refundStatus->value),
+                },
                 theme: match (true) {
+                    $refundApplicable === false => 'passive',
                     $refundRequiresAction => 'negative',
                     $refundStatus === RefundStatus::None => 'positive',
                     in_array($refundStatus, [RefundStatus::Pending, RefundStatus::Partial], true) => 'notice',
@@ -208,14 +217,27 @@ final class OrderPagePanel extends Page
             ),
             self::statusReport(
                 name: 'disputeStatus',
-                value: self::translate('orders.index.option.disputeFilter.' . $disputeStatus->value),
-                theme: match ($disputeStatus) {
-                    DisputeStatus::None, DisputeStatus::ResolvedFavorable => 'positive',
-                    DisputeStatus::UnderReview, DisputeStatus::Mixed => 'notice',
-                    DisputeStatus::NeedsResponse, DisputeStatus::ResolvedLost => 'negative',
+                value: $disputeApplicable
+                    ? self::translate('orders.index.option.disputeFilter.' . $disputeStatus->value)
+                    : self::translate('orders.status.notApplicable'),
+                theme: match (true) {
+                    $disputeApplicable === false => 'passive',
+                    in_array($disputeStatus, [DisputeStatus::None, DisputeStatus::ResolvedFavorable], true) => 'positive',
+                    in_array($disputeStatus, [DisputeStatus::UnderReview, DisputeStatus::Mixed], true) => 'notice',
+                    in_array($disputeStatus, [DisputeStatus::NeedsResponse, DisputeStatus::ResolvedLost], true) => 'negative',
                 },
             ),
         ];
+    }
+
+    /**
+     * Payment details omit the Checkout state that the Order Overview already presents.
+     *
+     * @return list<array{label: string, value: string, icon: string, theme: string}>
+     */
+    public function financialStatusReports(): array
+    {
+        return array_slice($this->statusReports(), 1);
     }
 
     /** Native Info fields resolve these notices through the Page's Panel query API. */
@@ -364,6 +386,7 @@ final class OrderPagePanel extends Page
         $shipping = self::map($order['shipping'] ?? null);
         $deliveryEstimate = self::map($shipping['deliveryEstimate'] ?? null);
         $discounts = self::list($order['discounts'] ?? null);
+        $payment = self::map($order['payment'] ?? null);
         $checkoutCustomFields = self::checkoutCustomFields($order['customFields'] ?? null);
         $checkoutAttempt = self::map($order['checkoutAttempt'] ?? null);
         $providerFailure = self::map($checkoutAttempt['providerFailure'] ?? null);
@@ -379,6 +402,16 @@ final class OrderPagePanel extends Page
             || $termsOfServiceConsent !== null
             || $promotionalEmailConsent !== null;
         $currency = OrderData::string($order['currency'] ?? null);
+        $paymentCurrency = OrderData::nullableString($payment['currency'] ?? null) ?? $currency;
+        $paymentAmount = OrderData::nullableString($payment['amount'] ?? null);
+        $paymentAmountReceived = OrderData::nullableString($payment['amountReceived'] ?? null);
+        $paymentAmountCaptured = OrderData::nullableString($payment['amountCaptured'] ?? null);
+        $paymentMethod = self::paymentMethodLabel($payment['methodType'] ?? null);
+        $failureMessage = OrderData::nullableString($payment['failureMessage'] ?? null);
+        $paymentFailureMessage = $failureMessage === null || $failureMessage === ''
+            ? self::translate('orders.paymentFailures.notProvided')
+            : $failureMessage;
+        $paymentCreatedAt = self::formattedUnixDate($payment['createdAt'] ?? null);
         $refundedTotal = OrderData::nullableString($order['refundedTotal'] ?? null);
 
         $values = [
@@ -392,6 +425,11 @@ final class OrderPagePanel extends Page
                 && BigDecimal::of($refundedTotal)->isZero() === false,
             self::handle('hasTermsOfServiceConsent') => $termsOfServiceConsent !== null,
             self::handle('hasPromotionalEmailConsent') => $promotionalEmailConsent !== null,
+            self::handle('hasPaymentAmount') => $paymentAmount !== null,
+            self::handle('hasPaymentAmountReceived') => $paymentAmountReceived !== null,
+            self::handle('hasPaymentAmountCaptured') => $paymentAmountCaptured !== null,
+            self::handle('hasPaymentMethod') => $paymentMethod !== null,
+            self::handle('hasPaymentCreatedAt') => $paymentCreatedAt !== null,
             self::handle('requiresShipping') => $requiresShipping,
             self::handle('customerSummary') => $customer,
             self::handle('termsOfServiceConsent') => $termsOfServiceConsent,
@@ -412,6 +450,14 @@ final class OrderPagePanel extends Page
             self::handle('formattedCheckoutCompletedAt') => self::formattedDate($order['checkoutCompletedAt'] ?? null),
             self::handle('formattedPaidAt') => self::formattedDate($order['paidAt'] ?? null),
             self::handle('formattedPaymentFailedAt') => self::formattedDate($order['paymentFailedAt'] ?? null),
+            self::handle('formattedPaymentAmount') => self::formattedAmount($paymentAmount, $paymentCurrency, $panelLocale, $moneyFormatter),
+            self::handle('formattedPaymentAmountReceived') => self::formattedAmount($paymentAmountReceived, $paymentCurrency, $panelLocale, $moneyFormatter),
+            self::handle('formattedPaymentAmountCaptured') => self::formattedAmount($paymentAmountCaptured, $paymentCurrency, $panelLocale, $moneyFormatter),
+            self::handle('paymentMethod') => $paymentMethod,
+            self::handle('paymentFailureMessage') => $paymentFailureMessage,
+            self::handle('formattedPaymentCreatedAt') => $paymentCreatedAt,
+            self::handle('paymentPaidAt') => self::formattedDate($order['paidAt'] ?? null),
+            self::handle('paymentFailedAt') => self::formattedDate($order['paymentFailedAt'] ?? null),
             self::handle('orderItems') => self::orderItems(
                 order: $order,
                 panelLocale: $panelLocale,
@@ -466,6 +512,18 @@ final class OrderPagePanel extends Page
         return match ($value) {
             'opt_in' => self::translate('orders.consent.optedIn'),
             'opt_out' => self::translate('orders.consent.optedOut'),
+            default => $value,
+        };
+    }
+
+    private static function paymentMethodLabel(mixed $value): ?string
+    {
+        $value = OrderData::nullableString($value);
+
+        // Preserve unknown Stripe method types instead of hiding future provider values.
+        return match ($value) {
+            'card' => self::translate('orders.paymentMethods.card'),
+            'sepa_debit' => self::translate('orders.paymentMethods.sepaDebit'),
             default => $value,
         };
     }
