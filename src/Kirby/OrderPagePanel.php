@@ -386,6 +386,8 @@ final class OrderPagePanel extends Page
         $shipping = self::map($order['shipping'] ?? null);
         $deliveryEstimate = self::map($shipping['deliveryEstimate'] ?? null);
         $discounts = self::list($order['discounts'] ?? null);
+        $refunds = self::list($order['refunds'] ?? null);
+        $disputes = self::list($order['disputes'] ?? null);
         $payment = self::map($order['payment'] ?? null);
         $checkoutCustomFields = self::checkoutCustomFields($order['customFields'] ?? null);
         $checkoutAttempt = self::map($order['checkoutAttempt'] ?? null);
@@ -411,7 +413,6 @@ final class OrderPagePanel extends Page
         $paymentFailureMessage = $failureMessage === null || $failureMessage === ''
             ? self::translate('orders.paymentFailures.notProvided')
             : $failureMessage;
-        $paymentCreatedAt = self::formattedUnixDate($payment['createdAt'] ?? null);
         $refundedTotal = OrderData::nullableString($order['refundedTotal'] ?? null);
 
         $values = [
@@ -429,7 +430,8 @@ final class OrderPagePanel extends Page
             self::handle('hasPaymentAmountReceived') => $paymentAmountReceived !== null,
             self::handle('hasPaymentAmountCaptured') => $paymentAmountCaptured !== null,
             self::handle('hasPaymentMethod') => $paymentMethod !== null,
-            self::handle('hasPaymentCreatedAt') => $paymentCreatedAt !== null,
+            self::handle('hasRefunds') => $refunds !== [],
+            self::handle('hasDisputes') => $disputes !== [],
             self::handle('requiresShipping') => $requiresShipping,
             self::handle('customerSummary') => $customer,
             self::handle('termsOfServiceConsent') => $termsOfServiceConsent,
@@ -455,9 +457,18 @@ final class OrderPagePanel extends Page
             self::handle('formattedPaymentAmountCaptured') => self::formattedAmount($paymentAmountCaptured, $paymentCurrency, $panelLocale, $moneyFormatter),
             self::handle('paymentMethod') => $paymentMethod,
             self::handle('paymentFailureMessage') => $paymentFailureMessage,
-            self::handle('formattedPaymentCreatedAt') => $paymentCreatedAt,
             self::handle('paymentPaidAt') => self::formattedDate($order['paidAt'] ?? null),
             self::handle('paymentFailedAt') => self::formattedDate($order['paymentFailedAt'] ?? null),
+            self::handle('refundSummaries') => self::refundSummaries(
+                refunds: $refunds,
+                panelLocale: $panelLocale,
+                moneyFormatter: $moneyFormatter,
+            ),
+            self::handle('disputeSummaries') => self::disputeSummaries(
+                disputes: $disputes,
+                panelLocale: $panelLocale,
+                moneyFormatter: $moneyFormatter,
+            ),
             self::handle('orderItems') => self::orderItems(
                 order: $order,
                 panelLocale: $panelLocale,
@@ -650,6 +661,9 @@ final class OrderPagePanel extends Page
             $reason = $reasonField === null
                 ? null
                 : OrderData::nullableString($refund[$reasonField] ?? null);
+            $reason = $reason === null
+                ? null
+                : self::providerLabel('refundReasons', $reason);
             $items[] = $reason === null
                 ? $amount
                 : self::template('orders.refundAttention.itemWithReason', [
@@ -842,6 +856,81 @@ final class OrderPagePanel extends Page
                 'percentOff' => $percentOff === null ? null : $percentOff . '%',
             ];
         }, $discounts);
+    }
+
+    /**
+     * @param list<mixed> $refunds
+     * @return list<array<string, mixed>>
+     */
+    private static function refundSummaries(
+        array $refunds,
+        string $panelLocale,
+        MoneyFormatter $moneyFormatter,
+    ): array {
+        return array_map(static function (mixed $value) use ($panelLocale, $moneyFormatter): array {
+            $refund = self::map($value);
+            $currency = OrderData::string($refund['currency'] ?? null);
+            $reason = self::refundReason($refund);
+
+            return [
+                'amount' => self::formattedAmount($refund['amount'] ?? null, $currency, $panelLocale, $moneyFormatter),
+                'status' => self::providerLabel('refundStatuses', OrderData::string($refund['status'] ?? null)),
+                'reason' => $reason === null ? '–' : self::providerLabel('refundReasons', $reason),
+                'createdAt' => self::formattedUnixDate($refund['createdAt'] ?? null),
+                'updatedAt' => self::formattedDate($refund['updatedAt'] ?? null),
+            ];
+        }, $refunds);
+    }
+
+    /**
+     * @param list<mixed> $disputes
+     * @return list<array<string, mixed>>
+     */
+    private static function disputeSummaries(
+        array $disputes,
+        string $panelLocale,
+        MoneyFormatter $moneyFormatter,
+    ): array {
+        return array_map(static function (mixed $value) use ($panelLocale, $moneyFormatter): array {
+            $dispute = self::map($value);
+            $currency = OrderData::string($dispute['currency'] ?? null);
+
+            return [
+                'amount' => self::formattedAmount($dispute['amount'] ?? null, $currency, $panelLocale, $moneyFormatter),
+                'status' => self::providerLabel('disputeStatuses', OrderData::string($dispute['status'] ?? null)),
+                'reason' => self::providerLabel('disputeReasons', OrderData::string($dispute['reason'] ?? null)),
+                'evidenceDueBy' => self::formattedUnixDate($dispute['evidenceDueBy'] ?? null) ?? '–',
+                'createdAt' => self::formattedUnixDate($dispute['createdAt'] ?? null),
+                'updatedAt' => self::formattedDate($dispute['updatedAt'] ?? null),
+            ];
+        }, $disputes);
+    }
+
+    /** @param array<string, mixed> $refund */
+    private static function refundReason(array $refund): ?string
+    {
+        foreach (['failureReason', 'pendingReason', 'reason'] as $field) {
+            $reason = OrderData::nullableString($refund[$field] ?? null);
+
+            if ($reason !== null && $reason !== '') {
+                return $reason;
+            }
+        }
+
+        return null;
+    }
+
+    private static function providerLabel(string $group, string $value): string
+    {
+        if ($value === '') {
+            return '–';
+        }
+
+        $translationKey = 'orders.' . $group . '.' . $value;
+        $translation = self::translate($translationKey);
+
+        // Provider vocabularies can grow before the plugin adds a dedicated label.
+        return $translation === $translationKey ? $value : $translation;
     }
 
     /** @return list<array{label: mixed, value: mixed}> */

@@ -744,6 +744,7 @@ final class OrderPageStoreTest extends KirbyTestCase
             'charge' => $chargeId,
             'created' => $createdAt->getTimestamp(),
             'status' => Refund::STATUS_REQUIRES_ACTION,
+            'reason' => 'future_refund_reason',
         ], $paymentIntentId);
         $failedRefund = RefundSnapshot::fromStripe([
             'id' => 're_failed',
@@ -835,12 +836,30 @@ final class OrderPageStoreTest extends KirbyTestCase
         $this->assertSame('Card', $values[strtolower(OrderPagePanel::handle('paymentMethod'))] ?? null);
         $this->assertSame(
             '2026-01-01 12:00:00',
-            $values[strtolower(OrderPagePanel::handle('formattedPaymentCreatedAt'))] ?? null,
-        );
-        $this->assertSame(
-            '2026-01-01 12:00:00',
             $values[strtolower(OrderPagePanel::handle('paymentPaidAt'))] ?? null,
         );
+        $this->assertTrue($values[strtolower(OrderPagePanel::handle('hasRefunds'))] ?? false);
+        $refundSummaries = OrderData::list(
+            $values[strtolower(OrderPagePanel::handle('refundSummaries'))] ?? null,
+        );
+        $firstRefund = OrderData::map($refundSummaries[0] ?? null);
+        $secondRefund = OrderData::map($refundSummaries[1] ?? null);
+        $this->assertSame('€16.00', $firstRefund['amount'] ?? null);
+        $this->assertSame('Needs action', $firstRefund['status'] ?? null);
+        $this->assertSame('future_refund_reason', $firstRefund['reason'] ?? null);
+        $this->assertSame('2026-01-01 12:00:00', $firstRefund['createdat'] ?? null);
+        $this->assertSame('€8.00', $secondRefund['amount'] ?? null);
+        $this->assertSame('Failed', $secondRefund['status'] ?? null);
+        $this->assertSame('Declined', $secondRefund['reason'] ?? null);
+        $this->assertTrue($values[strtolower(OrderPagePanel::handle('hasDisputes'))] ?? false);
+        $disputeSummaries = OrderData::list(
+            $values[strtolower(OrderPagePanel::handle('disputeSummaries'))] ?? null,
+        );
+        $disputeSummary = OrderData::map($disputeSummaries[0] ?? null);
+        $this->assertSame('€16.00', $disputeSummary['amount'] ?? null);
+        $this->assertSame('Needs response', $disputeSummary['status'] ?? null);
+        $this->assertSame('Fraudulent payment', $disputeSummary['reason'] ?? null);
+        $this->assertSame('2026-01-08 12:00:00', $disputeSummary['evidencedueby'] ?? null);
 
         $this->assertSame('Refund requires action', $reports[2]['label']);
         $this->assertSame('negative', $reports[2]['theme']);
@@ -851,7 +870,7 @@ final class OrderPageStoreTest extends KirbyTestCase
             $panel->refundRequiresActionNotice(),
         );
         $this->assertSame(
-            'Failed refunds: €8.00 (declined). Review the Payment tab',
+            'Failed refunds: €8.00 (Declined). Review the Payment tab',
             $panel->refundFailureNotice(),
         );
         $this->assertSame(

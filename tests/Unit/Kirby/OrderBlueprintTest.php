@@ -96,14 +96,12 @@ final class OrderBlueprintTest extends TestCase
         $this->assertSame('structure', self::map($technicalFields['initiatingLineItems'] ?? null)['type'] ?? null);
     }
 
-    public function testPaymentTabSeparatesOperatorFactsFromTheCanonicalPaymentSnapshot(): void
+    public function testPaymentTabSeparatesOperatorFactsFromCanonicalSnapshots(): void
     {
         $blueprint = OrderBlueprint::load();
         $tabs = self::map($blueprint['tabs'] ?? null);
         $paymentTab = self::map($tabs['payment'] ?? null);
-        $paymentSections = self::map($paymentTab['sections'] ?? null);
-        $paymentSection = self::map($paymentSections['payment'] ?? null);
-        $paymentFields = self::map($paymentSection['fields'] ?? null);
+        $paymentFields = self::tabFields($paymentTab);
 
         $financialStatuses = self::map(
             $paymentFields[OrderPagePanel::handle('financialStatusReports')] ?? null,
@@ -132,11 +130,37 @@ final class OrderBlueprintTest extends TestCase
         );
         $this->assertArrayNotHasKey('payment', $paymentFields);
 
+        $refundSummaries = self::map($paymentFields[OrderPagePanel::handle('refundSummaries')] ?? null);
+        $this->assertSame('structure', $refundSummaries['type'] ?? null);
+        $this->assertSame(
+            ['amount', 'status', 'reason', 'createdAt', 'updatedAt'],
+            array_keys(self::map($refundSummaries['fields'] ?? null)),
+        );
+        $this->assertSame(
+            [OrderPagePanel::handle('hasRefunds') => true],
+            $refundSummaries['when'] ?? null,
+        );
+        $this->assertArrayNotHasKey('refunds', $paymentFields);
+
+        $disputeSummaries = self::map($paymentFields[OrderPagePanel::handle('disputeSummaries')] ?? null);
+        $this->assertSame('structure', $disputeSummaries['type'] ?? null);
+        $this->assertSame(
+            ['amount', 'status', 'reason', 'evidenceDueBy', 'createdAt', 'updatedAt'],
+            array_keys(self::map($disputeSummaries['fields'] ?? null)),
+        );
+        $this->assertSame(
+            [OrderPagePanel::handle('hasDisputes') => true],
+            $disputeSummaries['when'] ?? null,
+        );
+        $this->assertArrayNotHasKey('disputes', $paymentFields);
+
         $technicalTab = self::map($tabs['technical'] ?? null);
         $technicalSections = self::map($technicalTab['sections'] ?? null);
         $operations = self::map($technicalSections['operations'] ?? null);
         $technicalFields = self::map($operations['fields'] ?? null);
         $this->assertSame('object', self::map($technicalFields['payment'] ?? null)['type'] ?? null);
+        $this->assertSame('structure', self::map($technicalFields['refunds'] ?? null)['type'] ?? null);
+        $this->assertSame('structure', self::map($technicalFields['disputes'] ?? null)['type'] ?? null);
     }
 
     public function testIncompleteCheckoutFactsUseNativeStateAwarePresentation(): void

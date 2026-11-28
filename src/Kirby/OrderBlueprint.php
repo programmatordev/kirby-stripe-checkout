@@ -21,13 +21,13 @@ final class OrderBlueprint
             'payment' => [
                 'payment' => [
                     OrderPagePanel::handle('financialStatusReports'),
+                    self::headline('payment'),
                     OrderPagePanel::handle('paymentNotRequiredInfo'),
                     OrderPagePanel::handle('paymentUnavailableInfo'),
                     OrderPagePanel::handle('formattedPaymentAmount'),
                     OrderPagePanel::handle('formattedPaymentAmountReceived'),
                     OrderPagePanel::handle('formattedPaymentAmountCaptured'),
                     OrderPagePanel::handle('paymentMethod'),
-                    OrderPagePanel::handle('formattedPaymentCreatedAt'),
                     OrderPagePanel::handle('paymentPaidAt'),
                     OrderPagePanel::handle('paymentFailedAt'),
                     OrderPagePanel::handle('paymentFailureMessage'),
@@ -35,10 +35,19 @@ final class OrderBlueprint
                     OrderPagePanel::handle('hasPaymentAmountReceived'),
                     OrderPagePanel::handle('hasPaymentAmountCaptured'),
                     OrderPagePanel::handle('hasPaymentMethod'),
-                    OrderPagePanel::handle('hasPaymentCreatedAt'),
                 ],
-                'refunds' => ['refunds'],
-                'disputes' => ['disputes'],
+                'refunds' => [
+                    self::headline('refunds'),
+                    OrderPagePanel::handle('refundsEmptyInfo'),
+                    OrderPagePanel::handle('refundSummaries'),
+                    OrderPagePanel::handle('hasRefunds'),
+                ],
+                'disputes' => [
+                    self::headline('disputes'),
+                    OrderPagePanel::handle('disputesEmptyInfo'),
+                    OrderPagePanel::handle('disputeSummaries'),
+                    OrderPagePanel::handle('hasDisputes'),
+                ],
             ],
         ];
         $displayed = [];
@@ -79,7 +88,9 @@ final class OrderBlueprint
         $tabs = ['overview' => self::overviewTab()];
 
         foreach ($sections as $tabName => $tabSections) {
-            $tabs[$tabName] = self::tab($tabName, $tabSections);
+            $tabs[$tabName] = $tabName === 'payment'
+                ? self::paymentTab($tabSections)
+                : self::tab($tabName, $tabSections);
         }
 
         return [
@@ -222,14 +233,23 @@ final class OrderBlueprint
             OrderPagePanel::handle('paymentFailureMessage') => [
                 'paymentStatus' => PaymentStatus::Failed->value,
             ],
-            OrderPagePanel::handle('formattedPaymentCreatedAt') => [
-                OrderPagePanel::handle('hasPaymentCreatedAt') => true,
-            ],
             OrderPagePanel::handle('paymentPaidAt') => [
                 'paymentStatus' => PaymentStatus::Paid->value,
             ],
             OrderPagePanel::handle('paymentFailedAt') => [
                 'paymentStatus' => PaymentStatus::Failed->value,
+            ],
+            OrderPagePanel::handle('refundsEmptyInfo') => [
+                OrderPagePanel::handle('hasRefunds') => false,
+            ],
+            OrderPagePanel::handle('refundSummaries') => [
+                OrderPagePanel::handle('hasRefunds') => true,
+            ],
+            OrderPagePanel::handle('disputesEmptyInfo') => [
+                OrderPagePanel::handle('hasDisputes') => false,
+            ],
+            OrderPagePanel::handle('disputeSummaries') => [
+                OrderPagePanel::handle('hasDisputes') => true,
             ],
             OrderPagePanel::handle('shippingMethod'),
             OrderPagePanel::handle('deliveryEstimate'),
@@ -308,7 +328,8 @@ final class OrderBlueprint
             'hasPaymentAmountReceived',
             'hasPaymentAmountCaptured',
             'hasPaymentMethod',
-            'hasPaymentCreatedAt',
+            'hasRefunds',
+            'hasDisputes',
             'requiresShipping' => [
                 'label' => false,
                 'type' => 'hidden',
@@ -347,23 +368,34 @@ final class OrderBlueprint
                 'type' => 'text',
                 'width' => '1/2',
             ],
-            'formattedPaymentCreatedAt' => [
-                'help' => 'programmatordev.stripe-checkout.orders.paymentCreatedAtHelp',
+            'paymentPaidAt' => [
                 'type' => 'text',
                 'width' => '1/2',
             ],
-            'paymentPaidAt' => [
-                'type' => 'text',
-                'width' => '1/1',
-            ],
             'paymentFailedAt' => [
                 'type' => 'text',
-                'width' => '1/1',
+                'width' => '1/2',
             ],
             'paymentFailureMessage' => [
                 'type' => 'textarea',
                 'width' => '1/1',
             ],
+            'refundsEmptyInfo' => [
+                'label' => false,
+                'text' => 'programmatordev.stripe-checkout.orders.refundsEmpty',
+                'theme' => 'info',
+                'type' => 'info',
+                'width' => '1/1',
+            ],
+            'refundSummaries' => self::refundSummariesField(),
+            'disputesEmptyInfo' => [
+                'label' => false,
+                'text' => 'programmatordev.stripe-checkout.orders.disputesEmpty',
+                'theme' => 'info',
+                'type' => 'info',
+                'width' => '1/1',
+            ],
+            'disputeSummaries' => self::disputeSummariesField(),
             'refundRequiresActionInfo' => [
                 'label' => false,
                 'type' => 'info',
@@ -420,7 +452,6 @@ final class OrderBlueprint
             'formattedPaymentAmountCaptured' => 'amountCaptured',
             'paymentMethod' => 'methodType',
             'paymentFailureMessage' => 'paymentFailure',
-            'formattedPaymentCreatedAt' => 'paymentCreatedAt',
             'paymentPaidAt' => 'paidAt',
             'paymentFailedAt' => 'paymentFailedAt',
             'checkoutSessionRequest' => 'sessionRequest',
@@ -494,6 +525,32 @@ final class OrderBlueprint
                 'details' => [
                     'width' => '1/1',
                     'fields' => self::overviewFields(),
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * One native field section preserves Kirby's spacing between the Payment,
+     * Refunds and Disputes headline fields.
+     *
+     * @param array<string, list<string>> $sections
+     * @return array<string, mixed>
+     */
+    private static function paymentTab(array $sections): array
+    {
+        $handles = [];
+
+        foreach ($sections as $sectionHandles) {
+            $handles = [...$handles, ...$sectionHandles];
+        }
+
+        return [
+            'label' => 'programmatordev.stripe-checkout.orders.tabs.payment',
+            'sections' => [
+                'details' => [
+                    'type' => 'fields',
+                    'fields' => self::fields($handles),
                 ],
             ],
         ];
@@ -792,6 +849,43 @@ final class OrderBlueprint
             ],
         );
         $field['label'] = false;
+
+        return $field;
+    }
+
+    /** @return array<string, mixed> */
+    private static function refundSummariesField(): array
+    {
+        $field = self::structureField(
+            members: ['amount', 'status', 'reason', 'createdAt', 'updatedAt'],
+            columns: [
+                'amount' => ['align' => 'right'],
+                'status' => [],
+                'reason' => [],
+                'createdAt' => [],
+            ],
+        );
+        $field['label'] = false;
+        $field['limit'] = 10;
+
+        return $field;
+    }
+
+    /** @return array<string, mixed> */
+    private static function disputeSummariesField(): array
+    {
+        $field = self::structureField(
+            members: ['amount', 'status', 'reason', 'evidenceDueBy', 'createdAt', 'updatedAt'],
+            columns: [
+                'amount' => ['align' => 'right'],
+                'status' => [],
+                'reason' => [],
+                'evidenceDueBy' => [],
+                'createdAt' => [],
+            ],
+        );
+        $field['label'] = false;
+        $field['limit'] = 10;
 
         return $field;
     }

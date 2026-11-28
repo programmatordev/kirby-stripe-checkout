@@ -816,9 +816,13 @@ final class OrderPanelFixtureSeeder
             'charge' => $data['stripeChargeId'],
             'created' => $createdAt->modify('+30 minutes')->getTimestamp(),
             'status' => $status,
-            'reason' => 'requested_by_customer',
+            'reason' => Refund::REASON_REQUESTED_BY_CUSTOMER,
+            // Stripe documents additional failure reasons that stripe-php does not expose as constants.
+            // https://docs.stripe.com/api/refunds/object#refund_object-failure_reason
             'failure_reason' => $status === Refund::STATUS_FAILED ? 'declined' : null,
-            'pending_reason' => $status === Refund::STATUS_PENDING ? 'processing' : null,
+            'pending_reason' => $status === Refund::STATUS_PENDING
+                ? Refund::PENDING_REASON_PROCESSING
+                : null,
         ], $paymentIntentId);
     }
 

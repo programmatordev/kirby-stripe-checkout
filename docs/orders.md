@@ -158,9 +158,9 @@ Only selected facts cross the stripe-php boundary. The order never stores a comp
 
 Refund reconciliation retains a protected `refunds` collection with one item per Stripe refund attempt, sorted by Refund ID. It includes pending, requires-action, succeeded, failed and canceled attempts. Each item holds the latest authoritative state and local observation times; it is not a log of every past status.
 
-The default order blueprint displays refunds as a read-only native Structure on the Payment tab. The table shows amount, currency, status and first-observed date. Open a row to inspect its Stripe identifiers, reason codes, original creation timestamp and local observation times. Refund actions remain in Stripe.
+The Payment tab presents refunds as a read-only native Structure with formatted amount, translated known status and reason labels, Stripe creation time and the latest local update time. The complete canonical collection, including Stripe identifiers and observation history, remains available under Technical details. Refund actions remain in Stripe.
 
-Refund IDs and reason codes are retained without truncation or a plugin-imposed text-length limit. Reason codes remain opaque strings; the plugin derives refund summaries from status and money, not from a locally maintained reason-code catalogue.
+Refund IDs and reason codes are retained without truncation or a plugin-imposed text-length limit. Known reason codes receive translated presentation labels while unknown values remain visible unchanged. The plugin derives refund summaries from status and money, not from reason labels.
 
 | Item field | Meaning |
 | --- | --- |
@@ -194,7 +194,7 @@ Refund actions remain in Stripe. The plugin does not create or cancel refunds, r
 
 A dispute is a customer challenge through their bank, separate from a merchant-initiated refund. The original successful payment remains paid; a dispute does not clear `paidAt` or count toward `refundedTotal`.
 
-The protected `disputes` collection contains one current item per Stripe Dispute ID, sorted by ID. It includes inquiries, active disputes and terminal outcomes. The Payment tab displays a separate read-only native Structure, with amount, currency, status and first-observed date columns. Open a row to inspect selected facts; evidence submission and dispute actions remain in Stripe.
+The protected `disputes` collection contains one current item per Stripe Dispute ID, sorted by ID. It includes inquiries, active disputes and terminal outcomes. The Payment tab presents formatted amount, translated known status and reason labels, response deadline, Stripe creation time and the latest local update time. Complete provider references, evidence flags and balance movements remain under Technical details; evidence submission and dispute actions remain in Stripe.
 
 | Item facts | Meaning |
 | --- | --- |
